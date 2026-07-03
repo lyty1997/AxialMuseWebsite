@@ -1,0 +1,35 @@
+{
+  "version": "0.1.0",
+  "kind": "axial_muse_contract_terms",
+  "status": "active",
+  "owner": "AxialMuseWebsite",
+  "description": "跨文档、页面和质量脚本共享的稳定契约名，防止品牌、内容模型、路由和状态命名漂移。",
+  "terms": {
+    "Axial Muse": {
+      "kind": "brand",
+      "owner": "site",
+      "canonical": true,
+      "source": ["README.md", "docs/architecture/glossary.md", "public/index.html"]
+    },
+    "技术分享": {
+      "kind": "content_category",
+      "owner": "content",
+      "canonical": true,
+      "source": ["README.md", "docs/product/content-roadmap.md", "public/index.html"]
+    },
+    "产品服务": {
+      "kind": "content_category",
+      "owner": "product",
+      "canonical": true,
+      "source": ["README.md", "docs/product/content-roadmap.md", "public/index.html"]
+    }
+  },
+  "enums": {
+    "content_stage": {
+      "owner": "content",
+      "members": ["draft", "planned", "published", "archived"],
+      "source": ["docs/product/content-roadmap.md"]
+    }
+  }
+}
+

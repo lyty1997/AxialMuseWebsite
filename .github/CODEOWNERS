@@ -1,0 +1,9 @@
+# Replace @lyty with the actual GitHub account or team if the repository owner differs.
+* @lyty
+
+# Documentation, contracts and quality gates need explicit owner review.
+/docs/ @lyty
+/codex-rules/ @lyty
+/scripts/quality/ @lyty
+/.github/workflows/ @lyty
+

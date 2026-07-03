@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# 本地提交前门禁：CI 的本地镜像，运行与 .github/workflows/ci.yml 相同的 npm run quality。
+# 启用方式（仓库首次克隆后执行一次）：git config core.hooksPath .githooks
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "pre-commit: 未找到 npm，跳过质量门禁；请手动运行 'npm run quality' 后再提交。" >&2
+  exit 1
+fi
+
+echo "pre-commit: 运行 npm run quality ..."
+npm run quality

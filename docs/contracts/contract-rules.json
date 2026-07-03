@@ -1,0 +1,47 @@
+{
+  "version": "0.1.0",
+  "kind": "axial_muse_contract_rules",
+  "status": "active",
+  "owner": "AxialMuseWebsite",
+  "description": "通用文档同步门禁规则。forbidden_terms 防旧名回潮；scoped_terms 防契约词跨层误用。",
+  "scan": {
+    "roots": ["docs", "public", "scripts", "codex-rules", ".github"],
+    "extensions": [".md", ".html", ".css", ".js", ".mjs", ".json", ".yml", ".yaml"],
+    "skip_paths": ["docs/contracts/", "node_modules/", ".git/"]
+  },
+  "forbidden_terms": [
+    {
+      "term": "AxialMuse",
+      "match": "word",
+      "use": "Axial Muse",
+      "reason": "公开品牌名默认使用空格分隔写法。"
+    },
+    {
+      "term": "博客",
+      "match": "literal",
+      "use": "技术分享",
+      "reason": "首版定位不是泛博客，而是项目驱动的技术分享。"
+    },
+    {
+      "term": "已上线产品服务",
+      "match": "literal",
+      "use": "计划中的产品服务",
+      "reason": "当前阶段不得把未来能力写成已上线事实。"
+    }
+  ],
+  "scoped_terms": [
+    {
+      "term": "待确认",
+      "match": "literal",
+      "allowed_paths": [
+        "docs/architecture/open-decisions.md",
+        "docs/architecture/glossary.md",
+        "docs/product/content-roadmap.md",
+        "docs/contracts/",
+        "codex-rules/"
+      ],
+      "reason": "待确认事项应集中记录，避免散落在页面和实现中。"
+    }
+  ]
+}
+
