@@ -75,8 +75,10 @@ AxialMuseWebsite.preview/          # 新增 worktree，专门用于 checkout 待
 ```
 
 - Linux 主目录（当前工作区）：Claude Code CLI 日常直接改动使用，正常提交到 `dev` 或临时 `feature/*` 分支。
-- Linux 预览 worktree（`../AxialMuseWebsite.preview`）：只做 `git checkout <待验收分支>` + 跑静态服务器，不在这里直接改代码，谁的分支要看效果就 checkout 谁，和主目录互不干扰。
+- Linux 预览 worktree（`../AxialMuseWebsite.preview`）：只跑静态服务器，不在这里直接改代码，谁的分支要看效果就切过去看，和主目录互不干扰。
 - Windows 端：clone 同一个仓库（`https://github.com/lyty1997/AxialMuseWebsite.git`），日常在 `feature/描述` 分支下编辑，不直接改 `dev` / `main`，改完 push 该分支。
+
+**创建方式的一处约束**：git 不允许同一个分支在两个 worktree 里同时被检出（比如主目录已经在 `dev`，预览 worktree 就不能再 `git checkout dev`，会报 `already used by worktree`）。所以预览 worktree 用 `git worktree add --detach ../AxialMuseWebsite.preview dev` 建成**分离头指针（detached HEAD）**模式，之后每次要看哪个分支的效果，都是 `git checkout --detach <分支或 origin/分支的最新提交>`，而不是切到分支本身。这样无论主目录当前停在哪个分支，预览 worktree 都不会和它冲突，包括预览 `dev` 或 `main` 自己的场景。
 
 ## 源码同步脚本（双向、一键）
 
@@ -89,8 +91,8 @@ AxialMuseWebsite.preview/          # 新增 worktree，专门用于 checkout 待
 ## 预览服务脚本（按需触发，不常驻）
 
 - `scripts/dev/preview.sh`（只在 Linux 端用）：操作对象是 `../AxialMuseWebsite.preview` 这个 worktree，支持三个子命令：
-  - `preview.sh serve <分支>`：如果 worktree 不存在则创建，`git checkout <分支>`，在后台启动 `python3 -m http.server -d public 8088`，PID 写入 `.preview.pid`。
-  - `preview.sh restart [分支]`：`git fetch` + `git checkout <分支>`（不传分支则保持当前分支）+ `git pull --ff-only`，杀掉旧进程再重新启动，全程按 PID 文件判断进程是否存活，避免重复启动或杀错进程。
+  - `preview.sh serve <分支>`：如果 worktree 不存在则用 `--detach` 创建，`git fetch` 后 `git checkout --detach origin/<分支>`（分离头指针，原因见上一节），在后台启动 `python3 -m http.server -d public 8088`，PID 写入 `.preview.pid`。
+  - `preview.sh restart [分支]`：`git fetch` + `git checkout --detach origin/<分支>`（不传分支则重新拉取并检出当前预览的那个分支的最新提交），杀掉旧进程再重新启动，全程按 PID 文件判断进程是否存活，避免重复启动或杀错进程。
   - `preview.sh stop`：按 PID 文件杀进程并清理。
 - 因为是按需触发（用户已确认不需要自动轮询 watcher），这个脚本不需要 `trap`/常驻生命周期管理这类复杂度，每次都是一次性前台命令，简单可控。
 
@@ -139,7 +141,7 @@ deactivate Preview
 
 ## 落地步骤 Checklist
 
-1. 在 Linux 端创建预览 worktree：`git worktree add ../AxialMuseWebsite.preview dev`。
+1. 在 Linux 端创建预览 worktree（分离头指针模式）：`git worktree add --detach ../AxialMuseWebsite.preview dev`。
 2. 新增 `scripts/dev/sync.sh`、`scripts/dev/sync.ps1`、`scripts/dev/preview.sh` 三个脚本并赋予可执行权限。
 3. Windows 端 clone 仓库，按“渲染与标注机制”一节完成一次现场验证，把结果（原生可行 / 需要 Playwright MCP）回填到本文件。
 4. 两端各跑一次 `sync.sh` / `sync.ps1`，确认能互相看到对方的提交，验证“双向同步”真正打通。
