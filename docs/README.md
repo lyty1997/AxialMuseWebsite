@@ -8,6 +8,7 @@
 - [架构概览](architecture/overview.md)
 - [术语表](architecture/glossary.md)
 - [待决策问题](architecture/open-decisions.md)
+- [跨机协同开发预览工作流](architecture/dev-workflow.md)
 - [内容与产品路线](product/content-roadmap.md)
 - [契约词表](contracts/contract-terms.json)
 - [契约扫描规则](contracts/contract-rules.json)
