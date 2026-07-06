@@ -26,3 +26,6 @@ pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Claude Code 会话 worktree（本地产物，不进版本库）
+.claude/worktrees/
+

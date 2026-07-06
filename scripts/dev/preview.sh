@@ -117,8 +117,8 @@ case "${cmd}" in
       [ -f "${branch_file}" ] || { echo "错误：没有历史分支记录，请显式传入分支名" >&2; exit 1; }
       branch="$(cat "${branch_file}")"
     fi
-    stop_server
     checkout_ref "${branch}"
+    stop_server
     start_server
     ;;
   stop)
