@@ -1,7 +1,7 @@
 # 架构概览
 
 状态：active  
-最近更新：2026-07-03  
+最近更新：2026-07-09  
 适用范围：M0 静态网站与工程规范
 
 ## 目标
@@ -10,14 +10,39 @@ AxialMuseWebsite 的首版目标是建立一个可维护的个人技术分享网
 
 ## 当前实现
 
-```mermaid
-flowchart TD
-  User[访问者] --> StaticSite[public/index.html]
-  StaticSite --> Content[项目与技术分享内容]
-  Docs[docs 真相源] --> StaticSite
-  Quality[quality 门禁] --> Docs
-  Quality --> StaticSite
+```plantuml
+@startuml
+package "访问者" {
+  [浏览器] as Browser
+}
+package "public/" {
+  [index.html] as Index
+  [styles.css] as Styles
+}
+package "docs/" {
+  [设计文档真相源] as Docs
+}
+package "codex-rules/" {
+  [Agent 操作规范] as Rules
+}
+package "scripts/quality/" {
+  [质量门禁] as Quality
+}
+package ".github/" {
+  [CI 工作流] as CI
+}
+
+Browser --> Index
+Index --> Styles
+Docs --> Index : 驱动内容与结构
+Rules ..> Docs : 不替代
+Quality --> Docs : 校验索引/链接/契约
+Quality --> Index : 校验入口结构
+CI --> Quality : 触发
+@enduml
 ```
+
+![架构概览组件图](../diagrams/architecture-overview.svg)
 
 当前没有运行时后端、数据库、登录、评论系统或用户数据采集。
 

@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "quality": "npm run check:js && npm run check:docs && npm run check:contracts && npm run check:secrets && npm run check:site",
-    "check:js": "node --check scripts/quality/check-markdown.mjs && node --check scripts/quality/check-contracts.mjs && node --check scripts/quality/check-secrets.mjs && node --check scripts/quality/check-static-site.mjs",
+    "check:js": "node --check scripts/quality/lib/files.mjs && node --check scripts/quality/lib/plantuml.mjs && node --check scripts/quality/check-markdown.mjs && node --check scripts/quality/check-contracts.mjs && node --check scripts/quality/check-secrets.mjs && node --check scripts/quality/check-static-site.mjs && node --check scripts/quality/check-diagrams.mjs && node --check scripts/quality/render-diagrams.mjs",
     "check:docs": "node scripts/quality/check-markdown.mjs",
     "check:contracts": "node scripts/quality/check-contracts.mjs",
     "check:secrets": "node scripts/quality/check-secrets.mjs",
-    "check:site": "node scripts/quality/check-static-site.mjs"
+    "check:site": "node scripts/quality/check-static-site.mjs",
+    "check:diagrams": "node scripts/quality/check-diagrams.mjs",
+    "gen:diagrams": "node scripts/quality/render-diagrams.mjs"
   },
   "engines": {
     "node": ">=22"

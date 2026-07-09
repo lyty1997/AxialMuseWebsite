@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
-# 预览服务脚本：只在 Linux 端使用，操作 ../<仓库名>.preview 这个 worktree。
+# 预览服务脚本：只在 Linux 托管机端使用，操作 ../<仓库名>.preview 这个 worktree。
 # 设计见 docs/architecture/dev-workflow.md，按需触发，不做常驻 watcher。
 set -euo pipefail
 
-PORT="${PREVIEW_PORT:-8088}"
-PREVIEW_HOST="${PREVIEW_HOST:-192.168.0.162}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+env_file="${script_dir}/dev-workflow.env"
+if [ -f "${env_file}" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${env_file}"
+  set +a
+fi
+
+PORT="${PREVIEW_PORT:?错误：未设置 PREVIEW_PORT。复制 scripts/dev/dev-workflow.env.example 为 dev-workflow.env 并填写}"
+PREVIEW_HOST="${PREVIEW_HOST:?错误：未设置 PREVIEW_HOST，同上}"
+SERVE_DIR="${PREVIEW_SERVE_DIR:-public}"
 
 repo_root="$(git rev-parse --show-toplevel)"
 repo_name="$(basename "${repo_root}")"
@@ -37,6 +47,21 @@ is_running() {
   return 0
 }
 
+# 反查监听 ${PORT} 的进程 PID（可能为空）。
+port_listener_pid() {
+  ss -tlnp "( sport = :${PORT} )" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -n1 || true
+}
+
+# 判断某 PID 是否确实是"本预览"启动的 http.server：既要是 http.server，
+# 还要服务的正是本预览目录，避免误认同机上别的 http.server 或占用同端口的无关进程。
+pid_is_our_server() {
+  local pid="$1"
+  [ -n "${pid}" ] || return 1
+  grep -q "http.server" "/proc/${pid}/cmdline" 2>/dev/null || return 1
+  grep -q -- "${preview_dir}/${SERVE_DIR}" "/proc/${pid}/cmdline" 2>/dev/null || return 1
+  return 0
+}
+
 checkout_ref() {
   local branch="$1"
   echo "== [preview] git fetch origin ${branch} =="
@@ -53,12 +78,22 @@ checkout_ref() {
 }
 
 start_server() {
-  echo "== [preview] 启动静态服务器，端口 ${PORT} =="
+  # 启动前先确认端口没有被"别的进程"占用：否则 python3 会绑定失败退出，而反查到的
+  # 却是那个无关进程的 PID，被误写进 pid 文件当成预览服务——后续 stop/restart 就会
+  # 去操作一个不属于我们的进程。这里遇到外来占用直接报错，不冒险接管。
+  local existing
+  existing="$(port_listener_pid)"
+  if [ -n "${existing}" ] && ! pid_is_our_server "${existing}"; then
+    echo "错误：端口 ${PORT} 已被进程 ${existing} 占用，且不是本预览服务；请释放端口或改用其它 PREVIEW_PORT。" >&2
+    exit 1
+  fi
+
+  echo "== [preview] 启动静态服务器，端口 ${PORT}，目录 ${SERVE_DIR} =="
   # 不信任 $!：setsid 在调用方恰好是 process group leader 时会内部再 fork 一次，
   # $! 拿到的会是很快退出的 setsid 包装进程（kill -0 对 zombie 仍返回成功），
   # 而不是真正的 python3 进程，导致后续 stop/restart 杀不到真正的服务。
   # 改成从监听 socket 反查真实 PID；进程绑定端口需要一点时间，所以带重试。
-  setsid python3 -m http.server -d "${preview_dir}/public" "${PORT}" \
+  setsid python3 -m http.server -d "${preview_dir}/${SERVE_DIR}" "${PORT}" \
     >"${log_file}" 2>&1 < /dev/null &
   disown 2>/dev/null || true
 
@@ -66,10 +101,12 @@ start_server() {
   for _ in $(seq 1 20); do
     # 注意：pipefail 下 grep 找不到匹配会以状态 1 退出，若不接 `|| true`，
     # 这个赋值语句在 set -e 下会直接终止脚本，重试循环根本执行不到第二轮。
-    real_pid="$(ss -tlnp "( sport = :${PORT} )" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -n1 || true)"
-    if [ -n "${real_pid}" ]; then
+    real_pid="$(port_listener_pid)"
+    # 只信任"确实是本预览目录的 http.server"的 PID，避免接管到抢占端口的其它进程。
+    if [ -n "${real_pid}" ] && pid_is_our_server "${real_pid}"; then
       break
     fi
+    real_pid=""
     sleep 0.2
   done
 

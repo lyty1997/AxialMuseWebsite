@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - dev
 
 permissions:
   contents: read
@@ -12,17 +13,53 @@ permissions:
 jobs:
   website-quality:
     name: Website quality gates
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
 
       - name: Quality gates
         run: npm run quality
 
+  diagrams:
+    name: Diagram compile check
+    runs-on: ubuntu-latest
+    env:
+      PUML_VERSION: "1.2026.1"
+      PUML_SHA256: "89c116168a2a0f7cf5292e11617ba22abd743f891914f1fec5bc9c7d257b3092"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Download pinned plantuml.jar
+        run: |
+          curl -sSL -o plantuml.jar \
+            "https://github.com/plantuml/plantuml/releases/download/v${PUML_VERSION}/plantuml-${PUML_VERSION}.jar"
+          echo "${PUML_SHA256}  plantuml.jar" | sha256sum -c -
+
+      - name: Check diagrams compile
+        run: npm run check:diagrams
+        env:
+          PUML_JAR: ${{ github.workspace }}/plantuml.jar

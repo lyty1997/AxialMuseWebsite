@@ -4,6 +4,23 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-09 — 从 project-scaffold 回填工程脚手架改进
+
+- **主题**：`project-scaffold` 是从本项目抽象出去的通用脚手架，抽象后又自行演进出一批改进（配置驱动、健壮性/安全加固、PlantUML 图表门禁）。对照两边差异，只回填"确实缺、确实适合当前阶段"的部分，按本项目真实上下文改写（非字节级复制）。
+- **完成内容**：
+  - **修复现存规则违规**：`docs/architecture/overview.md` 原用 Mermaid 画架构图，违反全局规则（禁用 Mermaid，强制 PlantUML）；`docs/architecture/dev-workflow.md` 已有 plantuml 时序图但从未编译校验、未渲染 SVG。新增 `scripts/quality/lib/plantuml.mjs` + `check-diagrams.mjs`（编译校验，独立于 `quality` 之外）+ `render-diagrams.mjs`（本地渲染器），用本机 `java -jar plantuml-1.2026.1.jar` 实测编译通过，`docs/diagrams/*.svg` 落地；CI 新增独立 `diagrams` job（下载并 SHA256 校验官方 jar）。
+  - **静态站点检查配置化**：新增 `docs/contracts/site-checks.json`，重写 `check-static-site.mjs` 改为读取配置、入口文件不存在时优雅跳过、资源引用正则更健壮（覆盖单/双引号、跳过 data:/mailto:/锚点等）。
+  - **CI 加固**：`push` 触发补上 `dev` 分支（此前只在 `main` push 时跑，与"push 到 main/dev 都要观察 CI"的规则不一致）；`actions/checkout`、`actions/setup-node` 升到 v5；quality job 加 `windows-latest` matrix，呼应真实存在的跨机 Windows/Linux 工作流。
+  - **跨机预览脚本安全/健壮性修复**：`preview.sh` 新增端口占用保护（`port_listener_pid`/`pid_is_our_server`），避免误认或误杀同端口上的无关进程；`restart-remote.ps1` 新增分支名白名单 + 仓库路径黑名单校验，修复一个真实的远端命令注入面（此前 `$Branch`/`$RemoteRepoPath` 直接拼进 SSH 命令字符串，无任何字符过滤）。两个脚本改为从新增的 `scripts/dev/dev-workflow.env`（gitignored）读取主机/端口/路径，不再硬编码在已提交脚本里。
+  - **其它**：新增 `.gitattributes`（跨平台换行归一化）、`CONTRIBUTING.md`、PR 模板加"对应设计文档"字段。
+  - **顺带修复一个 `.gitignore` 漏洞**：`.env`/`.env.*` 模式实际不匹配 `dev-workflow.env` 这个文件名（不以 `.env` 开头），已补充显式规则 `scripts/dev/dev-workflow.env`，并用 `git check-ignore -v` 验证生效。
+  - **自测证据**：`npm run quality` 全量通过；`PUML_JAR=... npm run check:diagrams` 通过（2 张图编译成功）且 `gen:diagrams` 幂等（二次运行无新改动）；对当前正在运行的真实预览服务（PID 由旧脚本启动）执行 `preview.sh restart`，新脚本正确识别、停止旧进程并重新拉起，`curl` 确认 HTTP 200；模拟删除 `dev-workflow.env` 验证脚本按预期报错退出而非静默使用错误默认值；`restart-remote.ps1` 的分支名白名单正则用一组通过/拒绝样例验证过滤逻辑正确（本机无 PowerShell，未做端到端执行验证，见遗留项）。
+- **未采纳（及理由）**：LICENSE、`.claude/rules/*.md` 项目内镜像——已征询用户明确选择不采纳；`docs/architecture/stack-recipes/`——尚未选定具体技术栈，属于为假设的未来需求预先设计，先不引入；`scripts/init.mjs`/`SCAFFOLD.md`——脚手架自身初始化工具，本项目已初始化，不适用；`.claude/hooks/pre-edit-validate.py` 与项目级 `.claude/settings.json`——确认用户全局配置已提供同等校验，属纯冗余；`.claude/skills/sync-shared-rules/`——是 scaffold 作为"规则同步枢纽"角色专属技能，不适合复制进被同步方。
+- **遗留项**：
+  - `restart-remote.ps1` 的改动未在真实 Windows PowerShell 环境里端到端执行验证（本次会话在 Linux 上完成，只做了语法层面的正则逻辑验证），建议下次在 Windows 端跑一次 `sync.ps1 -RestartPreview` 完整验证。
+  - `docs/diagrams/*.svg` 是本机 JVM 字体度量下的渲染产物，不同机器渲染字节可能不同，属预期行为（见 CLAUDE.md 说明），非缺陷。
+  - 尚未实际 `git add` + 提交本次改动，也未推送观察 CI（含新增的 `diagrams` job 与 `windows-latest` matrix 是否真的转绿）。
+
 ## 2026-07-05（下午）— 验证跨机协同工作流是否满足实际需求，发现并修正环境假设
 
 - **主题**：用户提出四条具体验收要求（Linux 托管+Windows 窗口渲染、Windows 端凭源码与渲染标注自主改代码并推送重启、双向一键同步、双端用 worktree），要求对照 [跨机协同开发预览工作流](architecture/dev-workflow.md) 和已提交脚本逐条验证是否真能做到，而不是只核对代码是否符合设计文档字面描述。
