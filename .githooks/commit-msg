@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# 提交信息门禁：强制 `<type>(<scope>): <English 主题> / <中文主题>` 中英双语（英文在前）格式（type 限定 feat|fix|docs|style|refactor|test|chore）。
+# 由 git 在提交时自动调用，读取 $1 指向的提交信息文件；零依赖纯 shell 正则，无需 husky/commitlint。
+# 启用方式（仓库首次克隆后执行一次）：git config core.hooksPath .githooks
+set -euo pipefail
+
+commit_msg_file="$1"
+
+# 取第一行非空、非注释（# 开头）内容作为主题行。
+subject_line=""
+while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in
+    ""|"#"*) continue ;;
+    *) subject_line="$line"; break ;;
+  esac
+done < "$commit_msg_file"
+
+if [ -z "$subject_line" ]; then
+  echo "commit-msg: 提交信息为空，已阻止本次提交。" >&2
+  exit 1
+fi
+
+# 由 git 自己生成主题行的提交不受本规范约束：
+# merge、revert、revert 的 revert（Reapply），以及 rebase --autosquash 用的 fixup!/squash!/amend! 前缀。
+case "$subject_line" in
+  "Merge "*|"Revert \""*|"Reapply \""*|"fixup! "*|"squash! "*|"amend! "*)
+    exit 0
+    ;;
+esac
+
+# 主题行结构：<type>(<scope>): <英文主题> / <中文主题>（中英双语，英文在前，用 " / " 分隔）。
+# " / " 前的英文段至少含一个 ASCII 字母（保证有英文、且在前）；分隔符后非空（保证有第二语言主题）。
+# 只校验"英文在前 + / 分隔 + 后段非空"这一结构，不做脆弱且跨平台不稳的 CJK 逐字检测，语义由人把关。
+pattern='^(feat|fix|docs|style|refactor|test|chore)\([^)]+\): .*[A-Za-z].* / .+$'
+if ! [[ "$subject_line" =~ $pattern ]]; then
+  echo "commit-msg: 提交信息格式不合规，已阻止本次提交。" >&2
+  echo "commit-msg: 期望格式：<type>(<scope>): <English 主题> / <中文主题>（中英双语，英文在前，用 ' / ' 分隔）" >&2
+  echo "commit-msg: type 限定：feat|fix|docs|style|refactor|test|chore" >&2
+  echo "commit-msg: 示例：feat(web): add stack recipe / 新增技术栈参考配方" >&2
+  echo "commit-msg: 实际收到：$subject_line" >&2
+  exit 1
+fi
+
+exit 0

@@ -57,7 +57,7 @@ python3 -m http.server -d public 8000
 
 - 语言：对话与 `docs/` 用简体中文；代码注释中文为主，标准英文术语/协议名/API 名保留原文；用户可见 UI 文案默认简体中文。详见 [codex-rules/rules/language.md](codex-rules/rules/language.md)。
 - 品牌名统一写作 `Axial Muse`（带空格）；`AxialMuseWebsite` 仅作仓库/项目标识。首版定位是“技术分享”而非泛“博客”。这些命名由契约门禁强制，见下节。
-- 分支：`main` 稳定不直接提交，`dev` 开发主干，特性分支 `feature/描述` / `bugfix/描述`。提交信息中文，格式 `<type>(<scope>): <主题>`，不带 Co-Authored-By。
+- 分支：`main` 稳定不直接提交，`dev` 开发主干，特性分支 `feature/描述` / `bugfix/描述`。提交信息中英双语、英文在前，格式 `<type>(<scope>): <English 主题> / <中文主题>`，不带 Co-Authored-By。
 - `.env`、`node_modules/`、构建产物、日志不进 Git（见 `.gitignore`）。
 - UI 改动必须做实际渲染或截图验证；纯静态页面至少检查入口文件、资源引用和关键链接。
 - 每次任务结束更新 [docs/progress.md](docs/progress.md)（时间戳/主题/完成/遗留）；解决 bug 后把原因和方案追加到 [codex-rules/known-issues.md](codex-rules/known-issues.md)，动手前先查阅它避免重复踩坑。
@@ -75,4 +75,6 @@ python3 -m http.server -d public 8000
 - `check:secrets`（`scripts/quality/check-secrets.mjs`）：扫描常见密钥形态，防止 token/密钥误入库。
 - `check:site`（`scripts/quality/check-static-site.mjs`）：校验 `public/index.html` 存在必需结构片段（`lang`、`<title>Axial Muse</title>`、`#projects`/`#writing`/`#roadmap` 锚点等）且引用的本地资源都存在。改首页结构或锚点时同步改此脚本的 `requiredSnippets`。
 
-本地提交前会由 `.githooks/pre-commit` 自动跑 `npm run quality`（首次克隆后执行 `git config core.hooksPath .githooks` 启用）；它是 CI 的本地镜像，别绕过。
+本地提交前会由 `.githooks/pre-commit` 自动跑 `npm run quality`、`.githooks/commit-msg` 校验提交信息格式（首次克隆后执行 `git config core.hooksPath .githooks` 启用）；它们是 CI 的本地镜像，别绕过。
+
+push 到 `main`/`dev`，或合并 PR 后，必须主动观察 `.github/workflows/ci.yml` 的运行结果（`gh pr checks <PR号> --watch` 或 `gh run watch`），不通过要定位原因、修复并重跑 `npm run quality` 验证后再推送，直到转绿；不允许在 CI 红色或状态未知时汇报任务完成。
