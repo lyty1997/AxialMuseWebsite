@@ -78,7 +78,7 @@ AxialMuseWebsite.preview/          # 新增 worktree，专门用于 checkout 待
 
 **创建方式的一处约束**：git 不允许同一个分支在两个 worktree 里同时被检出（比如主目录已经在 `dev`，预览 worktree 就不能再 `git checkout dev`，会报 `already used by worktree`）。所以预览 worktree 用 `git worktree add --detach ../AxialMuseWebsite.preview dev` 建成**分离头指针（detached HEAD）**模式，之后每次要看哪个分支的效果，都是 `git checkout --detach <分支或 origin/分支的最新提交>`，而不是切到分支本身。这样无论主目录当前停在哪个分支，预览 worktree 都不会和它冲突，包括预览 `dev` 或 `main` 自己的场景。
 
-**Windows 端的 worktree 是另外一回事，工具链自带，不用手动管理**：如果 Windows 端用 Claude Code / Claude Desktop 的编码会话来改代码，工具链本身会给每个会话自动建一个独立 worktree + 分支（例如 `.claude/worktrees/<会话名>`，分支名形如 `claude/<会话名>`），和主目录（跟随 `main`）互不干扰。这天然满足"发生改动时用 worktree 隔离"的诉求，不需要在这份设计里再手动搭一套 Windows 侧 worktree 管理机制；该会话分支后续照常走 push → 同步 → （按需）合并的路径回到 `dev`/`main`。
+**Windows 端的 worktree 是另外一回事，工具链自带，不用手动管理**：如果 Windows 端用 Claude Code / Claude Desktop 的编码会话来改代码，工具链本身会给每个会话自动建一个独立 worktree + 分支（例如 `.claude/worktrees/<会话名>`，分支名形如 `claude/<会话名>`），和主目录（跟随 `main`）互不干扰。这天然满足"发生改动时用 worktree 隔离"的诉求，不需要在这份设计里再手动搭一套 Windows 侧 worktree 管理机制；该会话分支后续必须先 push 并合入 `dev`，完成集成验证后再通过唯一的 `dev -> main` PR 晋级。
 
 ## 源码同步脚本（双向、一键）
 
@@ -167,6 +167,18 @@ deactivate Preview
 4. ~~两端各跑一次 `sync.sh` / `sync.ps1`，确认能互相看到对方的提交~~：**已完成**（此前验证时把 `dev` 推到了 origin，见 [项目进度](../progress.md)）。
 5. **新增并已验证**：Windows 端生成专用 SSH 密钥、用户手动装到 Linux 端 `authorized_keys`、`restart-remote.ps1` 通过 SSH 成功触发 Linux 端 `preview.sh restart`（从 `779407e` 拉到 `ee7b400` 并重启）。
 6. ~~走一轮完整"改动 → 推送 → 远程重启 → Windows 端渲染确认"的端到端验证~~：**已完成，2026-07-05**。Linux 托管机放行局域网到 8088 端口的访问后，`Test-NetConnection` 从 Windows 端确认端口可达；用已配对的 Chrome 扩展 `navigate` 到 `http://192.168.0.162:8088/`，标签页标题变为真实的 `Axial Muse`、正文内容读取正常，确认渲染链路完全打通。详细记录见 [项目进度](../progress.md)。
+
+
+## 从开发预览晋级到生产
+
+本地预览闭环结束不代表可以直接更新 `main`。主站统一使用以下晋级路径：
+
+1. 所有准备发布的改动在 `dev` 形成完整提交并推送到 `origin/dev`。
+2. 观察 `dev` CI；失败时在 `dev` 修复并重新推送，不能把修复直接提交到 `main`。
+3. 确认局域网预览、桌面/平板/移动截图、内容审核和质量门禁均完成。
+4. 创建唯一方向的生产 PR：`dev -> main`，核对 head/base，禁止反向或跨过 `dev`。
+5. required checks 通过后合并 PR，再观察 `main` CI 和生产 deployment。
+6. 本地 `main` fast-forward 同步 `origin/main` 后切回 `dev`；不得在 `main` 继续开发。
 
 ## 与生产发布的边界
 

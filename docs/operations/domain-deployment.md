@@ -40,11 +40,11 @@
 ## 生产拓扑
 
 ```text
-贡献者 -> feature 分支 -> GitHub Actions 质量门禁 -> 本地/局域网预览
-                              |
-                         PR 审核通过
-                              |
-                         合并到 main
+贡献者 -> dev（feature 先合入 dev）-> dev CI -> 本地/局域网预览
+                                           |
+                                    dev -> main PR
+                                           |
+                                      合并到 main
                               |
                     GitHub production job
                               |
@@ -61,7 +61,7 @@ DNSPod -> <project>.axialmuse.com -> Nginx -> /srv/axialmuse-experiences/<projec
 | 环境 | 来源 | 地址 | 索引策略 | 用途 |
 |---|---|---|---|---|
 | 本地预览 | 当前工作区 | 现有局域网预览地址 | 不公开 | 开发与视觉验证 |
-| PR 验收 | feature / `dev` | 本地预览指定分支 | 不公开 | 合并前验收 |
+| PR 验收 | `dev -> main` | 本地预览 `dev` 精确提交 | 不公开 | 生产合并前集成验收 |
 | 生产 | `main` 精确提交 | `https://www.axialmuse.com/` | 允许索引 | 对外发布 |
 
 M0 不额外建设公网 staging 子域名，避免增加服务器配置、证书、索引和访问控制成本。需要多人异地审核时再单独设计 staging。
@@ -92,7 +92,7 @@ M0 不额外建设公网 staging 子域名，避免增加服务器配置、证�
 |---|---|---|
 | Nginx | HTTPS、重定向、安全头、静态文件 | 使用系统包；不安装可视化服务器面板 |
 | Git | 拉取精确生产提交 | 只读仓库凭证；不保存 GitHub 写权限 |
-| ACME 客户端 | 签发与续期 TLS 证书 | 使用 HTTP-01；续期后验证并 reload Nginx |
+| Certbot | 签发与续期 TLS 证书 | 使用 webroot HTTP-01；续期后验证并 reload Nginx |
 | TAT agent | 接收腾讯云固定运维命令 | 保持在线；命令和实例按 CAM 最小授权 |
 | logrotate / systemd | 日志轮转、服务与续期定时器 | 不引入第三方常驻监控 agent |
 
@@ -112,6 +112,25 @@ M0 不额外建设公网 staging 子域名，避免增加服务器配置、证�
 - 发布目录不得被 Nginx 或发布流程就地覆盖。
 - 默认保留最近 5 个成功版本；当前版本和上一个版本不得被清理。
 - 发布脚本与 Nginx 配置后续纳入仓库，安装到服务器的副本由 root 持有且不可被部署凭证修改。
+
+### 配置即代码契约
+
+M0-P 实施时按以下路径纳入仓库；表中路径是设计契约，文件在对应实施步骤完成前可以不存在：
+
+| 计划路径 | 责任 |
+|---|---|
+| `ops/nginx/axialmuse.conf` | 精确 Host、跳转、Web Root、错误页和缓存规则 |
+| `ops/nginx/snippets/security-headers.conf` | CSP、HSTS 以外的安全响应头；HSTS 由启用步骤单独控制 |
+| `ops/deploy/deploy.sh` | 校验 SHA、创建 release、冒烟、原子切换和失败回滚 |
+| `ops/deploy/rollback.sh` | 只切换到已存在且通过校验的上一 release |
+| `ops/systemd/` | 证书检查、服务器健康与维护 timer/service 模板 |
+| `ops/logrotate/` | Nginx error log 和认证日志保留策略模板 |
+| `.github/workflows/deploy-production.yml` | `main` 精确 SHA 到 TAT 的受限生产发布 |
+| `.github/workflows/maintenance.yml` | HTTPS、TLS、链接、DNS 和到期提醒的定时检查 |
+
+- 仓库只保存无 secret 模板；实例 ID、SecretId、SecretKey、deploy key 和证书私钥不得写入这些文件。
+- 安装到 `/etc`、`/usr/local/sbin` 和 root 配置目录的副本由 root 持有，发布身份没有修改权限。
+- 模板变更先在测试路径执行语法与受控 hosts 验证，再由独立运维步骤安装；网页内容发布不能顺带覆盖系统配置。
 
 ## 服务器安全
 
@@ -197,6 +216,37 @@ TAT `InvokeCommand` 支持对已启用参数的固定 command 传入 JSON 编码
 - 未知 `Host` 不提供站点内容。
 
 所有跳转保留路径和查询参数。主站 Nginx Web Root 只读指向 `/srv/axialmuse/current`；每个项目只读指向 `/srv/axialmuse-experiences/<project-slug>/current`。所有站点关闭目录列表并定义独立错误页，不从 Host 动态拼接磁盘路径。
+
+### 安全响应头
+
+主站静态响应使用以下基线；实现阶段在 Nginx 模板中保留完整值，并由公网冒烟检查验证：
+
+| 响应头 | M0 值或策略 |
+|---|---|
+| `X-Content-Type-Options` | `nosniff` |
+| `Content-Security-Policy` | 仅允许本站 HTML、CSS、图片、字体和媒体；禁止脚本、对象、frame、表单提交和跨站连接 |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | `camera=(), geolocation=(), microphone=(), payment=(), usb=()` |
+| `X-Frame-Options` | `DENY`，作为旧客户端的 frame 防护补充 |
+| `Cross-Origin-Opener-Policy` | `same-origin` |
+| `Strict-Transport-Security` | HTTPS 全链路稳定后启用 `max-age=15552000`；首版不提交 preload |
+
+M0 CSP 精确基线为 `default-src 'none'; style-src 'self'; img-src 'self' data:; font-src 'self'; media-src 'self'; script-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests`。实现若需要增加来源，必须先说明实际资源和隐私影响，不能临时使用 `*`、`unsafe-inline` 或 `unsafe-eval` 放宽。
+
+HSTS 的 `includeSubDomains` 只在所有已登记子域名均具备有效 HTTPS 且完成恢复演练后启用。未知或未来子域名不能因提前启用 HSTS 而在尚未签证时失去可控验证路径。
+
+### 缓存与传输
+
+| 资源 | Cache-Control 基线 |
+|---|---|
+| HTML | `no-cache`，每次可复用缓存但必须重新验证 |
+| `robots.txt`、`sitemap.xml` | `public, max-age=300` |
+| 未指纹化 CSS、favicon 和图片 | `public, max-age=3600` |
+| 内容哈希文件名资源 | `public, max-age=31536000, immutable` |
+| MP4、WebVTT 与视频封面 | `public, max-age=86400`；MP4 支持 Range 请求 |
+| 错误页 | `no-store` |
+
+Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩已压缩图片或视频。响应必须带正确 MIME type 和 `ETag` 或 `Last-Modified`，发布切换后不能让旧 HTML 长时间引用已删除资源。
 
 ### 证书策略
 

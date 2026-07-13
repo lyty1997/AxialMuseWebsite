@@ -9,6 +9,13 @@
 
 ## 分支与提交规范
 
+- 本仓库默认晋级路径固定为：在 `dev` 提交 -> push `origin/dev` -> 观察 `dev` CI -> 创建 `dev -> main` PR -> required checks 通过 -> 合并 PR -> 观察 `main` CI。
+- 用户未明确要求特性分支时，工作提交直接落在 `dev`，不得把同一任务拆成一笔提交到 `dev`、另一笔提交到 `main`。
+- 使用 feature/bugfix 分支时，该分支必须先合入 `dev` 并完成集成验证；生产 PR 仍只能从 `dev` 指向 `main`。
+- 禁止直接 commit 或 push `main`，也禁止用本地 merge 后 push 的方式绕过 `dev -> main` PR。
+- 创建 PR 前确认 `dev` 已推送且工作区干净，PR head/base 分别为 `dev`/`main`。
+- 合并后本地 `main` 只允许 fast-forward 到 `origin/main`；完成后切回 `dev` 继续开发。
+- 紧急修复如需例外流程，必须先得到用户明确批准，并在修复后回合并到 `dev`，避免两条主干漂移。
 - 分支：`main` 稳定不直接提交，`dev` 开发主干，特性分支用 `feature/描述` / `bugfix/描述`。
 - 提交信息主题行采用中英双语、英文在前，格式 `<type>(<scope>): <English 主题> / <中文主题>`（用 ` / ` 分隔英文与中文两段；type 限定：feat / fix / docs / style / refactor / test / chore）。示例：`feat(web): add stack recipe / 新增技术栈配方`。
 - 提交信息**不带** `Co-Authored-By` 尾注。

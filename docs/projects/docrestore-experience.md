@@ -8,7 +8,7 @@
 
 本文定义 DocRestore 在 Axial Muse 主站中的公开展示方式，并保留未来重新评估在线体验时的技术与安全门禁。DocRestore 将文档照片经过 OCR、清洗、去重、可选 PII 脱敏和 LLM 精修后还原为 Markdown。
 
-用户已确认首版不提供在线体验。主站只展示项目说明、公开 GitHub 仓库和演示视频；不部署 DocRestore 前端，不公开后端，不创建项目或 API 子域名的 DNS、Nginx、证书和健康检查。注册表保留 `docrestore` 名称用于避免后续冲突，但明确 `onlineExperience: false`。
+用户已确认首版不提供在线体验。主站首次上线只展示项目说明和公开 GitHub 仓库，演示视频在素材完成后作为增量增强；不部署 DocRestore 前端，不公开后端，不创建项目或 API 子域名的 DNS、Nginx、证书和健康检查。注册表保留 `docrestore` 名称用于避免后续冲突，但明确 `onlineExperience: false`。
 
 ## 当前发布决策
 
@@ -16,7 +16,7 @@
 |---|---|
 | 主站项目说明 | 展示真实问题、处理流程、技术取舍、当前边界和开源状态 |
 | GitHub 仓库 | 展示 `https://github.com/lyty1997/DocRestore` |
-| 演示视频 | 素材通过隐私审核后在主站使用原生视频控件展示 |
+| 演示视频 | 不阻塞首次上线；素材完整并通过隐私审核后以独立内容更新增加 |
 | 在线体验 | 不提供，不显示“在线体验”按钮 |
 | `docrestore.axialmuse.com` | 仅保留名称，不创建 DNS、证书或 Web Root |
 | DocRestore 前端 | 不发布到上海轻量服务器 |
@@ -37,14 +37,14 @@
 | 构建命令 | `npm ci` 后运行 `npm run typecheck`、`npm run lint`、`npm exec -- vitest run`、`npm run build` |
 | 静态产物 | 从仓库根目录计为 `frontend/dist`；从构建工作目录计为 `dist` |
 | 后端能力 | FastAPI、WebSocket、文件上传、任务与结果持久化、GPU OCR、LLM 调用 |
-| 当前公开方式 | 主站项目说明、GitHub 仓库和演示视频 |
+| 当前公开方式 | 主站项目说明和 GitHub 仓库；演示视频待素材完成后追加 |
 | 后端位置 | 自有服务器可用于私有运行和录制；当前不作为公共服务入口 |
 
 DocRestore README 当前写有 `npm test`，但 `frontend/package.json` 尚未定义 `test` script；自动发布先使用 `npm exec -- vitest run`。在 DocRestore 仓库正式配置 CI 时应补齐稳定的 `test` script，并以仓库门禁为最终真相源。
 
 ## 演示视频契约
 
-主站只在真实视频、封面和字幕全部就绪后显示播放器，不展示空播放器或“即将上线”占位。首版使用原生 `<video>`，不嵌入第三方 iframe，不自动播放，不引入统计或追踪脚本。
+主站只在真实视频、封面和字幕全部就绪后显示播放器，不展示空播放器或“即将上线”占位。后续增加视频时使用原生 `<video>`，不嵌入第三方 iframe，不自动播放，不引入统计或追踪脚本。
 
 推荐素材：
 

@@ -6,11 +6,13 @@
 
 - [项目进度](progress.md)
 - [架构概览](architecture/overview.md)
+- [M0 技术选型决策](architecture/technology-selection.md)
 - [项目体验子域名架构](architecture/project-experience-hosting.md)
 - [术语表](architecture/glossary.md)
 - [待决策问题](architecture/open-decisions.md)
 - [跨机协同开发预览工作流](architecture/dev-workflow.md)
 - [主站体验与内容架构](product/site-experience.md)
+- [M0 主站实现 Spec](product/m0-main-site-spec.md)
 - [内容与产品路线](product/content-roadmap.md)
 - [DocRestore 项目展示与未来体验设计](projects/docrestore-experience.md)
 - [VibeCoding Project Scaffold 项目展示设计](projects/vibecoding-project-scaffold.md)

@@ -19,11 +19,11 @@
       "problem": "把多张文档照片转化为结构清晰、可编辑并可追溯的 Markdown，而不是只得到彼此孤立的 OCR 文本。",
       "decisions": [
         "采用分阶段处理流水线组织 OCR、清洗、合并、脱敏、精修和输出",
-        "首版主站只展示源码与演示视频，不提供在线体验"
+        "主站首次上线只展示源码，不提供在线体验；演示视频作为后续增量"
       ],
       "repositoryUrl": "https://github.com/lyty1997/DocRestore",
       "productionBranch": "main",
-      "showcaseMode": "repository-and-video",
+      "showcaseMode": "repository",
       "demoVideoStatus": "asset-pending",
       "onlineExperience": false,
       "experienceRegistryId": "docrestore",

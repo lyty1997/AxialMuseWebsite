@@ -1,12 +1,14 @@
 # 主站体验与内容架构
 
-状态：draft
+状态：active
 最近更新：2026-07-13
 适用范围：M0-M2 主站定位、信息架构、内容模型、页面体验与 SEO
 
 ## 目的
 
 本文定义访问者如何理解 Axial Muse、如何找到项目与技术分享，以及内容如何从首版单页演进为可维护的多页面站点。它不决定生产托管供应商，生产发布见 [域名与生产发布](../operations/domain-deployment.md)。
+
+M0 的页面级结构、文案状态、设计令牌、素材、响应式和 Definition of Done 见 [M0 主站实现 Spec](m0-main-site-spec.md)；本文继续作为 M0-M2 产品与信息架构基线。
 
 ## 产品定位
 
@@ -55,7 +57,7 @@ M0 保留单一公开路由 `/`，使用页面内锚点形成最小闭环：
 - 视频使用原生 `<video>` 控件，不自动播放、不使用第三方 iframe，默认只预加载元数据，并提供封面、字幕和文字摘要。
 - 视频、封面和字幕未全部就绪时不显示播放器或占位按钮，项目说明与仓库链接仍可独立发布。
 - 演示素材只使用可公开样例，发布前逐帧检查凭证、路径、IP、通知、个人信息和第三方版权内容。
-- DocRestore 首版采用“公开仓库 + 演示视频”模式，`docrestore.axialmuse.com` 只保留名称，不创建 DNS 或体验入口。详细契约见 [DocRestore 项目展示与未来体验设计](../projects/docrestore-experience.md)。
+- DocRestore 在主站首次上线时只展示公开仓库，演示视频作为素材完成后的增量增强；`docrestore.axialmuse.com` 只保留名称，不创建 DNS 或体验入口。详细契约见 [DocRestore 项目展示与未来体验设计](../projects/docrestore-experience.md)。
 
 ### M1：结构化内容
 
@@ -85,6 +87,7 @@ M0 保留单一公开路由 `/`，使用页面内锚点形成最小闭环：
 
 | 字段 | 必填 | 说明 |
 |---|---|---|
+| `id` | 是 | 全站唯一、稳定的项目标识 |
 | `title` | 是 | 公开名称 |
 | `slug` | 是 | 稳定路径标识 |
 | `summary` | 是 | 一句话说明解决的问题 |
@@ -94,8 +97,13 @@ M0 保留单一公开路由 `/`，使用页面内锚点形成最小闭环：
 | `updatedAt` | 是 | 最近实质更新日期 |
 | `problem` | 是 | 问题背景和约束 |
 | `decisions` | 是 | 关键技术或产品取舍 |
-| `evidence` | 否 | 代码、演示、文档或可验证结果链接 |
+| `evidence` | 发布时 | 真实截图、代码、演示、文档或可验证结果链接 |
 | `repositoryUrl` | 否 | 公开源码仓库的完整 HTTPS URL |
+| `productionBranch` | 有仓库时 | 用于核对公开事实的稳定分支 |
+| `showcaseMode` | 是 | 当前允许的公开动作集合；未就绪增强不能提前写入 |
+| `demoVideoStatus` | 有视频计划时 | 素材状态；未完成时禁止页面入口 |
+| `onlineExperience` | 是 | 是否批准公开体验；`false` 时禁止体验入口 |
+| `experienceRegistryId` | 有保留体验时 | 与项目体验注册表对应的稳定标识 |
 | `demoVideoUrl` | 否 | 已审核演示视频的站内路径或完整 HTTPS URL |
 | `demoVideoPoster` | 否 | 与视频匹配的 16:9 封面路径 |
 | `demoVideoCaptions` | 否 | UTF-8 WebVTT 字幕路径 |
@@ -144,9 +152,9 @@ M0 保留单一公开路由 `/`，使用页面内锚点形成最小闭环：
 
 ## SEO 与分享元数据
 
-每个可索引页面至少包含唯一的 `title`、`description`、canonical URL、Open Graph 标题/摘要/图片和正确的 `lang="zh-CN"`。生产 canonical 主机为 `https://www.axialmuse.com/`。结构化内容阶段增加站点根目录的 `sitemap.xml` 与 `robots.txt`；站点地图仅列 canonical URL，并使用完整绝对地址。
+每个可索引页面至少包含唯一的 `title`、`description`、canonical URL、Open Graph 标题/摘要/图片和正确的 `lang="zh-CN"`。生产 canonical 主机为 `https://www.axialmuse.com/`。M0 即在站点根目录发布 `sitemap.xml` 与 `robots.txt`；站点地图只列 canonical 首页并使用完整绝对地址，后续新增页面时同步扩展。
 
-首页标题采用“Axial Muse + 类别说明”，内容页标题采用“内容标题 | Axial Muse”。预览部署必须 `noindex`，生产部署不得意外继承该设置。项目体验子域名默认 `noindex`，项目背景与技术内容由主站项目页承载；只有体验具备独立可检索内容时才单独开放索引。`robots.txt` 只管理抓取，不承担隐藏敏感内容的职责。
+M0 首页标题精确使用 `Axial Muse | 个人项目与技术分享`，后续内容页采用“内容标题 | Axial Muse”。预览部署必须 `noindex`，生产部署不得意外继承该设置。项目体验子域名默认 `noindex`，项目背景与技术内容由主站项目页承载；只有体验具备独立可检索内容时才单独开放索引。`robots.txt` 只管理抓取，不承担隐藏敏感内容的职责。
 
 参考：[Google 站点地图指南](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)、[Google robots.txt 指南](https://developers.google.com/search/docs/crawling-indexing/robots/intro)。
 

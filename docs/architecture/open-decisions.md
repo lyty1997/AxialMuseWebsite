@@ -16,7 +16,7 @@
 - **D-014 / 2026-07-13**：为各项目提供 `https://<project-slug>.axialmuse.com/` 独立体验入口。
 - **D-017 / 2026-07-13**：首个项目为 DocRestore，保留名称 `docrestore.axialmuse.com`，公开仓库 `https://github.com/lyty1997/DocRestore`，生产分支 `main`，构建目录 `frontend`，静态产物 `frontend/dist`。
 - **D-018 / 2026-07-13**：DocRestore 的 GPU OCR、API、WebSocket、上传、任务和数据存储可在自有服务器私有运行，仅用于开发和录制演示，当前不作为公共服务入口。
-- **D-020 / 2026-07-13**：DocRestore 首版不提供在线体验，不创建 `docrestore` 或 API 子域名的 DNS、Nginx、证书和部署；主站只展示项目说明、GitHub 仓库和演示视频。
+- **D-020 / 2026-07-13**：DocRestore 首版不提供在线体验，不创建 `docrestore` 或 API 子域名的 DNS、Nginx、证书和部署；主站首次上线展示项目说明和 GitHub 仓库，演示视频作为素材完成后的增量增强。
 - **D-021 / 2026-07-13**：演示视频默认使用主站原生 `<video>` 控件，不自动播放、不嵌入第三方 iframe，并要求封面、中文字幕、文字摘要和逐帧隐私审核。
 - **D-022 / 2026-07-13**：主站第二个项目为 VibeCoding Project Scaffold，仓库 `https://github.com/lyty1997/project-scaffold`，生产分支 `main`；首版只展示项目说明和“查看源码”。
 - **D-023 / 2026-07-13**：主站项目与子域名体验拆分为两个注册表；VibeCoding Project Scaffold 不创建子域名、不提供在线体验，也不要求演示视频。
@@ -26,10 +26,14 @@
 - **OD-005 服务器现场核验**：通过控制台和只读命令复核系统基线、CPU 架构、监听端口、现有软件、到期日、自动续费、快照能力和 TAT agent 状态。
 - **OD-007 公安备案**：是否已有公安联网备案号；若尚未办理，网站开通后 30 日内按官方流程提交。
 - **OD-009 GitHub 部署能力**：核验仓库可见性与 GitHub 方案是否支持私有仓库的 environment secrets 和 protection rules；不支持时先决定升级方案或记录使用 repository secrets 的风险接受。
-- **OD-010 后续项目体验**：继续提供其他项目的名称、期望 slug、仓库地址、生产分支、构建与产物目录；DocRestore 已完成首项登记。
+- **OD-013 首版项目视觉证据**：为 DocRestore 和 VibeCoding Project Scaffold 分别准备无敏感信息的真实界面或工程截图；演示视频不阻塞本项。
+- **OD-014 M0 设计评审**：用户确认 M0 技术选型和主站实现 Spec；确认前只允许继续补充设计与公开素材，不进入页面实现或生产配置。
+
+## 后续非阻塞事项
+
+- **OD-010 后续项目体验**：继续提供其他项目的名称、期望 slug、仓库地址、生产分支、构建与产物目录；不阻塞当前两个项目的主站展示。
 - **OD-011 DocRestore 演示素材**：提供无敏感样例、视频成片、WebP 封面、WebVTT 中文字幕和文字摘要，并完成版权与逐帧隐私审核。
 - **OD-012 DocRestore 媒体托管**：根据成片大小、主站套餐流量和预计访问量确认随站托管；不合适时先设计腾讯云对象存储方案。
-- **OD-013 首版项目视觉证据**：为 DocRestore 和 VibeCoding Project Scaffold 分别准备无敏感信息的真实界面或工程截图；演示视频不阻塞本项。
 
 ## 已形成的首版基线
 
@@ -41,10 +45,12 @@
 - **D-015 / 2026-07-13**：项目体验使用显式 DNS A 记录、精确 Nginx `server_name`、单项目证书、独立目录和独立发布权限；不使用泛解析或泛域名证书。
 - **D-016 / 2026-07-13**：M0 只直接支持静态项目体验，默认 `noindex`；动态能力必须另行设计。
 - **D-019 / 2026-07-13**：若未来重新批准 DocRestore 在线体验，候选拓扑为“上海轻量服务器静态前端 + 浏览器直连独立 HTTPS/WSS API”；该方案当前冻结，不属于首版实施范围。
+- **D-025 / 2026-07-13**：M0 页面结构、内容状态、视觉令牌、响应式、素材、SEO、可访问性和 Definition of Done 统一受 `docs/product/m0-main-site-spec.md` 约束，评审通过后才进入页面实现。
+- **D-026 / 2026-07-13**：M0 首次上线内容基线为两个可信项目和真实的技术分享空状态；完整技术文章与 DocRestore 演示视频均为上线后增量，不阻塞主站首次上线。
 
 ## 后续技术选型
 
-- 当文章达到 5 篇或首页无法承载项目详情时，是否引入 Astro、Next.js 或其他静态站点框架。
+- 当文章达到 5 篇、首页无法承载项目详情或人工同步开始产生缺陷时，重新评估 Astro、Next.js 或其他静态站点框架；候选标准见 `docs/architecture/technology-selection.md`。
 - 结构化内容采用 Markdown、MDX 或 CMS；只有 Git 审核明显成为发布瓶颈时才评估 CMS。
 
 ## 内容与产品

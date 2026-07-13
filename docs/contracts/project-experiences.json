@@ -33,7 +33,7 @@
       "status": "planned",
       "onlineExperience": false,
       "dnsProvisioning": "disabled",
-      "showcaseMode": "repository-and-video",
+      "showcaseMode": "repository",
       "deliveryMode": "static",
       "repository": "https://github.com/lyty1997/DocRestore",
       "productionBranch": "main",
