@@ -1,8 +1,8 @@
 # 跨机协同开发预览工作流
 
 状态：active
-最近更新：2026-07-09
-适用范围：Windows 机器与 Linux 托管机之间的本地开发预览闭环（编码会话可以在任意一端发起，托管固定在 Linux 一端）。**不决定生产部署目标**——GitHub Pages / Cloudflare Pages / Vercel / 自托管仍是 [待决策问题](open-decisions.md) 中的未决项，本工作流只覆盖“改代码 → 本地渲染验证 → 再改”的迭代环节。
+最近更新：2026-07-12
+适用范围：Windows 机器与 Linux 托管机之间的本地开发预览闭环（编码会话可以在任意一端发起，托管固定在 Linux 一端）。本工作流只覆盖“改代码 → 本地渲染验证 → 再改”的迭代环节；生产目标已于 2026-07-12 确认为腾讯云轻量应用服务器，见 [域名与生产发布设计](../operations/domain-deployment.md)，两条链路独立运行。
 
 ## 背景与目标
 
@@ -168,7 +168,8 @@ deactivate Preview
 5. **新增并已验证**：Windows 端生成专用 SSH 密钥、用户手动装到 Linux 端 `authorized_keys`、`restart-remote.ps1` 通过 SSH 成功触发 Linux 端 `preview.sh restart`（从 `779407e` 拉到 `ee7b400` 并重启）。
 6. ~~走一轮完整"改动 → 推送 → 远程重启 → Windows 端渲染确认"的端到端验证~~：**已完成，2026-07-05**。Linux 托管机放行局域网到 8088 端口的访问后，`Test-NetConnection` 从 Windows 端确认端口可达；用已配对的 Chrome 扩展 `navigate` 到 `http://192.168.0.162:8088/`，标签页标题变为真实的 `Axial Muse`、正文内容读取正常，确认渲染链路完全打通。详细记录见 [项目进度](../progress.md)。
 
-## 未决事项
+## 与生产发布的边界
 
-- 生产环境最终部署目标（GitHub Pages / Cloudflare Pages / Vercel / 自托管）仍未决定，见 [待决策问题](open-decisions.md)；本工作流只覆盖本地预览环节，与生产部署方式无关，二者可以独立演进。
-
+- 本地预览继续由现有 Linux 托管机和 `8088` 端口承担，不映射到公网生产域名。
+- 生产环境由腾讯云轻量应用服务器承担，只接收 GitHub `main` 的精确提交；详细链路见 [域名与生产发布设计](../operations/domain-deployment.md)。
+- 预览脚本不得持有腾讯云 CAM 凭证，也不得直接修改生产 DNS、Nginx 或 release。
