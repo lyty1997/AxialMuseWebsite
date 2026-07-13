@@ -12,6 +12,7 @@ Axial Muse Website 是个人项目与技术分享网站。第一版聚焦个人�
 
 - Claude Code 指引：[CLAUDE.md](CLAUDE.md)
 - 项目规范：[AGENTS.md](AGENTS.md)
+- 贡献指南：[CONTRIBUTING.md](CONTRIBUTING.md)
 - 文档入口：[docs/README.md](docs/README.md)
 - 项目进度：[docs/progress.md](docs/progress.md)
 - Codex 规则：[codex-rules/global-AGENTS.md](codex-rules/global-AGENTS.md)

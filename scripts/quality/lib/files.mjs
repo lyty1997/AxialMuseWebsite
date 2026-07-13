@@ -16,7 +16,17 @@ export function readJson(path) {
 
 export function listFiles(root, predicate = () => true) {
   const files = [];
-  const ignoredDirectories = new Set([".git", "node_modules", ".next", "dist", "build", "coverage"]);
+  const ignoredDirectories = new Set([
+    ".git",
+    "node_modules",
+    ".next",
+    "dist",
+    "build",
+    "coverage",
+    ".venv",
+    "venv",
+    "__pycache__"
+  ]);
 
   function walk(directory) {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {

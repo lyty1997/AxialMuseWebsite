@@ -18,6 +18,7 @@ coverage/
 .env
 .env.*
 !.env.example
+scripts/dev/dev-workflow.env
 
 # Logs
 *.log

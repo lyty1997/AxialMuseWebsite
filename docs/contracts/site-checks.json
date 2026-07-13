@@ -1,0 +1,11 @@
+{
+  "entryFile": "public/index.html",
+  "requiredSnippets": [
+    "<html lang=\"zh-CN\">",
+    "<title>Axial Muse</title>",
+    "href=\"./styles.css\"",
+    "id=\"projects\"",
+    "id=\"writing\"",
+    "id=\"roadmap\""
+  ]
+}

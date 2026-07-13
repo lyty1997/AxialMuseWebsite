@@ -11,11 +11,41 @@
       "canonical": true,
       "source": ["README.md", "docs/architecture/glossary.md", "public/index.html"]
     },
+    "DocRestore": {
+      "kind": "project_brand",
+      "owner": "project",
+      "canonical": true,
+      "source": ["docs/projects/docrestore-experience.md", "docs/contracts/project-experiences.json"]
+    },
+    "VibeCoding Project Scaffold": {
+      "kind": "project_brand",
+      "owner": "project",
+      "canonical": true,
+      "source": ["docs/projects/vibecoding-project-scaffold.md", "docs/contracts/projects.json"]
+    },
+    "项目": {
+      "kind": "content_type",
+      "owner": "content",
+      "canonical": true,
+      "source": ["docs/product/site-experience.md", "docs/product/content-roadmap.md", "public/index.html"]
+    },
+    "项目体验": {
+      "kind": "content_type",
+      "owner": "project",
+      "canonical": true,
+      "source": ["docs/architecture/project-experience-hosting.md", "docs/product/site-experience.md"]
+    },
     "技术分享": {
       "kind": "content_category",
       "owner": "content",
       "canonical": true,
-      "source": ["README.md", "docs/product/content-roadmap.md", "public/index.html"]
+      "source": ["README.md", "docs/product/site-experience.md", "docs/product/content-roadmap.md", "public/index.html"]
+    },
+    "系列": {
+      "kind": "content_type",
+      "owner": "content",
+      "canonical": true,
+      "source": ["docs/product/site-experience.md"]
     },
     "产品服务": {
       "kind": "content_category",
@@ -28,8 +58,17 @@
     "content_stage": {
       "owner": "content",
       "members": ["draft", "planned", "published", "archived"],
-      "source": ["docs/product/content-roadmap.md"]
+      "source": ["docs/product/content-roadmap.md", "docs/contracts/projects.json"]
+    },
+    "project_status": {
+      "owner": "content",
+      "members": ["active", "paused", "completed", "archived"],
+      "source": ["docs/product/site-experience.md", "docs/contracts/projects.json"]
+    },
+    "experience_status": {
+      "owner": "project",
+      "members": ["planned", "provisioning", "live", "paused", "retired"],
+      "source": ["docs/architecture/project-experience-hosting.md", "docs/contracts/project-experiences.json"]
     }
   }
 }
-

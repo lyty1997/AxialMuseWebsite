@@ -1,0 +1,70 @@
+{
+  "version": "0.1.0",
+  "kind": "axial_muse_project_experiences",
+  "status": "active",
+  "owner": "AxialMuseWebsite",
+  "canonicalDomain": "axialmuse.com",
+  "defaultDeliveryMode": "static",
+  "defaultIndexing": "noindex",
+  "statusValues": ["planned", "provisioning", "live", "paused", "retired"],
+  "deliveryModes": ["static"],
+  "reservedSubdomains": [
+    "www",
+    "api",
+    "admin",
+    "auth",
+    "account",
+    "assets",
+    "cdn",
+    "dev",
+    "docs",
+    "mail",
+    "preview",
+    "staging",
+    "static",
+    "status",
+    "support"
+  ],
+  "experiences": [
+    {
+      "id": "docrestore",
+      "title": "DocRestore",
+      "hostname": "docrestore.axialmuse.com",
+      "status": "planned",
+      "onlineExperience": false,
+      "dnsProvisioning": "disabled",
+      "showcaseMode": "repository-and-video",
+      "deliveryMode": "static",
+      "repository": "https://github.com/lyty1997/DocRestore",
+      "productionBranch": "main",
+      "buildWorkingDirectory": "frontend",
+      "qualityCommands": [
+        "npm ci",
+        "npm run typecheck",
+        "npm run lint",
+        "npm exec -- vitest run"
+      ],
+      "buildCommand": "npm run build",
+      "artifactDirectory": "frontend/dist",
+      "healthPath": "/",
+      "indexing": "noindex",
+      "dataBoundary": "docs/projects/docrestore-experience.md",
+      "owner": "project-owner",
+      "showcase": {
+        "repositoryUrl": "https://github.com/lyty1997/DocRestore",
+        "demoVideoStatus": "asset-pending",
+        "demoVideoUrl": "unassigned",
+        "posterUrl": "unassigned",
+        "captionsUrl": "unassigned"
+      },
+      "runtimeDependencies": {
+        "apiRequired": true,
+        "activation": "deferred",
+        "apiHostname": "not-provisioned",
+        "websocket": true,
+        "uploads": true,
+        "authentication": "required-before-activation"
+      }
+    }
+  ]
+}

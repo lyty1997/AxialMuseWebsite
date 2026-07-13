@@ -6,17 +6,28 @@
 
 - [项目进度](progress.md)
 - [架构概览](architecture/overview.md)
+- [项目体验子域名架构](architecture/project-experience-hosting.md)
 - [术语表](architecture/glossary.md)
 - [待决策问题](architecture/open-decisions.md)
 - [跨机协同开发预览工作流](architecture/dev-workflow.md)
+- [主站体验与内容架构](product/site-experience.md)
 - [内容与产品路线](product/content-roadmap.md)
+- [DocRestore 项目展示与未来体验设计](projects/docrestore-experience.md)
+- [VibeCoding Project Scaffold 项目展示设计](projects/vibecoding-project-scaffold.md)
+- [域名与生产发布设计](operations/domain-deployment.md)
+- [内容发布流程](operations/content-publishing.md)
+- [自动化维护与运行手册](operations/maintenance.md)
+- [生产环境清单](operations/production-inventory.md)
 - [契约词表](contracts/contract-terms.json)
+- [主站项目目录](contracts/projects.json)
+- [项目体验注册表](contracts/project-experiences.json)
 - [契约扫描规则](contracts/contract-rules.json)
+- [站点检查规则](contracts/site-checks.json)
 
 ## 当前阶段
 
-- 阶段：M0 网站规范与首版静态入口。
-- 范围：个人项目技术分享、项目展示、后续产品服务演进规划。
+- 阶段：M0 主站设计与首版静态入口，下一步进入设计评审和内容准备。
+- 范围：个人项目技术分享、项目展示、项目体验子域名、域名与生产发布、自动化维护、后续产品服务演进规划。
 - 非目标：登录、评论、订阅、收费、用户数据采集、复杂 CMS、动态后端。
 
 ## 文档维护要求
@@ -24,4 +35,3 @@
 - 新增 `docs/` 下的 Markdown 文件后，必须在本文件索引。
 - 修改路由、导航、内容栏目、产品服务或部署方式时，同步更新相关设计文档。
 - 不确定事项写入 [待决策问题](architecture/open-decisions.md)，不要散落在代码注释里。
-

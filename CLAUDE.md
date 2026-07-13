@@ -47,17 +47,21 @@ npm run check:secrets     # 常见密钥形态扫描
 npm run check:site        # 静态站点入口和资源引用
 npm run check:js          # 质量脚本自身语法自检（node --check）
 
+# 不在 quality 聚合链路里，需要本机装 Java 并设置 PUML_JAR 才能跑
+PUML_JAR=/path/to/plantuml.jar npm run check:diagrams   # 编译校验所有 Markdown 里的 plantuml 图表
+PUML_JAR=/path/to/plantuml.jar npm run gen:diagrams     # 改完图表源码后，重新渲染 docs/diagrams/ 下的 SVG
+
 # 本地预览首版静态站点（任选其一）
 python3 -m http.server -d public 8000
 ```
 
-首版不依赖任何第三方 npm 包，`quality` 全部走 Node.js 内置能力（要求 Node ≥ 22）。
+首版不依赖任何第三方 npm 包，`quality` 全部走 Node.js 内置能力（要求 Node ≥ 22）；`check:diagrams` 依赖外部 Java + `plantuml.jar`，是刻意排除在 `quality` 之外的例外，CI 由专属 job 负责装好依赖后执行，见下方"文档一致性门禁现状"。
 
 ## 工程约定
 
 - 语言：对话与 `docs/` 用简体中文；代码注释中文为主，标准英文术语/协议名/API 名保留原文；用户可见 UI 文案默认简体中文。详见 [codex-rules/rules/language.md](codex-rules/rules/language.md)。
 - 品牌名统一写作 `Axial Muse`（带空格）；`AxialMuseWebsite` 仅作仓库/项目标识。首版定位是“技术分享”而非泛“博客”。这些命名由契约门禁强制，见下节。
-- 分支：`main` 稳定不直接提交，`dev` 开发主干，特性分支 `feature/描述` / `bugfix/描述`。提交信息中文，格式 `<type>(<scope>): <主题>`，不带 Co-Authored-By。
+- 分支：`main` 稳定不直接提交，`dev` 开发主干，特性分支 `feature/描述` / `bugfix/描述`。提交信息中英双语、英文在前，格式 `<type>(<scope>): <English 主题> / <中文主题>`，不带 Co-Authored-By。
 - `.env`、`node_modules/`、构建产物、日志不进 Git（见 `.gitignore`）。
 - UI 改动必须做实际渲染或截图验证；纯静态页面至少检查入口文件、资源引用和关键链接。
 - 每次任务结束更新 [docs/progress.md](docs/progress.md)（时间戳/主题/完成/遗留）；解决 bug 后把原因和方案追加到 [codex-rules/known-issues.md](codex-rules/known-issues.md)，动手前先查阅它避免重复踩坑。
@@ -68,11 +72,20 @@ python3 -m http.server -d public 8000
 
 ## 文档一致性门禁现状
 
-`npm run quality` 由四个门禁串联，任一失败即 CI 失败（`.github/workflows/ci.yml` 在 PR 与推送 `main` 时运行同一命令）：
+`npm run quality` 由四个门禁串联，任一失败即 CI 失败（`.github/workflows/ci.yml` 在 PR、推送 `main`/`dev` 时于 Ubuntu 与 Windows 上运行同一命令）：
 
 - `check:docs`（`scripts/quality/check-markdown.mjs`）：校验所有 `*.md` 的内部链接不断链、不逃逸仓库；并强制 **`docs/` 下每个 `.md` 都被 `docs/README.md` 索引**。新增 `docs/` 文档后必须在 `docs/README.md` 补索引，否则门禁失败。
 - `check:contracts`（`scripts/quality/check-contracts.mjs`）：真相源是 [docs/contracts/contract-terms.json](docs/contracts/contract-terms.json)（稳定契约名/枚举）与 [docs/contracts/contract-rules.json](docs/contracts/contract-rules.json)（`forbidden_terms` 防旧名回潮、`scoped_terms` 防契约词跨层误用）。扫描 `docs/public/scripts/codex-rules/.github`。注意：`forbidden_terms` 的 `AxialMuse`（`match: word`）用词边界匹配，`AxialMuseWebsite` 不会命中；`scoped_terms` 的 `待确认` 仅允许出现在 `open-decisions` / `glossary` / `content-roadmap` / `contracts/` / `codex-rules/`，其它路径写会失败。改契约名先动这两个 JSON。
 - `check:secrets`（`scripts/quality/check-secrets.mjs`）：扫描常见密钥形态，防止 token/密钥误入库。
-- `check:site`（`scripts/quality/check-static-site.mjs`）：校验 `public/index.html` 存在必需结构片段（`lang`、`<title>Axial Muse</title>`、`#projects`/`#writing`/`#roadmap` 锚点等）且引用的本地资源都存在。改首页结构或锚点时同步改此脚本的 `requiredSnippets`。
+- `check:site`（`scripts/quality/check-static-site.mjs`）：读取 [docs/contracts/site-checks.json](docs/contracts/site-checks.json) 里配置的入口文件路径和必需片段，校验入口文件存在必需结构片段（`lang`、`<title>Axial Muse</title>`、`#projects`/`#writing`/`#roadmap` 锚点等）且引用的本地资源都存在；入口文件尚不存在时打印提示并跳过，不会报错。改首页结构或锚点时同步改 `site-checks.json`。
 
-本地提交前会由 `.githooks/pre-commit` 自动跑 `npm run quality`（首次克隆后执行 `git config core.hooksPath .githooks` 启用）；它是 CI 的本地镜像，别绕过。
+本地提交前会由 `.githooks/pre-commit` 自动跑 `npm run quality`、`.githooks/commit-msg` 校验提交信息格式（首次克隆后执行 `git config core.hooksPath .githooks` 启用）；它们是 CI 的本地镜像，别绕过。
+
+另有两道独立于 `quality` 之外、围绕 PlantUML 图表的机制，共享 `scripts/quality/lib/plantuml.mjs` 的提取/编译逻辑：
+
+- `check:diagrams`（`scripts/quality/check-diagrams.mjs`）：扫描所有 Markdown 里的 ` ```plantuml ` 代码块并用 `java -jar $PUML_JAR` 真实编译，仓库里一个 plantuml 块都没有时直接跳过；一旦有块但没设置 `PUML_JAR` 则报错退出（不静默跳过，因为确实有东西要校验）。只认编译退出码，不比较字节内容。
+- `gen:diagrams`（`scripts/quality/render-diagrams.mjs`）：把每个 plantuml 块编译结果写入紧跟其后的 `![](path.svg)` 图片引用指向的文件，实现"改源码 → 自动重新渲染 `docs/diagrams/` 下的 SVG"。这是**本地生成器、不是门禁**——CI 不校验已提交 SVG 与源码是否字节一致（不同机器的 JVM 字体度量会导致同一份源码渲染出不同字节，字节相等门禁无法跨机器稳定通过）。真相源是 Markdown 里的 plantuml 源码，由 `check:diagrams` 保证能编译；SVG 只是给 GitHub 这类不渲染内嵌 plantuml 代码块的平台看的产物，改完源码本地跑一次 `gen:diagrams` 刷新并提交即可。
+
+CI 里由 `.github/workflows/ci.yml` 的独立 `diagrams` job（只跑 `ubuntu-latest`）负责下载校验过 SHA256 的 PlantUML 官方 release jar，跑 `check:diagrams`，不需要本地贡献者都装 Java 才能跑主 `quality` 门禁。
+
+push 到 `main`/`dev`，或合并 PR 后，必须主动观察 `.github/workflows/ci.yml` 的运行结果（`gh pr checks <PR号> --watch` 或 `gh run watch`），不通过要定位原因、修复并重跑 `npm run quality` 验证后再推送，直到转绿；不允许在 CI 红色或状态未知时汇报任务完成。
