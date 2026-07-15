@@ -1,34 +1,18 @@
-# AxialMuseWebsite Codex 全局规范
+# Codex 按需规则索引
 
-本文是 AxialMuseWebsite 的 Codex 工作入口规范。开始任何任务前，必须先读取根目录 `AGENTS.md`，再按任务类型读取本目录下的相关规则和 `docs/README.md` 指向的设计文档。
+根目录 [`AGENTS.md`](../AGENTS.md) 是唯一必读的项目操作入口；本文件只负责路由。设计事实从 [`docs/README.md`](../docs/README.md) 进入，不在规则文件重复维护。
 
-## 优先级
+| 任务触发条件 | 追加读取 |
+|---|---|
+| 修改仓库内容、处理用户决策 | [`rules/codex-workflow.md`](rules/codex-workflow.md) |
+| 公开内容、产品服务、反馈或讨论 | [`rules/content-product-rules.md`](rules/content-product-rules.md) |
+| 页面、样式、交互、前端依赖 | [`rules/frontend-web-rules.md`](rules/frontend-web-rules.md) |
+| `docs/` 或 Markdown | [`rules/markdown-docs.md`](rules/markdown-docs.md) |
+| 语言、解释或注释 | [`rules/language.md`](rules/language.md) |
+| 凭证、个人数据、第三方请求或外部内容 | [`rules/security-privacy.md`](rules/security-privacy.md) |
+| 运行质量门禁、修改 `scripts/quality/` 或 Markdown 图表 | [`rules/quality-gates.md`](rules/quality-gates.md) |
+| 工具调用失败 | [`rules/tool-failure.md`](rules/tool-failure.md) |
+| commit、push、PR、merge 或分支操作 | [`rules/git-workflow.md`](rules/git-workflow.md) |
+| `scripts/dev/`、PowerShell、跨机预览或本地忽略配置 | [`known-issues.md`](known-issues.md) |
 
-1. 系统、开发者、用户的显式指令优先于本规范。
-2. 根目录 `AGENTS.md` 是项目级最高规范。
-3. `docs/` 是定位、信息架构、内容模型、产品服务、部署和公开表达的真相源。
-4. `codex-rules/` 是 Codex 执行任务时的操作规范，不能替代设计文档。
-
-如规范之间存在冲突，默认选择更保守、更少公开风险、更容易维护的一项，并在回复中说明。
-
-## 启动检查
-
-每次任务开始时至少确认：
-
-- 已读取 `AGENTS.md`。
-- 已读取 `docs/README.md`。
-- 若任务涉及定位、信息架构、内容模型、路由、SEO、部署、用户数据、评论、订阅或产品服务，已读取相关设计文档。
-- 已检查 `codex-rules/known-issues.md` 和本次任务相关规则。
-- 不写入、不打印 API Key、Secret、token、真实隐私数据、未公开商业计划或客户数据。
-
-## 规则索引
-
-- `rules/codex-workflow.md`：Codex 通用工作流。
-- `rules/content-product-rules.md`：内容、产品服务和公开表达规则。
-- `rules/frontend-web-rules.md`：网站前端与交互规范。
-- `rules/markdown-docs.md`：Markdown 设计文档规范。
-- `rules/language.md`：语言、注释、解释风格规范。
-- `rules/security-privacy.md`：密钥、隐私和公开内容安全规范。
-- `rules/tool-failure.md`：工具失败处理规范。
-- `rules/git-workflow.md`：Git 工作流规范。
-
+同时命中多个条件时读取对应规则的并集；未命中的规则不加载。规则冲突按 `AGENTS.md` 的优先级和用户决策门禁处理。

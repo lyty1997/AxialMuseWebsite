@@ -4,6 +4,41 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-15 — CLAUDE.md 改为导入 AGENTS.md，门禁操作知识归位
+
+- **主题**：用户提出 CLAUDE.md 直接 `@` 导入 AGENTS.md 即可。查证后确认这是 Anthropic 官方文档明确推荐的多 Agent 仓库模式，采纳。
+- **完成内容**：
+  - `CLAUDE.md` 由 89 行缩为 13 行：一段说明 + `@AGENTS.md` 导入 + 一个只写环境差异的“Claude Code 专属差异”节。规范正文不再有第二份，结构上杜绝漂移。
+  - 新增 [`codex-rules/rules/quality-gates.md`](../codex-rules/rules/quality-gates.md)，收纳原先只存在于 CLAUDE.md 的门禁执行层知识：命令、hooks 启用、各门禁执行边界，以及词边界匹配、根目录只扫一层的理由、`gen:diagrams` 不是门禁、“写门禁文档会拦到自己”等坑点。设计层能力清单仍归 `maintenance.md`，本文件不复制。
+  - `global-AGENTS.md` 路由表新增一行“运行质量门禁、修改 `scripts/quality/` 或 Markdown 图表”。
+  - 修正 `apply_patch` 缺陷：AGENTS.md 要求手工编辑使用 `apply_patch`，但那是 Codex 的工具，Claude Code 没有；纯导入会让 Claude Code 收到无法执行的指令。已在 CLAUDE.md 的专属差异节声明改用 Edit / Write，未改动 AGENTS.md。
+- **查证结论**（`https://code.claude.com/docs/en/memory.md`）：Claude Code 只原生读取 `CLAUDE.md`、不自动读 `AGENTS.md`，因此显式导入不会重复加载；官方对“仓库已有 AGENTS.md”的建议正是创建 CLAUDE.md 导入它；导入递归上限为 4 跳；导入在反引号和代码块内不生效，紧跟 blockquote 之后不受影响。
+- **纠正上一轮的判断**：先前以“门禁细节别处没有”为由把整段机制留在 CLAUDE.md，查证后只对了一半——能力层清单早已归 `maintenance.md`，目录职责早已归 `overview.md`，真正无归属的只有执行层知识，而它本就该在 `codex-rules/`。这些知识长期只存在于 CLAUDE.md，等于 Codex 从来没拿到过；归位后两个 Agent 都能按需加载。
+- **验证证据**：`npm run quality` 五项通过（exit 0）；契约扫描集 45 → 46，确认 `CLAUDE.md` 与新建的 `quality-gates.md` 都在扫描范围内。
+- **遗留项**：
+  - `@AGENTS.md` 的实际展开只能在新会话用 `/memory` 确认，本次无法自证；若未生效需回退为在 CLAUDE.md 保留必要正文。
+  - AGENTS.md 第 30 行的 `apply_patch` 仍是 Codex 专属表述。是否把 AGENTS.md 改成工具无关写法（更彻底，但要动刚定稿的文件）留待决定。
+
+## 2026-07-15 — 固定首版工程技术基线
+
+- **主题**：用户确认把 Docusaurus 官方能力、现有 PlantUML、Nginx/Certbot、GitHub Actions/TAT、Ubuntu/systemd 原生运维和 CI 质量与供应链门禁固定为首版组合。
+- **完成内容**：
+  - 记录 D-053，固定各组件职责、静态生产边界、发布失败边界和门禁能力类别；明确“官方能力”不等于所有官方插件或可选功能自动获批。
+  - 将现有 PlantUML 保持为构建期源码到静态 SVG 的图表链路，不引入浏览器端渲染或 Docusaurus 运行时图表插件。
+  - 将 Nginx/Certbot、GitHub Actions 经 CAM 调用固定 TAT command、Ubuntu/systemd/logrotate 统一到目标架构和运行手册，并明确这些仍是设计基线而非已部署事实。
+  - 固定依赖与构建、代码与内容、路由与 SEO、许可证/SBOM/漏洞/Secret、制品网络、浏览器与可访问性、CSP、发布后冒烟等门禁类别；具体工具、格式和阈值继续受后续决策门禁约束。
+  - 区分迁移前 `npm run quality` 与 Docusaurus 目标门禁，明确当前检查仍不足以证明目标供应链覆盖；生产发布必须等待所有必需 job，包括 PlantUML 编译。
+  - 修正 Certbot webroot HTTP-01 与全量 HTTP 跳转的设计冲突：challenge 使用 release 之外的专用 root-owned webroot，其余 HTTP 请求才重定向到 HTTPS。
+- **验证结果**：
+  - `npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功。
+  - `git diff --check` 通过。
+  - `npm run check:diagrams` 未运行：本机未设置 `PUML_JAR`，且本次没有修改 PlantUML 源码或生成 SVG。
+- **遗留项**：
+  - OD-015 仍是下一项阻断性决策：确认单一 docs、多个 docs 或 docs + blog 的内容组织模式；本次没有替代或关闭该门禁。
+  - Docusaurus/Node.js 版本、preset/plugin 实例、包管理器与 lockfile、内容目录、字段映射、主题 fit-gap、门禁具体工具与契约格式、构建位置、制品交付和新版主站 Spec 仍待逐项确认。
+  - 服务器、GitHub environment、CAM/TAT、Certbot timer、快照和日志轮转仍待现场核验。
+  - 本次未安装依赖、未修改页面或质量脚本，未操作服务器、DNS、证书或云资源，也未提交、推送或创建 PR。
+
 ## 2026-07-15 — check:contracts 纳入仓库根级文件，堵住漂移缺口
 
 - **主题**：承接上一条的根因——`CLAUDE.md` 的失效副本之所以能一路漂移，是因为 `check:contracts` 的扫描根不含仓库根目录，没有门禁看着它。本次把根级文件纳入扫描。
