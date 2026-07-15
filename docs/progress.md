@@ -4,6 +4,22 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-15 — check:contracts 纳入仓库根级文件，堵住漂移缺口
+
+- **主题**：承接上一条的根因——`CLAUDE.md` 的失效副本之所以能一路漂移，是因为 `check:contracts` 的扫描根不含仓库根目录，没有门禁看着它。本次把根级文件纳入扫描。
+- **完成内容**：
+  - `contract-rules.json` 新增 `scan.include_root_files: true`；`lib/files.mjs` 新增 `listFilesShallow`（只列一层、不递归）；`check-contracts.mjs` 的 `scanFiles` 据此扫描根级文件，并把结果容器换成 `Set` 防重复计数。
+  - 扫描集 40 → 45，新增 `AGENTS.md`、`CLAUDE.md`、`README.md`、`CONTRIBUTING.md`、`package.json` 五个根级文件，现状零违规。
+  - `CLAUDE.md` 同步更正“根目录不在扫描范围内”这一已失效描述，并说明根目录只扫一层的原因。
+- **方案取舍**：先试过把扫描根直接改成 `["."]`，干跑发现会把 **134 个 `.mypy_cache/*.json`** 卷进扫描集。这类本地工具缓存靠自带的嵌套 `.gitignore` 对 git 隐身，但扫描器走文件系统、不读 `.gitignore`，会让门禁范围随各人机器上的残留而变；且引入 Docusaurus 后还会冒出 `.docusaurus/`，靠 `skip_paths` 逐个排除是黑名单打地鼠，漏一个就悄悄失效——与本次要修的病因同构。改用“根目录只扫一层”：目录天然进不来，无需维护排除名单，新增根级文件还能自动纳入、不会漏登记。
+- **验证证据**：
+  - 现状 `npm run quality` 五项通过（exit 0）。
+  - 反向验证：向 `CLAUDE.md` 注入三行违规文本，分别命中 forbidden/literal（定位旧名）、forbidden/word（裸写品牌名）、scoped（越界的受限词），`check:contracts` 如期失败并逐行指名 `CLAUDE.md:91/92/93`，退出码 1；随后 `git checkout --` 还原，`git status` 与 `git diff` 均确认已回到提交版本。
+  - 撰写本条目时把违规词原样写进 `docs/progress.md`，被 `check:contracts` 当场拦下（`progress.md:17`）——门禁对既有扫描范围同样有效的顺带实证。
+  - 确认扫描集不含 `.mypy_cache`，根级文件恰为上述五个。
+- **遗留项**：
+  - 受限词的 `allowed_paths` 未把根级文件纳入，因此 `CLAUDE.md` 里描述该规则时无法直接举例写出那个词，只能指向 `contract-rules.json`；如后续觉得别扭，可再决定是否为根级文件开例外。
+
 ## 2026-07-15 — CLAUDE.md 对齐 AGENTS.md 重构并清除失效副本
 
 - **主题**：`AGENTS.md` 重构后，`CLAUDE.md` 与之脱节且核心事实已过期，按“瘦身对齐”方向重写：删除与 `docs/` 重复的定位/阶段/内容边界叙述，保留 Claude Code 专属的工具链知识。
