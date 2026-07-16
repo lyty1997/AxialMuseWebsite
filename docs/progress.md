@@ -4,6 +4,45 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-16 — 重新确认 writing 技术文章类型边界
+
+- **主题**：用户在 `writing/` 子树、显式 `contentType` 字段和独立文章成员清单三种类型判据中再次确认方案 A，并要求继续保留此前重开过程的审计链。
+- **完成内容**：
+  - 记录 D-060：相对未来单一 Docusaurus docs 内容根，规范化后位于 `writing/` 子树内的 Markdown/MDX 是唯一技术文章成员集合；本次不选择内容根物理路径。
+  - 边界内所有候选文件都必须通过技术文章 schema 后再应用 D-059 最小投影；校验失败必须中止构建，不能退回普通 doc，也不能被框架 include/exclude 或 partial 行为绕过。
+  - 边界外只确定为非技术文章，不运行文章 schema 或投影，也不自动成为项目介绍、首页或其他内容类型。
+  - 不增加 `contentType`、独立成员清单或其他并行判据，不使用字段存在性、`slug`/URL 前缀、侧栏成员、文件名、doc ID 或分类关系反向判型。
+  - 明确 `writing/` 只决定内容类型，不生成或覆盖 D-058 的完整 `slug`、公开 URL、canonical、分类、侧栏归属或排序；D-060 与 D-059 解耦成立，schema、投影和未来消费者复用同一判型结果。
+  - 保留 D-057 首次确认、D-058 重新开放和 D-059 重新确认字段适配的历史原文；D-060 作为当前类型边界权威，不静默恢复 D-057 的旧绑定关系。
+- **验证结果**：
+  - `npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功。
+  - `git diff --check` 通过。
+- **遗留项**：
+  - docs 内容根物理路径、`writing/` 内部组织、路径包含与误放检测、完整 schema、函数 API、错误契约和测试实现仍需逐项确认。
+  - 项目内容来源与类型判据、侧栏生成、SEO 元数据组件、Docusaurus 版本与配置、构建发布契约仍未确认。
+  - 本次不修改页面、配置、依赖或质量脚本，不创建内容根、`writing/` 目录、schema 或文章文件，不操作服务器、DNS、证书或云资源，也不提交、推送或创建 PR。
+
+## 2026-07-16 — 确认技术文章原生优先与最小字段适配
+
+- **主题**：用户在原生优先最小适配、重开领域模型改用框架源字段、预构建规范化内容树三种方案中确认方案 A，并要求把此前重新开放的决定纳入评审。
+- **完成内容**：
+  - 记录 D-059：默认解析后的 `title` 与 D-058 原生完整 `slug` 直接使用，不重命名、规范化或生成副本；本站 schema 仍负责必填、格式、唯一性与跨字段约束。
+  - 构建内存中的原生 `description` 始终由 `summary` 派生；`seo.description` 与 `seo.socialDescription` 不进入该字段，避免 SEO 例外改变目录或其他原生消费者使用的默认摘要。
+  - 只有 `publicationStatus: draft` 派生原生 `draft: true`；`published` 与 `archived` 不映射为 `unlisted`。`authors`、`publishedAt`、`updatedAt` 与 `classification` 不映射到 blog 字段、`last_update` 或原生 `tags`。
+  - 以更小职责重新确认 D-056 的官方全局 `markdown.parseFrontMatter` 执行点、默认解析器和无副作用纯投影边界；不写回源内容，也不生成临时内容树。
+  - 保持 D-057 独立未决：本次不恢复历史 `writing/` 子树，也不选择 `contentType` 或成员清单。在类型判据重新确认前，不实现解析分流、投影函数或文章 schema 分派。
+- **查证依据**：
+  - [Docusaurus 官方 docs 插件 front matter](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter)列出 `title`、`description`、`slug`、`tags`、`draft`、`unlisted` 与 `last_update` 等原生字段及其职责。
+  - [Docusaurus 官方全局 Markdown 配置](https://docusaurus.io/docs/api/docusaurus-config#markdown)说明 `parseFrontMatter` 可以调用默认解析器后返回只供本次构建使用的 frontmatter 与正文。
+  - 当前官方页面展示的版本不构成本站依赖版本授权；具体版本及其行为仍须在依赖决策后通过契约测试验证。
+- **验证结果**：
+  - `npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功。
+  - `git diff --check` 通过。
+- **遗留项**：
+  - 下一项单独重新决策 D-057 的技术文章内容类型判据。
+  - 完整 schema、函数 API、错误契约、页面 SEO 元数据组件、标签合并与契约测试、项目字段适配、内容根与内部目录、侧栏和主题实现仍需逐项确认；SEO 回退值语义不因此重新开放。
+  - 本次不修改页面、配置、依赖或质量脚本，不创建内容目录或文章文件，不操作服务器、DNS、证书或云资源，也不提交、推送或创建 PR。
+
 ## 2026-07-16 — 改用 Docusaurus 原生完整 slug 并回退受影响决定
 
 - **主题**：用户确认技术文章直接使用 Docusaurus 原生完整 `slug`，并要求此前受影响的自定义适配与类型分流回退后重新决策。

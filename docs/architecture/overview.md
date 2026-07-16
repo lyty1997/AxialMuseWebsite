@@ -6,7 +6,7 @@
 
 ## 目标架构更新
 
-用户已确认主站使用 Git + Docusaurus 静态构建，并采用“静态主站 + 中央身份服务 + 独立评论服务 + 各项目独立服务”的演进方向。D-053 进一步固定 Docusaurus 官方静态能力、现有 PlantUML、Nginx/Certbot、GitHub Actions/TAT、Ubuntu/systemd 原生运维和 CI 门禁能力类别；D-054 固定项目介绍与技术文章共用单一 docs 内容实例、分别使用各自侧栏且首版不启用 blog；D-055 固定领域内容模型是唯一可编辑真相源；D-058 固定单一 docs 实例使用根 `routeBasePath`，技术文章直接保存 Docusaurus 原生完整 `slug`。D-056、D-057 的适配执行点和内容类型分流已经重新开放评审，当前不构成实现授权。完整的已确认边界和待决策项见[主站目标架构](main-site-target-architecture.md)。
+用户已确认主站使用 Git + Docusaurus 静态构建，并采用“静态主站 + 中央身份服务 + 独立评论服务 + 各项目独立服务”的演进方向。D-053 进一步固定 Docusaurus 官方静态能力、现有 PlantUML、Nginx/Certbot、GitHub Actions/TAT、Ubuntu/systemd 原生运维和 CI 门禁能力类别；D-054 固定项目介绍与技术文章共用单一 docs 内容实例、分别使用各自侧栏且首版不启用 blog；D-055 固定领域内容模型是唯一可编辑真相源；D-058 固定单一 docs 实例使用根 `routeBasePath`，技术文章直接保存 Docusaurus 原生完整 `slug`；D-059 完成核心字段 fit-gap，并以原生精确直用和只读内存最小适配收敛 D-056；D-060 独立确认未来 docs 内容根内的 `writing/` 子树是唯一技术文章类型边界。完整的已确认边界和待决策项见[主站目标架构](main-site-target-architecture.md)。
 
 本文其余部分记录当前仓库实现和 2026-07-13 形成的 M0 生产基线。凡涉及手工维护 `public/index.html`、零框架或推迟静态站点生成器的内容，均已被 D-028、D-029、D-051 先后替代；在 Docusaurus 迁移完成前，它们只描述当前状态，不代表目标实现。
 
@@ -18,7 +18,7 @@ AxialMuseWebsite 的首版目标是建立一个可维护的个人技术分享网
 
 | 决策域 | M0 选择 | 设计依据 |
 |---|---|---|
-| 页面技术 | 当前为手写静态骨架；目标为 Docusaurus 单一 docs 内容实例静态构建 | Git 内容发布、React 技术栈、多页面演进、项目/文章双侧栏、根 `routeBasePath` 和文章原生完整 `slug` 已经确认；适配执行点与内容类型分流已重新开放评审，内容根物理路径、原生字段 fit-gap、项目适配、其余实例配置、构建契约与可选客户端策略尚未决定 |
+| 页面技术 | 当前为手写静态骨架；目标为 Docusaurus 单一 docs 内容实例静态构建 | Git 内容发布、React 技术栈、多页面演进、项目/文章双侧栏、根 `routeBasePath`、文章原生完整 `slug`、核心字段 fit-gap、最小内存适配和 `writing/` 文章类型边界已经确认；内容根物理路径、完整 schema、项目适配、其余实例配置、构建契约与可选客户端策略尚未决定 |
 | 内容事实 | Git 审核；文章默认 Markdown、MDX 受控例外，核心字段、组织基数与 `classification` 唯一分组已确认 | 公开内容保持可追溯，构建产物不作为编辑源；项目/模块/主题注册表仍需确认 |
 | 当前质量运行时 | Node.js 22 ESM | 只描述现有零第三方依赖检查；Docusaurus 与 Node.js 的目标版本仍待依赖契约确认 |
 | 图表 | 现有 PlantUML 源码编译为静态 SVG | 保留构建期图表流程，不增加浏览器端渲染或 Docusaurus 运行时插件 |

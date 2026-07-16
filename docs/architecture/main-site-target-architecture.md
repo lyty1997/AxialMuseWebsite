@@ -6,7 +6,7 @@
 
 ## 决策依据
 
-本文记录 D-027 至 D-058 的已确认、替代与重新评审关系：
+本文记录 D-027 至 D-060 的已确认、替代与重新评审关系：
 
 - D-027：静态主站与动态服务分离；未来使用中央身份服务、独立评论服务和各项目独立服务。
 - D-028：技术分享由 Git 管理，并通过静态站点生成器构建；当前不引入私有 CMS。
@@ -37,9 +37,11 @@
 - D-053：固定首版工程技术基线和 CI/发布门禁能力类别，不把具体版本、依赖、工具、构建位置或可选服务补成已确认实现。
 - D-054：项目介绍与技术文章使用单一 docs 内容实例和各自侧栏，首版不启用 blog 或第二个 docs 内容实例。
 - D-055：领域内容模型保持唯一可编辑真相源，Docusaurus 等价字段只读直传、必要字段单向派生，不回写或持久化语义副本。
-- D-056：曾确认技术文章通过 Docusaurus 官方 `markdown.parseFrontMatter` 调用仓库内纯投影函数；现已重新开放评审并暂停实施授权。
-- D-057：曾确认相对未来 docs 内容根的 `writing/` 子树及其全局 frontmatter 分流规则；现已重新开放评审并暂停实施授权。
+- D-056：曾确认技术文章通过 Docusaurus 官方 `markdown.parseFrontMatter` 调用仓库内纯投影函数；经 D-058 重新开放后，已由 D-059 以更小职责重新确认。
+- D-057：曾确认相对未来 docs 内容根的 `writing/` 子树及其全局 frontmatter 分流规则；经 D-058 重新开放后，核心方案已由 D-060 独立重新确认。
 - D-058：单一 docs 实例使用根 `routeBasePath`，技术文章直接保存并使用 Docusaurus 原生完整 `slug`，不再派生栏目路径。
+- D-059：技术文章 `title` 与完整 `slug` 原生直用；构建内存只派生 `description <- summary` 与草稿状态，其他领域字段不强行映射到不等价的 Docusaurus 字段。
+- D-060：相对未来 docs 内容根的 `writing/` 子树是唯一技术文章成员边界，独立于适配器、URL、分类、侧栏和排序。
 
 决策原文、替代关系和未决事项统一记录在[待决策问题](open-decisions.md)。本文不替代尚未由用户决定的项目/模块/主题注册表、通用分组名称、跨项目相关关系字段、系列关系、其余文章字段、项目字段、身份、评论和部署设计。
 
@@ -101,27 +103,46 @@ Git 仓库中的内容与页面
 - 该选择只减少同一静态主站内的插件与配置边界，不提供独立构建、部署或故障隔离；主站仍生成一个静态 release。
 - 未来若出现相互独立的文档版本生命周期，或明确批准时间流、归档、Feed 等产品需求，必须重新评估内容拓扑，并保持既定公开 URL。
 
-单一 docs 实例的 `routeBasePath` 已由 D-058 固定为 `/`。内容根目录、侧栏文件与键名、项目和文章如何关联具体侧栏、侧栏生成与排序、`/projects/` 与 `/writing/` 列表页的生成方式，以及其余字段的原生能力 fit-gap 与适配契约仍由后续决策确定。本决定不授权安装依赖或配置 preset。
+单一 docs 实例的 `routeBasePath` 已由 D-058 固定为 `/`。D-059 已完成技术文章核心字段 fit-gap；内容根目录、侧栏文件与键名、项目和文章如何关联具体侧栏、侧栏生成与排序、`/projects/` 与 `/writing/` 列表页的生成方式、项目字段及尚未定名的文章字段仍由后续决策确定。本决定不授权安装依赖或配置 preset。
 
 ## 内容字段适配边界
 
-D-055 固定内容模型与框架之间的真相源方向，不固定具体映射表。技术文章继续以 D-038 至 D-050 已确认、并由 D-058 修订 slug 值语义后的领域字段和 Git 注册表作为唯一可编辑来源；Docusaurus 需要的等价或派生元数据只能在构建期从这些输入只读直传或生成。派生结果不回写 Markdown/MDX、注册表或其他已提交文件，Docusaurus 构建产物也不成为编辑来源。
+D-055 固定内容模型与框架之间的真相源方向。技术文章继续以 D-038 至 D-050 已确认、并由 D-058 修订 slug 值语义后的领域字段和 Git 注册表作为唯一可编辑来源；Docusaurus 需要的等价或派生元数据只能在构建期从这些输入只读直传或生成。派生结果不回写 Markdown/MDX、注册表或其他已提交文件，Docusaurus 构建产物也不成为编辑来源。
 
 D-058 优先复用 Docusaurus 原生路由字段：技术文章作者直接在源 frontmatter 中填写根相对完整路径，例如 `slug: /writing/dependency-inversion`；单一 docs 实例使用 `routeBasePath: '/'`，默认解析结果中的 `slug` 原样参与路由。该值同时是领域 URL 契约和框架原生字段，不再生成短 slug 到栏目路径的派生值，也不增加第二个路由字段。
 
-D-056 曾把全局 [`markdown.parseFrontMatter`](https://docusaurus.io/docs/api/docusaurus-config#markdown) 与本地纯投影函数固定为技术文章适配执行点；D-057 又把该执行点与内容根内 `writing/` 子树的类型分流绑定。两项决定形成前没有先完成 Docusaurus docs 原生 frontmatter 的逐字段 fit-gap。用户在确认 D-058 后要求回退受影响决定，因此 D-056 与 D-057 目前只保留历史方案，实施授权暂停；不得据此创建解析配置、投影函数、内容目录或 schema 分流。
+D-056 曾把全局 [`markdown.parseFrontMatter`](https://docusaurus.io/docs/api/docusaurus-config#markdown) 与本地纯投影函数固定为技术文章适配执行点；D-058 后该决定因缺少逐字段 fit-gap 而重新开放。D-059 已以更小职责重新确认相同的官方执行点：调用一次 `defaultParseFrontMatter` 后，只对已经被确认属于技术文章的文件执行无副作用纯投影。投影不修改正文或源 frontmatter，不回写文件，也不生成第二棵临时内容树。
+
+D-059 的技术文章核心字段契约如下：
+
+| 源领域字段 | Docusaurus 构建内存 | 处理规则 |
+|---|---|---|
+| `title` | 原生 `title` | 原值直传，不重命名、不规范化；本站 schema 必须拒绝缺失或非法值，不能接受框架 fallback 代替必填字段 |
+| 完整 `slug` | 原生 `slug` | 按 D-058 原值直传，不补写 `/writing/`，不从文件路径生成 |
+| `summary` | 原生 `description` | 无条件派生 `description = summary`；不得改为 `seo.description ?? summary`，也不得从正文首行推断 |
+| `publicationStatus` | 原生 `draft` 行为 | 只有源值为 `draft` 时派生 `draft: true`；`published` 与 `archived` 不映射为 `unlisted` |
+| `seo.description`、`seo.socialDescription` | 保留自定义 frontmatter | 不参与原生 `description` 派生；后续页面元数据按 D-046 分别应用回退 |
+| `authors`、`publishedAt`、`updatedAt`、`classification` | 保留自定义 frontmatter | 不映射到 blog 字段、`last_update` 或原生 `tags`，由后续已批准的主题、侧栏与校验消费者读取 |
+
+原生 `description` 是所有 Docusaurus 原生消费者共享的公共默认摘要，因此始终等于 `summary`，不是 SEO 覆盖后的最终页面描述。目录或生成索引消费 `description` 时必须仍看到 `summary`；页面 `<head>` 的 meta description 必须遵守 `seo.description -> summary`，分享描述必须遵守 `seo.socialDescription -> seo.description -> summary`。最终页面元数据组件、标签合并和避免重复标签的实现仍待主题与 SEO 契约确认，但不得改变这两条已确认回退链。后续契约测试必须覆盖无覆盖、仅 `seo.description`、仅 `seo.socialDescription`、两者同时存在四种组合；每种组合都必须保证目录摘要仍为 `summary`，且 `<head>` 不出现互相冲突或重复的 meta/OG description 标签。
+
+D-057 曾把 `writing/` 类型边界与 D-056 的全局解析分流绑定，D-058 后该组合被重新开放评审。D-060 独立重新确认类型边界：相对未来单一 Docusaurus docs 内容根，规范化后确实位于 `writing/` 子树内的 Markdown/MDX 构成唯一技术文章成员集合。这里的内容根不是仓库现有设计文档目录 `docs/`，其物理路径仍未决定。
+
+边界内所有候选文件都必须先通过技术文章领域 schema，再应用 D-059 的最小投影；缺少必填字段、枚举非法、注册表引用或跨字段约束失败必须中止构建，不能退回普通 doc，也不能被框架 include/exclude 或 partial 行为绕过本站校验。边界外文件不运行文章 schema 或投影，只确定为“非技术文章”，不自动成为项目介绍、首页或其他类型。
+
+不得增加 `contentType`、独立成员清单或其他并行判据，也不得用字段存在性、`slug`/URL 前缀、侧栏成员、文件名、doc ID 或分类关系反向判型。`writing/` 只决定内容类型，不生成或覆盖完整 `slug`、公开 URL、canonical、分类、侧栏归属或排序；schema、投影和未来经批准的消费者必须复用同一判型结果。
 
 该方向受以下边界约束：
 
-- `slug` 使用同一个原生完整字段直传，不创建短 slug 别名、栏目路径派生值或第二份公开 URL。
-- 作者只维护经逐字段评审后确认的单一来源，不为框架便利同时写 `publicationStatus`/`draft`、`summary`/`description`、`classification`/`tags`、本站日期/`date` 或第二套作者资料。
+- `title` 与 `slug` 使用同一个原生字段直传，不创建字段别名、栏目路径派生值或第二份公开 URL。
+- 作者只维护已确认的领域来源，不在源 frontmatter 中同时写 `publicationStatus`/`draft`、`summary`/`description`、`classification`/`tags`、本站日期/`last_update` 或第二套作者资料。
 - 任何直传或派生都必须保持已确认的稳定 URL、发布状态、摘要与 SEO 回退、显式日期、作者身份和规范分类语义；不得用框架默认推断覆盖这些语义。
 - 字段缺失、枚举未知、映射冲突或框架无法保持既定语义时，构建门禁必须失败，不能静默生成另一种公开结果。
 - 当前 `projects.json` 仍是迁移前的项目机器可读真相源；本决定不选择项目介绍的长期内容来源，也不把项目与文章合并为同一 schema。
 - 文章文件名、物理目录、侧栏和分类不生成或覆盖原生完整 `slug`；内部移动不得改变公开 URL。
-- 内容类型判据、`contentType` 或成员清单是否需要、docs 内容根物理路径、内部目录结构、误放检测以及项目内容来源与适配方式，均随 D-057 的重新评审恢复为未决项。
-- 必须先逐字段核对 Docusaurus 原生能力，再重新选择无需适配、最小适配或其他机制；schema、错误契约、契约测试和错误定位方式仍未确认。
-- 该适配方向不自动启用原生 tags、作者页、主题页、时间流、归档路由、Feed 或其他未批准功能。
+- 技术文章类型判据已经确认；docs 内容根物理路径、`writing/` 内部目录结构、路径规范化与精确包含实现、误放检测、符号链接和大小写策略，以及项目内容来源与适配方式仍未确认。
+- 完整 schema、函数 API、错误契约、契约测试和错误定位方式仍未确认；D-059 只固定字段职责和适配执行边界。
+- 该适配不启用 `unlisted`、原生 tags、作者页、主题页、时间流、归档路由、Feed 或其他未批准功能。
 
 ## 构建与生产边界
 
@@ -134,7 +155,7 @@ D-056 曾把全局 [`markdown.parseFrontMatter`](https://docusaurus.io/docs/api/
 5. 浏览文章、项目介绍和个人主页不依赖数据库或动态 API。
 6. 当前没有登录、评论或试用能力时，页面不得将其表达为已上线功能。
 
-Docusaurus 的单一 docs 内容拓扑、领域内容单一真相源、根 `routeBasePath` 与文章原生完整 `slug` 已经确认。D-056、D-057 的适配执行点和内容类型分流已重新开放评审；具体版本、preset、其余实例配置、内容根物理路径、原生字段 fit-gap、最小适配范围、错误契约、项目适配、内部内容目录、构建命令、产物目录、构建发生在 CI 还是发布主机，以及依赖锁定方式尚未确认。实现前必须完成对应设计，不得把 Docusaurus 的工具默认值当作用户决定。
+Docusaurus 的单一 docs 内容拓扑、领域内容单一真相源、根 `routeBasePath`、文章原生完整 `slug`、核心字段 fit-gap、最小内存适配与 `writing/` 技术文章类型边界已经确认。具体版本、preset、其余实例配置、内容根物理路径、`writing/` 内部组织、路径包含与误放检测、完整 schema、函数 API、错误契约、页面 SEO 元数据组件、标签合并与契约测试、项目适配、构建命令、产物目录、构建发生在 CI 还是发布主机，以及依赖锁定方式尚未确认。实现前必须完成对应设计，不得把 Docusaurus 的工具默认值当作用户决定。
 
 ## 首版工程技术基线
 
@@ -142,7 +163,7 @@ D-053 将已经分散确认的框架、图表、静态服务、发布控制和�
 
 | 范围 | 已固定职责 | 仍受门禁约束 |
 |---|---|---|
-| 站点与内容 | 使用 Docusaurus 官方且通过依赖准入的静态构建能力承载文档站；项目介绍与技术文章共用单一 docs 内容实例并分别使用各自侧栏；领域内容模型保持唯一可编辑真相源；实例使用根 `routeBasePath`，文章 `slug` 直接采用原生完整路径 | D-056、D-057 已重新开放评审；具体版本、preset、其余实例配置、内容根物理路径、原生字段 fit-gap、最小适配范围、错误契约、项目适配和主题适配仍由后续决策确定 |
+| 站点与内容 | 使用 Docusaurus 官方且通过依赖准入的静态构建能力承载文档站；项目介绍与技术文章共用单一 docs 内容实例并分别使用各自侧栏；领域内容模型保持唯一可编辑真相源；实例使用根 `routeBasePath`，文章 `slug` 直接采用原生完整路径；核心字段采用原生精确直用和最小内存适配；`writing/` 是唯一文章类型边界 | 具体版本、preset、其余实例配置、内容根物理路径、`writing/` 内部组织、路径包含与误放检测、完整 schema、函数 API、错误契约、项目适配、SEO 元数据组件、标签合并、契约测试和主题适配仍由后续决策确定 |
 | 图表 | 保留仓库现有 PlantUML 源码编译为静态 SVG 的流程 | 不引入 Docusaurus 运行时图表插件或浏览器端渲染；版本升级仍需供应链复核 |
 | Web 与 TLS | Ubuntu Server 24.04 LTS 上由 Nginx 提供静态制品，Certbot 通过 ACME HTTP-01 管理证书 | 生产不运行 Docusaurus/Node.js；具体安装来源、版本和配置在部署实施前核验 |
 | 发布控制 | GitHub Actions 运行必需门禁，再经最小权限 CAM 调用固定 TAT command，服务器以不可变 release 原子切换 | 构建在 CI 还是发布主机、制品封装与传输方式仍待发布契约确认 |
@@ -218,7 +239,7 @@ D-052 约束主站浏览器产物、构建依赖、未来独立服务和开发�
 
 | 数据类型 | 目标真相源 | 当前状态 |
 |---|---|---|
-| 技术文章、项目介绍、页面文案 | Git 仓库内的受审内容 | 文章核心字段、日期、组织基数、`classification` 唯一分组和原生完整 `slug` 已确认；内容类型判据已重新开放评审，完整 schema、内容根物理路径、内部组织和项目内容位置尚未决定 |
+| 技术文章、项目介绍、页面文案 | Git 仓库内的受审内容 | 文章核心字段、日期、组织基数、`classification` 唯一分组、原生完整 `slug`、核心字段 fit-gap、最小内存适配和 `writing/` 类型边界已确认；完整 schema、内容根物理路径、内部组织和项目内容位置尚未决定 |
 | 项目、模块与主题注册信息 | Git 仓库内经过确认的注册表 | 稳定 ID 与可变显示名的边界已确认；结构、路径以及是否复用现有 `projects.json` 尚未决定 |
 | 作者注册表 | Git 仓库内的单一 JSON 对象 | 稳定作者 ID 为键；首版字段为 `displayName` 与 `links.github`，当前记录使用已确认的 GitHub 主页 |
 | 构建产物 | 由 Git 提交可重复生成的静态 release | Docusaurus 尚未接入 |
@@ -318,7 +339,7 @@ D-052 约束主站浏览器产物、构建依赖、未来独立服务和开发�
 以下事项没有因选择 Docusaurus 而自动获得批准：
 
 - 项目/模块/主题注册表结构与路径、通用分组名称、跨项目相关关系字段、发布辅助命令实现、摘要长度、作者注册表路径、其余字段、项目字段、内容目录，以及 MDX 组件审核与机器校验机制。
-- [Docusaurus docs 原生 front matter](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter)中的 `title`、`description`、`slug`、`tags`、`draft`、`unlisted`、`last_update` 等字段与本站领域字段的逐字段 fit-gap；除已确认原生直传的文章 `slug` 外，D-056、D-057 的适配执行点、类型判据和纯投影函数均已重新开放评审。重新确认前不得要求作者双写等价字段，也不得实现解析钩子、临时内容树或自定义内容插件。
+- D-059 已完成 [Docusaurus docs 原生 front matter](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter)与技术文章核心字段的 fit-gap，并重新确认缩小后的 D-056 执行点；D-060 已确认 `writing/` 技术文章类型边界。内容根物理路径、路径包含与误放检测、完整 schema、函数 API、错误契约、页面 SEO 元数据组件、标签合并及其契约测试仍未确认；完成这些前不得实现解析钩子分流、纯投影、内容目录或 schema 分派，也不得要求作者双写派生字段。
 - 分类、系列、标签、分页和 RSS 是否需要独立路由，以及重定向清单的实现方式。
 - 目录分组排序、右栏元数据字段、桌面侧栏滚动行为和精确响应式断点。
 - Docusaurus 与 Node.js 具体版本、preset、插件实例、依赖清单、可选客户端 JavaScript 和测试工具。
@@ -364,5 +385,5 @@ D-052 约束主站浏览器产物、构建依赖、未来独立服务和开发�
 - 已明确文章只有一个规范目录归属：项目与模块均可为空且各最多一个，模块必须隶属所选项目；无模块时归入项目根级，无项目和模块时归入独立通用分组。
 - 已明确主题必填 1-5 个受控 ID，跨项目文章只选一个主项目，其他项目关系不造成多个项目侧栏重复；组织重分类不改变文章 URL。
 - 已明确必填 `classification` 是项目、模块和主题字段的唯一组织真相源，不在 frontmatter 顶层或其他分组复制这些字段。
-- 已明确 D-056、D-057 只保留历史方案，完成原生字段 fit-gap 并重新获得用户确认前不得实施适配执行点或内容类型分流。
+- 已明确 D-059 以原生字段精确直用和两个必要内存派生重新确认 D-056，D-060 以独立的 `writing/` 子树重新确认技术文章类型判据；物理内容根、完整 schema 与错误契约完成前仍不得实施全局解析分流或文章 schema 分派。
 - 已把所有未确认的实现问题保留为门禁，而不是补成默认方案。
