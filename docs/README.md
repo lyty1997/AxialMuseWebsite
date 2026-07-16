@@ -6,7 +6,8 @@
 
 - [项目进度](progress.md)
 - [架构概览](architecture/overview.md)
-- [M0 技术选型决策](architecture/technology-selection.md)
+- [历史 M0 技术选型决策（已被替代）](architecture/technology-selection.md)
+- [主站目标架构](architecture/main-site-target-architecture.md)
 - [项目体验子域名架构](architecture/project-experience-hosting.md)
 - [术语表](architecture/glossary.md)
 - [待决策问题](architecture/open-decisions.md)
@@ -28,9 +29,9 @@
 
 ## 当前阶段
 
-- 阶段：M0 主站设计与首版静态入口，下一步进入设计评审和内容准备。
-- 范围：个人项目技术分享、项目展示、项目体验子域名、域名与生产发布、自动化维护、后续产品服务演进规划。
-- 非目标：登录、评论、订阅、收费、用户数据采集、复杂 CMS、动态后端。
+- 阶段：主站已改选 Docusaurus，并已固定单一 docs 内容拓扑、领域字段作为唯一可编辑真相源及其向框架字段的构建期单向投影方向、技术文章通过官方 `markdown.parseFrontMatter` 调用本地纯投影函数的适配执行点，以及未来 Docusaurus docs 内容根内 `writing/` 子树作为唯一技术文章类型边界；项目介绍和技术文章共用一个 docs 内容实例、分别使用项目侧栏与技术分享侧栏，不启用 blog。下一步继续确认逐字段投影与错误契约，再确认内容根物理路径、各注册表、侧栏生成、主题适配、具体门禁工具和构建发布契约。
+- 范围：静态主站、Git 内容发布、项目展示与入口，以及未来中央账户、评论和独立项目服务的解耦边界。
+- 当前非目标：部署登录、评论、订阅、收费、用户数据采集、CMS、站内搜索、动态后端或项目试用环境。
 
 ## 文档维护要求
 

@@ -1,11 +1,11 @@
 # 内容与产品路线
 
 状态：active
-最近更新：2026-07-13
+最近更新：2026-07-15
 
 ## M0：个人技术分享入口
 
-内容阶段枚举：draft、planned、published、archived。
+技术文章发布状态为 `draft`、`published`、`archived`。`planned` 只表示路线或选题记录，不是文章状态；项目与项目体验继续使用各自独立的状态模型。
 
 目标：
 
@@ -18,8 +18,8 @@
 设计基线：
 
 - [主站体验与内容架构](site-experience.md)
-- [M0 技术选型决策](../architecture/technology-selection.md)
-- [M0 主站实现 Spec](m0-main-site-spec.md)
+- [主站目标架构](../architecture/main-site-target-architecture.md)
+- [M0 主站实现 Spec（待 Docusaurus 适配与复审）](m0-main-site-spec.md)
 - [项目体验子域名架构](../architecture/project-experience-hosting.md)
 - [域名与生产发布设计](../operations/domain-deployment.md)
 - [内容发布流程](../operations/content-publishing.md)
@@ -60,8 +60,9 @@ M0 退出条件：
 
 计划能力：
 
-- 为项目、文章、标签和系列建立内容模型。
-- 支持文章列表、项目详情和系列页。
+- 为项目、文章、模块、受控主题和系列关系建立内容模型。
+- 支持文章列表、项目详情，以及包含项目根级、项目模块和通用技术分组的文章目录。
+- 系列是否形成独立页面，在出现真实需求后另行决定。
 - 为公开页面补充基础 SEO 元数据。
 
 进入条件：已发布技术分享达到 5 篇，或项目详情已明显超过首页承载能力。未达到条件时继续使用 M0 静态结构。

@@ -1,12 +1,14 @@
 # 自动化维护与运行手册
 
 状态：draft
-最近更新：2026-07-13
+最近更新：2026-07-15
 适用范围：M0 腾讯云主站与项目体验子域名的自动发布、监测、备份、安全维护与故障处理
 
 ## 目的
 
 本文定义 `axialmuse.com` 主站及已登记项目体验上线后的最低运行标准，让日常维护依赖可重复检查和明确告警。首版由 Nginx 承载静态站点与静态项目体验，优先自动化发布、证书、健康检查和备份，不引入应用后端、数据库或第三方页面监测脚本。
+
+D-053 已固定 Docusaurus 官方静态能力、现有 PlantUML、Nginx/Certbot、GitHub Actions/TAT、Ubuntu/systemd 原生运维和 CI 门禁能力类别。这里记录目标运行标准；仓库当前仍是迁移前静态骨架，相关依赖、生产 workflow、服务器配置和定时任务均不得表述为已经部署。
 
 ## 服务目标
 
@@ -37,15 +39,30 @@
 - 静态站点入口、资源和关键锚点检查。
 - PlantUML 图表编译检查。
 
+#### Docusaurus 目标门禁
+
+上述列表描述迁移前骨架已经存在的检查。接入 Docusaurus 后，PR 与生产发布还必须实现并通过 D-053 已确认的全部能力类别：
+
+- 锁定依赖、lockfile 一致性、冻结安装和可重复 Docusaurus 构建。
+- lint、typecheck、测试、Markdown/MDX frontmatter 和内容模型校验。
+- 内部链接、资源、路由、canonical、sitemap、草稿泄漏和关键公开事实检查。
+- PlantUML 编译与静态 SVG 制品检查。
+- 许可证准入（未知或未获批即失败）、传递依赖、第三方声明或 SBOM、漏洞和 Secret 检查。
+- 构建制品外部请求 allowlist，以及依据真实制品验证的 CSP。
+- 桌面端和移动端真实浏览器、关键链接和可访问性检查。
+- 发布后 HTTPS、重定向、关键页面和资源冒烟。
+
+具体扫描器、Action、schema、SBOM/NOTICE 格式、浏览器工具、阈值、例外流程和报告保留方式仍待构建发布契约确认。实现时必须把缺失输入或构建制品视为失败，不能沿用迁移前检查中对不存在入口的跳过行为；所有发布必需 job（包括 PlantUML）必须通过后才能触发 production。
+
 影响 UI 的 PR 还必须在现有局域网预览环境完成桌面端和移动端截图。M0 没有公网 PR 预览，截图和质量结果共同作为合并证据。
 
 ### 生产发布
 
 1. PR required checks 与本地预览验收均通过。
 2. PR 合入 `main`。
-3. GitHub Actions 对精确 `GITHUB_SHA` 再运行 `npm run quality`。
+3. GitHub Actions 对精确 `GITHUB_SHA` 运行全部发布必需的质量与供应链 job；当前骨架至少包括 `npm run quality` 和独立 PlantUML 编译，Docusaurus 迁移后按已确认类别扩展。
 4. `production` job 通过最小权限 CAM 凭证调用指定 TAT command。
-5. 服务器从 `origin/main` 验证该 SHA，导出 `public/` 并创建不可变 release。
+5. 迁移前骨架由服务器验证 SHA 并导出 `public/`；Docusaurus 目标改为发布经过验证的静态构建制品，构建位置和制品交付方式待发布契约确认。
 6. 本机检查通过后原子切换 `current`，失败则自动恢复原 symlink。
 7. GitHub runner 从公网检查 HTTPS、canonical、关键锚点和资源。
 8. 发布者观察 workflow 与腾讯云 TAT 结果，记录部署 SHA、时间和验证结论。
@@ -244,11 +261,13 @@ GitHub 计划任务可能延迟，不作为分钟级监控。M0 不注入浏览�
 
 - 复核轻量服务器套餐与内容规模是否匹配。
 - 检查供应商价格、限制和产品变更。
-- 评估是否进入 M1；只有真实内容规模触发条件时才引入框架或 CMS。
+- 复核 Docusaurus 迁移、版本升级和内容规模；只有 Git 内容流程被事实证明不适用并经用户确认后才评估 CMS。
 
 ## 验收标准
 
 - 所有生产版本可追溯到 `main` SHA、GitHub deployment 和 TAT invocation。
+- 任何发布必需的质量、供应链、图表或发布后冒烟门禁失败时，release 不得标记成功，上一已验证版本保持可用。
+- 已确认的是门禁能力类别；具体工具、格式、阈值和 workflow 尚未批准或实现，不把目标标准误报为当前覆盖。
 - 自动部署不需要公网部署 SSH，也不能执行任意仓库脚本。
 - DNS、备案、TLS、服务器和内容都有检查、告警与回滚路径。
 - 访问日志默认关闭，保留的技术日志有用途、权限和删除周期。

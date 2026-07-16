@@ -55,10 +55,15 @@
     }
   },
   "enums": {
-    "content_stage": {
+    "article_publication_status": {
+      "owner": "content",
+      "members": ["draft", "published", "archived"],
+      "source": ["docs/operations/content-publishing.md"]
+    },
+    "project_publication_status": {
       "owner": "content",
       "members": ["draft", "planned", "published", "archived"],
-      "source": ["docs/product/content-roadmap.md", "docs/contracts/projects.json"]
+      "source": ["docs/contracts/projects.json"]
     },
     "project_status": {
       "owner": "content",
