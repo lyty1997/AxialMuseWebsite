@@ -4,6 +4,28 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-18 — 独立验收 11 个 open issue 的验收标准
+
+- **主题**：对 [Issues #4 至 #14](https://github.com/lyty1997/AxialMuseWebsite/issues?q=is%3Aissue) 逐条验收其“验收标准”，判定各 issue 当前是否可关闭，并把结论与复核发现留痕到 issue 与本文件。本轮为只读验收，未改动任何设计、代码、配置或基础设施。
+- **方法**：22 个 agent 编排（每 issue 一个审计 + 一个对抗式 skeptic 复核，0 分歧）；主会话实测可执行门禁并独立核对 `open-decisions.md`、`scripts/`、`.github/workflows/ci.yml` 与契约数据，凡 owner 评论声称“已落盘 E-xxx/CODE-xxx”的均回文档核验决策存在且覆盖对应验收点。
+- **完成内容**：
+  - **统一结论：11 个 issue 全部为 DESIGN-COMPLETE / IMPL-PENDING（设计已闭合、实现待落地），无一可关闭。** E-001 至 E-015 / CODE-018 至 CODE-020 已在 `open-decisions.md` 与专题文档中形成单一设计结论，各 issue 的验收标准中“文档一致性 + 门禁通过”类已 MET，“schema 运行时行为 / validator / fixture / CI checkout / 生成器 / Nginx 派生 / 截图验证”类均 DEFERRED —— 因仓库处于纯设计阶段，无 `src/`、`site-content/`、`docusaurus.config.*`、`tests/`、`package-lock.json`，也无 `scripts/build`、`scripts/release`、`scripts/content`、`run-isolated-npm.mjs`、`check-content-history.mjs`。
+  - #4 作为“设计闭包”总控项，自身文档同步 4/4 MET，但最终闭包须待 #5–#14 实现落地后回本项复核，故保持开启。
+  - 在 #4–#10 各补一条“验收复核结论”评论（#11–#14 已有 owner 的等价评论），记录逐条判定、门禁结果、复核发现与“暂不可关闭、保持开启跟踪实现”的结论。
+- **复核发现（实现期 backlog，均不阻断设计闭包）**：
+  - **#7**：准则 5“不依赖文件命名约定” 与 “检出混入 `static-public/` 白名单的误放未发布/项目素材” 存在设计张力，未说明如何两全；`site-content/writing/<entry>/assets/` 草稿文章同目录素材的生产不泄漏缺具名反例 fixture；因两项目均 `planned` 且无 `previewImage`，白名单机制当前无真实数据背书。
+  - **#9 / #10 / #11**：`CODE-011` 为 E-007/E-008/E-012/E-014 逐条列了必需 fixture，却未给 E-010（供应链，含“恶意 scoped registry”）、SPDX schema/校验和维度反例、跨模块导入等价枚举；fixture 产物 DEFERRED 无误，但“哪些用例必须覆盖”的 fixture 设计契约缺席。
+  - **#11**：E-012 定 `sourceMap:false` + finally 无条件清理临时目录，失败时既无 source map 也不留临时 `.js`，与“保留失败诊断”目标相抵，属有意取舍需显式记录。
+  - **#12**：`.github/workflows/ci.yml:20,39` 的 `actions/checkout@v5` 未设 `fetch-depth:0`，仍是默认单提交的迁移前实现（E-013:110 已自陈）；历史门禁还前置阻塞于 `@docusaurus/utils@3.10.2` 的 D-077 依赖准入。
+  - **#13**：`docs/contracts/redirects.json` 顶层封套字段（`version/kind/status/owner`）在 E-014/CODE-019/m0-spec 中均无 schema 描述，属源契约封套可追溯性缺口（不影响运行时验收）。
+  - **#5**：docrestore 过渡段补回旧注册表 `problem/decisions`，vibecoding 未补（其旧 decision“采用 Apache-2.0”只存活于事实表），迁入 `site-content` 前建议内容审查复核两项目一致性；E-006 有意把语义级重复划归人工审查、不做相似度门禁。
+- **验证结果**：
+  - `git diff --check`、`npm run quality`（js/docs/contracts/secrets/site）均 PASS；`npm run check:diagrams`（`PUML_JAR` 指向本机 plantuml jar）3 个 block 编译通过。
+  - 独立 `ls` 确认上述实现产物全部缺失，坐实“设计完整、实现待定”的判定；#4–#10 的 7 条评论均已发布成功。
+- **遗留项**：
+  - 无 issue 可关闭；11 个全部保持开启跟踪实现。下一门禁仍是 D-077 首次联网依赖解析与真实准入，及 Action/凭证接线、Git 发布授权。
+  - 本次未提交、推送、创建或合并 PR，未操作服务器/DNS/云资源；仅新增 7 条 issue 评论并更新本进度文件。
+
 ## 2026-07-18 — 建立设计审查跟踪并恢复活动真相源一致性
 
 - **主题**：复核外部代码审查指出的预览、内容所有权、媒体、供应链、测试、Git 历史、301 重定向和制品交接问题，先建立可验收的 Issue，再按依赖顺序逐项补充设计。
