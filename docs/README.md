@@ -33,7 +33,7 @@
 
 ## 当前阶段
 
-- 阶段：Docusaurus 静态主站的上层方向和 M0 页面基线已经固定。D-059 至 D-077 约束内容身份、单一 docs 拓扑、Node 24、严格 TypeScript、依赖候选与供应链准入；D-078 授权 Agent 收口 M0 内部工程细节，E-001 至 E-005 已进一步固定项目结构化事实与长文职责拆分、尾斜杠与路由冲突、作者/主题/模块注册表、classic/Infima 最小主题适配，以及 GitHub Actions `build/` artifact 到 TAT 的发布边界。下一步先完成 D-077 的首次联网依赖解析与人工准入，再按[主站编码规范 Spec](engineering/main-site-coding-spec.md)实施；npm 下载、Git 发布、GitHub 凭证、服务器、DNS、证书和生产操作仍需各自授权。
+- 阶段：Docusaurus 静态主站的上层方向和 M0 多页面基线已经固定。D-059 至 D-077 约束内容身份、单一 docs 拓扑、Node 24、严格 TypeScript、依赖候选与供应链准入；D-078 授权 Agent 收口不改变既定边界的 M0 内部工程细节，D-079 增加 Node 24 测试类型直接候选，E-001 至 E-015 已固定项目内容职责、URL、注册表、主题适配、静态制品交付、主预览 schema、发布态素材白名单、可验收草稿预览、npm 启动前隔离、确定性 SPDX、Node ESM TypeScript 测试、统一结构化 frontmatter 解码、HEAD 可达完整 Git 历史、与静态 payload 同版本激活的服务端 301，以及 production artifact 自包含重建与字节闭包。2026-07-18 审查的 #5 至 #14 已完成设计收口并继续跟踪实现与 fixture；下一前置是申请 D-077 的首次联网解析与真实依赖准入（包括 E-013 的 `@docusaurus/utils@3.10.2` 直接开发候选），随后进入实现。npm 下载、Git 发布、GitHub Action/凭证、服务器、DNS、证书和生产操作仍需各自授权。
 - 范围：静态主站、Git 内容发布、项目展示与入口，以及未来中央账户、评论和独立项目服务的解耦边界。
 - 当前非目标：部署登录、评论、订阅、收费、用户数据采集、CMS、站内搜索、动态后端或项目试用环境。
 

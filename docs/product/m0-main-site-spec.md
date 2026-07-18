@@ -3,7 +3,7 @@
 状态：active
 最近更新：2026-07-18
 适用范围：`https://www.axialmuse.com/` 的 Docusaurus 多页面静态主站
-实现前置：D-077 首次依赖解析与准入完成；真实公开素材通过事实、隐私和版权检查
+实现前置：#5 至 #14 按已补齐设计实现；D-077 首次依赖解析与准入完成；真实公开素材通过事实、隐私和版权检查
 
 ## 目的与授权边界
 
@@ -42,21 +42,27 @@
 
 `/assets/`、`/img/`、`/.well-known/`、`robots.txt`、`sitemap.xml` 和 `404.html` 是保留空间。M0 不生成其他内容路由。`onDuplicateRoutes: 'throw'`，broken link 和 broken anchor 均让构建失败。
 
-旧 URL 只允许在 `docs/contracts/redirects.json` 登记精确永久重定向。每项只包含根相对 `from`、根相对 `to` 和非空 `reason`；两条路径都必须以 `/` 开始并遵守页面尾斜杠规范，不接受 origin、查询串、fragment、状态码覆盖或通配。生成结果固定为 301；重定向不得形成自跳转、链或环，源、目标和所有规范化路径必须参与全站冲突检查。
+旧 URL 只允许在 `docs/contracts/redirects.json` 登记精确永久重定向。每项只包含根相对 `from`、根相对 `to` 和非空 `reason`；两条路径都必须以 `/` 开始并遵守页面尾斜杠规范，每个非空段只允许 lowercase kebab-case，不接受 origin、查询串、fragment、百分号编码、反斜杠、空白/控制字符、重复斜杠、点路径、状态码覆盖、配置元字符或通配。`from` 不得是活动页面或保留路径，`to` 必须是同一 production payload 中实际存在且预期返回 200 的规范页面，并且不能成为另一重定向 source。
+
+E-014 固定由 release 封装器从同一次 `build/` 的公开页面集合生成服务端规则，不生成旧路径静态 HTML。每条登记同时生成带斜杠 source 和其无斜杠别名到最终 `to` 的直接 301；每个 `/` 以外的活动页面另生成无斜杠到规范页面的直接 301，避免重定向链。规则以 Nginx `location =` 精确匹配规范化 URI，目标固定为 `https://www.axialmuse.com`，保留请求查询串；源重复、规范化冲突、自跳转、链、环、目标缺失或 source 静态页面均使构建或封装失败。运行清单、Nginx 配置与 payload 由同一 release 摘要绑定并整版激活。
+
+生产服务器以只追加暴露账本保存已经成功发布、或因候选 301 潜在暴露而预先承诺的规范 200 路径，以及所有可能对外返回过的 registered 301 边。`canonical-slash` 不单独入边账本，但候选全部 canonical 页面必须在 reload 前进入路由账本，以保护无斜杠 301 可能已被缓存的 target。候选必须让每个历史 200 路径仍为 200 或单跳到当前 200，并让每条历史边的 source 与历史 target 收敛到同一个当前 200 终点；只保留目标文件但丢失旧 source 规则不算兼容。二次迁移可以把全部旧 source 直接改指最新终点，但被缓存过的中间 target 也必须保留或直达同一终点。候选全部 canonical 页面和新增/改指的 registered 边在公网 reload 前先保守写入账本；首次发布新 URL 通常会因旧 release 缺少页面而没有兼容 fallback。没有满足更新后账本的 fallback release 时，发布默认拒绝，只有显式生产授权接受 forward-only 后才能激活。成功后不得通过回滚删除历史 source、让历史 target 404 或令两者分裂，只能使用满足完整闭包的 release 或向前修复。
 
 ## 内容与投影
 
 ### 项目
 
-`docs/contracts/projects.json` 拥有项目的结构化事实，包括 ID、标题、短 slug、摘要、状态、日期、仓库、展示能力、顺序和模块。`site-content/projects/<project-id>/index.md|index.mdx` 只拥有背景、能力、取舍、限制、证据与复盘正文，不重复 H1、摘要、状态、日期、仓库或路由。
+`docs/contracts/projects.json` 拥有项目的结构化事实，包括 ID、标题、短 slug、摘要、状态、日期、仓库、展示能力、顺序和模块。`site-content/projects/<project-id>/index.md|index.mdx` 只拥有背景、能力、取舍、限制、证据说明与复盘正文，不保存作者可编辑 frontmatter，也不重复 H1、摘要、状态、日期、仓库、路由或 Docusaurus 派生字段。注册表 `source` 只追溯结构化事实，正文中的证据链接不回填注册表。
 
-构建期以 `projectId` 一对一绑定两者，并在内存中派生 Docusaurus `title`、`description`、完整 slug 和 draft 行为。`published`、`archived` 项目必须恰有一个正文入口；`planned`、`draft` 可暂时没有。孤儿正文、重复字段、未知项目或双入口必须失败。
+构建期以正文目录名和注册表稳定 ID 一对一绑定两者，并在内存中派生 Docusaurus `title`、`description`、完整 slug 和 draft 行为。`published`、`archived` 项目必须恰有一个正文入口；`planned`、`draft` 可暂时没有。孤儿正文、任意项目 frontmatter、H1、未知项目或双入口必须自动失败；正文与摘要的自然语义重叠由内容审查判断，不做字符串相似度门禁。
+
+正文创建前，现有两个项目的叙事分别由对应 `docs/projects/` 文档中标记为过渡所有者的章节保存。创建正文的同一提交必须人工移动并审核叙事，把原章节替换为正文的仓库相对链接；不得从已删除的注册表字段生成，也不得在迁移后保留两份可编辑叙事。
 
 ### 技术文章
 
-文章位于 `site-content/writing/<source-name>/index.md|index.mdx`，完整模型与发布规则见[内容发布流程](../operations/content-publishing.md)。生产只生成 `published` 和 `archived` 的列表、详情及 sitemap 项；draft 仅在开发预览的独立分组可见，并强制 `noindex`。
+文章位于 `site-content/writing/<source-name>/index.md|index.mdx`，完整模型与发布规则见[内容发布流程](../operations/content-publishing.md)。生产只生成 `published` 和 `archived` 的列表、详情及 sitemap 项；draft 仅在 E-009 的 `build --dev` 预览制品和独立“草稿”分组可见。预览全站强制 `noindex, nofollow` 并不生成 sitemap，production 反向拒绝全站 noindex；精确 Docusaurus 版本必须以 fixture 证明 draft 行为。
 
-文章默认使用 Markdown。M0 的 `src/components/mdx/index.ts` 白名单为空，因此首版不发布 MDX 文章。文章局部素材放在同目录 `assets/`，全站公共素材放在 `static/assets/`。
+文章默认使用 Markdown。M0 的 `src/components/mdx/index.ts` 白名单为空，因此首版不发布 MDX 文章。文章局部素材放在同目录 `assets/`；项目主预览与始终公开的全站资源分别进入 `site-assets/` 和 `static-public/`，只通过受控构建入口生成静态白名单树。
 
 ### 注册表与排序
 
@@ -91,7 +97,7 @@
 ### 项目目录
 
 - 标题、摘要和状态来自 `projects.json`，生产只列 `published`、`archived`。
-- 每项展示真实预览、标题、状态、摘要、最近实质更新时间和明确动作。
+- 每项展示 `previewImage` 明确登记的真实预览、标题、状态、摘要、最近实质更新时间和明确动作；不得按 ID 或文件名推断图片。
 - 项目详情是主动作；“查看源码”是次动作，URL 必须与注册表一致。
 - 只有体验注册表为 `live` 且通过生产健康检查时才能显示体验入口；M0 不满足该条件。
 - 视觉素材未通过公开性检查时，项目不得改为 `published`，不使用虚构占位图绕过。
@@ -146,19 +152,20 @@ M0 使用 Docusaurus classic/Infima 的语义、导航和可访问性基础，�
 
 ## 素材契约
 
-每个发布项目至少需要一张真实、已脱敏的视觉证据。项目预览优先 WebP，建议 1600 x 1000、单张不超过 300 KB；Open Graph 图建议 1200 x 630、不超过 300 KB；favicon 不超过 50 KB。具体内容必须来自项目真实界面或工程证据，不能用装饰图代替产品证据。
+每个发布项目必须登记一张真实、已脱敏的主预览。主预览固定为非动画 WebP、1600 x 1000、最多 300,000 bytes；登记宽高必须与解码结果一致，`alt` 必须说明图片所证明的真实界面或工程状态。Open Graph 图建议 1200 x 630、不超过 300 KB；favicon 不超过 50 KB。具体内容必须来自项目真实界面或工程证据，不能用装饰图或占位图代替产品证据。
 
 ```text
-static/assets/
-├── brand/
-│   ├── favicon.svg
-│   └── social-card.webp
-└── projects/
-    ├── docrestore-preview.webp
-    └── project-scaffold-preview.webp
+static-public/                 # 每次构建均公开，禁止项目与待审核素材
+└── assets/brand/
+    ├── favicon.svg
+    └── social-card.webp
+
+site-assets/                   # 原件目录，不直接交给 Docusaurus
+└── projects/<project-id>/
+    └── <preview-name>.webp
 ```
 
-文件名使用小写 ASCII 与连字符。生产页面不引用仓库外图片 URL。截图必须移除凭证、真实隐私、用户名、主机名、绝对路径、通知和未授权内容；版权与公开性无法确认时不发布。
+文件名使用小写 ASCII 与连字符。生产构建只从全新的临时静态树读取 `static-public/` 与 `published`/`archived` 项目白名单；预览构建可包含所有状态中已登记的项目预览，但不能成为交付输入。生产制品中的项目资源必须与白名单逐路径、逐字节一致，未发布素材的路径或字节不得泄漏。生产页面不引用仓库外图片 URL。截图必须移除凭证、真实隐私、用户名、主机名、绝对路径、通知和未授权内容；预览隔离不是保密边界，版权与公开性无法确认的素材不得进入 Git。
 
 ## 可访问性与 SEO
 
@@ -171,7 +178,7 @@ static/assets/
 - 首页 description 为 `Axial Muse 记录个人项目的设计、实现、技术取舍与复盘，公开可核验的源码与工程资料。`
 - canonical、Open Graph URL、站内链接和 sitemap 使用 `https://www.axialmuse.com/` 下的规范尾斜杠 URL。
 - sitemap 列出所有公开首页、目录、项目详情和文章详情，不包含 draft、planned、预览 URL、锚点或重定向源。
-- 预览环境必须 `noindex`，不得把预览 URL 写入 canonical 或 sitemap。
+- 预览每个 HTML 必须包含 `noindex, nofollow`，且不存在 `sitemap.xml`；canonical 继续使用生产 origin，局域网主机、IP 和端口不得进入任何 HTML、XML 或 JavaScript。production 不得继承全站 noindex，并生成预期 sitemap。
 
 ## 性能与运行时边界
 
@@ -183,13 +190,15 @@ static/assets/
 
 ## 实施顺序
 
-1. 依 D-077 完成首次 npm 解析、人工准入、冻结 lockfile 和供应链证据；该联网步骤另行申请授权。
-2. 实现 Node 24、TypeScript、Docusaurus 配置和 schema/注册表只读门禁。
-3. 迁移项目结构化事实与正文，完成页面、侧栏、路由和 SEO 投影。
-4. 适配主题、响应式、素材和可访问性，不改变公开事实。
-5. 运行质量、类型、构建、路由、断链、浏览器和视觉验收。
-6. 由 GitHub Actions 从精确 `main` SHA 生成默认 `build/` artifact；Action 与凭证接线另行授权。
-7. 服务器、TAT、Nginx、证书、DNS 和生产冒烟按部署 runbook 单独实施与验收。
+1. 先实现并以 fixture 验证 E-010/E-011 的隔离 npm 入口、官方 registry/lock 来源检查和确定性 SPDX 规范器，再依 D-077 完成首次 npm 解析、人工准入、冻结 lockfile 和供应链证据；联网步骤另行申请授权。
+2. 让 D-079 的 Node 类型候选与 E-013 的 Docusaurus 官方 frontmatter 解析候选随真实依赖图通过准入，再实现 Node 24、生产/测试 TypeScript 配置、E-012 临时 ESM 测试入口、Docusaurus 配置和 schema/注册表只读门禁。
+3. 按 E-013 实现统一结构化 frontmatter 解码、HEAD 可达完整历史检查器、作者入口共享实现、临时 Git DAG fixture 和完整 CI checkout；浅克隆、partial/promisor/alternate object store、缺失对象、协议访问、并行 lineage 冲突或其他父历史冲突必须在内容迁移前失败关闭。
+4. 迁移项目结构化事实与正文，完成页面、侧栏、路由和 SEO 投影。
+5. 适配主题、响应式、素材和可访问性，不改变公开事实。
+6. 在主 Node 与最低 Node 端点运行同一质量、类型、E-012 测试、E-013 历史检查、构建、路由和断链负载，再完成浏览器和视觉验收。
+7. 按 E-015 让 `production-artifact` 在四个 prerequisite job 成功后，从 fresh runner 对同一 `main` SHA 重新冻结安装并执行完整主端点 `quality`；不传递或复用 `website-quality` 的 job-local build。
+8. 按 E-014 从该 job 同一 production `build/` 与重定向注册表生成确定性运行清单和 Nginx exact-location 配置，证明 source 没有静态 HTML、目标在 payload 中存在，并把 source build tree、payload 与规则封装和复验为同一 release；随后只上传一次并输出唯一 artifact ID/digest。Action 与凭证接线另行授权。
+9. 服务器、TAT、Nginx、证书、DNS 和生产冒烟按部署 runbook 单独实施与验收。
 
 ## Definition of Done
 
@@ -199,12 +208,15 @@ static/assets/
 - DocRestore 和 VibeCoding Project Scaffold 的公开字段与 `projects.json` 一致；页面不宣称未上线体验。
 - 空状态、路线、关于、GitHub 主页和 ICP 备案链接符合本 Spec。
 - draft、planned、未审核素材和未登记关系不会进入生产 `build/`、导航或 sitemap。
+- 局域网 preview 的 draft 路由和“草稿”组可访问，但 preview 输出被 release 封装器明确拒绝；候选失败时活动预览 SHA 与服务 PID 保持不变。
 
 ### 工程
 
-- `npm run quality`、独立 `tsc --noEmit` 和 Docusaurus build 全部通过。
-- Node 版本与 `.nvmrc`、`engines.node` 一致，双端点冻结安装和 D-077 供应链门禁通过。
-- 路由、尾斜杠、重定向、注册表、schema、历史 articleId、断链和资源路径契约有自动测试。
+- `npm run quality`、独立 `tsc --noEmit`、E-012 的临时编译 Node ESM 测试和 Docusaurus build 全部通过；主 Node 与最低 Node 端点执行同一测试入口和测试集合。
+- 测试只从 `tests/domain/` 与 `tests/build/` 进入，在系统临时目录生成并直接执行 ESM；空测试集、非法说明符或清理失败均阻断，源码、内容树、`build/` 与 `dist/` 不出现测试 emit、source map、声明文件或增量状态。
+- Node 版本与 `.nvmrc`、`engines.node` 一致；所有解析、安装、audit、SBOM 和 CI npm script 调用经 E-010 的隔离入口，双端点冻结安装和 D-077 供应链门禁通过。
+- 提交的 SPDX 2.3 SBOM 通过 E-011 的稳定化、两个空临时目录逐字节一致性、namespace 派生和 evidence 摘要交叉校验；CI 与构建不读取系统时间补齐 `createdAt`。
+- 路由、尾斜杠、重定向、注册表、schema、断链和资源路径契约有自动测试；E-013 证明当前与历史 frontmatter 结构化解码一致，并在完整非浅 HEAD 可达 DAG 上覆盖 articleId/source-name 绑定、稳定 ID lineage、删除后重引、平行分支独立引入同一 ID、合并第二父、partial/promisor/alternate object store 与缺失对象。E-014 证明旧 URL 与活动无斜杠 URL 返回单跳 301、查询串保留、目标为同 release 的 200 页面、旧 source 没有静态 HTML，payload 与运行规则不能分开激活；生产暴露账本证明历史 source、历史 target 与当前终点闭包，缺规则的旧 release 即使含目标页面也不能回滚。
 - `build/` 可由普通静态 HTTP 服务直接提供，生产请求不依赖 Node、npm、源码或构建进程。
 - 浏览器网络面板没有未经批准的第三方请求或 Cookie。
 
@@ -217,7 +229,8 @@ static/assets/
 
 ### 发布准备
 
-- GitHub Actions artifact 绑定精确 `main` SHA，包含可验证摘要和文件清单。
+- GitHub Actions artifact 绑定精确 `main` SHA，包含可验证摘要、文件清单、服务端 301 运行清单和 Nginx 配置；可部署规则不进入 Web Root，但与同一 payload 一起校验和切换。
+- 最终 artifact 的 `build/` 在 `production-artifact` 同一 fresh runner 内完成重建、完整质量门禁、树摘要、封装和复验；prerequisite 非成功、build 竞争修改、重复上传或按名称选择 artifact 时失败关闭。
 - PR 记录设计依据、质量结果、桌面与移动截图、公开素材来源和未完成项。
 - 服务器部署、回滚、HTTPS、备案展示和生产冒烟在独立 runbook 中验收；本 Spec 通过不等于生产上线授权。
 
@@ -225,7 +238,7 @@ static/assets/
 
 | 项目 | 状态 | 影响 |
 |---|---|---|
-| M0 内部工程细节 | 已由 D-078 授权并形成 E-001 至 E-005 | 不再逐项阻塞设计或实现 |
+| 本轮审查跟踪 | #5 至 #14 已形成单一设计结论并继续跟踪实现、fixture 与真实验收 | 不把设计完成误报为实现完成；实现偏离 E-006 至 E-015 时回到对应 Issue |
 | 首次 npm 解析与真实传递图准入 | 尚未执行 | 阻塞 Docusaurus 依赖安装和实现 |
 | 两个项目真实视觉证据 | 尚未准备 | 阻塞对应项目改为 `published`，不阻塞框架和空状态实现 |
 | DocRestore 演示视频 | 后续增量 | 不阻塞 M0 |

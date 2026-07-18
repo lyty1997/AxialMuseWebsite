@@ -4,6 +4,37 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-18 — 建立设计审查跟踪并恢复活动真相源一致性
+
+- **主题**：复核外部代码审查指出的预览、内容所有权、媒体、供应链、测试、Git 历史、301 重定向和制品交接问题，先建立可验收的 Issue，再按依赖顺序逐项补充设计。
+- **完成内容**：
+  - 核对当前仓库后确认 11 条审查意见均仍成立，在 GitHub 分别创建 [Issues #4 至 #14](https://github.com/lyty1997/AxialMuseWebsite/issues?q=is%3Aissue)，统一保留 P1/P2 优先级、冲突证据、错误后果、设计任务、验收标准和关联顺序。
+  - 先处理 #4：把 M0 路线从迁移前单页改为已确认的 Docusaurus 多页面范围，移除 M1 对 M0 内容模型、目录、详情和基础 SEO 的重复规划；将 M1 改为基于真实内容需求再评估可发现性能力。
+  - 明确 D-031 的尾斜杠语义已经由 E-002 补充，移除“仍待用户决定”的失效状态；目标架构不再把已经更新的 M0 Spec 列为待更新项。
+  - 重新开放 OD-014 的实施设计一致性收口：D-078 的委托和既定上层方向保持有效；不宣告完整设计闭包，也不把 D-077 首次联网依赖解析写成唯一实现阻塞。
+  - 完成 #5 的设计归一：以 E-001 为上位结论新增 E-006，项目注册表删除 `problem`/`decisions` 迁移残留并升级契约版本；项目正文最终唯一拥有问题、能力、取舍、限制、证据说明和复盘，自动门禁拒绝 frontmatter 与 H1，普通叙事的重复风险由内容审查处理。正文创建前由两个项目设计文档中的标记章节临时拥有叙事，创建正文的同一提交必须移动内容并把原章节替换为链接；DocRestore 已补回旧注册表中独有的问题和取舍，确保无损迁移。
+  - 完成 #6 的设计：新增 E-007 与 `previewImage` 四字段 schema，主预览由注册表显式选择，固定非动画 WebP、1600 x 1000、最多 300,000 bytes，并绑定固有尺寸和替代文本；当前两个 `planned` 项目没有获确认素材，因此不创建占位字段或文件。
+  - 完成 #7 的设计：新增 E-008，把项目预览原件、始终公开资源和构建临时白名单树拆开；production 只复制公开状态项目的登记预览，preview 可复制全部已登记预览，生产制品再以路径、字节、SSR 引用、未发布路径和源摘要检查证明没有泄漏。
+  - 完成 #8 的设计：新增 E-009，以 Docusaurus `build --dev` 生成含 draft、全站 `noindex, nofollow` 且无 sitemap 的候选静态制品；Python 服务稳定读取 worktree 外 `PREVIEW_STATE_DIR/current`，候选通过后原子切换，fetch、依赖、构建、检查或切后冒烟失败时保留或恢复上一活动 release。预览不安装或解析依赖，不新增常驻服务，也不能进入生产封装。
+  - 完成 #9 的设计：新增 E-010，所有候选解析、冻结安装、audit、原生 SBOM 和 CI npm script 都经封闭 profile 的零依赖隔离入口；每次调用使用临时 HOME、空 user/global 配置和全新 cache，联网前离线核验官方 registry、scope、认证、代理和证书边界，拒绝继承当前机器的镜像与共享缓存。
+  - 完成 #10 的设计：新增 E-011，把 npm 原生 SPDX 2.3 作为语义输入，规范化原生随机时间、UUID namespace 和无序集合；`createdAt` 只由显式生成参数持久化，namespace 从 canonical 文档摘要确定派生，并以两个空临时目录的逐字节一致性 fixture 防止同一 lockfile 的制品漂移。
+  - 完成 #11 的设计：用户选择严格 TypeScript 测试方案，D-079 将 `@types/node@^24.0.0` 加入直接开发候选但保留真实依赖准入门禁；E-012 把测试从根 Docusaurus `bundler`/`noEmit` program 分离到 NodeNext/ES2024 配置，先输出到系统临时目录，再以当前 Node `--test` 执行编译后 ESM，并固定 `.js` 说明符、零测试失败、双 Node 端点同负载和失败清理契约。
+  - 完成 #12 的设计：新增 E-013，把稳定身份历史闭包固定为当前 `HEAD` 可达完整 Git DAG；检查器按每个提交的直接父状态维护 source-name 映射及 articleId/注册表 ID 的首次引入 lineage，覆盖原子改名、删除后重引、平行分支独立引入同一 ID 和 merge 第二父冲突。当前内容与历史提取共用 Docusaurus 3.10.2 公共结构化 frontmatter 解析器；`@docusaurus/utils@3.10.2` 只作为后续 D-077 的直接开发候选。Git 2.43 通过空 `GIT_ALLOW_PROTOCOL` 和 partial/promisor/alternate object store 预检保证无协议访问，不依赖不受支持的 `--no-lazy-fetch`。所有运行该门禁的 CI job 必须完整 checkout 且保留 PR merge ref；作者命令复用同一实现，不复制历史算法。
+  - 完成 #13 的设计：新增 E-014/CODE-019，`redirects.json` 继续唯一拥有旧 URL 与原因；release 封装器从同一 production payload 的实际公开页面和注册表确定派生运行清单与 Nginx exact-location 配置，不再生成返回 200 的静态跳转页。登记 source 的带斜杠/无斜杠形式与活动页面的无斜杠形式都单跳 canonical 目标并保留查询；路径 allowlist、目标 200、source HTML 缺失、链环/冲突、稳定序列化和配置注入由 fixture 失败关闭。服务器把 payload/config 安装到同一不可变 SHA，Nginx 请求期使用精确 SHA root/include；`current` 只在配置解析时选代。root-owned 只追加 URL 暴露账本在 reload 前预写候选的全部规范路由和新增或改指的 registered 边；`canonical-slash` 不单独入边账本，但其 target 由规范路由预写保护。候选与回滚必须使每个历史 source/target 收敛到同一当前 200。只有兼容 fallback 可自动回滚；首次发布新 canonical URL 时旧 release 通常不兼容，因此默认停止或经单独生产授权进入 forward-only。
+  - 完成 #14 的设计：新增 E-015/CODE-020。对比“跨 job 上传已验证 build”和“最终 job 自包含重建”后，选择后者：`website-quality` 保持 PR/`main` required check，但其 job-local build 不具有部署身份；四个 prerequisite 全部成功后，非 matrix `production-artifact` 在 fresh runner 对同一 SHA 完整 checkout、使用全新隔离 cache 冻结安装并重新执行主端点完整 `quality`，随后不插入第三方 Action 或第二次 build，立即对同一 `build/` 计算树摘要、封装、独立复验、计算 artifact 外 `releaseContentSha256` 并一次上传。最终身份绑定 repository、run/attempt、artifact ID、commit SHA、外层 `artifactDigest`、上传前 release tree、source build tree 与内部 metadata；deploy 只能消费该 job outputs，并以仅 `contents: read`/`actions: read` 的权限复核 canonical main HEAD 和当前 artifact 后才引用 CAM Secret。concurrency 只互斥，不替代新鲜度；服务器分别比较两个外传摘要，禁止按名称、latest、跨 run 或本地 fallback 选择。该方案让 `main` 多构建一次，但避免中间 artifact、download Action、归档权限/隐藏文件、重跑和过期协议。
+- **验证结果**：
+  - `npm run quality` 通过，覆盖现有 JavaScript 语法、Markdown 链接与索引、契约词、Secret 启发式扫描和迁移前静态入口检查。
+  - PlantUML 三个活动源码块独立提取并以仓库固定编译器编译通过，`dev-workflow-loop.svg` 已与新的 Docusaurus 候选构建和原子切换流程同步。
+  - 定向扫描与独立复核不再发现 Docusaurus 适配未完成、M0 实现单页、M1 才结构化、尾斜杠仍未决、还需更新 M0 Spec，或把 D-077 写成唯一实现阻塞等失效活动表述；#11 相关活动文档不再把 Node ESM 测试或 `@types/node` 直接候选写成未决。#12 的独立审计发现并推动修复了并行 UUID 复用、Git 2.43 惰性拉取隔离、frontmatter 解析所有权和陈旧状态四类缺口；活动文档现统一采用结构化解码、完整非浅 HEAD 可达 DAG、lineage 父状态与 PR merge ref 语义。
+  - 通过 npm 官方版本页核对 `@types/node` 仍维护 Node 24 版本线；本次没有因此请求 registry 解析、下载 tarball、创建 lockfile 或接受其真实传递图。
+  - 通过 Docusaurus `3.10.2` 精确官方源码核对 `@docusaurus/utils` 公开导出 `DEFAULT_PARSE_FRONT_MATTER`，并确认同版本默认实现使用结构化 gray-matter 解析；该包只进入 D-077 候选，没有安装或解析。当前 Git `2.43.0` 实测不接受 `--no-lazy-fetch`，而空 `GIT_ALLOW_PROTOCOL` 会在尝试本地 file transport 前直接拒绝，因此 E-013 采用后者并先拒绝所有 partial/promisor/alternate object store。
+  - 对照 Nginx 官方 `location`、`return`、embedded variables、command-line switches 与 reload 文档，确认 exact location 在规范化 URI 上终止匹配、`$is_args$args` 可显式保留查询、server 级 rewrite 指令会先于 location 搜索、`nginx -t` 只验证语法/引用文件，以及 graceful reload 会让新旧 worker 分别持有完整配置代。第一轮独立只读复核指出 301 客户端缓存无法由服务器回滚撤销；第二轮复核发现“只检查目标存在”会误放缺少历史 source 规则的 release；第三轮复核发现 canonical-slash 可能在公网冒烟前缓存新 target。设计因此改为在 reload 前只追加全部候选规范路由和 registered 边，以 source/target 同终点谓词明确兼容 fallback 与 forward-only 恢复边界。
+  - 对照 GitHub 官方 job/prerequisite、upload artifact ID/digest、不可变性、覆盖换 ID、隐藏文件和权限归一化文档，确认独立 job 不能共享本地 `build/`。两轮只读分析分别验证了 handoff 路线的最低安全协议和 fresh rebuild 路线的维护成本；最终采用后者，并明确它保证最终 build 自身完整重验，不虚构两次 runner 输出可复现。
+  - #14 最终独立审计先发现“禁止 cache”与 E-010 本次 job 私有 npm cache 的措辞冲突，随后发现旧 run 晚到、上传前 release 期望摘要未穿过 TAT、GitHub token 权限未固定，以及误要求 upload Action 证明 download mismatch 四项闭包缺口。活动文档现统一禁止共享/恢复 cache 而保留全新私有 cache；deploy 在 CAM 前检查 canonical main HEAD；`artifactDigest` 与 artifact 外 `releaseContentSha256` 分别传递并由服务器复算；producer/deploy 只保留所需只读权限。后续官方语义复核又固定 upload/TAT 裸 hex 与 REST `sha256:` 前缀的严格转换，跨信任边界以仓库/服务器双实现和共用 golden vectors 防摘要漂移，并把过期历史 SHA 排除在普通 rerun 与 4 小时 RTO 承诺外。最终只读一致性、官方语义和威胁复核均未发现剩余 P1/P2。
+- **遗留项**：
+  - #5 至 #14 的设计缺口已收口，Issues 继续保留实现、fixture 与真实验收跟踪；当前下一门禁是 D-077 首次联网解析、真实候选依赖图与 Action 的最终准入，尚未获得下载、安装、workflow 修改、Git 发布或生产操作授权。
+  - 本次没有安装依赖、创建 lockfile、执行 npm 联网解析、修改站点代码或基础设施，也未新增第三方服务、浏览器外部请求或用户数据处理；Git 提交、推送、PR 和合并未获本次授权，因此未执行。
+
 ## 2026-07-18 — 收口 M0 内部工程设计与实施边界
 
 - **主题**：用户确认总体方向已经足够明确，将 M0 剩余内部技术与展示细节委托给 Agent 根据仓库事实、对应版本官方资料和工程知识判断；外部依赖、公开事实、用户数据、Git 发布和基础设施继续保留门禁。
@@ -12,7 +43,7 @@
   - 将 M0 Spec 从失效的原生 HTML 单页草案整体改写为 active 的 Docusaurus 多页面基线，固定首页、项目目录/详情、技术分享目录/详情、三栏折叠、内容可见性、SEO、素材和 Definition of Done；M0 明确不生成搜索、主题/作者/系列/归档等未需要路由。
   - 扩充编码 Spec 到 `M0-complete`：固定错误模型、路径与符号链接、公共 API、命名、CSS/资源、测试 fixture、日期索引、侧栏、Markdown 文章命令、供应链证据布局、`payload/ + metadata/` release 封装、最小质量工具和 Ubuntu CI job 拓扑。
   - 新增 `authors.json`、`topics.json`、`redirects.json`，为项目注册表补充 `navigationOrder` 与 `writingModules`；去除项目与体验注册表重复维护的在线布尔、标题、仓库和展示事实，体验入口只由 `live` 状态与健康检查决定。
-  - 统一架构概览、内容发布、域名部署、维护和生产清单：Docusaurus 默认输出 `build/`，Actions 封装 `dist/release/payload/` 与 `metadata/`，服务器只验证并安装 payload，不安装 Node/npm、不拉源码、不构建。同步更新并编译目标生产 PlantUML 图。
+  - 当时统一架构概览、内容发布、域名部署、维护和生产清单：Docusaurus 默认输出 `build/`，Actions 封装 `dist/release/payload/` 与 `metadata/`，服务器只验证并安装 payload，不安装 Node/npm、不拉源码、不构建；本条的“只安装 payload”后来由 E-014 补充为同一 release 还安装非公开运行重定向配置，生产仍不构建。同步更新并编译目标生产 PlantUML 图。
 - **验证结果**：
   - `npm run quality` 通过；当前只覆盖迁移前 JavaScript、Markdown、契约词、Secret 启发式扫描和手写静态入口，不代表 Docusaurus 依赖、类型检查或构建已经实现。
   - 新增和修改的 6 个 JSON 契约均可解析；`git diff --check` 通过；定向扫描未发现 active 设计仍把 D-078 范围内事项写成用户待决策，也未发现旧 `onlineExperience` 双写、失效单页 Spec 或服务器拉源码目标。

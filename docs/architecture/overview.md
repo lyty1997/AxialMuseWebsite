@@ -6,7 +6,7 @@
 
 ## 目标架构更新
 
-用户已确认主站使用 Git + Docusaurus 静态构建，并采用“静态主站 + 中央身份服务 + 独立评论服务 + 各项目独立服务”的演进方向。D-053 至 D-077 已固定单一 docs 内容实例、领域内容单一真相源、Docusaurus `3.10.2`、Node 24、严格 TypeScript、npm 冻结安装、目标源码边界和首次供应链准入协议。D-078 进一步把不改变产品方向、数据边界或基础设施授权的 M0 内部工程与展示细节委托给 Agent 查证、落盘并验证；E-001 至 E-005 已固定项目结构化事实与长文职责拆分、URL 与路由闭包、内容注册表、classic/Infima 最小主题适配，以及 GitHub Actions 把 `build/` 复制到 artifact 的 `payload/`、附加 `metadata/` 后交由 TAT 受限发布的边界。完整约束见[主站目标架构](main-site-target-architecture.md)和[待决策问题](open-decisions.md)。
+用户已确认主站使用 Git + Docusaurus 静态构建，并采用“静态主站 + 中央身份服务 + 独立评论服务 + 各项目独立服务”的演进方向。D-053 至 D-077 已固定单一 docs 内容实例、领域内容单一真相源、Docusaurus `3.10.2`、Node 24、严格 TypeScript、npm 冻结安装、目标源码边界和首次供应链准入协议。D-078 进一步把不改变产品方向、数据边界或基础设施授权的 M0 内部工程与展示细节委托给 Agent 查证、落盘并验证，D-079 增加 Node 24 测试类型直接候选；E-001 至 E-015 已固定项目结构化事实与长文职责拆分、URL 与路由闭包、内容注册表、classic/Infima 最小主题适配、静态制品交付、项目主预览 schema、发布态素材白名单、可验收草稿预览、npm 启动前隔离、确定性 SPDX、Node ESM TypeScript 测试、Docusaurus 官方结构化 frontmatter 解码、HEAD 可达完整 Git 历史门禁、同版本服务端 301 和 production artifact 自包含字节闭包。完整约束见[主站目标架构](main-site-target-architecture.md)和[待决策问题](open-decisions.md)。
 
 本文其余部分记录当前仓库实现和 2026-07-13 形成的 M0 生产基线。凡涉及手工维护 `public/index.html`、零框架或推迟静态站点生成器的内容，均已被 D-028、D-029、D-051 先后替代；在 Docusaurus 迁移完成前，它们只描述当前状态，不代表目标实现。
 
@@ -19,16 +19,16 @@ AxialMuseWebsite 的首版目标是建立一个可维护的个人技术分享网
 | 决策域 | M0 选择 | 设计依据 |
 |---|---|---|
 | 页面技术 | 当前为手写静态骨架；目标为 Node 24 LTS + 严格 TypeScript + Docusaurus `3.10.2` 单一 docs 内容实例静态构建 | classic/Infima 最小适配；首页与列表页使用严格 TypeScript 页面，项目与文章详情由 docs 实例承载；项目/文章双侧栏遵守 E-004 的三档响应式契约，不引入 UI 库、搜索或文章专属交互 |
-| 内容事实 | Git 审核；`projects.json` 拥有项目结构化事实，`site-content/projects/` 拥有项目长文，`site-content/writing/` 拥有技术文章 | E-001/E-003 固定作者、主题和项目写作模块注册表及其引用；构建期只读投影框架字段，构建产物不成为编辑源 |
-| URL 与发现 | 根 `routeBasePath`，文章原生完整 `slug`，项目短 slug；canonical 统一使用末尾 `/` | E-002 失败关闭检查重复路由、断链、锚点和精确重定向；M0 不生成系列、主题、作者、归档、筛选、分页、RSS 或独立 `/about/` 路由 |
+| 内容事实 | Git 审核；`projects.json` 拥有项目结构化事实与主预览引用，`site-content/projects/` 拥有项目长文，`site-content/writing/` 拥有技术文章 | E-001/E-003/E-006/E-007 固定叙事所有者、作者、主题、项目模块与主预览 schema；构建期只读投影框架字段，构建产物不成为编辑源 |
+| URL 与发现 | 根 `routeBasePath`，文章原生完整 `slug`，项目短 slug；canonical 统一使用末尾 `/` | E-002/E-014 失败关闭检查重复路由、断链、锚点和精确重定向；旧路径及活动无斜杠路径由同一 release 的 Nginx exact rules 返回 301，不生成静态跳转页 |
 | 当前质量运行时 | Node.js 22 ESM；目标为 `.nvmrc` 精确 Node `24.18.0` 与 `>=24.16.0 <25` 兼容入口 | 目标版本、随附 npm、唯一 lockfile、严格 TypeScript 和双端点门禁已确定；版本文件、依赖、配置、策略脚本和 CI 接线尚未实施，首次联网解析与真实传递图准入仍受 D-077 门禁 |
 | 图表 | 现有 PlantUML 源码编译为静态 SVG | 保留构建期图表流程，不增加浏览器端渲染或 Docusaurus 运行时插件 |
-| 质量与供应链 | D-053、D-074、D-077 固定能力类别、独立 `tsc --noEmit`/Docusaurus build 和 npm 原生失败关闭准入 | 策略接口、记录、派生制品、边界检查和 CI 编排由 D-078 授权的编码 Spec 实施；当前尚未覆盖目标依赖图、lockfile、SBOM/NOTICE、审计和静态制品 |
+| 质量与供应链 | D-053、D-074、D-077、D-079 固定能力类别、独立 `tsc --noEmit`/Node ESM test/Docusaurus build 和 npm 原生失败关闭准入 | E-008 至 E-015 已固定发布态素材白名单、局域网候选预览、npm 隔离、确定性 SPDX、Node ESM 测试、完整 Git 历史、服务端 301 和 production 字节闭包；#5 至 #14 设计完成并继续跟踪实现，当前尚未覆盖目标依赖图、lockfile、SBOM/NOTICE、审计和静态制品 |
 | 生产服务 | Ubuntu 24.04 LTS + Nginx + Certbot（ACME HTTP-01）+ systemd/logrotate | 直接提供静态产物和原生运维，不运行主站应用后端或数据库 |
-| 发布 | GitHub Actions 将 `build/` 封装为不可变 `payload/` + `metadata/` artifact -> CAM -> TAT 固定命令 -> 原子 release | artifact 绑定 `main` 精确 SHA、外部 digest、内部 release metadata 与逐文件 SHA-256 清单；服务器只安装 `payload/`，不安装 Node、不拉源码、不执行仓库脚本 |
+| 发布 | GitHub Actions `production-artifact` 在 prerequisite 成功后对 `main` 精确 SHA fresh rebuild + full quality，将同一 `build/` 与派生 301 配置封装为不可变 `payload/` + `metadata/` artifact -> main HEAD 新鲜度检查 -> CAM -> TAT 固定命令 -> 整版 release | 不跨 job 传递 build；最终 artifact 绑定 repository/run/ID/SHA、外层 `artifactDigest`、artifact 外 `releaseContentSha256`、build tree、payload、运行清单、Nginx 配置与逐文件 SHA-256；服务器安装同 SHA payload/config，不安装 Node、不拉源码、不执行仓库脚本 |
 | 数据与隐私 | 无应用数据层、无 Cookie、无第三方运行时请求 | M0 没有已确认的数据收集需求 |
 
-当前有效的选择、取舍和实施门禁见[主站目标架构](main-site-target-architecture.md)。[M0 主站实现 Spec](../product/m0-main-site-spec.md)已按 D-078 与 E-001 至 E-005 收敛为 Docusaurus 多页面实现基线；内部实现细节不再逐项请求用户选择，D-078 排除的联网依赖准入、基础设施、公开事实、数据与未来动态能力仍执行原门禁。
+当前有效的选择、取舍和实施门禁见[主站目标架构](main-site-target-architecture.md)。[M0 主站实现 Spec](../product/m0-main-site-spec.md)已按 D-078 与 E-001 至 E-015 收敛为 Docusaurus 多页面实现基线；内部实现细节不再逐项请求用户选择。#5 至 #14 已形成设计但尚未实现。D-078 排除的联网依赖准入、基础设施、公开事实、数据与未来动态能力仍执行原门禁。
 
 ## 当前实现
 
@@ -78,8 +78,8 @@ CI --> Quality : 触发
 | 本地预览 | 现有 Linux 预览机 | feature / `dev` 分支渲染与桌面/移动验收 |
 | 域名解析 | 腾讯云 DNSPod | `axialmuse.com` 权威解析和 DNSSEC |
 | 生产执行 | GitHub Actions + 腾讯云 TAT | 对 `main` 精确提交构建不可变 artifact，并以固定参数触发受限的原子发布 |
-| Web 服务 | 腾讯云轻量应用服务器 + Nginx | HTTPS、重定向、安全头和静态资源 |
-| 公开站点 | 当前为 `public/` 骨架；目标为从 Docusaurus 默认 `build/` 逐文件复制得到的 artifact `payload/` | `metadata/` 只服务发布校验，不进入 Web Root；生产服务器只校验、解包和静态提供 `payload/` |
+| Web 服务 | 腾讯云轻量应用服务器 + Nginx | HTTPS、同版本 exact 301、安全头和精确 SHA 静态 Web Root；root-owned 只追加 URL 暴露账本约束历史路径兼容性 |
+| 公开站点 | 当前为 `public/` 骨架；目标为从 Docusaurus 默认 `build/` 逐文件复制得到的 artifact `payload/` | 运行清单与 Nginx 配置安装到同 release 非公开 `config/`；请求期只提供 `payload/`，服务器不重建规则 |
 | 项目体验 | `<project-slug>.axialmuse.com` | 已登记项目的独立静态体验、证书、发布和回滚边界 |
 
 
@@ -89,27 +89,30 @@ left to right direction
 actor "访问者浏览器" as Browser
 cloud "DNSPod" as DNS
 cloud "GitHub\n仓库与 Actions" as GitHub
-artifact "不可变 Actions artifact\npayload/ + metadata/" as Artifact
+artifact "不可变 Actions artifact\npayload/ + metadata/\n含 301 派生配置" as Artifact
 cloud "腾讯云 API" as TencentApi
 cloud "ACME CA" as Acme
 node "上海轻量应用服务器" as Server {
   component "Nginx" as Nginx
   component "TAT agent" as Tat
   component "root-owned\n固定发布脚本" as Deploy
-  folder "releases/<sha>" as Releases
-  folder "current symlink" as Current
+  folder "releases/<sha>\npayload/ + config/" as Releases
+  folder "current symlink\n配置解析时选代" as Current
+  database "root-owned\nURL 暴露账本" as UrlLedger
 }
 
 Browser --> DNS : DNS 查询
 Browser --> Nginx : HTTPS
-Nginx --> Current : 只读静态文件
-GitHub --> Artifact : build/ 复制为 payload/\n附加 release metadata
+Nginx --> Releases : 精确 SHA root\n同代 301 + 静态文件
+GitHub --> Artifact : production job 重建并重验\n同一 build/ 封装 payload/ + 301
 GitHub --> TencentApi : InvokeCommand\n(run/artifact, SHA, digest)
 TencentApi --> Tat : 指定实例与命令
 Tat --> Deploy : 仅传入固定发布参数
 Deploy --> Artifact : 读取元数据并下载
-Deploy --> Releases : 校验后仅安装 payload/
-Deploy --> Current : 原子切换/回滚
+Deploy --> Releases : 校验后安装 payload/ + config/
+Deploy <--> UrlLedger : 只追加暴露边\n校验历史收敛
+Deploy --> Current : 整版选择\n测试、reload、兼容回滚\n或 forward-only
+Current --> Releases : 指向活动 SHA
 Acme --> Nginx : HTTP-01 与证书续期
 @enduml
 ```
@@ -126,56 +129,61 @@ Acme --> Nginx : HTTP-01 与证书续期
 2. 实现者在 `dev` 或 feature 分支修改目标 Docusaurus 源码、内容与契约；迁移完成前的 `public/` 只描述当前可见骨架，不参与目标内容双写。
 3. 本地与 CI 校验内容模型、路由、链接、资源、Secret、依赖、类型、测试和静态制品。
 4. 真实浏览器按 E-004 完成桌面、平板、移动端和键盘验收，证据随 PR 评审。
-5. `dev` 集成验证通过后创建 `dev -> main` PR；合入 `main` 后，GitHub Actions 对精确 `GITHUB_SHA` 冻结安装并生成默认 `build/`。
-6. Actions 校验制品后，由封装器在临时 `dist/release/` 中把 `build/` 逐文件复制为 `payload/`，并生成 `metadata/release.json` 与按路径稳定排序的 `metadata/files.sha256`；只上传该目录为不可变 artifact，并记录 artifact digest。
-7. GitHub Actions 通过最小权限 CAM 调用固定 TAT command，只传 workflow run/artifact 标识、提交 SHA 和预期摘要。
-8. 服务器依次验证 GitHub artifact 元数据与 digest、内部 `metadata/release.json`、`metadata/files.sha256`、提交 SHA 和归档路径安全，只把已验证 `payload/` 安装到 `releases/<sha>`；`metadata/` 不进入 Web Root，本机冒烟通过才原子切换 `current`，失败则保持或恢复上一版本。
-9. GitHub runner 完成公网 HTTPS、canonical、关键页面与资源冒烟，并保留 deployment 记录。
+5. `dev` 集成验证通过后创建 `dev -> main` PR；合入 `main` 后，`website-quality`、`node-minimum`、`diagrams` 和 `supply-chain` 对精确 `GITHUB_SHA` 执行各自发布必需门禁。
+6. 四项全部成功后，非 matrix `production-artifact` 在 fresh runner 对同一 SHA 完整 checkout，以全新隔离 cache 冻结安装并重新执行主端点完整 `quality`，生成且重验唯一 production `build/`；不下载或复用 `website-quality` 的 job-local build。
+7. 同一 job 紧接着由封装器在临时 `dist/release/` 中把该 `build/` 逐文件复制为 `payload/`，从同一 payload 公开路由和 `redirects.json` 派生 `metadata/runtime-redirects.json`、`metadata/nginx/redirects.conf`，并生成绑定 source build tree、payload 和规则的 `metadata/release.json` 与稳定 `metadata/files.sha256`。独立校验通过后，从 exact release 全文件树计算不写入 artifact 的 `releaseContentSha256`，随即只上传该目录一次，输出唯一 artifact ID、外层 `artifactDigest` 与前述独立摘要。
+8. `deploy-production` 先以只读 GitHub 权限复核 canonical `main` 仍等于本次 SHA，并核对当前 run/artifact/head SHA/外层 digest；concurrency 只承担互斥，不替代新鲜度检查。通过后才引用最小权限 CAM 调用固定 TAT command，只传 workflow run/artifact 标识、提交 SHA、`artifactDigest` 和 `releaseContentSha256`；deploy 不按名称、最新版本或跨 run 搜索 artifact。
+9. 服务器依次验证 GitHub artifact 元数据与外层 `artifactDigest`、从安全解包后的 exact release 独立重算 artifact 外传入的 `releaseContentSha256`、内部 release/file/route/redirect 摘要、提交 SHA 和归档路径安全，把已验证 payload 与两个可部署派生文件安装到同一 `releases/<sha>/payload/`、`config/`；root-owned 脚本先用只追加 URL 暴露账本证明历史 source/target 仍收敛到同一当前 200，再生成只引用该 SHA 的 Nginx 包装。候选的全部规范路由和新增或改指的 registered 边在 reload 前预写；只有通过更新后账本的 fallback 才可自动回滚，否则默认停止或经生产授权进入 forward-only。
+10. GitHub runner 完成公网 HTTPS、canonical、单跳 301、目标 200、关键页面与资源冒烟，并保留 deployment 记录。
 
-当前 `public/` 仍是迁移前事实。目标生产链只接收 CODE-015 定义的 `payload/` + `metadata/` Actions artifact；生产服务器只安装已验证 `payload/`，不拉取源码、不运行 Node/npm 或仓库脚本，也不成为内容编辑或构建源。
+当前 `public/` 仍是迁移前事实。目标生产链只接收 CODE-015/CODE-019/CODE-020 定义的 `payload/` + `metadata/` Actions artifact；该 artifact 来自 `production-artifact` 同一 job 内重建、重验和封装的 build，不接收跨 job build handoff。生产服务器安装已验证 payload 和非公开运行配置，但不解释源注册表、不拉取源码、不运行 Node/npm 或仓库脚本，也不成为内容编辑或构建源。
 
 ### 浏览器请求
 
 1. DNSPod 将 `www.axialmuse.com` 解析到轻量服务器。
-2. Nginx 终止 TLS，校验精确 Host，并从 `/srv/axialmuse/current` 读取静态文件。
+2. Nginx 终止 TLS，校验精确 Host，并使用活动配置中包含 40 位 SHA 的绝对 root 和同 SHA redirect include；`current` 只在 reload 解析配置时选择 release，不参与请求期文件查找。
 3. 当前骨架加载本地 HTML、CSS 和图片；目标 `build/` 加载 Docusaurus 标准 React 客户端资源和仓库内静态资产。未经批准时，页面不请求站点 API、第三方字体、分析或嵌入脚本。
 4. 用户主动点击 GitHub 或备案链接时才离开本站。
 
 ### 信任边界
 
 - **公开边界**：当前 `public/` 和未来 Docusaurus 静态制品中的 HTML、CSS、JavaScript、图片、视频、字幕和元数据均可被任何人下载，不能包含秘密或私人资料。
-- **仓库边界**：GitHub 保存源码、公开文档、CI 记录和绑定精确 SHA 的不可变 `payload/` + `metadata/` artifact；GitHub secrets 只进入受控 workflow，不写入 release。
+- **仓库边界**：GitHub 保存源码、公开文档、CI 记录和绑定精确 SHA 的不可变 `payload/` + `metadata/` artifact；其中服务端规则是源注册表与同一 payload 的派生结果，GitHub secrets 只进入受控 workflow，不写入 release。
 - **云控制面边界**：腾讯云保存 DNS、CAM、TAT、实例和证书运行状态；控制台不是内容真相源。
-- **服务器边界**：Nginx 只读由 artifact `payload/` 安装的 release；发布脚本校验 `metadata/` 但不把它安装到 Web Root，也不拉取源码或运行构建；发布脚本和证书由受限系统身份管理，网页内容不能写服务器磁盘。
+- **服务器边界**：Nginx 只读同一 artifact release 中的 `payload/` 与非公开 redirect config；发布脚本校验 `metadata/`，只把运行清单/配置复制到非 Web Root `config/`，不拉取源码、重建规则或运行构建。发布脚本和证书由受限系统身份管理，网页内容不能写服务器磁盘。
 
 ## 故障隔离
 
-- 页面内容或 CSS 错误通过切换 `current` 回滚，不修改 DNS 或重装服务器。
+- 页面内容或 CSS 错误只能整版切换通过 URL 暴露账本的兼容 release，不修改 DNS 或重装服务器；历史 source 或 target 在 fallback 中不再收敛到同一 200 时，不得回滚，改走向前恢复。
 - Nginx 或证书错误先回滚对应配置，不重新发布页面内容。
 - 主站与项目体验使用独立目录、证书和发布命令；一个体验失败不能切换主站 release。
 - DocRestore 当前不创建 DNS、Nginx 或证书，因此其私有后端不会进入主站生产故障域。
 - GitHub Actions、TAT 或公网检查失败时不得把未验证 release 标记为成功。
-- artifact 的提交、外部 digest、内部 metadata、`payload/` 文件清单或归档路径校验失败时不得创建或切换 release。
+- artifact 的提交、外层 `artifactDigest`、artifact 外 `releaseContentSha256`、内部 metadata、payload/运行规则文件清单或归档路径校验失败时不得创建或切换 release。
 
 ## 目录职责
 
 - `public/`：迁移前静态网站入口和资源；不是 Docusaurus 目标源码或已确认的目标产物目录。
-- `build/`：Docusaurus 默认静态输出；是封装器的只读输入，不是 Actions artifact 根、编辑源或 `src/build/`。
-- `dist/release/payload/` 与 `dist/release/metadata/`：CODE-015 的临时 artifact 封装；前者逐文件复制 `build/`，后者保存 release 身份与文件摘要。`dist/` 不提交，服务器只安装 `payload/`。
+- `build/`：Docusaurus 默认静态输出；`website-quality` 与 `production-artifact` 分别在自己的 runner 生成，只有后者经过同 job 完整重验的实例是封装器只读输入。它不是 Actions artifact 根、编辑源或 `src/build/`。
+- `dist/release/payload/` 与 `dist/release/metadata/`：CODE-015/CODE-019/CODE-020 的临时 artifact 封装；前者逐文件复制 production job 的 `build/`，后者保存 source build tree、release 身份、文件摘要、运行重定向清单和 Nginx 配置。`dist/` 不提交；服务器只公开 payload，并把两个可部署派生文件安装到同 release 的非 Web Root `config/`。
 - 根 `docusaurus.config.ts` 与 `sidebars.ts`：D-075 已确认的框架入口；承载 E-002 路由和 E-004 docs/主题接线，当前尚未创建。
 - `site-content/projects/<project-id>/`：E-001 的项目长文正文；项目结构化事实继续由 `docs/contracts/projects.json` 拥有。
 - `site-content/writing/<source-name>/`：D-060 至 D-064 的技术文章源码与文章局部 `assets/`。
+- `site-assets/projects/<project-id>/`：E-007 的项目主预览原件；不直接进入 Docusaurus 静态目录，公开路径由注册表字段和受控构建入口派生。
+- `static-public/`：E-008 的始终公开品牌与根级静态文件；禁止项目、文章和待审核素材，并与获准项目预览一起投影到临时白名单树。
 - `src/domain/` 与 `src/build/`：领域核心与构建期适配源码；`src/build/` 是源码目录，不是静态构建产物目录，当前均尚未创建。
 - `src/components/`、`src/pages/` 与 `src/theme/`：通用展示组件、E-004 文件路由页面与最小主题适配；当前均尚未创建。
 - `scripts/author/`：作者显式 Node.js 工具目录；具体接口由 D-078 授权的编码 Spec 固定，当前尚未创建。
+- `scripts/build/`：E-008 的受控 Docusaurus 构建入口；按显式模式生成临时静态白名单树，当前尚未创建。
 - `docs/`：定位、架构、内容模型、产品服务演进和契约词表的真相源。
 - `docs/contracts/projects.json`：项目结构化事实、导航顺序和项目写作模块的唯一注册表。
 - `docs/contracts/authors.json` 与 `docs/contracts/topics.json`：E-003 的作者和主题注册表。
-- `docs/contracts/redirects.json`：E-002 的精确同站永久重定向登记，不接收通配规则。
+- `docs/contracts/redirects.json`：E-002/E-014 的精确同站永久重定向唯一登记，不接收通配规则；运行清单与 Nginx 配置只能派生，不能反向编辑。
+- `/var/lib/axialmuse/url-exposure-ledger.json`（服务器外部运行状态）：只追加已成功发布规范路径与可能暴露过的 301 边，是候选/回滚兼容证据，不是内容或规则编辑源，不能从单个 release 静默重建。
 - `docs/contracts/project-experiences.json`：已规划、上线、暂停和退役项目体验的公开事实注册表。
 - `codex-rules/`：Codex 执行任务时的操作规范。
 - `scripts/quality/`：CI 和本地质量门禁。
-- `.github/`：PR 模板、CODEOWNERS、CI，以及 E-005 的 `build/` artifact 构建与受限发布编排。
+- `.github/`：PR 模板、CODEOWNERS、CI，以及 E-005/E-015 的 prerequisite、production 自包含重建、最终 artifact 与受限发布编排。
 - 腾讯云（仓库外）：域名注册、DNS、轻量应用服务器、TAT 和账号控制面，非内容真相源。
 
 ## 演进原则
@@ -188,11 +196,11 @@ Acme --> Nginx : HTTP-01 与证书续期
 
 ## 架构验收
 
-- 当前 `public/` 是迁移前静态骨架；目标 release 来自 GitHub Actions 对 `main` 精确 SHA 生成的 `payload/` + `metadata/` artifact，其中 `payload/` 是 Docusaurus 默认 `build/` 的逐文件复制。服务器校验两层摘要后只安装 `payload/` 并交给 Nginx 静态提供，生产请求不依赖 Node.js、数据库或第三方 API。
-- D-078/E-001 至 E-005 已关闭项目内容职责、路由闭包、注册表、主题响应式、输出目录和制品交付的逐项用户决策；剩余内部 API、命名、路径检查、测试和 CI 接线由编码 Spec 实施并验证，不再重新选择上层方向。
+- 当前 `public/` 是迁移前静态骨架；目标 release 来自 GitHub Actions 对 `main` 精确 SHA 生成的 `payload/` + `metadata/` artifact，其中 `payload/` 是 Docusaurus 默认 `build/` 的逐文件复制，运行清单和 Nginx 配置从同一 payload 与源注册表确定派生。服务器校验两层摘要后安装同 SHA payload/config，只有 payload 进入 Web Root；生产请求不依赖 Node.js、数据库或第三方 API。
+- D-078/D-079/E-001 至 E-015 已关闭项目内容职责、路由闭包、注册表、主题响应式、输出目录、制品交付、主预览、发布态素材白名单、草稿预览、npm 隔离、确定性 SPDX、Node ESM 测试、完整 Git 历史、同版本服务端 301 和 production artifact 字节所有权设计；#5 至 #14 继续跟踪实现与 fixture，处理过程不重新选择已确认的上层方向。
 - 首次候选 lockfile 联网解析、真实传递图最终准入、安装、Action 与凭证配置、服务器和云资源操作仍受各自门禁；当前 Node 22、缺失的目标配置和现有 workflow 不能表述为目标能力已经部署。
 - 项目列表、项目侧栏和项目详情元数据从 `projects.json` 同一结构化事实投影；项目长文、文章、作者、主题、模块和重定向没有并行可编辑副本。
 - 从 contract 变更到页面、门禁、PR、`main` SHA、TAT invocation 和 release 的链路可追溯。
-- DNS、TLS、Nginx、发布和页面内容可以分别验证和回滚。
+- DNS、TLS、Nginx、发布和页面内容可以分别验证和恢复；URL 暴露账本判定不兼容的 301 变更只能向前恢复，不伪装成可逆回滚。
 - 浏览器、GitHub、腾讯云控制面和服务器四个信任边界没有共享网页可读取的凭证。
 - 未登记或未批准的项目不会因泛解析、默认 Nginx Host 或页面占位链接意外公开。
