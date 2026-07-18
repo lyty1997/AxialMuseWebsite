@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.3.0",
   "kind": "axial_muse_projects",
   "status": "active",
   "owner": "AxialMuseWebsite",
@@ -17,11 +17,6 @@
       "publicationStatus": "planned",
       "startedAt": "2026-04",
       "updatedAt": "2026-07-02",
-      "problem": "把多张文档照片转化为结构清晰、可编辑并可追溯的 Markdown，而不是只得到彼此孤立的 OCR 文本。",
-      "decisions": [
-        "采用分阶段处理流水线组织 OCR、清洗、合并、脱敏、精修和输出",
-        "主站首次上线只展示源码，不提供在线体验；演示视频作为后续增量"
-      ],
       "repositoryUrl": "https://github.com/lyty1997/DocRestore",
       "productionBranch": "main",
       "showcaseMode": "repository",
@@ -43,12 +38,6 @@
       "publicationStatus": "planned",
       "startedAt": "2026-07",
       "updatedAt": "2026-07-09",
-      "problem": "新项目通常缺少统一的设计真相源、Agent 执行规则和自动质量门禁，后续容易产生文档、代码与流程漂移。",
-      "decisions": [
-        "使用初始化脚本替换项目占位符，不预设具体应用技术栈",
-        "以 docs、Agent 规则、零第三方依赖质量脚本、CI 和 Git hooks 形成可执行工程基线",
-        "采用 Apache License 2.0 开源"
-      ],
       "repositoryUrl": "https://github.com/lyty1997/project-scaffold",
       "productionBranch": "main",
       "showcaseMode": "repository",

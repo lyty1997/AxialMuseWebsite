@@ -71,7 +71,7 @@ D-031 固定主站展示与未来项目试用的 URL 职责。主站承载可索
 | 技术分享列表 | `/writing/` | 浏览技术分享 |
 | 技术分享详情 | `/writing/<article-slug>/` | 完整正文和内容元数据 |
 
-D-031 已确认这些页面职责与路径命名空间；E-002 进一步固定 `trailingSlash: true`，表中的末尾 `/` 现在属于 canonical URL 契约。内容源中的文章完整 `slug` 和项目短 slug 不保存末尾 `/`，构建链接、canonical、sitemap 与 Nginx 永久重定向统一输出末尾 `/`。
+D-031 已确认这些页面职责与路径命名空间；E-002 进一步固定 `trailingSlash: true`，表中的末尾 `/` 现在属于 canonical URL 契约。内容源中的文章完整 `slug` 和项目短 slug 不保存末尾 `/`，构建链接、canonical、sitemap 与 Nginx 永久重定向统一输出末尾 `/`。E-014 要求 release 封装器从同一 production payload 的实际公开页面派生无斜杠 301，不能依赖静态目录服务的隐式行为。
 
 M0 不提供 `/series/<slug>/`、`/about/`、作者、主题、归档、筛选、分页、RSS 或搜索路由；这些不是实现阻塞项，只有出现真实产品需求时才重新评估。
 
@@ -83,7 +83,7 @@ D-035 与 D-058 共同固定当前 slug 规则：
 - 确需修改时，为旧 URL 配置永久重定向并同步 canonical URL 与站点地图。
 - 项目 slug 逐项目登记；例如 DocRestore 使用 `docrestore`。
 
-D-038 原先确认技术文章必须在 frontmatter 顶层显式填写 `slug`，并以它作为文章公开 URL 的唯一真相源。D-058 保留该原则，但把字段值改为 Docusaurus 原生根相对完整路径，例如 `slug: /writing/dependency-inversion`；单一 docs 实例使用 `routeBasePath: '/'`，不再从短文章标识派生栏目路径。文章文件名和目录不参与路由生成。E-002 要求构建在规范化尾斜杠后检查 pages、docs、静态资源和精确重定向的全站唯一性；已发布 slug 变更必须登记无链无环的永久重定向。
+D-038 原先确认技术文章必须在 frontmatter 顶层显式填写 `slug`，并以它作为文章公开 URL 的唯一真相源。D-058 保留该原则，但把字段值改为 Docusaurus 原生根相对完整路径，例如 `slug: /writing/dependency-inversion`；单一 docs 实例使用 `routeBasePath: '/'`，不再从短文章标识派生栏目路径。文章文件名和目录不参与路由生成。E-002 要求构建在规范化尾斜杠后检查 pages、docs、静态资源和精确重定向的全站唯一性；已发布 slug 变更必须登记无链无环的永久重定向。E-014 进一步把登记 source 及其无斜杠别名直接指向同一 release 中实际存在的最终 200 页面，不生成静态跳转页。生产暴露账本保存已发布路径和历史 301 边；后续迁移必须让每个历史 source 与曾被缓存的历史 target 仍收敛到同一个当前 200 终点，不能用只含目标文件但丢失旧规则的 release 回滚。
 
 
 项目子域名只表示实际体验，不承担主站项目介绍：
@@ -106,7 +106,7 @@ D-056 曾确认技术文章通过 Docusaurus 官方 `markdown.parseFrontMatter` 
 
 D-057 曾把相对未来 docs 内容根的 `writing/` 子树设为技术文章类型边界，并与 D-056 的全局解析分流绑定；D-058 后该组合被重新开放评审。D-060 独立重新确认目录判据：规范化后相对未来 docs 内容根位于 `writing/` 子树内的 Markdown/MDX 是技术文章候选，边界内每个候选都必须通过技术文章 schema，不能因字段缺失或非法而退回普通 doc。D-061 随后把该内容根固定为仓库根 `site-content/`，因此当前文章候选边界为 `site-content/writing/`。D-062 再确认每篇文章使用 `site-content/writing/<source-name>/` 独立源码目录，并以 `index.md` 或 `index.mdx` 之一作为唯一正文入口；D-063 将 `<source-name>` 固定为作者手工确定、稳定可读且满足 1-64 字符 lowercase kebab-case 约束的源码目录名，并规定发布前受控改名、发布后仅在明确授权的纠错迁移中改名；D-064 为每篇文章增加不可变 UUIDv7 `articleId` 领域身份，并确认源码相对文章链接、基于 `classification` 与当前 `docs[].id` 的侧栏派生方向，以及显式日期的未来构建期索引绑定；D-065 将新文章创建固定为作者显式运行仓库内 Node.js 命令，并在创建唯一正文入口时一次性写入 articleId；D-066 将目标工具链固定为 Node 24 LTS，并选择原生 `randomUUIDv7()` 作为非严格递增的生成后端；D-067 再固定 `.nvmrc` 唯一精确执行基线、`engines` 兼容边界、最低端点兼容验证和受控 patch 升级治理；D-072 规定这些作者 Node.js 命令只在 Linux 执行环境运行并由 Ubuntu CI 验证。边界外只表示“不是技术文章”，不能自动解释为项目内容。
 
-`site-content/writing/` 边界独立于 D-059 的投影、公开 URL、侧栏归属和排序；schema、投影和所有消费者必须复用同一判型结果。articleId、文章路径、`<source-name>`、完整 `slug`、分类和当前 doc ID 各自独立。文章不填写原生 `id`，正文使用带扩展名的源码相对链接，侧栏生成器消费当前 `docs[].id`。生产只包含 `published` 与 `archived`；开发预览可以在独立“草稿”分组显示 draft，但必须 `noindex` 且不能成为发布制品。E-003/E-004 已固定注册表、排序和响应式投影；公共 API、错误和 fixture 的实现契约见[主站编码规范 Spec](../engineering/main-site-coding-spec.md)。
+`site-content/writing/` 边界独立于 D-059 的投影、公开 URL、侧栏归属和排序；schema、投影和所有消费者必须复用同一判型结果。articleId、文章路径、`<source-name>`、完整 `slug`、分类和当前 doc ID 各自独立。文章不填写原生 `id`，正文使用带扩展名的源码相对链接，侧栏生成器消费当前 `docs[].id`。生产只包含 `published` 与 `archived`；E-009 的静态 development-mode 预览在独立“草稿”分组显示 draft，全站 `noindex, nofollow`、无 sitemap，并且不能成为发布制品。候选失败保留上一活动预览，精确 Docusaurus 版本的 draft 行为由 fixture 验证。E-003/E-004 已固定注册表、排序和响应式投影；公共 API、错误和 fixture 的实现契约见[主站编码规范 Spec](../engineering/main-site-coding-spec.md)。
 
 - 顶部导航负责项目、技术分享等全站级跳转，不与左侧目录重复承担同一职责。
 - 文章页左栏显示技术分享目录；项目页左栏显示项目目录；当前内容在目录中保持清晰高亮。
@@ -161,9 +161,6 @@ classification:
 | `publicationStatus` | 是 | `draft`、`planned`、`published`、`archived` |
 | `startedAt` | 是 | 开始日期，至少精确到月 |
 | `updatedAt` | 是 | 最近实质更新日期 |
-| `problem` | 是 | 问题背景和约束 |
-| `decisions` | 是 | 关键技术或产品取舍 |
-| `evidence` | 发布时 | 真实截图、代码、演示、文档或可验证结果链接 |
 | `repositoryUrl` | 否 | 公开源码仓库的完整 HTTPS URL |
 | `productionBranch` | 有仓库时 | 用于核对公开事实的稳定分支 |
 | `showcaseMode` | 是 | 当前允许的公开动作集合；未就绪增强不能提前写入 |
@@ -174,9 +171,19 @@ classification:
 | `demoVideoCaptions` | 否 | UTF-8 WebVTT 字幕路径 |
 | `relatedWriting` | 否 | 相关技术分享标识列表 |
 | `writingModules` | 否 | 项目内写作模块列表；每项包含稳定 `id`、`displayName`、唯一 `navigationOrder` 与状态 |
-| `source` | 是 | 支撑公开描述的设计文档、仓库或原始资料 |
+| `previewImage` | `published`、`archived` | 唯一主预览对象；`draft`、`planned` 可省略且不得使用占位图 |
+| `previewImage.sourcePath` | 有主预览时 | 相对 `site-assets/` 的 `projects/<project-id>/<lowercase-kebab-case>.webp`，公开 URL 只由它派生 |
+| `previewImage.width` / `height` | 有主预览时 | 固定 `1600` / `1000`，并且必须与 WebP 解码尺寸一致 |
+| `previewImage.alt` | 有主预览时 | 非空单行纯文本，最多 160 个 grapheme，说明图片所证明的真实界面或工程状态 |
+| `source` | 是 | 支撑注册表结构化事实的设计文档、仓库或原始资料；不作为页面证据清单 |
 
-项目长文位于 `site-content/projects/<project-id>/index.md` 或 `index.mdx`，不重复上表字段，也不重复 H1。`published` 与 `archived` 项目必须恰有一个正文入口；`draft` 与 `planned` 可以在准备期没有正文，但不会产生生产路由。项目正文同目录素材放在 `assets/`；列表预览图和全站品牌资源放在 `static/assets/` 并由注册表显式引用。体验 URL 与运行状态只从 `project-experiences.json` 派生；只有对应条目为 `live` 且健康检查通过时显示入口，不在项目注册表复制在线布尔值、体验 URL 或体验状态。
+`problem`、`decisions` 和叙事性 `evidence` 不是项目注册表字段。项目长文位于 `site-content/projects/<project-id>/index.md` 或 `index.mdx`，唯一拥有问题背景、能力与架构、关键取舍、限制、证据说明和复盘正文；其中的证据链接是正文内容，不回填注册表。注册表 `summary` 只拥有列表和元数据使用的一句话摘要，正文不得把它复制为第二个可编辑摘要字段。
+
+项目正文由目录名与注册表稳定 ID 绑定，不保存作者可编辑 frontmatter，也不重复 H1、上表字段或 Docusaurus 派生字段；出现任意 frontmatter key、孤儿正文、未知目录或双入口时自动失败。正文可以正常叙述问题、取舍并链接证据；摘要或结构化事实是否发生不必要的文字重复由内容审查判断，不使用字符串相似度冒充语义校验。
+
+`published` 与 `archived` 项目必须恰有一个正文入口和一个 `previewImage`；`draft` 与 `planned` 可以在准备期没有正文和预览，不会产生生产路由，也不得用占位图满足字段。单对象本身就是主预览选择规则，不增加 `primary`、顺序、公开 URL、审核布尔值或内容哈希副本。主预览固定为非动画 WebP、1600 x 1000、最多 300,000 bytes；扩展名、文件签名、动画状态、实际尺寸和登记尺寸必须一致，`alt` 去除首尾空白后不得为空、包含换行或与项目标题/摘要完全相同。
+
+正文创建前，当前两个项目分别由 `docs/projects/docrestore-experience.md` 的“主站叙事迁移源（过渡）”和 `docs/projects/vibecoding-project-scaffold.md` 的“主站内容契约”临时拥有叙事。创建目标正文的同一提交必须人工移动并审核内容，把原过渡章节替换成正文链接；迁移前后任一时刻只允许一个可编辑叙事来源。`projects.json` 旧有同名字段删除后不得作为迁移输入重新生成。项目正文同目录素材放在 `assets/`；主预览原件放在 `site-assets/projects/<project-id>/`，始终公开的全站资源放在 `static-public/`，二者均由 E-008 的受控构建入口投影，不能直接配置为未过滤的项目素材目录。体验 URL 与运行状态只从 `project-experiences.json` 派生；只有对应条目为 `live` 且健康检查通过时显示入口，不在项目注册表复制在线布尔值、体验 URL 或体验状态。
 
 ### 技术分享 Writing
 
@@ -230,7 +237,7 @@ sources:
 
 `articleId`、完整 `slug`、`publishedAt` 与 `updatedAt` 保存在同一个唯一正文入口中，形成唯一可编辑绑定。UUIDv7 时间字段只记录生成器在分配 ID 时采用的 Unix 毫秒时间源值，可用于 UUID 值的技术排序与未来存储索引局部性，但不保证真实业务事件顺序，也不是文章创建、发布或更新日期；未来日期筛选或索引只能读取显式 `publishedAt` 与 `updatedAt`。M0 从 `published` 与 `archived` 文章派生仅包含这四个字段的日期索引，按 articleId 确定性排序；它只存在于构建内存和 Docusaurus generated files 中，不提交、不进入 `static/`、不形成公开路由或浏览器数据，draft 不进入索引。当前不新增 `createdAt`，也不批准站内搜索、日期筛选 UI、搜索插件或归档路由。
 
-新文章由作者在获准的 Linux 执行环境显式运行 `npm run content:new --` 建立，入口实现固定为 `scripts/author/create-article.mjs`。命令显式接收 source-name、title、完整 slug、summary、至少一个 author 和 topic，以及可选 project/module；M0 只创建 Markdown，不提供 MDX 快捷入口。它在创建唯一正文入口时使用 Node 24.16.0 起提供的原生 `node:crypto.randomUUIDv7()` 生成并一次写入 articleId，正常作者入口必须运行在与仓库 `.nvmrc` 精确一致的 Node 上，结果保留在 Linux 作者工作区供 Git diff 审查。最低版本兼容任务只验证共享负载，不得触发文章创建。命令先完整校验并取得作者锁，再在 `site-content/.author-staging-*` 写出完整 draft，flush 后把整个临时目录原子 rename 为目标；失败清理本次结果，质量、预览和构建发现锁或残留 staging 时失败，不读取半成品。命令不从 UUID 推导源码名、slug、分类或日期，不自动暂存、提交、推送或发布。Git hook、CI、Docusaurus 与生产只读校验，不生成或修复；UUID 文本、当前树和 Git 历史不可复用检查属于同一只读质量规则。原生后端不保证严格递增，且不引入 UUID npm 包。命令与检查尚未实现，因此这不是当前已可使用的编辑器功能、CMS 或公开页面能力。
+新文章由作者在获准的 Linux 执行环境显式运行 `npm run content:new --` 建立，入口实现固定为 `scripts/author/create-article.mjs`。命令显式接收 source-name、title、完整 slug、summary、至少一个 author 和 topic，以及可选 project/module；M0 只创建 Markdown，不提供 MDX 快捷入口。它在创建唯一正文入口时使用 Node 24.16.0 起提供的原生 `node:crypto.randomUUIDv7()` 生成并一次写入 articleId，正常作者入口必须运行在与仓库 `.nvmrc` 精确一致的 Node 上，结果保留在 Linux 作者工作区供 Git diff 审查。最低版本兼容任务只验证共享负载，不得触发文章创建。命令先完整校验并取得作者锁，在锁内复核工作区并在内存生成 UUID；E-013 的候选历史检查通过后，才在 `site-content/.author-staging-*` 写出完整 draft，flush 后把整个临时目录原子 rename 为目标。失败清理本次结果，质量、预览和构建发现锁或残留 staging 时失败，不读取半成品。命令不从 UUID 推导源码名、slug、分类或日期，不自动暂存、提交、推送或发布。Git hook、CI、Docusaurus 与生产只读校验，不生成或修复；E-013 的同一实现从完整非浅 HEAD 可达 DAG 和当前工作区候选检查 UUID、source-name 与稳定注册表 ID，浅历史、缺失对象、改绑或删除后重引都失败关闭。原生后端不保证严格递增，且不引入 UUID npm 包。命令与检查尚未实现，因此这不是当前已可使用的编辑器功能、CMS 或公开页面能力。
 
 ### 系列 Series
 
