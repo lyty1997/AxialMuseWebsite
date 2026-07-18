@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { listFiles, projectRoot, readJson, readText } from "./lib/files.mjs";
+import { listFiles, listFilesShallow, projectRoot, readJson, readText } from "./lib/files.mjs";
 
 const ROOT = projectRoot();
 const TERMS_PATH = resolve(ROOT, "docs/contracts/contract-terms.json");
@@ -33,20 +33,33 @@ function scanFiles(rules) {
   const roots = asArray(scan.roots);
   const extensions = new Set(asArray(scan.extensions));
   const skipPaths = asArray(scan.skip_paths);
-  const files = [];
+  const matchesExtension = (path) => extensions.has(path.slice(path.lastIndexOf(".")));
+  const files = new Set();
+
+  function collect(filePath) {
+    const relativePath = relative(ROOT, filePath).replaceAll("\\", "/");
+    if (!pathMatches(relativePath, skipPaths)) {
+      files.add(filePath);
+    }
+  }
+
+  // 仓库根级文件（AGENTS.md、CLAUDE.md 等）只扫一层，不递归——理由见 listFilesShallow。
+  // 这样新增的根级文件自动纳入门禁，不需要逐个登记，也不会漏登记。
+  if (scan.include_root_files === true) {
+    for (const filePath of listFilesShallow(ROOT, matchesExtension)) {
+      collect(filePath);
+    }
+  }
 
   for (const rootName of roots) {
     const root = resolve(ROOT, rootName);
     if (!existsSync(root)) continue;
-    for (const filePath of listFiles(root, (path) => extensions.has(path.slice(path.lastIndexOf("."))))) {
-      const relativePath = relative(ROOT, filePath).replaceAll("\\", "/");
-      if (!pathMatches(relativePath, skipPaths)) {
-        files.push(filePath);
-      }
+    for (const filePath of listFiles(root, matchesExtension)) {
+      collect(filePath);
     }
   }
 
-  return files.sort();
+  return [...files].sort();
 }
 
 function validateContractFiles(terms, rules) {

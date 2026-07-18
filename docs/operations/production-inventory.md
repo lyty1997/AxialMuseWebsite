@@ -1,7 +1,7 @@
 # 生产环境清单
 
 状态：inactive
-最近更新：2026-07-13
+最近更新：2026-07-18
 适用范围：M0 生产环境非敏感事实与验证记录
 
 ## 使用规则
@@ -56,11 +56,23 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 | 快照能力 | 未核验 |
 | TAT agent | 未核验 |
 | Web 服务 | 计划使用 Nginx |
-| Web Root | `/srv/axialmuse/current` |
+| Web Root | 目标：活动 `site-release.conf` 中 `/srv/axialmuse/releases/<sha>/payload` 的精确绝对路径；`current` 只在配置解析时选代 |
 | 生产分支 | `main` |
-| 发布方式 | GitHub Actions -> 腾讯云 TAT -> 原子 release |
-| Build command | `npm run quality`，在 GitHub Actions 执行 |
-| Output directory | `public` |
+| 发布方式 | 目标：GitHub Actions 构建不可变 artifact -> 腾讯云 TAT 受限交付 -> 校验后原子 release；尚未实施 |
+| 构建位置 | 目标：仅 GitHub Actions 构建；PR/`main` 的 `website-quality` 与 release-eligible `production-artifact` 各自在独立 runner 构建，只有后者对 `main` 精确 SHA fresh rebuild + full quality 的 build 可部署；生产服务器不构建 |
+| Build command | 目标：四个 prerequisite 成功后，`production-artifact` 重新执行隔离冻结安装、完整主端点 `quality`、Docusaurus production build、制品检查、封装和独立 release 校验；具体 npm script 尚未实现 |
+| Output directory | 目标：Docusaurus 默认 `build/`；当前仓库仍是迁移前 `public/` 骨架 |
+| Artifact 身份 | 目标：canonical repository、workflow run ID/attempt、`production-artifact` 输出的 artifact ID、40 位提交 SHA、GitHub 外层 `artifactDigest` 与上传前独立计算且不写入 artifact 的 `releaseContentSha256`；展示名不用于选择；尚未生成 |
+| Artifact 内容 | 目标：`payload/`（同一 production job 已完整重验 `build/` 的逐文件复制）与 `metadata/`（source build tree、提交标识、release manifest、逐文件 SHA-256、运行重定向清单和 Nginx exact-location 配置）；尚未生成 |
+| 跨 job build 边界 | E-015 固定不上传或下载中间 build artifact；`production-artifact` 在 fresh runner 自包含重建、重验和封装，避免消费其他 job 文件系统 |
+| 发布新鲜度 | 目标：`deploy-production` 在引用 CAM Secret/腾讯云 API 前以只读 GitHub API 证明 canonical `refs/heads/main` 仍等于候选 SHA；concurrency 只互斥、不承担顺序；尚未实施 |
+| Workflow token | 目标：prerequisite/producer 仅 `contents: read`，deploy 仅 `contents: read`、`actions: read`，其他 scope 全部为 `none`；尚未实施 |
+| Artifact 读取 | OD-009 待核验；公开仓库无需凭证，私有仓库仅用单仓库 `Actions: read` 细粒度凭证 |
+| 服务器发布职责 | 目标：分别校验外层 `artifactDigest` 与从解包后 exact release 独立重算的 `releaseContentSha256`，再校验元数据、归档路径与文件清单，把同 SHA payload/运行清单/Nginx 配置安装至不可变 release，用 URL 暴露账本验证历史闭包，生成精确 SHA root/include，执行隔离候选测试、`nginx -t`、reload、逐规则冒烟和受控恢复 |
+| 活动重定向身份 | 目标：记录源注册表摘要、公开路由摘要、运行清单摘要、Nginx 配置摘要和规则数；当前未生成 |
+| URL 暴露账本 | 目标：`/var/lib/axialmuse/url-exposure-ledger.json`；每次 reload 前只追加候选的全部规范 200 路径和新增或改指的 registered 301 边，`canonical-slash` 不入边账本但 target 由路由预写保护；记录每次 deployment 前后摘要并由 root-owned 备份保护，当前未创建 |
+| 回滚兼容谓词 | 目标：每个历史 published route 仍可解析，每条历史 301 边的 source/target 收敛到同一当前 200；只有目标文件但缺少 source 规则不算兼容 |
+| 服务器主站工具边界 | 不安装 Node/npm，不拉取主站源码，不从源码 checkout 执行脚本或构建；尚待现场核验与配置 |
 
 ## 项目体验子域名
 
@@ -79,7 +91,7 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 
 | 项目 | 保留主机名 | 状态 | 当前公开方式 | DNS |
 |---|---|---|---|---|
-| DocRestore | `docrestore.axialmuse.com` | `planned` / `onlineExperience: false` | 主站项目说明、GitHub 仓库、演示视频 | 禁止创建 |
+| DocRestore | `docrestore.axialmuse.com` | `planned` / `dnsProvisioning: disabled` | 主站项目说明和 GitHub 仓库；演示视频后续追加 | 禁止创建 |
 
 ## 备案与合规
 
@@ -126,7 +138,10 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 
 | 日期 | 变更 | 原因 | 验证 |
 |---|---|---|---|
-| 2026-07-13 | DocRestore 改为“公开仓库 + 演示视频”，明确不提供在线体验 | 用户确认自有后端只用于私有运行和录制，首版不承担公网服务 | 注册表禁止 DNS provisioning；视频素材尚待准备 |
+| 2026-07-18 | 记录 E-014 的同版本服务端 301、精确 SHA Web Root/include、只追加 URL 暴露账本、历史 source/target 收敛谓词和 fallback/forward-only 恢复边界 | 静态跳转页无法返回真实 301，请求期 `current` Web Root 会在 graceful reload 中混用新旧代，且只检查目标文件会误放缺少历史 source 规则的回滚 | 设计已落盘；生成器、artifact、账本、Nginx、TAT 和服务器操作均未实施 |
+| 2026-07-18 | 记录 E-015 的 production artifact 自包含重建、同 job build tree/封装闭包、唯一 ID/双摘要输出、main HEAD 新鲜度和最小 token 边界 | GitHub jobs 文件系统隔离；直接封装另一个 job 的 `build/` 没有输入，建立中间 handoff 又会增加 Action、归档、重跑和过期协议；concurrency 不保证旧 run 不会晚到 | 设计已落盘；选择在 `production-artifact` fresh runner 重新执行完整主端点质量，不实现中间 build artifact；workflow 与 Action 均未修改 |
+| 2026-07-18 | 记录 E-005 的 GitHub Actions `build/` artifact、TAT 受限参数和服务器只校验/解包/切换目标 | D-078 委托内部工程细节后形成静态制品交付决定 | 设计已落盘；Action、凭证、workflow、TAT、服务器与 DNS 操作均未实施，仍需对应准入、核验和授权 |
+| 2026-07-13 | DocRestore 改为公开仓库展示，演示视频作为后续增强，明确不提供在线体验 | 用户确认自有后端只用于私有运行和录制，首版不承担公网服务 | 注册表禁止 DNS provisioning；视频素材不阻塞首次上线 |
 | 2026-07-13 | 登记 DocRestore 静态前端入口，保持 `planned` 与 `noindex` | 用户提供首个项目、子域名、仓库、分支和外部后端边界 | 已核对本地 README、前端构建配置和相对 API 实现；外部后端与公网认证待决策 |
 | 2026-07-13 | 记录上海地域、Ubuntu Server 24.04 LTS 64bit、专用空机、完整 ICP 备案号和接入成功状态 | 用户补充生产事实 | 待腾讯云控制台、官方备案查询与服务器只读核验 |
 | 2026-07-13 | 建立项目体验子域名注册、DNS、Nginx、证书与发布基线 | 用户要求为各项目提供体验入口 | 注册表当前为空，待提供首批项目清单 |

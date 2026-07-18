@@ -14,21 +14,24 @@ Axial Muse Website 是个人项目与技术分享网站。第一版聚焦个人�
 - 项目规范：[AGENTS.md](AGENTS.md)
 - 贡献指南：[CONTRIBUTING.md](CONTRIBUTING.md)
 - 文档入口：[docs/README.md](docs/README.md)
+- 主站编码规范 Spec：[docs/engineering/main-site-coding-spec.md](docs/engineering/main-site-coding-spec.md)
 - 项目进度：[docs/progress.md](docs/progress.md)
 - Codex 规则：[codex-rules/global-AGENTS.md](codex-rules/global-AGENTS.md)
 - 质量门禁脚本：[scripts/quality](scripts/quality)
 
-## 本地检查
+## Linux 执行环境检查
 
 ```bash
 npm run quality
 ```
 
-提交前门禁与 CI 一致，克隆后执行一次即可启用本地 pre-commit 钩子：
+在获准运行本站 Node.js 的 Linux 工作区，提交前门禁与 CI 共用同一质量入口；克隆后执行一次即可启用本地 pre-commit 钩子：
 
 ```bash
 git config core.hooksPath .githooks
 ```
+
+本站 Node.js 命令、质量检查和 Docusaurus 构建只在获准的 Linux 执行环境运行；Ubuntu CI 在合入与发布前执行统一验证。本地 hook 提供快捷反馈，但不能代替 CI。
 
 当前首版不依赖第三方包，`quality` 使用 Node.js 内置能力检查：
 
@@ -36,4 +39,3 @@ git config core.hooksPath .githooks
 - 契约词表和禁用旧名回潮。
 - 常见密钥形态。
 - 静态站点入口和资源引用。
-

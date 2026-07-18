@@ -47,17 +47,13 @@ https://<project-slug>.axialmuse.com/
 
 | 字段 | 说明 |
 |---|---|
-| `id` | 稳定项目标识，与 slug 一致 |
-| `title` | 主站显示名称 |
+| `id` | 稳定体验标识，与保留子域名 slug 一致 |
+| `projectId` | 对 `projects.json` 的稳定项目外键；标题、公开仓库和展示方式只从项目注册表读取 |
 | `hostname` | 完整体验主机名 |
 | `status` | `planned`、`provisioning`、`live`、`paused`、`retired` |
-| `onlineExperience` | 是否已批准进入在线体验实施；`false` 时禁止 DNS、证书、Nginx 和体验发布 |
 | `dnsProvisioning` | DNS 实施状态；未批准体验使用 `disabled` |
-| `showcaseMode` | 不提供在线体验时的主站展示方式，例如仓库与演示视频 |
 | `deliveryMode` | M0 只允许 `static` |
-| `repository` | 公开仓库 URL 或不含凭证的内部稳定标识 |
-| `productionBranch` | 生产分支，默认 `main` |
-| `buildWorkingDirectory` | 运行前端质量与构建命令的仓库相对目录 |
+| `deploymentSource` | 部署源码职责；引用项目仓库时只保存 `kind` 和工作目录，不复制仓库 URL 或生产分支 |
 | `qualityCommands` | 发布前必须通过的依赖安装、类型、lint 和测试命令 |
 | `buildCommand` | 生成静态产物的命令 |
 | `artifactDirectory` | 已构建静态产物目录 |
@@ -65,14 +61,13 @@ https://<project-slug>.axialmuse.com/
 | `indexing` | `noindex` 或 `index` |
 | `dataBoundary` | 是否收集数据及对应设计文档 |
 | `owner` | 维护责任人角色，不记录私人联系方式 |
-| `showcase` | 仓库、演示视频、封面和字幕等公开展示资产的状态与路径 |
 | `runtimeDependencies` | API、WebSocket、上传与认证等外部运行依赖；存在时必须指向项目专属设计 |
 
 注册表不保存公网 IP、实例 ID、deploy key、CAM Secret、证书私钥或私人仓库凭证。
 
 `deliveryMode: static` 只描述本轻量服务器交付的产物类型，不代表整个项目没有后端。若 `runtimeDependencies` 表明存在 API、上传、登录、WebSocket 或用户数据，项目即使只发布静态前端，也必须完成独立运行、安全和隐私设计后才能进入 `provisioning`。
 
-`onlineExperience: false` 的条目只用于保留 slug 和维护未来边界，不属于待部署体验。此类项目可以在主站展示仓库、截图或经过审核的演示视频，但不得创建子域名解析、签发证书、部署体验产物或显示“在线体验”按钮。
+`status: planned` 且 `dnsProvisioning: disabled` 的条目只用于保留 slug 和维护未来边界，不属于待部署体验。此类项目可以在主站展示仓库、截图或经过审核的演示视频，但不得创建子域名解析、签发证书、部署体验产物或显示“在线体验”按钮。只有 `status: live` 且健康检查通过的条目才能生成体验入口，不再维护第二个在线布尔值。
 
 ## DNS 设计
 

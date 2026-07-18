@@ -13,11 +13,7 @@ permissions:
 jobs:
   website-quality:
     name: Website quality gates
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout

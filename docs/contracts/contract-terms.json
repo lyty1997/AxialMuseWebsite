@@ -15,7 +15,7 @@
       "kind": "project_brand",
       "owner": "project",
       "canonical": true,
-      "source": ["docs/projects/docrestore-experience.md", "docs/contracts/project-experiences.json"]
+      "source": ["docs/projects/docrestore-experience.md", "docs/contracts/projects.json"]
     },
     "VibeCoding Project Scaffold": {
       "kind": "project_brand",
@@ -55,10 +55,15 @@
     }
   },
   "enums": {
-    "content_stage": {
+    "article_publication_status": {
+      "owner": "content",
+      "members": ["draft", "published", "archived"],
+      "source": ["docs/operations/content-publishing.md"]
+    },
+    "project_publication_status": {
       "owner": "content",
       "members": ["draft", "planned", "published", "archived"],
-      "source": ["docs/product/content-roadmap.md", "docs/contracts/projects.json"]
+      "source": ["docs/contracts/projects.json"]
     },
     "project_status": {
       "owner": "content",

@@ -1,7 +1,7 @@
 # 跨机协同开发预览工作流
 
 状态：active
-最近更新：2026-07-12
+最近更新：2026-07-18
 适用范围：Windows 机器与 Linux 托管机之间的本地开发预览闭环（编码会话可以在任意一端发起，托管固定在 Linux 一端）。本工作流只覆盖“改代码 → 本地渲染验证 → 再改”的迭代环节；生产目标已于 2026-07-12 确认为腾讯云轻量应用服务器，见 [域名与生产发布设计](../operations/domain-deployment.md)，两条链路独立运行。
 
 ## 背景与目标
@@ -10,14 +10,16 @@
 
 **一处曾经的误判（2026-07-05 现场验证后更正）**：本文件最初假设“当前 Claude Code CLI 所在环境”等同于“Linux 开发机”，即会话本身固定跑在 Linux 上。实测发现这个假设不成立——Claude Code CLI / Claude Desktop 的编码会话可以运行在 Windows 或 Linux 任意一端（取决于用户在哪台机器上发起对话），与“网站预览服务固定托管在哪台机器”是两回事，不能划等号。本文件后续把两者分开描述：**托管角色**（固定是 `192.168.0.162` 这台 Linux 机器）与**发起编码会话的机器**（可以是 Windows 也可以是 Linux，随时可能变化）。
 
+**实现状态**：2026-07-18 的目标已迁移为 E-009 的 Docusaurus 草稿预览制品，但当前 `scripts/dev/preview.sh` 仍直接服务 worktree 的 `public/`，尚不构建 Docusaurus、显示 draft 或执行原子制品切换。本节把目标协议与已验证的迁移前事实明确分开；在脚本和现场验收完成前，不把目标写成已可用能力。
+
 ## 工程量判断
 
-判定为**刚刚好**，理由：
+目标保持最小增量，理由：
 
-- 不引入任何新依赖或框架：复用项目已有的 `python3 -m http.server`、已存在的 GitHub 远程仓库、Linux 上已经可用的 Playwright MCP 工具链。
+- 复用已经确认的 Docusaurus 与 Node 冻结依赖，只短时构建静态候选；常驻进程继续是现有 `python3 -m http.server`，不再增加一个 Docusaurus dev server。
 - 不新建常驻服务：同步与重启都是按需触发的一次性脚本，不需要 systemd/守护进程，出问题时排查成本低（用户已确认选择“按需触发”而非自动轮询）。
-- 不新建标注工具：优先复用 Claude Desktop 自身能力，只有在验证后确认不可行时才退回 Playwright MCP 的元素定位 + 文字描述，不为“标注”单独造一套本地服务或数据库。
-- worktree 只新增一个，职责单一（专门给预览用），不做多层嵌套 worktree 或分支矩阵，避免管理成本超过收益。
+- 不新建标注工具：继续复用已经现场验证的 Chrome 扩展和对话式审查，不为“标注”另建服务或数据库。
+- worktree 仍只有一个，负责远端提交 checkout 与候选构建；活动 Web Root 放在 worktree 外，避免 checkout 或构建失败影响上一份预览。
 
 ## 角色与环境
 
@@ -28,6 +30,8 @@
 | GitHub origin | `https://github.com/lyty1997/AxialMuseWebsite.git` | 两端共同的远程仓库，承担双向同步，无需额外中转 |
 
 编码会话本身可能运行在 Windows 也可能运行在 Linux 托管机上（两边都能跑 Claude Code），这不影响本工作流——不管从哪一端发起改动，最终都通过 git 走到 Linux 托管机上重启预览。
+
+Windows 机器在本工作流中只承担编辑、审查、普通 Git 操作、浏览器验收和远程触发；本站 Node.js 命令、质量检查与 Docusaurus 构建只在 Linux 执行环境运行，并由 Ubuntu CI 在合入与发布前统一验证。下述 Windows 编辑、Git 同步、浏览器审查和远程预览脚本不构成第二套构建或发布环境。
 
 ## 网络与访问
 
@@ -43,25 +47,7 @@
 - 实测调用桥接的 `list_connected_browsers` 确认连接是活的（`isLocal: true`），并成功用 `navigate` 把浏览器导航到 `http://192.168.0.162:8088/`——渲染发生在一个真实的、用户桌面上可见的 Chrome 窗口里（不是 Desktop 自身面板内嵌，如果需要严格“Desktop 窗口内渲染”而非“Desktop 桌面上的独立 Chrome 窗口”，这一点需要用户确认是否可接受）。
 - 标注方式：这套机制不提供“点选元素 + 写贴纸评论”式的可视化标注 UI。实际标注仍然是**对话式**的——用户看着渲染结果，用文字描述想要的修改；需要精确定位时，可以让 Claude 读取页面（accessibility 快照 / `get_page_text` / 截图）拿到元素引用后再描述，而不是指望一个独立的标注浮层或数据库。这与本文件最初设想的 Playwright MCP 回退方案在“标注”这一步是同一种模式，只是渲染桥接换成了官方自带的扩展。
 
-### 备用方案：Playwright MCP
-
-如果换一台 Windows 机器时发现 Chrome 扩展没有配对（`list_connected_browsers` 返回空），才需要退回 Playwright MCP：
-
-- 在 Windows 端 Claude Desktop 的 MCP 配置（`claude_desktop_config.json`）里加入：
-
-```json
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": ["-y", "@playwright/mcp@latest"]
-    }
-  }
-}
-```
-
-- 渲染方式退化为：用 `browser_navigate` 打开预览 URL，用 `browser_take_screenshot` 或 `browser_snapshot` 获取截图或带 `ref` 编号的无障碍树。
-- 标注方式与上面一致：文字描述 + 引用元素 `ref` 编号精确定位。
+当前没有批准的备用浏览器审查工具。现有 Chrome 扩展不可用时，先按用户决策门禁重新评估工具、依赖和数据边界，不执行历史候选命令。
 
 ## 分支与 worktree 布局
 
@@ -69,16 +55,16 @@
 
 ```
 AxialMuseWebsite/                  # 当前目录，Linux CLI 日常开发用，跟随 dev
-AxialMuseWebsite.preview/          # 新增 worktree，专门用于 checkout 待验收分支并跑静态服务器
+AxialMuseWebsite.preview/          # 专门用于 checkout 待验收分支并构建候选制品
 ```
 
 - Linux 主目录（实际路径 `~/work/personal_projects/AxiomMind/Axial_Muse/AxialMuseWebsite`）：日常直接改动使用，正常提交到 `dev` 或临时 `feature/*` 分支。
-- Linux 预览 worktree（同级 `AxialMuseWebsite.preview`）：只跑静态服务器，不在这里直接改代码，谁的分支要看效果就切过去看，和主目录互不干扰。2026-07-05 已现场确认这个 worktree 真实存在且是分离头指针模式。
-- Windows 端：clone 同一个仓库（`https://github.com/lyty1997/AxialMuseWebsite.git`），日常在 `feature/描述` 分支下编辑，不直接改 `dev` / `main`，改完 push 该分支。
+- Linux 预览 worktree（同级 `AxialMuseWebsite.preview`）：不直接编辑代码，只 detached checkout 远端提交并短时构建候选；Python 静态服务器读取 worktree 外的活动制品，和主目录互不干扰。2026-07-05 已现场确认这个 worktree 真实存在且是分离头指针模式。
+- Windows 端：clone 同一个仓库（`https://github.com/lyty1997/AxialMuseWebsite.git`），可在 `feature/描述` 分支工作区编辑、提交并 push，不直接改 `dev` / `main`；合入和发布前由 Ubuntu CI 统一验证。
 
 **创建方式的一处约束**：git 不允许同一个分支在两个 worktree 里同时被检出（比如主目录已经在 `dev`，预览 worktree 就不能再 `git checkout dev`，会报 `already used by worktree`）。所以预览 worktree 用 `git worktree add --detach ../AxialMuseWebsite.preview dev` 建成**分离头指针（detached HEAD）**模式，之后每次要看哪个分支的效果，都是 `git checkout --detach <分支或 origin/分支的最新提交>`，而不是切到分支本身。这样无论主目录当前停在哪个分支，预览 worktree 都不会和它冲突，包括预览 `dev` 或 `main` 自己的场景。
 
-**Windows 端的 worktree 是另外一回事，工具链自带，不用手动管理**：如果 Windows 端用 Claude Code / Claude Desktop 的编码会话来改代码，工具链本身会给每个会话自动建一个独立 worktree + 分支（例如 `.claude/worktrees/<会话名>`，分支名形如 `claude/<会话名>`），和主目录（跟随 `main`）互不干扰。这天然满足"发生改动时用 worktree 隔离"的诉求，不需要在这份设计里再手动搭一套 Windows 侧 worktree 管理机制；该会话分支后续照常走 push → 同步 → （按需）合并的路径回到 `dev`/`main`。
+**Windows 端的 worktree 是另外一回事，工具链自带，不用手动管理**：如果 Windows 端用 Claude Code / Claude Desktop 的编码会话来改代码，工具链本身会给每个会话自动建一个独立 worktree + 分支（例如 `.claude/worktrees/<会话名>`，分支名形如 `claude/<会话名>`），和主目录（跟随 `main`）互不干扰。这天然满足"发生改动时用 worktree 隔离"的诉求，不需要在这份设计里再手动搭一套 Windows 侧 worktree 管理机制；该会话分支后续必须先 push 并合入 `dev`，完成集成验证后再通过唯一的 `dev -> main` PR 晋级。
 
 ## 源码同步脚本（双向、一键）
 
@@ -87,18 +73,23 @@ AxialMuseWebsite.preview/          # 新增 worktree，专门用于 checkout 待
 - `scripts/dev/sync.sh`（Linux / macOS / Git Bash 通用）：给当前分支执行 `git fetch`，`git pull --rebase`，若有本地未推送的提交则 `git push`。
 - `scripts/dev/sync.ps1`（Windows PowerShell）：同样的逻辑，供 Windows 端 Claude Desktop 或用户直接运行。额外支持一个可选开关 `-RestartPreview`（默认不开，不影响与 `sync.sh` 的对等行为）：推送成功后顺带调用 `restart-remote.ps1` 通过 SSH 让 Linux 端预览重启，把"改代码→同步→重启→查看"收成一条命令。
 - 两个脚本都提交进仓库，随 git 同步分发到两端，不需要分别维护。
+- D-072 后，Windows 仍可用 `sync.ps1` 获取远端变更、推送普通功能分支提交并触发 Linux 预览；该脚本只负责 Git 同步和远程触发，不运行或替代质量检查，提交在合入与发布前由 Ubuntu CI 统一验证。
 - **踩过的坑**：`.ps1` 文件里带中文注释时必须存成**带 BOM 的 UTF-8**。Windows PowerShell 5.1 解析 `.ps1` 源码时，没有 BOM 就按系统 ANSI 代码页（这台机器是 GB2312）解码，会把 UTF-8 的中文字节序列读成乱码，进而在字符串/括号处报一堆看似无关的语法错误。判断依据：这类报错只在直接执行 `.ps1` 文件时出现，`Read`/`cat` 出来的内容看着完全正常。修法是用 `[System.Text.UTF8Encoding]::new($true)` 之类方式重新写盘，确保开头是 `EF BB BF`。
 
-## 预览服务脚本（按需触发，不常驻）
+## 预览服务脚本（目标协议，按需触发）
 
-- **配置来源（2026-07-09 新增）**：`PREVIEW_HOST`/`PREVIEW_PORT`/`PREVIEW_SERVE_DIR` 等环境相关的值不再硬编码在脚本默认值里，一律从 `scripts/dev/dev-workflow.env`（不进版本库，被 `.gitignore` 忽略）读取，脚本内 `source` 加载。缺失该文件或缺失必需字段时脚本直接报错退出（`${VAR:?...}`），并提示"复制 `scripts/dev/dev-workflow.env.example` 为 `dev-workflow.env` 并填写"，不会静默套用一个可能错误的默认值。
-- `scripts/dev/preview.sh`（只在 Linux 托管机端用）：操作对象是 `../AxialMuseWebsite.preview` 这个 worktree，支持四个子命令：
-  - `preview.sh serve <分支>`：如果 worktree 不存在则用 `--detach` 创建，`git fetch` 后 `git checkout --detach origin/<分支>`（分离头指针，原因见上一节），在后台启动静态文件服务器（监听 `PREVIEW_PORT`，服务目录 `PREVIEW_SERVE_DIR`），PID 写入 `.preview.pid`。
-  - `preview.sh restart [分支]`：正确顺序是**先 `git fetch` + `git checkout --detach origin/<分支>` 成功，再停旧进程，再启动新进程**（不传分支则重新拉取并检出当前预览的那个分支的最新提交）。顺序不能反——如果先停旧进程再做网络操作，一旦 `fetch`/`checkout` 因网络抖动失败，会导致预览服务"只停不起"，比重启前更糟（这一顺序已在 `59905fb` 修过）。
-  - `preview.sh stop`：按 PID 文件杀进程并清理。
-  - `preview.sh status`：查询当前是否有预览进程在跑、对应哪个分支。
-- **PID 安全校验（2026-07-09 新增）**：`port_listener_pid()` 反查监听 `PREVIEW_PORT` 的进程 PID，`pid_is_our_server()` 进一步确认该 PID 确实是"服务本预览目录"的 `http.server`（而不是同机上恰好占用同端口的无关进程）。`start_server` 启动前先用这两个函数检查端口是否已被"别的"进程占用，是则直接报错退出，不冒险接管——避免把无关进程的 PID 误写进 `.preview.pid`，导致后续 `stop`/`restart` 杀错进程。
-- 因为是按需触发（不需要自动轮询 watcher），这个脚本不需要 `trap`/常驻生命周期管理这类复杂度，每次都是一次性前台命令，简单可控。
+- **配置来源**：`PREVIEW_HOST`、`PREVIEW_PORT` 与新的 `PREVIEW_STATE_DIR` 来自不进版本库的 `scripts/dev/dev-workflow.env`。`PREVIEW_STATE_DIR` 必须是仓库和所有 worktree 外的绝对路径，候选、release 与 `current` 必须位于同一文件系统；旧 `PREVIEW_SERVE_DIR` 在目标实现中删除。已提交 example 与真实 gitignored 配置在脚本实现时一并迁移，不能把当前未使用的变量先写成已生效。
+- 状态目录固定分责：`candidates/<sha>.<pid>/` 保存本次未激活构建，`releases/<sha>/` 只保存不可变 Web Root，`current` 原子指向活动 release，`run/` 保存 PID、请求分支、worktree HEAD、活动 SHA、排他锁与最近失败，`logs/` 保存非公开日志。运行元数据不得放入 release 或被 HTTP 提供。
+- `scripts/dev/preview.sh` 继续只在 Linux 托管机使用，并保留四个子命令：
+  - `serve <branch>`：取得排他锁，严格验证远端分支，精确 fetch 和 detached checkout `origin/<branch>`，构建并检查候选；活动 `current` 就绪后才启动 Python 服务。已有服务或失败的首次候选都不得被误报为成功。
+  - `restart [branch]`：不传分支时读取上次请求分支；完成 checkout 后先断言 Node 精确匹配 `.nvmrc`、当前 manifest/lock 与已独立准备的本地冻结依赖一致，再通过 E-008 的 wrapper 执行 Docusaurus `build --dev`。候选通过制品门禁后，先原子 rename 为 `releases/<sha>`，再原子替换 `current`；服务已运行时不停止或更换 PID。
+  - `stop`：只停止经命令行与服务目录双重确认属于本站的 Python 进程，保留 `current` 和 release 以便恢复。
+  - `status`：分别显示请求分支、worktree HEAD、活动制品 SHA、`mode=preview`、PID、URL 和最近失败；checkout 已更新但候选未激活时不得显示为预览成功。
+- **失败与回滚**：fetch、checkout、Node、依赖、build 或候选检查失败时删除本次 candidate，保持旧 `current` 和 Python PID。切换后 localhost HTTP 冒烟失败时原子恢复旧 symlink；首次启动没有旧 release 时停止新服务。并发 `serve/restart` 由同一非阻塞排他锁拒绝，不能交错删除或切换候选。
+- **依赖边界**：预览脚本不运行 `npm install`、`npm ci`、`npm audit`、lockfile 解析或下载，不修复缺失依赖。冻结依赖必须在 D-077/#9 完成后由独立受控步骤准备，并与当前 checkout 的 manifest、lock、精确 Node/npm 证据绑定；不匹配时只报告并保留旧预览。
+- **索引边界**：preview 配置全站 `noIndex: true`、关闭 sitemap，所有 HTML 必须含 `noindex, nofollow`；canonical 仍使用生产 origin，局域网 IP/端口不进入制品。production 必须反向证明没有继承全站 noindex，预览的成功不能替代 production build、断链或发布门禁。
+- 现有端口占用和 PID 所有权保护继续保留，但目标 PID 校验的服务目录改为 `${PREVIEW_STATE_DIR}/current`，不再检查 worktree 的 `public/`。
+- 触发方式仍有两种：Linux 端直接执行，或 Windows 端 `restart-remote.ps1` 通过 SSH 触发同一 Linux 命令；后者只远程触发，不运行 Node 或建立第二套构建环境。
 - **触发方式有两种，都已验证可用**：
   1. 人工经由 Linux 端会话执行（原始设计）：不管是 Claude Code 会话还是用户自己登录，只要在 Linux 托管机上直接跑 `preview.sh restart` 即可。
   2. Windows 端直接 SSH 触发（见下一节"远程重启"）：不需要额外开一个 Linux 端会话，`restart-remote.ps1` 会通过 SSH 在 Linux 托管机上执行同一个 `preview.sh restart`，两种方式最终跑的是同一段远端逻辑，只是发起点不同。
@@ -113,6 +104,8 @@ AxialMuseWebsite.preview/          # 新增 worktree，专门用于 checkout 待
 - `sync.ps1 -RestartPreview` 会在推送成功后自动调用这个脚本，实现单条命令收尾。
 
 ## 端到端迭代流程
+
+> 状态说明：Windows 编辑、普通提交与推送、Git 同步、浏览器审查和远程触发已在 2026-07-05 现场验证；图中的 Docusaurus 候选构建与原子切换是 E-009 的目标设计，尚待脚本实现和重新验收。该步骤不代表 production build 或 Ubuntu CI 质量门禁。
 
 ```plantuml
 @startuml
@@ -137,7 +130,7 @@ Win -> Hub : commit 并 push 到 feature 分支
 User -> Linux : 请求同步并重启预览
 activate Linux
 Linux -> Hub : git fetch
-Linux -> Preview : pull feature 分支并重启服务
+Linux -> Preview : 构建 Docusaurus 候选并原子切换 current
 deactivate Linux
 
 User -> Win : 刷新查看最新效果
@@ -167,9 +160,23 @@ deactivate Preview
 4. ~~两端各跑一次 `sync.sh` / `sync.ps1`，确认能互相看到对方的提交~~：**已完成**（此前验证时把 `dev` 推到了 origin，见 [项目进度](../progress.md)）。
 5. **新增并已验证**：Windows 端生成专用 SSH 密钥、用户手动装到 Linux 端 `authorized_keys`、`restart-remote.ps1` 通过 SSH 成功触发 Linux 端 `preview.sh restart`（从 `779407e` 拉到 `ee7b400` 并重启）。
 6. ~~走一轮完整"改动 → 推送 → 远程重启 → Windows 端渲染确认"的端到端验证~~：**已完成，2026-07-05**。Linux 托管机放行局域网到 8088 端口的访问后，`Test-NetConnection` 从 Windows 端确认端口可达；用已配对的 Chrome 扩展 `navigate` 到 `http://192.168.0.162:8088/`，标签页标题变为真实的 `Axial Muse`、正文内容读取正常，确认渲染链路完全打通。详细记录见 [项目进度](../progress.md)。
+7. **待实现与重新验收**：把 `preview.sh`、环境示例和实际 gitignored 配置迁移到 E-009；在 Docusaurus 3.10.2 与冻结依赖就绪后验证 draft/noindex、production 反向隔离、候选原子切换、失败保留旧页面、切换后回滚、并发拒绝、状态报告，以及桌面/平板/移动真实 Chrome 截图。
+
+
+## 从开发预览晋级到生产
+
+本地预览闭环结束不代表可以直接更新 `main`。主站统一使用以下晋级路径：
+
+1. 所有准备发布的改动在 `dev` 形成完整提交并推送到 `origin/dev`。
+2. 观察 `dev` CI；失败时在 `dev` 修复并重新推送，不能把修复直接提交到 `main`。
+3. 确认局域网预览、桌面/平板/移动截图、内容审核和质量门禁均完成。
+4. 创建唯一方向的生产 PR：`dev -> main`，核对 head/base，禁止反向或跨过 `dev`。
+5. required checks 通过后合并 PR，再观察 `main` CI 和生产 deployment。
+6. 本地 `main` fast-forward 同步 `origin/main` 后切回 `dev`；不得在 `main` 继续开发。
 
 ## 与生产发布的边界
 
 - 本地预览继续由现有 Linux 托管机和 `8088` 端口承担，不映射到公网生产域名。
+- preview 制品和状态目录不得被 `quality`、`package:artifact` 或 production workflow 读取；E-015/CODE-020 要求最终 build 只能由 `production-artifact` 在 fresh runner 自包含重建并重验，不存在 preview 或跨 job build fallback。
 - 生产环境由腾讯云轻量应用服务器承担，只接收 GitHub `main` 的精确提交；详细链路见 [域名与生产发布设计](../operations/domain-deployment.md)。
 - 预览脚本不得持有腾讯云 CAM 凭证，也不得直接修改生产 DNS、Nginx 或 release。

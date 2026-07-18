@@ -6,6 +6,7 @@
   "description": "通用文档同步门禁规则。forbidden_terms 防旧名回潮；scoped_terms 防契约词跨层误用。",
   "scan": {
     "roots": ["docs", "public", "scripts", "codex-rules", ".github"],
+    "include_root_files": true,
     "extensions": [".md", ".html", ".css", ".js", ".mjs", ".json", ".yml", ".yaml"],
     "skip_paths": ["docs/contracts/", "node_modules/", ".git/"]
   },
