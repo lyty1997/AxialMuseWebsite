@@ -11,6 +11,7 @@
       "id": "docrestore",
       "title": "DocRestore",
       "slug": "docrestore",
+      "navigationOrder": 10,
       "summary": "将文档屏幕拍摄照片经过 OCR、清洗、去重、可选 PII 脱敏和 LLM 精修，还原为 Markdown 文档。",
       "status": "active",
       "publicationStatus": "planned",
@@ -25,8 +26,8 @@
       "productionBranch": "main",
       "showcaseMode": "repository",
       "demoVideoStatus": "asset-pending",
-      "onlineExperience": false,
       "experienceRegistryId": "docrestore",
+      "writingModules": [],
       "source": [
         "docs/projects/docrestore-experience.md",
         "https://github.com/lyty1997/DocRestore"
@@ -36,6 +37,7 @@
       "id": "vibecoding-project-scaffold",
       "title": "VibeCoding Project Scaffold",
       "slug": "vibecoding-project-scaffold",
+      "navigationOrder": 20,
       "summary": "用于启动 AI 辅助开发项目的可复用工程脚手架，把设计文档、Agent 规则、质量门禁和 CI 纳入同一仓库基线。",
       "status": "active",
       "publicationStatus": "planned",
@@ -50,7 +52,7 @@
       "repositoryUrl": "https://github.com/lyty1997/project-scaffold",
       "productionBranch": "main",
       "showcaseMode": "repository",
-      "onlineExperience": false,
+      "writingModules": [],
       "source": [
         "docs/projects/vibecoding-project-scaffold.md",
         "https://github.com/lyty1997/project-scaffold"

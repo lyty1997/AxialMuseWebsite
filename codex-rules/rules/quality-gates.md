@@ -21,7 +21,7 @@ PUML_JAR=/path/to/plantuml.jar npm run gen:diagrams     # 重新渲染 docs/diag
 python3 -m http.server -d public 8000                   # 临时手动预览当前静态入口
 ```
 
-本地提交前由 `.githooks/pre-commit` 自动跑 `npm run quality`、`.githooks/commit-msg` 校验提交信息格式。首次克隆后执行一次 `git config core.hooksPath .githooks` 启用；它们是 CI 的本地镜像，别绕过。
+在获准运行本站 Node.js 的 Linux 工作区，本地提交前由 `.githooks/pre-commit` 自动跑 `npm run quality`、`.githooks/commit-msg` 校验提交信息格式；首次克隆后执行一次 `git config core.hooksPath .githooks` 启用，不能绕过。Ubuntu CI 在合入与发布前执行统一验证。
 
 跨机协同预览走 `scripts/dev/preview.sh`（固定 8088 端口），与上面的临时 8000 预览是两条独立链路，见[跨机协同开发预览工作流](../../docs/architecture/dev-workflow.md)。
 

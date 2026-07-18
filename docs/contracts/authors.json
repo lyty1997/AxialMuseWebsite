@@ -1,0 +1,14 @@
+{
+  "version": "0.1.0",
+  "kind": "axial_muse_authors",
+  "status": "active",
+  "owner": "AxialMuseWebsite",
+  "authors": {
+    "lyty1997": {
+      "displayName": "lyty1997",
+      "links": {
+        "github": "https://github.com/lyty1997"
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 # 跨机协同开发预览工作流
 
 状态：active
-最近更新：2026-07-12
+最近更新：2026-07-17
 适用范围：Windows 机器与 Linux 托管机之间的本地开发预览闭环（编码会话可以在任意一端发起，托管固定在 Linux 一端）。本工作流只覆盖“改代码 → 本地渲染验证 → 再改”的迭代环节；生产目标已于 2026-07-12 确认为腾讯云轻量应用服务器，见 [域名与生产发布设计](../operations/domain-deployment.md)，两条链路独立运行。
 
 ## 背景与目标
@@ -29,6 +29,8 @@
 
 编码会话本身可能运行在 Windows 也可能运行在 Linux 托管机上（两边都能跑 Claude Code），这不影响本工作流——不管从哪一端发起改动，最终都通过 git 走到 Linux 托管机上重启预览。
 
+Windows 机器在本工作流中只承担编辑、审查、普通 Git 操作、浏览器验收和远程触发；本站 Node.js 命令、质量检查与 Docusaurus 构建只在 Linux 执行环境运行，并由 Ubuntu CI 在合入与发布前统一验证。下述 Windows 编辑、Git 同步、浏览器审查和远程预览脚本不构成第二套构建或发布环境。
+
 ## 网络与访问
 
 - 已确认 Windows（`192.168.0.163`）与 Linux 托管机（`192.168.0.162`）在同一局域网，可直接用局域网 IP 访问，无需 SSH 隧道或 VPN；两者之间的 ICMP 与 SSH（22 端口）均已验证连通。
@@ -43,25 +45,7 @@
 - 实测调用桥接的 `list_connected_browsers` 确认连接是活的（`isLocal: true`），并成功用 `navigate` 把浏览器导航到 `http://192.168.0.162:8088/`——渲染发生在一个真实的、用户桌面上可见的 Chrome 窗口里（不是 Desktop 自身面板内嵌，如果需要严格“Desktop 窗口内渲染”而非“Desktop 桌面上的独立 Chrome 窗口”，这一点需要用户确认是否可接受）。
 - 标注方式：这套机制不提供“点选元素 + 写贴纸评论”式的可视化标注 UI。实际标注仍然是**对话式**的——用户看着渲染结果，用文字描述想要的修改；需要精确定位时，可以让 Claude 读取页面（accessibility 快照 / `get_page_text` / 截图）拿到元素引用后再描述，而不是指望一个独立的标注浮层或数据库。这与本文件最初设想的 Playwright MCP 回退方案在“标注”这一步是同一种模式，只是渲染桥接换成了官方自带的扩展。
 
-### 备用方案：Playwright MCP
-
-如果换一台 Windows 机器时发现 Chrome 扩展没有配对（`list_connected_browsers` 返回空），才需要退回 Playwright MCP：
-
-- 在 Windows 端 Claude Desktop 的 MCP 配置（`claude_desktop_config.json`）里加入：
-
-```json
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": ["-y", "@playwright/mcp@latest"]
-    }
-  }
-}
-```
-
-- 渲染方式退化为：用 `browser_navigate` 打开预览 URL，用 `browser_take_screenshot` 或 `browser_snapshot` 获取截图或带 `ref` 编号的无障碍树。
-- 标注方式与上面一致：文字描述 + 引用元素 `ref` 编号精确定位。
+当前没有批准的备用浏览器审查工具。现有 Chrome 扩展不可用时，先按用户决策门禁重新评估工具、依赖和数据边界，不执行历史候选命令。
 
 ## 分支与 worktree 布局
 
@@ -74,7 +58,7 @@ AxialMuseWebsite.preview/          # 新增 worktree，专门用于 checkout 待
 
 - Linux 主目录（实际路径 `~/work/personal_projects/AxiomMind/Axial_Muse/AxialMuseWebsite`）：日常直接改动使用，正常提交到 `dev` 或临时 `feature/*` 分支。
 - Linux 预览 worktree（同级 `AxialMuseWebsite.preview`）：只跑静态服务器，不在这里直接改代码，谁的分支要看效果就切过去看，和主目录互不干扰。2026-07-05 已现场确认这个 worktree 真实存在且是分离头指针模式。
-- Windows 端：clone 同一个仓库（`https://github.com/lyty1997/AxialMuseWebsite.git`），日常在 `feature/描述` 分支下编辑，不直接改 `dev` / `main`，改完 push 该分支。
+- Windows 端：clone 同一个仓库（`https://github.com/lyty1997/AxialMuseWebsite.git`），可在 `feature/描述` 分支工作区编辑、提交并 push，不直接改 `dev` / `main`；合入和发布前由 Ubuntu CI 统一验证。
 
 **创建方式的一处约束**：git 不允许同一个分支在两个 worktree 里同时被检出（比如主目录已经在 `dev`，预览 worktree 就不能再 `git checkout dev`，会报 `already used by worktree`）。所以预览 worktree 用 `git worktree add --detach ../AxialMuseWebsite.preview dev` 建成**分离头指针（detached HEAD）**模式，之后每次要看哪个分支的效果，都是 `git checkout --detach <分支或 origin/分支的最新提交>`，而不是切到分支本身。这样无论主目录当前停在哪个分支，预览 worktree 都不会和它冲突，包括预览 `dev` 或 `main` 自己的场景。
 
@@ -87,6 +71,7 @@ AxialMuseWebsite.preview/          # 新增 worktree，专门用于 checkout 待
 - `scripts/dev/sync.sh`（Linux / macOS / Git Bash 通用）：给当前分支执行 `git fetch`，`git pull --rebase`，若有本地未推送的提交则 `git push`。
 - `scripts/dev/sync.ps1`（Windows PowerShell）：同样的逻辑，供 Windows 端 Claude Desktop 或用户直接运行。额外支持一个可选开关 `-RestartPreview`（默认不开，不影响与 `sync.sh` 的对等行为）：推送成功后顺带调用 `restart-remote.ps1` 通过 SSH 让 Linux 端预览重启，把"改代码→同步→重启→查看"收成一条命令。
 - 两个脚本都提交进仓库，随 git 同步分发到两端，不需要分别维护。
+- D-072 后，Windows 仍可用 `sync.ps1` 获取远端变更、推送普通功能分支提交并触发 Linux 预览；该脚本只负责 Git 同步和远程触发，不运行或替代质量检查，提交在合入与发布前由 Ubuntu CI 统一验证。
 - **踩过的坑**：`.ps1` 文件里带中文注释时必须存成**带 BOM 的 UTF-8**。Windows PowerShell 5.1 解析 `.ps1` 源码时，没有 BOM 就按系统 ANSI 代码页（这台机器是 GB2312）解码，会把 UTF-8 的中文字节序列读成乱码，进而在字符串/括号处报一堆看似无关的语法错误。判断依据：这类报错只在直接执行 `.ps1` 文件时出现，`Read`/`cat` 出来的内容看着完全正常。修法是用 `[System.Text.UTF8Encoding]::new($true)` 之类方式重新写盘，确保开头是 `EF BB BF`。
 
 ## 预览服务脚本（按需触发，不常驻）
@@ -113,6 +98,8 @@ AxialMuseWebsite.preview/          # 新增 worktree，专门用于 checkout 待
 - `sync.ps1 -RestartPreview` 会在推送成功后自动调用这个脚本，实现单条命令收尾。
 
 ## 端到端迭代流程
+
+> 状态说明：下图记录 2026-07-05 已现场验证的协同闭环。Windows 编辑、普通提交与推送、Git 同步、浏览器审查和远程触发 Linux 预览仍有效；图中的同步步骤不代表质量验证，Ubuntu CI 在合入与发布前统一执行质量和构建门禁。
 
 ```plantuml
 @startuml

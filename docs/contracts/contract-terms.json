@@ -15,7 +15,7 @@
       "kind": "project_brand",
       "owner": "project",
       "canonical": true,
-      "source": ["docs/projects/docrestore-experience.md", "docs/contracts/project-experiences.json"]
+      "source": ["docs/projects/docrestore-experience.md", "docs/contracts/projects.json"]
     },
     "VibeCoding Project Scaffold": {
       "kind": "project_brand",

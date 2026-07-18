@@ -4,6 +4,370 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-18 — 收口 M0 内部工程设计与实施边界
+
+- **主题**：用户确认总体方向已经足够明确，将 M0 剩余内部技术与展示细节委托给 Agent 根据仓库事实、对应版本官方资料和工程知识判断；外部依赖、公开事实、用户数据、Git 发布和基础设施继续保留门禁。
+- **完成内容**：
+  - 在 AGENTS 规则和 D-078 中持久化有边界的工程委托；以 E-001 至 E-005 固定项目结构化事实/长文职责拆分、尾斜杠与路由闭包、作者/主题/模块注册表、classic/Infima 最小主题适配和 GitHub Actions artifact 到 TAT 的静态交付边界。
+  - 将 M0 Spec 从失效的原生 HTML 单页草案整体改写为 active 的 Docusaurus 多页面基线，固定首页、项目目录/详情、技术分享目录/详情、三栏折叠、内容可见性、SEO、素材和 Definition of Done；M0 明确不生成搜索、主题/作者/系列/归档等未需要路由。
+  - 扩充编码 Spec 到 `M0-complete`：固定错误模型、路径与符号链接、公共 API、命名、CSS/资源、测试 fixture、日期索引、侧栏、Markdown 文章命令、供应链证据布局、`payload/ + metadata/` release 封装、最小质量工具和 Ubuntu CI job 拓扑。
+  - 新增 `authors.json`、`topics.json`、`redirects.json`，为项目注册表补充 `navigationOrder` 与 `writingModules`；去除项目与体验注册表重复维护的在线布尔、标题、仓库和展示事实，体验入口只由 `live` 状态与健康检查决定。
+  - 统一架构概览、内容发布、域名部署、维护和生产清单：Docusaurus 默认输出 `build/`，Actions 封装 `dist/release/payload/` 与 `metadata/`，服务器只验证并安装 payload，不安装 Node/npm、不拉源码、不构建。同步更新并编译目标生产 PlantUML 图。
+- **验证结果**：
+  - `npm run quality` 通过；当前只覆盖迁移前 JavaScript、Markdown、契约词、Secret 启发式扫描和手写静态入口，不代表 Docusaurus 依赖、类型检查或构建已经实现。
+  - 新增和修改的 6 个 JSON 契约均可解析；`git diff --check` 通过；定向扫描未发现 active 设计仍把 D-078 范围内事项写成用户待决策，也未发现旧 `onlineExperience` 双写、失效单页 Spec 或服务器拉源码目标。
+  - PlantUML 源码提取与编译 2/2 通过，更新后的目标图为 `payload/ + metadata/` 链路，生成 SVG 与最终源码编译结果一致。
+- **遗留项**：
+  - 下一实施门禁是 D-077 的首次 npm 联网解析、精确 tarball 证据、真实传递图最终准入和冻结安装；这些外部请求仍需单独授权，本次未下载或安装依赖。
+  - 两个项目的真实公开视觉证据仍未准备，阻塞项目改为 `published`，但不阻塞框架、schema、空状态和页面结构实现；DocRestore 视频继续是非阻塞增量。
+  - Action commit SHA 与凭证、Git 发布、服务器/TAT、DNS、证书和生产上线仍需各自准入、现场核验和操作授权。
+  - 本次未新增站点运行时第三方服务、浏览器外部请求或用户数据处理，未执行提交、推送、PR 或基础设施操作。
+
+## 2026-07-18 — 确认首次依赖解析与供应链准入闭环
+
+- **主题**：用户确认 D-077，采用“npm 原生能力 + 仓库内零第三方依赖策略脚本”完成首轮 Docusaurus 候选依赖的失败关闭准入，不为扫描本身新增第三方供应链依赖。
+- **完成内容**：
+  - 固定准入顺序：只有主端点可在隔离目录以 `npm install --package-lock-only --ignore-scripts --audit=false` 生成候选 lockfile；正常安装前按精确 tarball 审查 integrity、实际许可证/NOTICE 和生命周期脚本；许可证与脚本人工预审后生成派生制品并通过漏洞门禁，最终人工准入通过后两个 npm 端点才可使用 `npm ci --ignore-scripts --audit=false` 读取同一依赖图并以执行前后哈希证明 manifest/lock 不变。
+  - 固定官方 npm registry-only、`lockfileVersion: 3`、许可证证据缺失或不明确即暂停、生命周期脚本默认拒绝且例外逐个 `name@version` 重决策的边界。
+  - 固定 npm 原生 SPDX JSON SBOM、生成式 `THIRD_PARTY_NOTICES`、包含开发依赖的显式全图 `npm audit`、`moderate` 及以上阻断、`low` 报告、禁止 `npm audit fix` 及审计服务不可用时失败关闭。
+  - 明确 `package.json`、`package-lock.json`、人工准入记录、SBOM 与 NOTICE 的唯一职责和派生关系，禁止人工维护第二份依赖清单；同步更新架构、编码 Spec、运行手册、M0 Spec、文档入口和贡献指南。
+  - 记录显式 `npm audit` 向官方 registry 发送依赖包名与版本、回退协议可能发送完整锁定树和构建环境元数据的边界；该批准只用于未来构建/CI，不涉及浏览器、站点内容或访问者、账户、评论数据。
+- **验证结果**：
+  - 对照 npm 11 官方 `install`、lockfile、`ci`、`sbom`、`audit` 文档及 npm `11.16.0` 的 `allowScripts` 当前行为，确认 `--ignore-scripts` 仍是两个 npm 端点可共同执行的禁脚本基线。
+  - `npm run quality` 通过：现有质量脚本语法、Markdown 索引与内链、契约词、Secret 启发式扫描和迁移前静态入口检查全部成功；该结果不表示 D-077 已被当前质量入口实现。
+  - `git diff --check` 通过；定向扫描未发现活动文档仍把首次供应链准入协议、SPDX 格式或漏洞阈值整体写成未决。
+  - 仓库仍不存在 `package-lock.json`、`node_modules/`、`tsconfig.json`、Docusaurus 配置、正式准入记录、SPDX SBOM 或 `THIRD_PARTY_NOTICES`；本次未修改 PlantUML 源码，因此未运行图表编译或生成 SVG。
+- **遗留项**：
+  - 零第三方依赖策略脚本的精确路径与接口、准入记录 schema、派生制品布局、报告保留和 CI job 接线仍需实施设计；候选 lockfile、真实传递图、许可证与脚本结论、正式 SBOM/NOTICE、显式 audit 结果、双端点冻结安装和制品/浏览器检查均尚未产生。
+  - 首次实际解析、tarball 下载、审查和安装仍须在执行前展示准确操作范围并单独取得授权；本轮未发起 npm registry/audit 请求，未下载或安装依赖，未运行候选生命周期脚本。
+  - 本次只更新设计文档，不修改依赖清单、质量脚本或 CI，不创建工程骨架，不操作服务器、DNS、证书或云资源，也未提交、推送、创建或合并 PR。
+  - 本次未新增站点运行时第三方服务、浏览器外部请求或用户数据处理。
+
+## 2026-07-18 — 确认 Docusaurus TypeScript 编译与首轮直接依赖基线
+
+- **主题**：用户接受“Docusaurus `3.10.2` 官方 TypeScript 基线继承 + 本站显式收紧”的推荐方案，一次关闭首轮 React/MDX/TypeScript 与类型工具候选直接依赖，以及 `tsconfig` 继承和模块解析的选型空白。
+- **完成内容**：
+  - 记录 D-076：D-073 的三个框架包继续精确 `3.10.2`；首轮应用候选直接依赖使用 React 19、React DOM 19 与 MDX React 3 的官方模板范围，首轮开发候选直接依赖使用三个精确 `3.10.2` Docusaurus 类型/配置包、React 19 类型和 TypeScript `~6.0.2`；实际解析版本只由未来唯一 `package-lock.json` 冻结。
+  - 明确 `clsx`、`prism-react-renderer`、`@types/node`、`@types/react-dom` 及其他模板或未来源码中的包不因此成为新增直接依赖；真实用途出现时重新准入，作为候选传递依赖出现时仍执行 D-052 审查。
+  - 固定目标根 `tsconfig.json` 继承精确 `@docusaurus/tsconfig@3.10.2`；本站显式设置 `baseUrl`、TypeScript 6 弃用过渡、严格模式和禁用 JavaScript，并把首轮 program 限定为两个根框架入口与 `src/**/*.ts(x)`。`module`、`moduleResolution`、`noEmit` 和 `skipLibCheck` 由官方基线拥有，本站不重复声明，也不增加自定义 `paths`。
+  - 保持 `tsc --noEmit` 与 Docusaurus build 相互独立；记录 TypeScript 7、Docusaurus 4 或官方基线变化会触发重新审查，当前过渡配置不能永久沿用。
+  - 将 D-076 传播到主站目标架构、架构概览、M0 Spec、编码 Spec、运行手册和文档入口；保留 D-073、D-074、D-075 及旧进度条目的历史原文，不倒改各决定形成时的授权范围。
+- **验证结果**：
+  - 对照 Docusaurus `3.10.2` 官方 TypeScript 文档、官方模板与精确提交下的 `@docusaurus/tsconfig` 源码，核对直接依赖范围、继承选项和 TypeScript 6 的 `baseUrl` 过渡行为。
+  - `npm run quality` 通过：现有质量脚本语法、Markdown 索引与内链、契约词、Secret 启发式扫描和迁移前静态入口检查全部成功；该结果不表示候选依赖已经准入或目标类型检查已经接线。
+  - `git diff --check` 通过；定向扫描未发现活动摘要仍把首轮 TypeScript/类型包版本、`tsconfig` 继承或 module/moduleResolution 写成待决。
+  - 仓库仍不存在 `tsconfig.json`、`package-lock.json`、`docusaurus.config.ts`、`sidebars.ts` 或目标 `src/`；本次未修改 PlantUML 源码，因此未运行图表编译或生成 SVG。
+- **遗留项**：
+  - 首轮候选依赖仍须完成直接登记、候选 lockfile、传递依赖许可证与生命周期脚本扫描、SBOM/第三方声明、制品网络检查及两个 npm 端点读取同一 lockfile 的失败关闭验证；后续真实用途新增依赖继续单独准入。
+  - 实际 `tsconfig.json`、依赖、lockfile、双门禁和 CI 接线尚未创建；具体公共 API 与命名、层内子目录、模块边界检查工具、质量工具和构建发布契约仍需后续确认或实施。
+  - 本次不安装依赖，不创建配置、目录、工程骨架或源码，不修改服务器、DNS、证书或云资源，也未提交、推送、创建或合并 PR。
+  - 本次未新增站点运行时第三方服务、浏览器外部请求或用户数据处理。
+
+## 2026-07-18 — 确认 Docusaurus 模块与目录契约
+
+- **主题**：用户确认采用 Docusaurus 标准入口目录与显式模块边界，使 CODE-002 的逻辑分层能够落实为物理结构，同时避免自定义别名和宽泛 barrel 扩大配置与循环依赖风险。
+- **完成内容**：
+  - 记录 D-075：仓库根保留未来 `docusaurus.config.ts` 与 `sidebars.ts`；领域核心、构建适配、可复用组件、文件路由页面和主题覆盖分别映射到 `src/domain/`、`src/build/`、`src/components/`、`src/pages/` 与 `src/theme/`；未来作者工具使用 `scripts/author/`，现有质量脚本保持在 `scripts/quality/`。
+  - 明确 `src/build/` 是构建期源码目录而非静态产物目录，`site-content/` 不进入源码模块树；不新增职责含混的通用共享层，发布自动化与静态产物目录继续由构建发布契约决定。
+  - 固定跨层依赖只能经过按真实需要建立的显式公共入口；不预建空 `index.ts`，公共入口逐项导出值与类型，禁止跨层深层导入及递归或宽泛 `export *`，同一模块内部使用相对导入。
+  - 固定默认导出只用于 Docusaurus 实际加载的配置、侧栏、文件路由页面、主题覆盖和独立本地插件构造器；内部复用模块采用具名导出。首版不增加自定义业务路径别名，Docusaurus 官方别名只能按框架语义使用，不能绕过公共入口。
+  - 将 D-075 传播到主站目标架构、架构概览、M0 Spec、编码 Spec、内容发布流程、运行手册与文档入口；明确 `src/components/` 只是通用展示组件根，不自动构成 MDX 白名单。
+- **验证结果**：
+  - 核对 Docusaurus `3.10.2` 官方配置、侧栏、页面、插件、TypeScript、客户端架构与版本化文档，区分框架入口的加载契约和本站内部模块风格。
+  - `npm run quality` 通过：现有质量脚本语法、Markdown 索引与内链、契约词、Secret 启发式扫描和迁移前静态入口检查全部成功；该结果不表示 D-075 的未来模块边界检查已经实现。
+  - `git diff --check` 通过；定向扫描未发现活动文档仍把模块目录、跨层公共入口、导出和首版自定义别名策略整体写成未决。
+  - 仓库仍不存在目标 `src/`、`scripts/author/`、Docusaurus 配置或空公共入口；本次未修改 PlantUML 源码，因此未运行图表编译或生成 SVG。
+- **遗留项**：
+  - TypeScript 与类型包具体版本、`tsconfig` 继承和 module/moduleResolution、具体公共函数与类型、文件/组件/hook 命名、层内子目录、MDX 白名单、主题 Swizzle、边界检查工具与 CI 接线仍需后续确认或实施。
+  - 本次只更新设计，不安装依赖，不创建目标目录、配置、lockfile、工程骨架或源码，不修改服务器、DNS、证书或云资源，也未提交、推送、创建或合并 PR。
+  - 本次未新增第三方服务、浏览器外部请求或用户数据处理。
+
+## 2026-07-17 — 确认 Docusaurus 严格 TypeScript 源码边界
+
+- **主题**：用户选择方案 A，将 Docusaurus 管理的目标源码固定为严格 TypeScript，并把类型检查与静态构建设为两个独立必需门禁。
+- **完成内容**：
+  - 记录 D-074：站点配置、侧栏、生成器、本地插件、构建期适配和无 JSX 站点模块使用 `.ts`，包含 JSX 的页面、主题覆盖和 React 组件使用 `.tsx`；目标 `tsconfig.json` 显式启用 `strict: true`，该范围不新增 `.js` 或 `.jsx`，例外必须重新取得用户确认。
+  - 固定 `tsc --noEmit` 与 Docusaurus build 的职责分离：两项都必须失败关闭通过，build 成功不能证明类型检查完成，类型检查成功也不能证明框架加载和静态制品正确。
+  - 明确 `docusaurus.config.ts`、`sidebars.ts` 及其 Node.js 侧模块不导入浏览器 API、React 或 JSX；现有 `scripts/quality/*.mjs` 不强制迁移，未来作者 CLI 的语言与接口继续独立决策。
+  - 将 D-074 传播到主站目标架构、架构概览、M0 Spec、编码 Spec、内容发布流程、运行手册与文档入口；保留旧进度和历史决策形成时的原始状态，不倒改历史。
+  - 明确 TypeScript、Docusaurus/React/Node 类型声明和相关配置包的具体选择与版本尚未获批，`tsconfig` 其余选项、模块公共 API、目录、命名、导出、路径别名、npm script 和 CI job 编排仍受后续决策或依赖准入约束。
+- **验证结果**：
+  - 核对 Docusaurus `3.10.2` 官方 TypeScript、配置与侧栏文档，确认框架支持 TypeScript 主题组件和 `docusaurus.config.ts`，项目 `tsconfig.json` 不由 Docusaurus build 用于类型检查，侧栏文件在 Node.js 中执行且不能使用浏览器 API、React 或 JSX。
+  - `npm run quality` 通过：现有质量脚本语法、Markdown 索引与内链、契约词、Secret 启发式扫描和迁移前静态入口检查全部成功；该结果不包含尚未接入的目标 `tsc --noEmit` 或 Docusaurus build。
+  - `git diff --check` 通过；定向扫描确认活动文档不再把 JavaScript/TypeScript 选择或严格度写成未决，也没有把现有 `npm run quality` 误报为目标双门禁。
+  - 本次未修改 PlantUML 源码，因此未重复运行图表编译或生成 SVG。
+- **遗留项**：
+  - 下一项继续确认模块公共 API、目录、命名、导出与路径别名；TypeScript 与类型包具体版本、其余 `tsconfig` 选项、质量工具、CI 接线和构建发布契约仍未完成。
+  - 本次只更新设计，不安装依赖，不创建 TypeScript/Docusaurus 配置、lockfile、工程骨架或目标源码，不修改服务器、DNS、证书或云资源，也未提交、推送、创建或合并 PR。
+  - 本次未新增第三方服务、浏览器外部请求或用户数据处理。
+
+## 2026-07-17 — 确认 Docusaurus 前瞻稳定依赖基线
+
+- **主题**：用户选择方案 A，固定主站首个 Docusaurus 版本、官方 preset/Faster 拓扑、v4 兼容行为、npm 与冻结安装边界。
+- **完成内容**：
+  - 记录 D-073：首版精确使用 Docusaurus `3.10.2`，`@docusaurus/core`、`@docusaurus/preset-classic` 与 `@docusaurus/faster` 保持同版，启用 `future.v4: true`；classic preset 显式关闭 blog，不配置搜索、统计或其他浏览器外部请求。
+  - 包管理器固定为 Node 随附 npm，仓库未来只提交一个 `package-lock.json`；主基线只有受审依赖变更可以更新清单和 lockfile，其余正常验证、CI 与构建运行 `npm ci`。最低 Node 端点只读同一 lockfile、不发布制品，首次迁移必须失败关闭验证两个 npm 端点的兼容性。
+  - 将 D-073 传播到主站目标架构、架构概览、M0 Spec、运行手册、编码 Spec 与文档入口；保留 D-051 至 D-067 形成时的历史未授权范围，不回写旧进度记录。
+  - 明确本决定只批准三个 Docusaurus 官方包和安装方向；React、React DOM、MDX 等其余直接依赖版本、传递依赖准入、SBOM/第三方声明工具、构建制品检查和实际迁移仍受后续门禁约束。
+- **验证结果**：
+  - `npm run quality` 通过：现有质量脚本语法、Markdown 索引与内链、契约词、Secret 启发式扫描和迁移前静态入口检查全部成功。
+  - `git diff --check` 通过；定向扫描确认活动摘要不再把 Docusaurus 精确版本、preset、npm、唯一 lockfile 或冻结安装方向写成未决事项，历史决策与旧进度记录保持不变。
+  - 本次未修改 PlantUML 源码，因此未重复运行图表编译或生成 SVG。
+- **遗留项**：
+  - 继续确认工程语言与模块约束、其余直接和传递依赖准入、质量工具、主题组件、内容契约、Node 24/Ubuntu CI 迁移及构建发布契约；完成前不安装 Docusaurus、不创建 lockfile 或工程骨架。
+  - 本次未新增第三方服务、浏览器外部请求或用户数据处理，也未修改服务器、DNS、证书或云资源，未提交、推送、创建或合并 PR。
+
+## 2026-07-17 — 将上层设计下沉为主站编码规范 Spec
+
+- **主题**：建立从已确认上层设计进入实现、测试与评审的编码规范入口，同时避免复制真相源造成一致性漂移。
+- **完成内容**：
+  - 新增 `docs/engineering/main-site-coding-spec.md`，用 D-xxx 映射表说明静态架构、内容、页面、运行时、供应链和发布设计分别落到哪类代码与验证层；领域行为仍直接引用原决策，不在 Spec 复制字段表、页面数值或发布步骤。
+  - 固化编码规范自身拥有的真相源依赖、逻辑分层、确定性与副作用、结构化输入、ESM/Node 边界、静态渲染、React 组件、样式资源、文件注释、依赖安全、测试分层和质量评审规则。
+  - 记录当前工具的真实覆盖范围：现有语法检查不是全仓 lint，Secret 扫描与静态入口检查范围有限，PlantUML 编译不证明 SVG 同步，PowerShell 的 EditorConfig 与 Git 属性仍有差异；不把迁移前能力包装为目标门禁。
+  - 明确 Docusaurus 工程语言、依赖与 lockfile、lint/formatter/test、React/CSS/主题、完整 schema、命令接口、Node 24 CI 和构建发布契约仍属实施阻塞，Spec 不以默认方案替代用户决策。
+  - 在 README、文档索引、主站目标架构、贡献入口和前端操作规则建立下游引用；纠正通用 Markdown 规则对图表技术的越权默认，使图表选择继续服从已确认的 PlantUML 构建边界。
+- **验证结果**：
+  - `npm run quality` 通过：现有质量脚本语法、Markdown 索引与内链、契约词、Secret 启发式扫描和迁移前静态入口检查全部成功。
+  - `git diff --check` 通过；定向扫描未发现禁用契约词、一次性“本轮”禁令或把 D-052 已确认误写为具体依赖自动准入。
+  - 对照上层设计和当前脚本范围完成只读复核，删除了会形成第二真相源的字段、页面和发布规则副本，并修正领域核心依赖方向与当前门禁覆盖表述。
+  - 本次未修改 PlantUML 源码，因此未重复运行图表编译或生成 SVG。
+- **遗留项**：
+  - 后续仍按 `open-decisions.md` 逐项完成实施阻塞事项；本次未安装依赖，未修改运行时、站点代码、服务器、DNS、证书或云资源。
+  - 本次未新增第三方服务、浏览器外部请求或用户数据处理，也未提交、推送、创建或合并 PR。
+
+## 2026-07-17 — 清理失效的非 Linux 作者执行路线
+
+- **主题**：清除已撤销的平台与本地版本工具方案，统一现行架构、操作规则和 CI 的执行边界。
+- **完成内容**：
+  - 将 `open-decisions.md` 中 D-068 至 D-071 的失效长篇方案压缩为一条撤销记录，并从活动待办中删除其安装、供应链、平台验收和周期维护事项；完整过程继续由本文件与 Git 历史留存。
+  - 统一 README、贡献指南、Agent 操作规则、架构、产品 Spec、内容发布和运维文档：本站作者 Node.js 命令、质量检查与 Docusaurus 构建只在 Linux 执行环境运行，GitHub Actions 只使用 Ubuntu。
+  - 删除 CI 的多平台矩阵，`website-quality` 直接运行在 `ubuntu-latest`；Node 24 迁移、Action commit SHA 固定和构建发布契约仍按既有门禁后续实施。
+  - 删除活动开发工作流中已失效且使用浮动依赖的备用浏览器命令；保留 D-072 已确认的编辑、Git、浏览器审查与远程触发脚本，这些客户端能力不构成第二套构建或发布环境。
+- **验证结果**：
+  - `npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功。
+  - `git diff --check` 通过；定向扫描确认活动架构与待决策清单不再包含已撤销的执行路线或本地版本工具待办。
+- **遗留项**：
+  - 推送前需核验 GitHub 分支保护是否引用了旧矩阵生成的 required check 名称；本轮未操作 GitHub、服务器、DNS、证书或云资源。
+  - 本次未新增第三方服务、浏览器外部请求或用户数据处理，也未提交、推送、创建或合并 PR。
+
+## 2026-07-17 — 纠正 Windows 职责范围并废止 D-068 至 D-071
+
+- **主题**：收敛 Windows 协同边界，避免把普通 Git 协同扩展成额外架构。
+- **完成内容**：
+  - 记录 D-072：Windows 可以编辑、审查、普通 Git 提交/推送/同步、浏览器验收和远程触发，但不运行本站 Node.js、文章命令、质量检查或 Docusaurus 构建；Linux 执行作者命令，Ubuntu CI 在合入与发布前统一验证。
+  - 将 D-068 标记为因错误扩大 Windows 职责而失效；依赖该前提的 D-069、D-070 与 D-071 同步失效，不再形成 mise、Windows Node 版本管理器、Windows CPU 资产或相关维护义务。
+  - 保留 D-066 的 Node 24 LTS 与原生 UUIDv7 后端，以及 D-067 在 Linux 作者环境和 Ubuntu CI/构建 job 中的精确基线、兼容边界、最低端点验证与升级治理。
+  - 删除人为新增的 Windows CI 与提交门禁待决项；明确 Linux 本地 Node.js hook 只提供快捷反馈，Windows 不复刻该 hook，现有 `windows-latest` 是随目标 Ubuntu CI 迁移移除的遗留 job。
+- **验证结果**：
+  - `git diff --check` 通过。
+  - 在当前 Linux Node `v22.22.0` 迁移前环境中，`npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功。
+  - 定向扫描确认活动文档不再把 D-068 至 D-071、Windows 本地 Node 或 mise 写成现行方案，也没有本轮误加的 OD-015/OD-016、Windows 提交门禁待决项、SSH 补丁协议、候选提交状态机或 GitHub Pro 依赖；剩余 Windows CI 命中只存在于醒目标记为失效的历史，或明确限定为待移除的迁移事实。
+  - 查明 `.githooks/pre-commit` 当前会运行 `npm run quality`；将它限定为 Linux 本地快捷反馈，没有修改 hook、Windows 脚本或 Git 配置。
+- **遗留项**：
+  - Node 24 与 Ubuntu CI 迁移、文章创建命令、Docusaurus 精确版本、依赖与构建发布契约仍按原有门禁继续待决或待实施。
+  - 本次不安装软件，不修改 CI、脚本、hook、依赖或版本文件，不操作服务器、DNS、证书或云资源，也不提交、推送、创建或合并 PR。
+
+## 2026-07-17 — 确认 mise 官方 Release 精确直下与强完整性门禁（历史记录，已由 D-072 失效）
+
+- **主题**：用户选择方案 A，确认 Windows 作者环境中的 mise 只从官方 immutable GitHub Release 按精确 tag 直接获取，并在安装授权前执行失败即阻断的强发布完整性验证。
+- **完成内容**：
+  - 记录 D-071：mise 的唯一获准获取渠道是 `jdx/mise` 官方 GitHub 仓库的 immutable Release，并绑定另行批准的精确 tag 和明确资产 URL；禁止 `/releases/latest` 下载选择器、`mise.run`、主分支浮动文件、镜像、Scoop、WinGet、Chocolatey、npm、Cargo、`mise self-update` 及失败后的静默换源。该限制只适用于 mise，不预先决定其他工具的获取渠道。
+  - 明确 Windows CPU 架构属于安装前从目标实机查证的环境事实，不是网站设计选择；不得从 Ubuntu、CI 或“64 位”描述猜测 x64/ARM64，具体检测方式仍待后续确认，架构与获批资产不能准确匹配时必须停止。
+  - 固定三层安装前门禁：确认精确 tag 属于官方 immutable Release；用后续获准的验证器与独立核验的信任材料验证上游签名 checksum manifest，并使本地 SHA-256 与目标资产摘要完全一致；再验证 GitHub Release attestation 将同一仓库、tag、资产和摘要绑定到该发布。缺失、不一致、不可验证或发生身份漂移时保持原环境，不降级验证或回退其他渠道。
+  - 明确 release integrity 不等于源码到二进制的 SLSA build provenance，公开成功 workflow 只能作辅助证据；截至 2026-07-17，在已核查的 `v2026.7.7` 官方 Release 资产与发布资料中未发现独立的制品级 SBOM、SLSA build provenance 或 Windows Authenticode 签名证据，且尚未在目标机检查实际 PE 文件。这些证据缺口和逐版本许可、传递依赖仍须另行准入。
+  - 保持 D-070 边界：`v2026.7.7` 仍只是当前候选，不是已安装、获批或永久版本。实际获取前先展示检查时间、精确 tag、官方 Release、明确资产 URL 与实机架构并取得该次获取授权；获取后完成三层验证，再在安装前展示实测校验结果、证据缺口和具体候选准入结论并取得安装授权。
+- **验证结果**：
+  - 在当前 Node `v22.22.0` 迁移前环境中，`npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功；该结果只验证 D-071 文档一致性，不表示 mise、验证器、PowerShell 7、Node 24 或真实 Windows 路径已经安装或实测。
+  - `git diff --check` 通过；活动文档已把“mise 获取渠道与验证强度未决”收窄为“官方 immutable GitHub Release 精确直下与三层门禁已确认，最终版本、实机架构、资产、验证器、信任引导、具体候选的许可/依赖/制品准入结论与证据缺口风险接受，以及安装集成仍待决”，D-069、D-070 决策原文及历史进度保持不变。
+  - 仓库扫描确认仍不存在 `.nvmrc`、mise 项目配置或 lockfile、`.tool-versions`、`.node-version` 和 npm lockfile；`package.json`、workflow、脚本、hook、`AGENTS.md` 与 `codex-rules/` 没有因 D-071 发生改动。
+- **遗留项**：
+  - mise 最终精确版本、EXE/ZIP 资产形态、目标 Windows 实机架构、GPG/Minisign/GitHub CLI 或其他验证器及其版本与来源、完整公钥或 GitHub 信任引导、证据保存、逐版本许可/传递依赖/制品准入和证据缺口风险接受仍待决策与现场查证。
+  - 用户级或系统级安装、权限、目录、PATH/shim/Profile、PowerShell 激活与切换、Node 获取与 GPG 信任、网络失败、回退、卸载和人工恢复仍待后续决策；D-071 不提供或批准任何下载、验签、安装、升级或回退命令。
+  - 本次不下载或安装 mise、Node、GPG、Minisign、GitHub CLI 或其他软件，不修改用户环境，不创建 `.nvmrc`，不修改代码、依赖、配置、workflow、hook、脚本或公开站点内容，也不提交、推送、创建或合并 PR。
+  - 本次不引入站点运行时第三方服务、浏览器外部请求或用户数据处理；未来维护者访问 GitHub Release 只属于作者工具获取路径。
+
+## 2026-07-17 — 确认 mise 受控精确版本滚动治理（历史记录，已由 D-072 失效）
+
+- **主题**：用户在“受控精确版本滚动并接受短暂支持缺口”“发现新版即停用至验证完成”和“自动跟随 latest”之间选择方案 A，确认 mise 自身禁止自动漂移，并通过人工检查、观察和逐版本验证晋级。
+- **完成内容**：
+  - 记录 D-070：mise 工具版本与 `.nvmrc` 中的 Node 精确版本保持独立；禁止以 `latest` 选择 mise、禁止自动升级，也不允许包管理器常规更新未经审核地改变作者工具。仓库继续不增加 mise 版本文件、项目配置、lockfile 或第二 Node 版本源。
+  - 固定维护频率：至少每周一次、并在每次主站正式发布前人工检查 mise 官方 Releases 与安全公告；该义务不批准后台任务、CI job、计划服务或自动网络检查，也不重新启用 D-069 已要求关闭的 mise versions host。
+  - 将正式发布前的人工检查写入内容发布与生产发布编号流程；发现新版或安全事项时记录并发起审查，但是否因具体风险阻塞当次站点发布仍须按事实另行确认，不能补成自动发布门禁。
+  - 固定普通候选门禁：从官方发布时间起至少观察 24 小时，审查 release notes、breaking changes、安全公告与逐版本准入证据，再在真实 Windows 和 PowerShell 7 上验证准确版本、`mise doctor`、新会话、`.nvmrc` 精确 Node、无项目配置写入以及适用的质量和静态构建；失败时拒绝候选并保持原状态。
+  - 固定安全事件入口：Critical/High 且命中 Windows、信任或校验机制、Node backend 或本站实际路径时立即人工审查，但不自动升级、不自动跳过制品完整性和平台/构建验证；是否缩短 24 小时观察期仍须针对该次候选确认。
+  - 明确接受 mise 官方只支持 latest 所产生的取舍：上游发布新版至人工批准完成之间，届时已安装的精确版本可能短暂不受支持，不得表述为始终运行受支持版本。
+  - 将 `v2026.7.7` 记录为截至 2026-07-17 核查到的安装候选，而非已安装、永久固定或长期支持版本；真正安装前若 latest 已变化，必须暂停并重新确认准确候选，不能静默使用旧候选或新版。
+- **验证结果**：
+  - 在当前 Node `v22.22.0` 迁移前环境中，`npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功；该结果只验证 D-070 文档一致性，不表示 mise、PowerShell 7、Node 24、GPG 或 Windows 作者链路已经实测。
+  - `git diff --check` 通过；活动文档已把“mise 升级策略未决”收窄为“受控滚动已确认、最终安装版本与供应链仍待决”，D-067、D-068、D-069 决策原文及对应历史进度保持不变。
+  - 仓库扫描确认仍不存在 `.nvmrc`、mise 项目配置或 lockfile、`.tool-versions`、`.node-version` 和 npm lockfile；`package.json`、workflow、脚本、hook、`AGENTS.md` 与 `codex-rules/` 没有因 D-070 发生改动。
+- **遗留项**：
+  - mise 的最终安装精确版本、逐版本许可/依赖/制品准入、GitHub Release/Scoop/WinGet 获取渠道、摘要/签名/attestation 验证、Windows CPU 架构与现场状态、安装范围与权限、PATH/shim/Profile、具体切换命令、Node/GPG 信任材料、回退、卸载和失败处置仍需后续决策与实测。
+  - `v2026.7.7` 只是当前候选；任何实际安装或版本切换前都必须重新核对 latest，并向用户说明准确目标、证据和影响后取得确认。
+  - 本次不安装 mise、Node 或 GPG，不修改用户设置、PATH 或 Profile，不创建 `.nvmrc`，不修改代码、依赖、配置、workflow、hook、脚本或公开站点内容，也不提交、推送、创建或合并 PR。
+  - 本次不引入站点运行时第三方服务、浏览器外部请求或用户数据处理；维护者人工访问 mise 官方发布与安全公告只属于未来作者工具维护路径。
+
+## 2026-07-17 — 确认 Windows 作者 mise 受限路线（历史记录，已由 D-072 失效）
+
+- **主题**：用户在“受限使用 mise”和“使用 fnm”之间选择方案 A，确认原生 Windows 作者环境只用 mise 消费仓库根 `.nvmrc`，不采用 mise 的项目配置、任务、环境管理或多工具版本治理。
+- **完成内容**：
+  - 记录 D-069：mise 只作为 Windows 本地 Node 执行适配器；Ubuntu 作者仍使用 nvm，Windows CI 仍使用 `actions/setup-node`，生产服务器和浏览器制品不引入 mise。
+  - 保持 D-067 的单一版本源：未来只在作者用户级启用 Node idiomatic version file 识别，该开关不得保存版本或提交到仓库；仓库不得创建、使用或提交 mise 项目配置、lockfile、任务、环境配置、`.tool-versions`、`.node-version` 或其他第二版本源，也不得运行会写入项目配置的 mise 命令。
+  - 明确 D-067 未采用的是“mise 统一全仓版本治理”，D-069 只批准 Windows 本地 `.nvmrc` 适配，两项决定不冲突。
+  - 按 D-052 将 MIT 许可的 mise 登记为仅作者机使用、不进入仓库依赖或发布物的开发工具；未来 Windows 用户级设置必须关闭 mise versions host 及随附统计路径，但该约束不等于离线运行或批准其他下载源。
+  - 将真实原生 Windows + PowerShell 7 验收和 Node GPG 验证行为核验列为启用前门禁；本轮不授权关闭或弱化验证、静默换源或回退到系统 Node，GPG 缺失或校验失败后的处置仍待后续决策。
+- **验证结果**：
+  - 在当前 Node `v22.22.0` 迁移前环境中，`npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功；该结果只验证 D-069 文档一致性，不表示 mise、PowerShell 7、Node 24、GPG 或 Windows 作者链路已经实测。
+  - `git diff --check` 通过；活动文档已把“Windows 管理器待选择”收窄为“受限 mise 路线已确认、精确版本与安装验收仍待决策”，D-067、D-068 决策原文及对应历史进度保持不变。
+  - 仓库扫描确认仍不存在 `.nvmrc`、mise 项目配置或 lockfile、`.tool-versions`、`.node-version` 和 npm lockfile；`package.json`、workflow、脚本与 hook 没有因 D-069 发生改动。
+- **遗留项**：
+  - Windows CPU 架构、PowerShell 7、现有 Node 与版本管理器、PATH、Profile、GPG、包管理器和权限状态仍需现场核验。
+  - mise 的精确版本、逐版本许可与依赖复核、官方获取渠道、mise 制品摘要/签名/attestation 校验、安装范围与管理员权限、PATH/shim/Profile 集成、手动或自动切换、具体命令、Node 来源与 GPG 信任材料、升级、回滚、卸载和失败语义仍需后续决策。
+  - 本次不安装 mise、Node 或 GPG，不修改用户设置、PATH 或 Profile，不创建 `.nvmrc`，不修改代码、依赖、`package.json`、workflow、hook、脚本或公开站点内容，也不提交、推送、创建或合并 PR。
+  - 本次不引入站点运行时第三方服务、浏览器外部请求或用户数据处理；关闭 mise versions host 只约束未来作者工具的本地网络路径。
+
+## 2026-07-17 — 确认原生 Windows 作者执行环境（历史记录，已由 D-072 失效）
+
+- **主题**：用户在“保留原生 Windows 作者环境”“迁入 WSL2 + nvm”和“取消 Windows 作者执行能力”之间选择方案 A，确认继续使用 Windows 本机 Git 工作区和 PowerShell 承担作者命令、质量检查与未来静态构建。
+- **完成内容**：
+  - 记录 D-068：Windows 继续作为受支持的原生作者执行环境，不迁入 WSL2，也不降为只负责浏览器审查、同步或远程触发的终端；现有原生 Windows、PowerShell 与本机 Git 协同边界保持有效。
+  - 确认未来选定的原生 Windows Node 版本工具必须直接消费仓库根 `.nvmrc`，正常作者入口只运行该精确基线并先断言实际 Node 完全一致；不得增加 `.node-version`、工具专属已提交版本文件、重复当前 patch、浮动版本或从 `engines.node` 推导的第二真相源。
+  - 明确 D-067 中的 nvm 只适用于 Ubuntu 作者环境，不自动扩展为或批准名称相近的 Windows 工具；Windows CI 继续由 `actions/setup-node` 管理，兼容下限仍只由 CI 验证，不能用本地 Windows 管理器代替。
+  - 保持生产静态边界：D-068 不改变 Nginx 静态服务、构建位置、跨机预览、Git 分支流程、服务器、DNS、证书或云资源。
+- **验证结果**：
+  - 在当前 Node `v22.22.0` 迁移前环境中，`npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功；该结果只验证 D-068 文档一致性，不表示原生 Windows 管理器、Node 24 或 Docusaurus 构建已经实测。
+  - `git diff --check` 通过；活动文档不再把整个 Windows 作者环境列为未决，旧表述只保留在 D-067 决策原文和对应历史进度中。
+  - 文档将原先笼统的“Windows 作者环境未决”收窄为“原生 Windows 执行边界已确认，具体版本管理器及供应链契约未决”，并保留 D-067 决策原文和旧进度记录作为历史状态。
+  - 当前仓库仍不存在 `.nvmrc`、`site-content/`、lockfile 或 Windows 版本管理器配置；`package.json >=22` 与 CI Node 22 继续是尚未迁移的实现事实。
+- **遗留项**：
+  - 原生 Windows 版本管理器的选择、精确版本、许可证义务、官方来源、完整性校验、安装范围与管理员权限、PATH 与 PowerShell 集成、手动或自动切换、升级、卸载和失败语义仍需下一项决策。
+  - Ubuntu nvm 的精确版本、安装来源与完整性校验，`actions/setup-node` 的版本与 commit SHA，两个封闭入口、共享负载、缓存、required check、job 拓扑、错误格式和实际 Node 24 迁移仍需后续确认。
+  - 本次不安装软件、不修改 shell 或 PATH、不创建 `.nvmrc`，不修改代码、依赖、`package.json`、workflow、hook、脚本或内容，也不提交、推送或创建 PR。
+  - 本次不引入站点运行时第三方服务、浏览器外部请求或用户数据处理。
+
+## 2026-07-17 — 确认 Node 24 精确版本源与升级治理（Windows 条款已由 D-072 失效）
+
+- **主题**：用户在“.nvmrc 精确固定并受控升级”“mise 统一工具版本”和“跟随 Node 24 最新 patch”之间选择方案 A，确认以仓库版本文件消除作者与 CI 的 Node patch 漂移。
+- **状态说明**：本条形成时记录的 Windows CI、双平台任务和 Windows 作者工具内容已由 D-072 失效；当前目标只保留 Linux 作者环境与 Ubuntu CI 部分。
+- **完成内容**：
+  - 记录 D-067：仓库根 `.nvmrc` 是正常作者、质量和构建的唯一精确 Node 执行版本源，初始值为 `24.18.0`；`package.json#engines.node` 独立保存 D-066 的 `>=24.16.0 <25` 兼容边界，不承担精确版本选择。
+  - 确认 Ubuntu 作者环境由 nvm 读取 `.nvmrc`，Ubuntu/Windows 主质量 job、Ubuntu PlantUML job 和未来正式 Docusaurus 构建由 `actions/setup-node` 的 `node-version-file` 读取同一值；正常入口先断言实际 Node 等于 `.nvmrc`，不得在 workflow、脚本或活动文档复制当前 patch，也不得使用 `24`、`lts/*`、`latest` 或 `check-latest` 自动漂移。
+  - 确认 Ubuntu/Windows 最低版本入口先断言实际 Node 等于 `engines.node` 下界，再与正常入口调用同一共享质量、未来静态构建和行为测试负载；它只替换版本断言，不跳过其他检查，不生成发布制品，不触发文章创建或发布，也不得通过通用跳过开关削弱正常入口。
+  - 增加版本一致性契约：`.nvmrc` 必须是兼容范围内的单个非浮动 `24.x.y`，最低版本任务必须等于 `engines` 下界；持续验证精确基线和最低端点，但不宣称逐一测试范围内每个 patch。
+  - 固定升级顺序：安全 patch 被发现后及时发起独立 PR，其他 patch 至少每月检查；PR 先提出 `.nvmrc` 候选值，在候选精确基线和不变兼容下限上分别通过双平台任务，并通过 PlantUML 与届时全部发布必需门禁后才允许合并，不自动合并，也不在普通 patch PR 中修改 `engines` 边界。
+  - 保持生产静态边界：D-067 不决定构建位置，不授权在生产服务器安装或运行 Node；当前 Linux `v22.22.0`、`package.json >=22` 和 CI Node 22 仍是尚未迁移的实现事实。
+- **验证结果**：
+  - 在当前 Node `v22.22.0` 迁移前环境中，`npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功；该结果只验证 D-067 文档一致性，不表示 Node 24、最低端点或 Docusaurus 构建已经实测。
+  - `git diff --check` 通过；仓库仍不存在 `.nvmrc`、`site-content/` 和 lockfile，改动范围保持为已有 9 份设计与进度文档。
+- **遗留项**：
+  - Ubuntu 所用 nvm 的精确版本、安装来源与完整性校验，Windows 作者环境的安装与版本切换方式，`actions/setup-node` 的版本与 commit SHA，两个封闭入口、共享负载、缓存、required check、job 拓扑、错误格式和迁移顺序仍需确认。
+  - npm 版本、`packageManager`、lockfile、Docusaurus 精确版本及依赖、构建命令、产物目录和构建位置仍需独立决策；D-067 不批准这些内容。
+  - `.nvmrc`、`package.json`、CI、hook、质量规则和作者环境尚未修改，Node 24 双平台与 Docusaurus 契约尚未实测；本次不创建版本文件，不安装 nvm，不修改代码、依赖、配置或 workflow。
+  - 本次不引入站点运行时第三方服务、浏览器请求或用户数据处理，不操作服务器、DNS、证书或云资源，也不提交、推送或创建 PR。
+
+## 2026-07-17 — 确认 Node 24 LTS 与原生 UUIDv7 后端（Windows 条款已由 D-072 失效）
+
+- **主题**：用户在“Node 24.16+ 原生 UUIDv7”和“保留 Node 22 并锁定 `uuid` 依赖”之间选择方案 A，确认全仓库目标作者与构建工具链采用 Node 24 LTS，并使用 Node.js 原生 UUIDv7 生成后端。
+- **状态说明**：本条形成时记录的 Windows CI 与双平台验证内容已由 D-072 失效；当前目标只在 Linux 作者环境与 Ubuntu CI 执行相关负载。
+- **完成内容**：
+  - 记录 D-066：首版作者工作区、仓库质量门禁、CI 与 Docusaurus 静态构建统一使用 Node 24 LTS 主版本，最低为 24.16.0；允许范围是 `>=24.16.0 <25`，Node 25、26 或后续主版本不因版本号更高而自动获批。
+  - 将 D-065 文章创建命令的生成后端固定为稳定的 `node:crypto.randomUUIDv7()`；不引入 `uuid` 或其他 UUID 生成、CLI、校验 npm 包，也不调用系统 CLI 或仓库外 UUID 服务。
+  - 接受原生 API 的非单调时钟语义：同毫秒、时钟回退、跨进程或跨机器场景不保证严格递增，不增加计数器、共享状态、重试到大于前值、时间修正或其他单调包装；articleId 继续不承担业务排序或日期职责。
+  - 保留当前树唯一性、Git 历史不可复用、未授权改写检测和 UUID 文本/schema 校验为独立门禁，不把“原生生成”误写为完整校验已经解决。
+  - 明确 D-066 是尚未实施的目标：当前 Linux 工作区为 Node `v22.22.0`，`package.json` 仍声明 `>=22`，Ubuntu/Windows 质量 job 与 PlantUML job 仍配置 Node 22；生产继续只由 Nginx 提供静态制品，不运行 Node.js 请求服务。
+- **验证结果**：
+  - 在当前 Node `v22.22.0` 迁移前环境中，`npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功；该结果不表示 Node 24 迁移或 Docusaurus 契约已经验证。
+  - `git diff --check` 通过，且未创建 `site-content/`。
+- **遗留项**：
+  - Node 24 精确 patch 固定值、版本文件与安装方式、patch 升级节奏、本机和 CI 迁移步骤仍需确认；选定 Docusaurus 精确版本后必须执行的 Ubuntu/Windows 契约测试，其具体实现与执行结果仍待完成。
+  - `randomUUIDv7()` 的 `disableEntropyCache` 选项、UUID 文本规范与 schema、当前树和 Git 历史检查、旧文迁移、错误格式与测试实现仍需确认。
+  - 文章创建命令名称、路径、参数、交互、模板、Markdown/MDX 选择、原子文件系统实现和完整内容 schema 仍未完成；因此本次不修改本机 Node、`package.json`、CI、Git hook、依赖或 lockfile，不创建命令、内容目录、文章、schema、配置或索引。
+  - 本次不引入第三方服务、浏览器请求或用户数据处理，不操作服务器、DNS、证书或云资源，也不提交、推送或创建 PR。
+
+## 2026-07-17 — 确认 UUIDv7 文章创建责任与入口
+
+- **主题**：用户在“仓库内文章创建命令一并生成”“仓库内只生成 ID 后手工粘贴”和“仓库外工具生成”三种入口中选择方案 A，确认由作者显式运行仓库内 Node.js 文章创建命令，并在创建唯一正文入口时一次性写入 UUIDv7 articleId。
+- **完成内容**：
+  - 记录 D-065：新文章的正常创建入口是作者显式运行的仓库内 Node.js 命令；作者先确定符合 D-063 的 `<source-name>`，命令在同一次创建操作中建立尚不存在的文章目录、D-062 的唯一 `index.md` 或 `index.mdx` 正文入口，并把符合 D-064 的 UUIDv7 作为顶层 `articleId` 写入一次。
+  - 固定可观察的完整创建边界：成功结果必须同时具备新目录、唯一正文入口和 articleId；失败必须恢复到调用前状态，不得留下目标文章目录、正文入口或本次创建产生的其他持久化结果。普通创建入口不得覆盖既有目录，也不得为既有文章覆盖、修复、轮换或补写 articleId；旧文分配继续走独立迁移。
+  - 明确创建命令不得从 articleId、标题、slug、`classification`、日期、正文或其他字段相互推导、同步改写或静默纠正领域值；命令只写作者工作区供其审查 Git diff，不自动暂存、提交、推送或发布。
+  - 将 Git hook、PR bot、CI、Docusaurus、预览、发布自动化和生产服务器限定为只读校验与已批准的构建期派生；缺失、非法、重复或被改写的 articleId 只能使门禁失败，不能触发生成或修复。
+  - 保持 D-047 发布日期操作为独立作者职责；文章创建命令不自动调用发布命令，不从 UUID 时间填写 `publishedAt` 或 `updatedAt`，也不自动发布文章。
+- **验证结果**：
+  - `npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功。
+  - `git diff --check` 通过，且未创建 `site-content/`。
+- **遗留项**：
+  - 创建命令的名称、路径、参数、交互方式、Markdown/MDX 入口选择、文章模板、其他字段输入、文件系统原子实现、错误格式和契约测试仍需确认。
+  - UUIDv7 的生成后端、Node.js 版本、npm 依赖与 lockfile、文本规范、同毫秒单调、时钟回退、当前树及 Git 历史查重、历史不可复用检查和旧文迁移仍需确认。
+  - 完整 schema、路径规范化与误放检测、保留名与旧名称复用、派生索引、侧栏生成器、文章素材布局和 Docusaurus 构建发布契约仍未完成；因此本次不创建命令、内容目录、文章、schema、配置或索引，不修改依赖、Git hook 或 CI workflow。
+  - 本次不引入第三方服务、浏览器请求或用户数据处理，不操作服务器、DNS、证书或云资源，也不提交、推送或创建 PR。
+
+## 2026-07-17 — 确认技术文章稳定身份与内部引用契约
+
+- **主题**：用户确认独立稳定文章身份与 Docusaurus 原生内部引用方案，将 articleId 格式改为 UUIDv7，并确认 UUID 时间只作技术索引、显式日期通过文章源记录绑定并在未来构建期派生索引。
+- **完成内容**：
+  - 记录 D-064：每篇技术文章从创建起在唯一正文入口顶层保存必填、全站唯一、终身不可修改或复用的 UUIDv7 `articleId`；它不进入 URL，也不生成、覆盖或校验源码目录、完整 slug、canonical、`classification`、Docusaurus doc ID 或侧栏。
+  - 将 UUIDv7 时间字段限定为生成器分配 ID 时采用的 Unix 毫秒时间源值，以及 UUID 值的技术排序与未来存储索引用途；它不保证真实业务事件顺序，不新增 `createdAt`，也不解码 UUID 用作文章创建、发布、更新、公开排序、SEO、归档或日期搜索。`publishedAt` 与 `updatedAt` 继续是公开日期唯一真相源。
+  - 确认唯一正文入口是 articleId、当前 slug、发布状态、显式日期和正文的唯一可编辑绑定；未来查找索引只能在构建期从已校验文章只读派生，不回写、不手工编辑，也不提交第二份映射。本次不批准索引格式、搜索 UI、插件、外部搜索服务或查询数据采集。
+  - 确认首版不填写 Docusaurus 原生 frontmatter `id`；默认 doc ID 只在当前构建内部使用，禁止手工拼接或提交可编辑映射，也不得作为跨构建、跨发布或领域服务的持久身份；Docusaurus 当前临时目录和静态构建制品中的框架内序列化不构成本站真相源。文章正文之间使用带目标实际 `.md` 或 `.mdx` 扩展名的源码相对文件链接。
+  - 确认技术分享侧栏由官方 `sidebarItemsGenerator` 在构建期复用文章成员结果，按源 `publicationStatus` 排除生产 draft，再读取已校验的 `classification` 和插件提供的当前 `docs[].id` 生成 `type: 'doc'` 项；不按物理目录、articleId 或 slug 分类，也不提交第二份成员清单。
+- **验证结果**：
+  - `npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功。
+  - `git diff --check` 通过，且未创建 `site-content/`。
+- **遗留项**：
+  - UUIDv7 的生成命令与实现、文本规范、同毫秒单调与时钟异常处理、历史不可复用检查、旧文迁移和精确错误契约仍需确认。
+  - 派生索引的格式、位置、draft 边界、消费者、缓存和公开范围，以及侧栏键名、显示注册表、通用分组名称、排序、折叠、分页、生成器 API 与测试仍需确认。
+  - 完整 schema、路径检测、文章素材布局、项目内容来源、Docusaurus 版本与构建发布契约仍未确认；站内搜索、评论、账户、API、数据库与用户数据处理仍未实施或批准。
+  - 本次不创建 `site-content/`、文章、索引、schema、配置或代码，不修改依赖或质量脚本，不操作服务器、DNS、证书或云资源，也不提交、推送或创建 PR。
+
+## 2026-07-16 — 确认技术文章语义源码名契约
+
+- **主题**：用户在稳定可读的语义源码名与生成式永久 ID 两种方案中确认方案 A。
+- **完成内容**：
+  - 记录 D-063：`<source-name>` 由作者手工确定，长度为 1-64 个 ASCII 字符，完整匹配 `^[a-z0-9]+(?:-[a-z0-9]+)*$`，并在当前 `site-content/writing/` 文章直接子目录命名空间内全局唯一。
+  - 明确源码名只为 Git、PR 和编辑器中的人工辨识服务，不是文章领域身份；不得从标题、slug、`classification`、日期或正文自动生成或同步，也不生成、覆盖或校验公开 URL、canonical、分类、侧栏或排序。它可以恰好与 slug 尾段相同，但不建立等值契约。
+  - 确认发布前受控改名必须原子移动目录、更新全部路径和 doc ID 消费者并通过构建及断链检查；首次发布后禁止日常改名，只有拼写错误或持续造成严重歧义时才能在用户明确授权后作为独立迁移处理，并保持公开 slug 与 canonical 不变。
+  - 记录 Docusaurus 默认 doc ID 仍随父目录路径变化，D-058 的根相对完整 `slug` 保持公开 URL 不变；具体 doc ID、文章间链接与侧栏引用策略继续待决。
+- **验证结果**：
+  - `npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功。
+  - `git diff --check` 通过，且未创建 `site-content/`。
+- **遗留项**：
+  - `<source-name>` 保留名、旧名称是否允许复用、路径规范化与真实包含算法、符号链接、文件系统大小写处理、历史状态检测和误放错误格式仍需确认。
+  - doc ID、文章间链接、侧栏引用、文章素材布局、完整 schema、函数 API、错误契约、测试实现与 Docusaurus 配置仍未确认。
+  - 本次不创建 `site-content/`、文章目录或正文，不修改页面、配置、依赖或质量脚本，不操作服务器、DNS、证书或云资源，也不提交、推送或创建 PR。
+
+## 2026-07-16 — 确认技术文章每文独立源码目录
+
+- **主题**：用户在正文平铺、每篇文章独立目录和按项目/模块建立分类目录树三种布局中确认方案 B。
+- **完成内容**：
+  - 记录 D-062：每篇技术文章位于 `site-content/writing/<source-name>/` 直接子目录，并且恰好使用 `index.md` 或 `index.mdx` 之一作为唯一正文入口。
+  - 明确 D-060 的任意深度 Markdown/MDX 候选扫描继续保留；根级文章、非 `index` 正文、双入口和额外 Markdown/MDX 必须在未来门禁中失败，不能通过布局规则逃逸文章校验。
+  - 将 `<source-name>` 限定为稳定的仓库组织名；本站不从它生成、覆盖或校验 `slug`、公开 URL、canonical、`classification`、显式 doc ID、侧栏或排序，标题和分类变化不要求移动目录；Docusaurus 默认 doc ID 仍受文件路径影响，具体稳定与引用策略继续待决。
+  - 保持 frontmatter 与正文位于唯一入口文件，不引入文章元数据 sidecar，也不借本决定批准自动侧栏或文章本地 React 组件。
+- **验证结果**：
+  - `npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功。
+  - `git diff --check` 通过。
+- **遗留项**：
+  - `<source-name>` 字符与生成规则、目录重命名流程、路径规范化与包含算法、误放错误格式、符号链接和大小写策略仍需确认。
+  - 文章私有与共享素材布局、允许的非 Markdown 文件、PlantUML 的 MDX 支持、doc ID 稳定契约、侧栏、schema、函数 API、错误契约和测试实现仍未确认。
+  - 本次不创建 `site-content/`、文章目录或正文，不修改页面、配置、依赖或质量脚本，不操作服务器、DNS、证书或云资源，也不提交、推送或创建 PR。
+
+## 2026-07-16 — 确认 Docusaurus 物理内容根
+
+- **主题**：用户在仓库根 `content/`、仓库根 `site-content/` 与 `src/content/` 三种公开内容根候选中确认方案 B。
+- **完成内容**：
+  - 记录 D-061：单一 Docusaurus docs 内容实例的仓库相对物理内容根固定为根级 `site-content/`；现有 `docs/` 继续作为内部设计真相源，迁移前 `public/` 不成为目标内容根。
+  - 将 D-060 的相对文章类型边界锚定为 `site-content/writing/`；该目录根级及任意深度 Markdown/MDX 继续遵守唯一判型、schema 先行和失败关闭规则。
+  - 明确物理目录不生成或覆盖文章 URL、完整 `slug`、canonical、分类、侧栏或排序，也不把 `writing/` 外内容自动解释为项目、首页或其他类型。
+  - 保留 D-060“当时未选择物理路径”的历史原文，通过后续 D-061 补充当前权威状态，不改写决策形成过程。
+- **验证结果**：
+  - `npm run quality` 通过：JavaScript 语法、Markdown 索引与内链、契约词、Secret 和迁移前静态入口检查全部成功。
+  - `git diff --check` 通过。
+- **遗留项**：
+  - `writing/` 内部组织、文件命名、路径规范化与包含算法、误放检测、符号链接和大小写策略仍需逐项确认。
+  - 项目内容来源与位置、首页和列表页来源、完整 schema、函数 API、错误契约、侧栏、SEO、Docusaurus 版本与配置、构建发布契约仍未确认。
+  - 本次不创建 `site-content/` 或 `writing/` 目录，不修改页面、配置、依赖或质量脚本，不操作服务器、DNS、证书或云资源，也不提交、推送或创建 PR。
+
 ## 2026-07-16 — 重新确认 writing 技术文章类型边界
 
 - **主题**：用户在 `writing/` 子树、显式 `contentType` 字段和独立文章成员清单三种类型判据中再次确认方案 A，并要求继续保留此前重开过程的审计链。

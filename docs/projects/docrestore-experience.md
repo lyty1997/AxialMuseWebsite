@@ -8,7 +8,7 @@
 
 本文定义 DocRestore 在 Axial Muse 主站中的公开展示方式，并保留未来重新评估在线体验时的技术与安全门禁。DocRestore 将文档照片经过 OCR、清洗、去重、可选 PII 脱敏和 LLM 精修后还原为 Markdown。
 
-用户已确认首版不提供在线体验。主站首次上线只展示项目说明和公开 GitHub 仓库，演示视频在素材完成后作为增量增强；不部署 DocRestore 前端，不公开后端，不创建项目或 API 子域名的 DNS、Nginx、证书和健康检查。注册表保留 `docrestore` 名称用于避免后续冲突，但明确 `onlineExperience: false`。
+用户已确认首版不提供在线体验。主站首次上线只展示项目说明和公开 GitHub 仓库，演示视频在素材完成后作为增量增强；不部署 DocRestore 前端，不公开后端，不创建项目或 API 子域名的 DNS、Nginx、证书和健康检查。体验注册表保留 `docrestore` 名称用于避免后续冲突，并以 `status: planned`、`dnsProvisioning: disabled` 明确禁止实施。
 
 ## 当前发布决策
 

@@ -1,6 +1,6 @@
 # Git 工作流规则
 
-仅在用户明确授权相应 Git 操作后执行。开始前检查状态并保留用户已有改动；提交前运行相关质量门禁。
+仅在用户明确授权相应 Git 操作后执行。开始前检查状态并保留用户已有改动；获准运行本站 Node.js 的 Linux 工作区在提交前运行相关质量门禁，Ubuntu CI 在合入与发布前统一验证。
 
 ## 分支与晋级
 
@@ -19,4 +19,4 @@
 ## CI
 
 - push 到 `main`/`dev` 或合并 PR 后必须观察 `.github/workflows/ci.yml`：PR 使用 `gh pr checks <PR号> --watch`，分支运行使用 `gh run watch`。
-- CI 失败时定位原因、本地修复并重跑 `npm run quality`、重新推送并继续观察；CI 红色或状态未知时不得报告发布流程完成。
+- CI 失败时定位原因并修复；在获准的 Linux 执行环境重跑 `npm run quality`，重新推送并继续观察。CI 红色或状态未知时不得报告发布流程完成。

@@ -1,6 +1,6 @@
 # 网站前端规则
 
-前端实现以[主站体验与内容架构](../../docs/product/site-experience.md)、[主站目标架构](../../docs/architecture/main-site-target-architecture.md)和当前有效 Spec 为准；不得从旧页面反推设计，也不得在本文件复制当前技术栈。
+前端实现以[主站编码规范 Spec](../../docs/engineering/main-site-coding-spec.md)为实现入口，并追溯[主站体验与内容架构](../../docs/product/site-experience.md)和[主站目标架构](../../docs/architecture/main-site-target-architecture.md)；不得从旧页面反推设计，也不得在本文件复制当前技术栈。
 
 ## 体验
 

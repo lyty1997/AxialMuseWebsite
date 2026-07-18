@@ -1,12 +1,12 @@
 # 主站目标架构
 
 状态：active
-最近更新：2026-07-16
+最近更新：2026-07-18
 适用范围：主站内容构建、未来中央账户、评论服务和独立项目服务的职责边界
 
 ## 决策依据
 
-本文记录 D-027 至 D-060 的已确认、替代与重新评审关系：
+本文记录 D-027 至 D-078 的已确认、替代与重新评审关系，并引用依 D-078 形成的 M0 工程决定：
 
 - D-027：静态主站与动态服务分离；未来使用中央身份服务、独立评论服务和各项目独立服务。
 - D-028：技术分享由 Git 管理，并通过静态站点生成器构建；当前不引入私有 CMS。
@@ -42,8 +42,24 @@
 - D-058：单一 docs 实例使用根 `routeBasePath`，技术文章直接保存并使用 Docusaurus 原生完整 `slug`，不再派生栏目路径。
 - D-059：技术文章 `title` 与完整 `slug` 原生直用；构建内存只派生 `description <- summary` 与草稿状态，其他领域字段不强行映射到不等价的 Docusaurus 字段。
 - D-060：相对未来 docs 内容根的 `writing/` 子树是唯一技术文章成员边界，独立于适配器、URL、分类、侧栏和排序。
+- D-061：仓库根 `site-content/` 是单一 docs 实例的物理内容根，技术文章边界具体锚定为 `site-content/writing/`。
+- D-062：每篇技术文章使用 `site-content/writing/<source-name>/` 独立源码目录，并以 `index.md` 或 `index.mdx` 之一作为唯一正文入口。
+- D-063：`<source-name>` 使用作者手工确定、稳定可读且符合固定格式的语义源码名，并采用发布前受控改名、发布后仅限明确授权纠错迁移的规则。
+- D-064：技术文章使用不可变 UUIDv7 `articleId` 作为领域身份，Docusaurus 内部采用默认 doc ID、源码相对文章链接和基于 `classification` 的官方侧栏生成器，未来日期索引只从文章显式日期构建期派生。
+- D-065：新文章由作者显式运行仓库内 Node.js 创建命令建立，命令在创建唯一正文入口时一次性写入 UUIDv7 `articleId`；Git hook、CI、构建、发布与生产不得自动生成或修复。
+- D-066：目标作者与构建工具链统一使用 Node 24 LTS 主版本且最低为 24.16.0，文章 ID 由原生 `node:crypto.randomUUIDv7()` 生成；接受其不保证严格递增的时钟语义，不引入 UUID npm 包。
+- D-067：仓库根 `.nvmrc` 是唯一精确执行基线，初始值记录在决策日志；`engines.node` 保持 `>=24.16.0 <25` 兼容边界，Linux 作者环境和 Ubuntu CI/构建 job 分别验证精确基线或最低端点，patch 只通过受审 PR 升级。
+- D-068 至 D-071：已撤销，仅在决策日志和进度记录中保留历史。
+- D-072：本站作者命令、质量检查与 Docusaurus 构建只在 Linux 执行环境运行，CI 仅使用 Ubuntu；协同客户端边界见[开发预览工作流](dev-workflow.md)。
+- D-073：首版固定 Docusaurus `3.10.2` 的 core/classic preset/Faster 同版本拓扑、v4 兼容行为，以及 npm、唯一 `package-lock.json` 与 `npm ci` 冻结安装方向；blog、搜索、分析和其他浏览器外部请求保持关闭。
+- D-074：Docusaurus 管理的目标源码采用显式严格 TypeScript，`tsc --noEmit` 类型检查与 Docusaurus build 作为两个独立必需门禁；现有 `.mjs` 质量脚本和未来作者 CLI 不在本决定的迁移范围。
+- D-075：采用 Docusaurus 标准入口目录与显式模块边界；跨层只通过按需建立的公共入口导入，框架入口使用默认导出，内部模块使用具名导出，首版不增加自定义路径别名。
+- D-076：首轮 React/MDX/TypeScript 与类型工具使用 Docusaurus `3.10.2` 官方模板的候选直接依赖范围；目标 `tsconfig` 继承官方基线并显式收紧本站源码范围、严格度与 TypeScript 6 过渡项。
+- D-077：首次依赖解析采用 npm 原生能力与零第三方依赖策略脚本，在脚本禁用、官方 registry-only、实际 tarball 证据、SPDX SBOM、显式漏洞阈值和双端点只读验证下完成失败关闭准入。
+- D-078：用户把不改变既定产品、公开事实、静态生产和数据边界的 M0 内部技术与展示细节委托给 Agent 查证、落盘和验证，不再要求逐项用户选择；外部操作、真实依赖最终准入、基础设施、Git 发布、费用、法律和用户数据仍保留原门禁。
+- E-001 至 E-005：在 D-078 范围内固定项目结构化事实与长文职责拆分、尾斜杠及路由闭包、作者/主题/模块注册表、classic/Infima 最小主题适配，以及 GitHub Actions 构建 `build/` artifact 后由 TAT 受限交付的工程方案。
 
-决策原文、替代关系和未决事项统一记录在[待决策问题](open-decisions.md)。本文不替代尚未由用户决定的项目/模块/主题注册表、通用分组名称、跨项目相关关系字段、系列关系、其余文章字段、项目字段、身份、评论和部署设计。
+决策原文、工程决定、替代关系和保留门禁统一记录在[待决策问题](open-decisions.md)。M0 内部细节按 D-078 执行；未来身份、评论、在线体验、用户数据、外部服务和基础设施操作仍不能从本架构推导授权。
 
 ## 要解决的问题
 
@@ -103,7 +119,7 @@ Git 仓库中的内容与页面
 - 该选择只减少同一静态主站内的插件与配置边界，不提供独立构建、部署或故障隔离；主站仍生成一个静态 release。
 - 未来若出现相互独立的文档版本生命周期，或明确批准时间流、归档、Feed 等产品需求，必须重新评估内容拓扑，并保持既定公开 URL。
 
-单一 docs 实例的 `routeBasePath` 已由 D-058 固定为 `/`。D-059 已完成技术文章核心字段 fit-gap；内容根目录、侧栏文件与键名、项目和文章如何关联具体侧栏、侧栏生成与排序、`/projects/` 与 `/writing/` 列表页的生成方式、项目字段及尚未定名的文章字段仍由后续决策确定。本决定不授权安装依赖或配置 preset。
+单一 docs 实例的 `routeBasePath` 为 `/`，物理内容根为仓库根 `site-content/`。技术文章继续使用 `site-content/writing/<source-name>/index.md|index.mdx` 与 D-059 至 D-067 的身份、投影和作者工具方向；E-001 又把项目正文固定为 `site-content/projects/<project-id>/index.md|index.mdx`，结构化事实由 `projects.json` 唯一拥有，框架字段只在构建内存中派生。E-004 固定首页、项目目录和技术分享目录由 `src/pages/` 提供，详情由同一个 docs 实例提供；项目侧栏与技术分享侧栏都只消费已校验的注册表、内容和当前 `docs[].id`。剩余内部 API、命名、脚本、错误格式和测试编排属于 D-078 工程实现，不再形成逐项用户门禁。候选 lockfile 的实际联网解析、真实传递图最终准入、安装、基础设施和 Git 操作仍未授权。
 
 ## 内容字段适配边界
 
@@ -113,24 +129,75 @@ D-058 优先复用 Docusaurus 原生路由字段：技术文章作者直接在�
 
 D-056 曾把全局 [`markdown.parseFrontMatter`](https://docusaurus.io/docs/api/docusaurus-config#markdown) 与本地纯投影函数固定为技术文章适配执行点；D-058 后该决定因缺少逐字段 fit-gap 而重新开放。D-059 已以更小职责重新确认相同的官方执行点：调用一次 `defaultParseFrontMatter` 后，只对已经被确认属于技术文章的文件执行无副作用纯投影。投影不修改正文或源 frontmatter，不回写文件，也不生成第二棵临时内容树。
 
-D-059 的技术文章核心字段契约如下：
+D-059 的技术文章核心字段契约经 D-064 补充文章身份后如下：
 
 | 源领域字段 | Docusaurus 构建内存 | 处理规则 |
 |---|---|---|
 | `title` | 原生 `title` | 原值直传，不重命名、不规范化；本站 schema 必须拒绝缺失或非法值，不能接受框架 fallback 代替必填字段 |
 | 完整 `slug` | 原生 `slug` | 按 D-058 原值直传，不补写 `/writing/`，不从文件路径生成 |
+| `articleId` | 保留自定义 frontmatter | 作为 UUIDv7 领域身份原值保留，不映射或双写为 Docusaurus 原生 `id`，不参与路由或分类 |
 | `summary` | 原生 `description` | 无条件派生 `description = summary`；不得改为 `seo.description ?? summary`，也不得从正文首行推断 |
 | `publicationStatus` | 原生 `draft` 行为 | 只有源值为 `draft` 时派生 `draft: true`；`published` 与 `archived` 不映射为 `unlisted` |
 | `seo.description`、`seo.socialDescription` | 保留自定义 frontmatter | 不参与原生 `description` 派生；后续页面元数据按 D-046 分别应用回退 |
 | `authors`、`publishedAt`、`updatedAt`、`classification` | 保留自定义 frontmatter | 不映射到 blog 字段、`last_update` 或原生 `tags`，由后续已批准的主题、侧栏与校验消费者读取 |
 
-原生 `description` 是所有 Docusaurus 原生消费者共享的公共默认摘要，因此始终等于 `summary`，不是 SEO 覆盖后的最终页面描述。目录或生成索引消费 `description` 时必须仍看到 `summary`；页面 `<head>` 的 meta description 必须遵守 `seo.description -> summary`，分享描述必须遵守 `seo.socialDescription -> seo.description -> summary`。最终页面元数据组件、标签合并和避免重复标签的实现仍待主题与 SEO 契约确认，但不得改变这两条已确认回退链。后续契约测试必须覆盖无覆盖、仅 `seo.description`、仅 `seo.socialDescription`、两者同时存在四种组合；每种组合都必须保证目录摘要仍为 `summary`，且 `<head>` 不出现互相冲突或重复的 meta/OG description 标签。
+原生 `description` 是所有 Docusaurus 原生消费者共享的公共默认摘要，因此始终等于 `summary`，不是 SEO 覆盖后的最终页面描述。目录或生成索引消费 `description` 时必须仍看到 `summary`；页面 `<head>` 的 meta description 必须遵守 `seo.description -> summary`，分享描述必须遵守 `seo.socialDescription -> seo.description -> summary`。元数据组件由主题层对框架默认标签做单点覆盖和去重，不在正文组件再次输出同名标签。契约测试必须覆盖无覆盖、仅 `seo.description`、仅 `seo.socialDescription`、两者同时存在四种组合；每种组合都必须保证目录摘要仍为 `summary`，且 `<head>` 不出现互相冲突或重复的 meta/OG description 标签。
 
-D-057 曾把 `writing/` 类型边界与 D-056 的全局解析分流绑定，D-058 后该组合被重新开放评审。D-060 独立重新确认类型边界：相对未来单一 Docusaurus docs 内容根，规范化后确实位于 `writing/` 子树内的 Markdown/MDX 构成唯一技术文章成员集合。这里的内容根不是仓库现有设计文档目录 `docs/`，其物理路径仍未决定。
+D-057 曾把 `writing/` 类型边界与 D-056 的全局解析分流绑定，D-058 后该组合被重新开放评审。D-060 独立重新确认类型边界：相对未来单一 Docusaurus docs 内容根，规范化后确实位于 `writing/` 子树内的 Markdown/MDX 构成唯一技术文章成员集合。D-061 随后把该物理内容根固定为仓库根 `site-content/`，因此当前文章候选边界是 `site-content/writing/`；仓库现有设计文档目录 `docs/` 不属于该内容根。
+
+D-062 在这个候选边界内进一步固定合法源码布局：每篇文章位于 `site-content/writing/<source-name>/` 直接子目录，并且正文入口恰好是 `index.md` 或 `index.mdx` 之一。D-060 的宽候选扫描不能因布局收窄而缩小；根级 Markdown/MDX、非 `index` 正文、同目录双入口和额外 Markdown/MDX 仍是文章候选，但必须因违反布局而使未来门禁失败，不能退回普通 doc 或被 include/exclude/partial 绕过。
+
+D-063 进一步把 `<source-name>` 固定为作者手工确定、稳定可读的语义源码名，只用于在 Git、PR 和编辑器中辨识文章目录，不是文章领域身份。它是 `site-content/writing/` 下的单个直接子目录路径段，长度为 1-64 个 ASCII 字符并完整匹配 `^[a-z0-9]+(?:-[a-z0-9]+)*$`，在当前文章直接子目录命名空间内全局唯一。未来工具可以接收并校验作者输入，但不得从标题、完整 `slug`、`classification`、日期、正文或其他字段自动生成、同步改写或静默纠正。源码名可以恰好与 slug 尾段相同，但不形成等值、派生或持续同步契约。
+
+首次发布前允许在一次受审变更中受控重命名：原子移动完整文章目录，不复制正文入口，同步更新所有旧文件路径和旧 doc ID 消费者，并通过完整静态构建、内部链接与资源断链检查；目录改名不得自动改变 slug。首次发布后禁止日常改名，只有拼写错误或持续造成严重歧义时才可在用户对该次操作明确授权后，以独立迁移使用 `git mv` 改名；公开 slug 与 canonical URL 必须保持不变，全部路径和 doc ID 消费者必须原子更新并通过同等门禁。
+
+D-064 为文章补充独立的稳定领域身份：每个技术文章从创建起在唯一正文入口的顶层 frontmatter 保存必填、全站唯一且终身不可修改或复用的 UUIDv7 `articleId`。articleId、`<source-name>`、完整 `slug`、`classification` 和 Docusaurus doc ID 分别承担领域身份、源码组织、公开 URL、内容组织与框架内部引用职责；它们在领域语义上不得互相替代、建立等值约束或作为另一项的真相源。默认 doc ID 仍由 Docusaurus 按源码路径派生，但只属于当前构建内部引用。未来评论若经独立决策上线，以 articleId 关联文章实体；这不批准评论服务、账户、API、数据库或用户数据处理。
+
+UUIDv7 时间字段只记录生成器在分配 ID 时采用的 Unix 毫秒时间源值，可服务 UUID 值的未来存储索引局部性与技术排序，但不保证真实业务事件顺序，也不是文章创建、发布或更新日期。当前不新增 `createdAt`；不得从 articleId 解码、补写或校验 `publishedAt` 与 `updatedAt`，也不得用 UUID 时间驱动公开日期、SEO、sitemap、列表、侧栏、归档或日期搜索。唯一正文入口同时保存 articleId、当前 slug、发布状态与显式日期，形成唯一可编辑绑定。构建在临时目录从通过 schema 的当前内容重建按 articleId 排序的 JSON 索引，记录只包含 `articleId`、`slug`、`publishedAt` 与 `updatedAt`；生产索引排除 draft，不回写、不提交、不复制到公开 `build/`，只供构建期路由、历史身份与重定向检查消费，不建立运行时缓存。该索引不表示站内搜索、日期筛选、归档路由或搜索依赖已经获批。
+
+D-065 将新文章的正常创建入口固定为作者显式运行的仓库内 Node.js 文章创建命令。命令在同一次作者操作中创建尚不存在的 `site-content/writing/<source-name>/`、D-062 的唯一正文入口和一个符合 D-064 的顶层 articleId；成功结果必须三者齐备，失败必须恢复到调用前状态，不得留下目标文章目录、正文入口或本次创建产生的其他持久化结果。`<source-name>` 仍由作者按 D-063 确定，命令不得从 articleId、标题、slug、分类、日期或正文相互推导、同步改写或静默纠正领域值。普通创建入口不覆盖、修复或轮换既有文章的 articleId，旧文分配由独立迁移处理。
+
+创建命令只写入获准运行本站 Node.js 的 Linux 作者工作区并形成待审 Git diff，不自动暂存、提交、推送或发布。Git hook、PR bot、CI、Docusaurus、预览、发布自动化和生产服务器都不能隐式触发创建命令，也不能补写或修复 articleId；它们只对已提交源内容做只读校验和已批准的构建期派生。D-047 的发布日期辅助命令是独立作者操作，负责显式日期而不生成 articleId；文章创建命令不得读取 UUID 时间写入 `publishedAt` 或 `updatedAt`。
+
+D-066 将获准执行本站命令的作者工作区、仓库质量门禁、CI 与 Docusaurus 静态构建的目标运行时统一为 Node 24 LTS 主版本，最低为 24.16.0；允许范围是 `>=24.16.0 <25`，后续 Node 主版本必须重新确认。D-065 创建命令只通过稳定的 `node:crypto.randomUUIDv7()` 分配 articleId，不引入 `uuid` 或其他 UUID 生成、CLI、校验 npm 包，也不调用仓库外服务。当前 Linux 工作区实测 Node `v22.22.0`，`package.json` 仍声明 `>=22`，现有 Ubuntu 质量与 PlantUML job 仍配置 Node 22；这是迁移前事实。本决定没有授权立即升级，生产请求运行时继续只有 Nginx 静态服务。
+
+原生 UUIDv7 后端依赖非单调系统时钟，本站接受其在同毫秒、时钟回退、跨进程或跨机器时不保证严格递增，不实现计数器、共享状态、重试到大于前值、时间修正或其他单调包装。生成结果仍只承担 D-064 的身份和技术索引局部性，不承担业务排序或日期职责；当前树唯一性、Git 历史不可复用和未授权改写仍由独立门禁处理。
+
+D-067 将仓库根 `.nvmrc` 固定为 Node 精确执行版本的唯一可编辑真相源，初始值只记录在 D-067 决策日志；`package.json#engines.node` 继续保存 `>=24.16.0 <25` 兼容边界，二者分别承担实际执行基线和受支持范围，不能相互覆盖。Linux 作者环境由 nvm 读取 `.nvmrc`，获准的主质量、Ubuntu PlantUML 与未来正式 Docusaurus 构建 job 由 `actions/setup-node` 的 `node-version-file` 读取同一值；正常作者和发布必需入口必须先断言实际版本等于 `.nvmrc`，不在 workflow、脚本或活动文档复制当前 patch。浮动的 `24`、`lts/*`、`latest` 与 `check-latest` 均不得代替该精确版本源。
+
+主质量和构建使用当前 `.nvmrc` 精确基线；Ubuntu CI 的最低版本入口先断言实际版本等于 `engines.node` 下界，再与正常入口调用同一质量、未来 Docusaurus 静态构建和行为测试负载。最低版本入口只替换版本断言，不跳过其他检查，不生成发布制品，不触发文章创建或发布；不得提供通用跳过版本检查的开关。只有精确基线下生成并通过门禁的制品可进入发布链。版本契约还必须验证 `.nvmrc` 是范围内的单个非浮动 `24.x.y`，并验证最低版本任务等于 `engines` 下界；这不宣称逐一测试范围内每个 patch。两个封闭入口、共享负载、job 拓扑和错误契约已由 CODE-003/CODE-016 固定，当前尚未接线。
+
+Node 24 安全 patch 被发现后及时通过独立 PR 升级，其他 patch 至少每月检查。升级 PR 先修改 `.nvmrc` 候选值，再分别在候选精确基线和不变的兼容下限运行全部 Ubuntu CI 任务，并通过 PlantUML 与届时全部发布必需门禁；全部成功后才允许合并，不得自动合并。普通 patch PR 不修改 `engines` 或兼容下限；Node 25 或后续主版本、兼容下限或上界调整都必须重新决策。E-005 已把构建固定在 GitHub Actions，生产服务器不安装或运行 Node/npm、不拉取源码。D-073 固定两个 Node 端点随附的 npm、唯一 `package-lock.json` 与 `npm ci` 方向，CODE-016 固定 job 拓扑；作者环境 nvm 与 workflow Action 的精确外部版本、commit SHA 和安装校验必须在实施时按官方证据及 D-077 准入，随后完成两个 npm 读取同一 lockfile 的实测和迁移。当前 Node 22 实现不因设计确认自动改变。
+
+D-072 将执行平台收敛为单一路线：作者 Node.js、文章创建与日期辅助命令、仓库质量检查和 Docusaurus 构建只在 Linux 作者/预览环境运行，GitHub Actions 只使用 Ubuntu。生产服务器继续只提供经过验证的静态制品，不运行 Node.js 请求服务。其他客户端只承担不依赖本站 Node.js 工具链的协作操作，具体边界由[开发预览工作流](dev-workflow.md)维护。
+
+D-073 将首版框架与依赖安装边界固定为 Docusaurus `3.10.2`：`@docusaurus/core`、`@docusaurus/preset-classic` 与 `@docusaurus/faster` 使用相同精确版本，配置采用 `future.v4: true`。classic preset 显式关闭 blog，不配置搜索、统计或其他浏览器外部请求；preset 内含能力不等于获准启用。依赖管理只使用 Node 随附的 npm 和仓库唯一 `package-lock.json`，正常验证、CI 与构建运行 `npm ci`；只有受审依赖变更可以在精确主基线更新清单与 lockfile，最低 Node 端点只读同一 lockfile。该选择减少未来 v4 迁移工作，但把 Faster、严格兼容行为和 preset 的完整安装依赖图纳入首次构建、许可证、漏洞、生命周期脚本、制品网络与真实浏览器验证。
+
+D-073 没有把尚未列明的 React、React DOM、MDX 或其他直接依赖版本补成默认，也没有批准 community plugin、外部服务或用户数据处理。D-076 后续补齐首轮候选直接清单，D-077 又固定首次供应链准入方法；当前仓库仍无 Docusaurus 依赖和 lockfile，实际安装必须等待 D-077 策略脚本与证据格式实现、候选传递图实际审查通过、构建制品检查和浏览器网络 allowlist 接线。
+
+D-074 将 Docusaurus 管理的目标站点源码统一为严格 TypeScript。站点配置使用 `docusaurus.config.ts`；侧栏配置、侧栏生成器、本地插件、构建期领域适配及其他无 JSX 站点模块使用 `.ts`；页面、主题覆盖和 React 组件在包含 JSX 时使用 `.tsx`。目标 `tsconfig.json` 显式设置 `compilerOptions.strict: true`，上述范围不新增 `.js` 或 `.jsx`；任何例外都必须先回到用户决策门禁。配置、侧栏及其 Node.js 侧模块保持纯 Node.js 执行边界，不导入浏览器 API、React 或 JSX。
+
+Docusaurus 官方说明其构建不使用项目 `tsconfig.json` 完成 TypeScript 类型检查，因此目标 CI 必须把 `tsc --noEmit` 和 Docusaurus build 作为两个独立、失败关闭且都必需的门禁：前者验证目标源码类型，后者验证框架加载与静态制品；任一通过都不能替代另一项。现有 `scripts/quality/*.mjs` 保持迁移前 ESM，不因 D-074 强制改写。D-076 已确认首轮 TypeScript、Docusaurus/React 类型工具和 React/MDX 候选直接依赖，以及 `tsconfig` 继承与模块解析；质量入口、CI job、作者 CLI、命名与测试布局按 D-078 在编码 Spec 固定并实施。lint、formatter 或其他新工具只有出现可验证缺口时才进入 D-077 准入，不能作为模板默认依赖。实际依赖与配置尚未创建，D-074 本身不授权联网安装。官方依据：[Docusaurus TypeScript Support](https://docusaurus.io/docs/typescript-support)、[Docusaurus Configuration](https://docusaurus.io/docs/configuration)、[Docusaurus Sidebar](https://docusaurus.io/docs/sidebar)。
+
+D-075 将 CODE-002 的逻辑层映射为首版物理结构：框架入口使用仓库根 `docusaurus.config.ts` 与 `sidebars.ts`；`src/domain/` 只承载领域核心，`src/build/` 承载 Docusaurus 构建适配和本地插件，`src/components/` 承载可复用展示组件，`src/pages/` 承载文件路由页面，`src/theme/` 承载主题覆盖；未来作者工具位于 `scripts/author/`，现有质量脚本保持在 `scripts/quality/`。`src/build/` 是受版本控制的构建期源码目录，不是静态产物目录；E-005 已把 Docusaurus 默认 `build/` 固定为目标制品目录。目录名不会改变既有依赖方向，也不建立通用 `shared` 层；`site-content/` 继续是独立内容根，不进入源码模块树。
+
+跨逻辑层依赖必须从被依赖模块的显式公共入口导入，禁止直接引用其内部文件。只有出现真实跨层消费者时才创建对应 `index.ts`，不预建空入口；公共入口逐项写出值导出与类型导出，不使用递归或宽泛 `export *`。同一模块内部使用相对导入。默认导出只用于 Docusaurus 加载器所需的站点配置、侧栏、文件路由页面、主题覆盖和独立本地插件构造器；内部可复用模块使用具名导出，插件静态方法按框架契约具名导出。首版不新增业务路径别名，只能在 Docusaurus 文档定义的对应语义下使用官方别名；官方别名不能绕过跨层公共入口。公共 API、命名、层内子目录与边界测试以[主站编码规范 Spec](../engineering/main-site-coding-spec.md)为实施真相源。M0 不做默认 Swizzle，MDX 只允许从 `src/components/mdx/index.ts` 导入且首版白名单为空。官方依据：[Docusaurus Configuration](https://docusaurus.io/docs/configuration)、[Docusaurus Sidebar](https://docusaurus.io/docs/sidebar)、[Docusaurus Creating Pages](https://docusaurus.io/docs/creating-pages/)、[Docusaurus Plugin Method References](https://docusaurus.io/docs/api/plugin-methods)、[Docusaurus Client architecture](https://docusaurus.io/docs/advanced/client)与[Docusaurus Versioning](https://docusaurus.io/docs/versioning)。
+
+D-076 在 D-073 的三个精确框架包之外确认首轮候选直接依赖。应用依赖使用 `react@^19.0.0`、`react-dom@^19.0.0` 与 `@mdx-js/react@^3.0.0`；开发依赖使用 `@docusaurus/module-type-aliases@3.10.2`、`@docusaurus/tsconfig@3.10.2`、`@docusaurus/types@3.10.2`、`@types/react@^19.0.0` 与 `typescript@~6.0.2`。版本表达与 Docusaurus `3.10.2` 官方 TypeScript 模板保持一致，唯一 `package-lock.json` 负责冻结所有范围的实际解析结果。该清单不把模板示例使用的 `clsx`、`prism-react-renderer`，或尚无直接源码用途的 `@types/node`、`@types/react-dom` 批准为新增直接依赖；以后出现真实直接用途时必须重新准入。任何已存在于候选传递图中的包仍须接受 D-052 的许可证、NOTICE、漏洞、生命周期脚本和分发义务审查，不能借“非直接依赖”绕过。
+
+目标根 `tsconfig.json` 继承精确 `3.10.2` 的 `@docusaurus/tsconfig`。本站显式覆盖 `baseUrl: "."`、`ignoreDeprecations: "6.0"`、`strict: true` 与 `allowJs: false`，并把首轮 `include` 限定为根 `docusaurus.config.ts`、根 `sidebars.ts`、`src/**/*.ts` 和 `src/**/*.tsx`；`.mjs` 作者/质量/发布 CLI 不进入该 program，`tests/` 使用 CODE-005/CODE-016 的独立测试配置。`module: "esnext"`、`moduleResolution: "bundler"`、`noEmit: true` 与 `skipLibCheck: true` 由精确官方基线继承，本站不重复声明。官方基线的 `@site/*` 映射只服务 Docusaurus 文档定义的框架语义；本站不添加自定义 `paths`，`baseUrl` 也不允许业务裸导入或绕过 D-075 的跨层公共入口。
+
+目标类型检查命令继续显式执行 `tsc --noEmit`，既不能因基线已经设置 `noEmit` 而省略 `--noEmit`，也不能被 Docusaurus build 替代。Docusaurus 3.10 的 `baseUrl` 与 TypeScript 6 的 `ignoreDeprecations: "6.0"` 是相互绑定的过渡兼容项，不是永久站点标准；升级到 TypeScript 7、Docusaurus 4 或改变 `@docusaurus/tsconfig` 基线前必须重新审查并移除不再适用的选项。D-076 只确定候选清单与目标配置；D-077 只确定供应链准入流程和失败边界，两者都不表示候选 lockfile、传递图结论、依赖安装、配置创建、CI 接线或迁移已经完成。官方依据：[Docusaurus TypeScript Support](https://docusaurus.io/docs/typescript-support)、[Docusaurus 3.10.2 TypeScript template](https://github.com/facebook/docusaurus/blob/f37f9035584917a97a260b91fc2842cba4f8b94f/packages/create-docusaurus/templates/classic-typescript/package.json)、[Docusaurus 3.10.2 tsconfig template](https://github.com/facebook/docusaurus/blob/f37f9035584917a97a260b91fc2842cba4f8b94f/packages/create-docusaurus/templates/classic-typescript/tsconfig.json)、[`@docusaurus/tsconfig` 3.10.2 source](https://github.com/facebook/docusaurus/blob/f37f9035584917a97a260b91fc2842cba4f8b94f/packages/docusaurus-tsconfig/tsconfig.json)与[TypeScript 6 `baseUrl` transition](https://github.com/facebook/docusaurus/issues/11893)。
+
+文章创建命令的路径、参数、Markdown 模板、原子文件系统实现、UUID 文本与历史检查、旧文迁移、错误契约和测试由[主站编码规范 Spec](../engineering/main-site-coding-spec.md)固定。命令只使用 Node 24 原生 UUIDv7，不设置 `disableEntropyCache`，不提供交互式猜测、自动发布、Git 操作或 MDX 创建快捷方式。目标 Node 运行时和只读门禁实现完成前，不能把该命令表述为可用入口。
+
+Docusaurus 内部不使用 articleId 代替框架 ID。首版文章不填写原生 frontmatter `id`；默认 doc ID 只在当前构建内作为框架引用，本站不得手工拼接或提交 `writing/<source-name>/index` 这类 doc ID 可编辑映射，也不得将其作为跨构建、跨发布或领域服务的持久身份。Docusaurus 在当前临时目录与静态构建制品中的框架内序列化不构成本站真相源。文章正文引用同一 docs 实例的其他文章时，统一使用带目标实际 `.md` 或 `.mdx` 扩展名的源码相对文件路径；Docusaurus 将链接转换为目标当前 permalink，因此 slug 迁移不要求改写这类链接，而目标源码目录或扩展名变更必须更新全部入站链接并通过断链检查。不得在正文中使用 articleId 自定义协议、doc ID 或硬编码公开 slug 代替该源文件链接。
+
+技术分享侧栏通过官方 `sidebarItemsGenerator` 在构建期读取已通过 schema 的文章元数据，以 `classification` 作为项目、模块和主题组织的唯一真相源，并为每个 `type: 'doc'` 项直接使用插件提供的当前 `docs[].id`。生产侧栏只生成 `published` 与 `archived` 文章项；开发预览可以在独立“草稿”分组显示 draft，但预览制品必须 `noindex` 且不能发布。侧栏顺序固定为“通用技术”在前，随后按项目 `navigationOrder`、模块 `navigationOrder`、文章 `publishedAt` 降序和稳定 `articleId` 兜底；空分组不渲染。项目侧栏按项目 `navigationOrder` 生成。两个生成器都不从 articleId、slug 或路径反推分类，不手工拼接 doc ID，也不提交第二份成员清单；重分类或源码目录改名不得改变 articleId 或公开 slug。
 
 边界内所有候选文件都必须先通过技术文章领域 schema，再应用 D-059 的最小投影；缺少必填字段、枚举非法、注册表引用或跨字段约束失败必须中止构建，不能退回普通 doc，也不能被框架 include/exclude 或 partial 行为绕过本站校验。边界外文件不运行文章 schema 或投影，只确定为“非技术文章”，不自动成为项目介绍、首页或其他类型。
 
-不得增加 `contentType`、独立成员清单或其他并行判据，也不得用字段存在性、`slug`/URL 前缀、侧栏成员、文件名、doc ID 或分类关系反向判型。`writing/` 只决定内容类型，不生成或覆盖完整 `slug`、公开 URL、canonical、分类、侧栏归属或排序；schema、投影和未来经批准的消费者必须复用同一判型结果。
+不得增加 `contentType`、独立成员清单或其他并行判据，也不得用字段存在性、`slug`/URL 前缀、侧栏成员、文件名、doc ID 或分类关系反向判型。`writing/` 只决定内容类型，不生成或覆盖完整 `slug`、公开 URL、canonical、分类、侧栏归属或排序；`<source-name>` 也只是稳定可读的仓库组织名，本站不从它生成或校验这些领域语义。Docusaurus 默认 doc ID 受文件路径影响的框架事实不构成本站的领域真相源；D-058 的根相对完整 `slug` 可以在父目录改名时保持公开 URL 不变，但不能使默认 doc ID 稳定。D-064 只允许本站构建期消费者读取插件提供的当前 doc ID；正文链接与侧栏不得手工拼接或提交路径派生 ID 的可编辑映射，也不得把它作为跨构建身份。schema、投影和未来经批准的消费者必须复用同一判型结果。
 
 该方向受以下边界约束：
 
@@ -138,10 +205,10 @@ D-057 曾把 `writing/` 类型边界与 D-056 的全局解析分流绑定，D-05
 - 作者只维护已确认的领域来源，不在源 frontmatter 中同时写 `publicationStatus`/`draft`、`summary`/`description`、`classification`/`tags`、本站日期/`last_update` 或第二套作者资料。
 - 任何直传或派生都必须保持已确认的稳定 URL、发布状态、摘要与 SEO 回退、显式日期、作者身份和规范分类语义；不得用框架默认推断覆盖这些语义。
 - 字段缺失、枚举未知、映射冲突或框架无法保持既定语义时，构建门禁必须失败，不能静默生成另一种公开结果。
-- 当前 `projects.json` 仍是迁移前的项目机器可读真相源；本决定不选择项目介绍的长期内容来源，也不把项目与文章合并为同一 schema。
-- 文章文件名、物理目录、侧栏和分类不生成或覆盖原生完整 `slug`；内部移动不得改变公开 URL。
-- 技术文章类型判据已经确认；docs 内容根物理路径、`writing/` 内部目录结构、路径规范化与精确包含实现、误放检测、符号链接和大小写策略，以及项目内容来源与适配方式仍未确认。
-- 完整 schema、函数 API、错误契约、契约测试和错误定位方式仍未确认；D-059 只固定字段职责和适配执行边界。
+- `projects.json` 是项目结构化事实的长期真相源；`site-content/projects/<project-id>/index.md|index.mdx` 是项目长文正文源。两者按 E-001 一对一关联、字段职责互斥，不把项目与文章合并为同一 schema。
+- `articleId`、文章文件名、物理目录、doc ID、侧栏和分类均不生成或覆盖原生完整 `slug`；标题、项目或模块变化不要求移动稳定的文章源码目录，也不改变 articleId 或公开 URL。
+- 技术文章与项目正文分别使用 `site-content/writing/` 和 `site-content/projects/`。两棵子树都拒绝符号链接、大小写不精确路径、根级正文、非 `index` 正文、双入口和额外 Markdown/MDX；正文同目录素材放入 `assets/`，全站品牌与列表预览资源放入 `static/assets/`。路径规范化、误放检测、保留名和旧名称复用由零第三方依赖质量脚本实现并以 fixture 验证。
+- UUIDv7 articleId、作者显式仓库 Node.js 创建入口与一次性写入、Node 24 LTS 目标基线、原生 `randomUUIDv7()` 后端及非严格递增语义、`.nvmrc` 唯一精确执行基线、`engines` 兼容边界、受控 patch 升级治理、Linux 作者执行环境与 Ubuntu-only CI、源码相对文章链接及基于 `classification` 与当前 doc ID 的侧栏引用方向已经确认；文章命令、UUID 文本与历史检查、派生索引、M0 schema、函数 API、错误和测试契约已由 D-078 与编码 Spec 固定，但 Node 24/Ubuntu CI 迁移和这些实现尚未完成。
 - 该适配不启用 `unlisted`、原生 tags、作者页、主题页、时间流、归档路由、Feed 或其他未批准功能。
 
 ## 构建与生产边界
@@ -155,7 +222,7 @@ D-057 曾把 `writing/` 类型边界与 D-056 的全局解析分流绑定，D-05
 5. 浏览文章、项目介绍和个人主页不依赖数据库或动态 API。
 6. 当前没有登录、评论或试用能力时，页面不得将其表达为已上线功能。
 
-Docusaurus 的单一 docs 内容拓扑、领域内容单一真相源、根 `routeBasePath`、文章原生完整 `slug`、核心字段 fit-gap、最小内存适配与 `writing/` 技术文章类型边界已经确认。具体版本、preset、其余实例配置、内容根物理路径、`writing/` 内部组织、路径包含与误放检测、完整 schema、函数 API、错误契约、页面 SEO 元数据组件、标签合并与契约测试、项目适配、构建命令、产物目录、构建发生在 CI 还是发布主机，以及依赖锁定方式尚未确认。实现前必须完成对应设计，不得把 Docusaurus 的工具默认值当作用户决定。
+Docusaurus、Node/npm、严格 TypeScript、内容身份和首次供应链协议已由 D-051 至 D-077 固定；D-078 与 E-001 至 E-005 又关闭了 M0 项目内容来源、URL 闭包、注册表布局、主题适配、构建位置与制品交付的逐项用户门禁。剩余内部 API、命名、路径检查、作者命令、索引、侧栏、SEO 合并、测试、CI 和供应链脚本按本架构与编码 Spec 实施并验证，不再重新选择上层方向。首轮候选 lockfile 的联网解析、真实传递图最终准入、安装，以及 Action、服务器、凭证和 Git 的实际变更仍须取得对应授权；当前 Node 22、`public/` 和 workflow 只能作为迁移前事实。
 
 ## 首版工程技术基线
 
@@ -163,12 +230,12 @@ D-053 将已经分散确认的框架、图表、静态服务、发布控制和�
 
 | 范围 | 已固定职责 | 仍受门禁约束 |
 |---|---|---|
-| 站点与内容 | 使用 Docusaurus 官方且通过依赖准入的静态构建能力承载文档站；项目介绍与技术文章共用单一 docs 内容实例并分别使用各自侧栏；领域内容模型保持唯一可编辑真相源；实例使用根 `routeBasePath`，文章 `slug` 直接采用原生完整路径；核心字段采用原生精确直用和最小内存适配；`writing/` 是唯一文章类型边界 | 具体版本、preset、其余实例配置、内容根物理路径、`writing/` 内部组织、路径包含与误放检测、完整 schema、函数 API、错误契约、项目适配、SEO 元数据组件、标签合并、契约测试和主题适配仍由后续决策确定 |
+| 站点与内容 | 使用 `.nvmrc` 唯一精确执行基线、`>=24.16.0 <25` 兼容边界与受控升级治理下的 Node 24 LTS 工具链；以 Docusaurus `3.10.2` 的 core/classic preset/Faster 同版本拓扑、v4 兼容行为、npm、唯一 `package-lock.json` 与 `npm ci` 承载可重复静态构建；Docusaurus 管理的目标源码使用显式严格 TypeScript，首轮候选直接依赖与 `tsconfig` 采用 D-076 的官方基线和本站收紧规则，并分别通过 `tsc --noEmit` 与 Docusaurus build；依赖按 D-077 完成官方 registry-only、无脚本 tarball 证据、SPDX SBOM、显式漏洞阈值和双端点只读准入；源码采用 D-075 的标准入口目录、跨层公共入口、框架入口默认导出、内部具名导出和无自定义业务别名边界；作者命令、质量与构建负载只在 Linux 执行环境和 Ubuntu CI 运行；项目介绍与技术文章共用单一 docs 内容实例并分别使用各自侧栏；领域内容模型保持唯一可编辑真相源；实例使用根 `routeBasePath` 和仓库根 `site-content/` 物理内容根，文章 `slug` 直接采用原生完整路径；核心字段采用原生精确直用和最小内存适配；`site-content/writing/` 是唯一文章类型边界，每篇文章使用独立源码目录和唯一正文入口，`<source-name>` 采用人工稳定可读命名，UUIDv7 articleId 作为领域身份，作者显式运行仓库 Node.js 创建命令并通过原生 `randomUUIDv7()` 在唯一正文入口中一次写入该 ID，正文采用源码相对文章链接，技术分享侧栏从 `classification` 和当前 `docs[].id` 构建期派生 | 首轮候选 lockfile 的实际解析、真实传递图准入、D-077 策略与派生制品实现、后续真实用途新增依赖、具体公共函数与类型、文件/组件/hook 命名、层内子目录与边界检查实现、实例其余配置、Ubuntu CI 版本门禁迁移、保留名与旧名称复用、路径检测、文章创建命令接口、UUIDv7 文本与历史检查、派生索引格式与消费者、侧栏排序与生成器契约、文章素材布局、完整 schema、错误契约、项目适配、SEO 元数据组件、标签合并、契约测试和主题适配仍由后续决策或实施确定 |
 | 图表 | 保留仓库现有 PlantUML 源码编译为静态 SVG 的流程 | 不引入 Docusaurus 运行时图表插件或浏览器端渲染；版本升级仍需供应链复核 |
 | Web 与 TLS | Ubuntu Server 24.04 LTS 上由 Nginx 提供静态制品，Certbot 通过 ACME HTTP-01 管理证书 | 生产不运行 Docusaurus/Node.js；具体安装来源、版本和配置在部署实施前核验 |
-| 发布控制 | GitHub Actions 运行必需门禁，再经最小权限 CAM 调用固定 TAT command，服务器以不可变 release 原子切换 | 构建在 CI 还是发布主机、制品封装与传输方式仍待发布契约确认 |
+| 发布控制 | GitHub Actions 对 `main` 精确 SHA 构建并封装 `build/` artifact，再经最小权限 CAM 调用固定 TAT command；服务器只验证、解包并原子切换不可变 release | artifact 读取权限按仓库可见性在 OD-009 核验；实际 Action、凭证、TAT 和服务器配置仍需准入与操作授权 |
 | 原生运维 | 使用 systemd 管理服务与定时任务，使用 logrotate 或系统日志轮转能力控制技术日志 | 不引入容器、PaaS、编排平台或第三方常驻监控 agent |
-| CI 与发布门禁 | 门禁失败阻止发布成功，旧的已验证 release 继续可用 | 具体工具、Action、配置、报告格式、阈值和例外流程仍由构建发布契约确定 |
+| CI 与发布门禁 | 门禁失败阻止发布成功，旧的已验证 release 继续可用；D-074 的 `tsc --noEmit` 与 Docusaurus build 独立必需；D-077 的依赖来源、无脚本准入、SPDX SBOM、显式漏洞阈值和双端点只读验证失败关闭 | D-077 的策略脚本接口、准入记录 schema、派生制品路径、报告保留和 CI 接线，以及其他质量工具、Action、配置与例外流程仍由实施或构建发布契约确定 |
 
 CI 与发布门禁必须覆盖以下能力类别：
 
@@ -210,7 +277,18 @@ D-052 约束主站浏览器产物、构建依赖、未来独立服务和开发�
 - 资源占用、部署隔离、故障影响、备份以及替换或退出方案。
 - 对应用户决策编号、需要履行的署名、许可证文本、源码提供或其他义务。
 
-当前 `package.json` 尚无站点运行依赖，仓库也没有 lockfile、第三方许可证清单或 SBOM，因此本决定只建立准入规则，不虚构一份尚不存在的依赖清单。第一次引入 Docusaurus 或其他 npm 依赖前，必须同步设计并实现直接依赖登记、lockfile 强制检查、传递依赖许可证扫描、第三方声明或 SBOM、Docusaurus 构建产物检查和浏览器网络请求 allowlist；具体工具与文件格式随构建发布契约确认。
+当前 `package.json` 尚无站点运行依赖，仓库也没有 lockfile、第三方准入记录、第三方许可证清单或 SBOM。D-073 已批准三个 Docusaurus 官方包及其版本、preset 拓扑和 npm 锁定方向，D-076 又批准首轮 React/MDX/TypeScript 与类型工具的候选直接清单和 manifest 版本表达；这些设计决定没有生成 lockfile，也没有虚构尚未解析的完整传递依赖图。D-077 已固定首次解析和供应链准入协议，但尚未创建策略脚本、准入记录、派生制品或 CI 门禁，也没有对真实候选图给出准入结论。
+
+### 首次依赖准入闭环
+
+1. 只有 D-067/D-073 的主端点可以在隔离目录按已批准 manifest 运行 `npm install --package-lock-only --ignore-scripts --audit=false`，生成候选 `package-lock.json`；该阶段不得安装到正常工作树、执行依赖代码或生命周期脚本。每次实际解析仍属于外部操作，执行前需要单独授权。
+2. 候选图只允许来自官方 npm registry，拒绝 Git、`file:`、本地目录、任意远程 tarball 或其他来源。零第三方依赖策略脚本先检查直接清单、`lockfileVersion: 3`、来源，以及适用节点的 `resolved`、`integrity`、声明许可证和安装脚本标记；缺失、未知或冲突即失败。
+3. 在正常安装前，按 lockfile 下载精确 tarball 但不执行其中代码或脚本，复核 integrity，并检查包内实际 `package.json`、`LICENSE`/`LICENCE`/`COPYING`、`NOTICE` 和生命周期脚本内容。许可证缺失、未知、推测性、复杂或未获准时暂停；生命周期脚本默认拒绝，确有构建必要性时必须以精确 `name@version`、脚本内容、风险和证据重新请求用户决定，禁止批量放行。
+4. 许可证与脚本人工预审通过后，从 lockfile 与 tarball 证据生成 npm 原生 SPDX JSON SBOM 和 `THIRD_PARTY_NOTICES`，并运行显式的全图 `npm audit`，不得省略开发依赖。`moderate`、`high` 或 `critical` 阻断，`low` 必须报告但不自动阻断；禁止运行 `npm audit fix`，registry 或 audit 服务不可用时失败关闭。最终人工准入结论只能在该漏洞门禁通过后形成。
+5. `npm audit` 会向官方 npm registry 发送包名和版本；回退协议可能发送完整 lockfile 树以及 npm/Node/平台/架构/环境元数据。该构建期外发不包含站点文章源码、访问者、账户或评论数据，不产生浏览器外部请求。审计端点、协议或数据字段改变时重新评审。
+6. 只有证据齐全、漏洞门禁与最终人工准入结论都通过后，主端点与最低端点才可对同一 manifest、lockfile 和项目 npm 配置运行 `npm ci --ignore-scripts --audit=false`。两个端点都必须通过执行前后哈希证明 `package.json` 与 `package-lock.json` 未改变；最低端点保持只读且不生成发布制品。
+
+依赖事实所有权不得重复：`package.json` 只拥有直接依赖意图，`package-lock.json` 拥有完整解析图，人工准入记录只保存无法从二者稳定派生的用途、许可证澄清、脚本处置、义务和决策编号；SPDX SBOM 与 `THIRD_PARTY_NOTICES` 由 lockfile 和 tarball 证据生成并做漂移校验，不能成为人工维护的第二份依赖清单。首版策略实现使用 Node.js 内置能力，Ubuntu 的 `tar` 可作为系统工具；不把许可证扫描器、SBOM 生成器或 GitHub Dependency Review Action 作为首版必需工具，本决定也不授权将其作为可选补充引入。策略脚本接口、记录 schema、派生制品布局、报告保留、CI job、`build/` 检查和浏览器网络 allowlist 以编码 Spec 为准；它们接线并通过后才能形成首轮最终准入。
 
 ### Docusaurus 许可边界
 
@@ -223,26 +301,27 @@ D-052 约束主站浏览器产物、构建依赖、未来独立服务和开发�
 ## 内容格式边界
 
 - 普通技术文章使用 Markdown，保持正文简单、可追溯和可迁移。
-- Docusaurus 默认使用 MDX 编译管线处理 Markdown 与 MDX；是否启用其他解析模式仍待后续技术设计。“Markdown 默认、MDX 受控例外”是本站的编辑和审核边界，不表示普通文章绕过框架编译管线。
+- Docusaurus 默认使用 MDX 编译管线处理 Markdown 与 MDX；M0 不启用其他解析模式。“Markdown 默认、MDX 受控例外”是本站的编辑和审核边界，不表示普通文章绕过框架编译管线。
 - 框架选择包含 Docusaurus 标准静态页面所需的 React 客户端资源；自定义客户端组件、第三方脚本和外部 SDK 不在本次授权内。
 - 只有文章确实需要专属展示或交互组件，且普通 Markdown 无法满足时，才使用 MDX。
 - MDX 只能引用仓库内经过审核的组件，不能把任意组件或远程脚本作为内容依赖引入。
 - 选择 MDX 不自动批准超出 Docusaurus 框架基线的组件库、自定义浏览器端 JavaScript、第三方服务或运行时 API。
+- 未来经审核批准创建的本站可复用 React 组件遵守 D-074 并使用 `.tsx`，按 D-075 位于 `src/components/`；该目录只是通用展示层位置，不构成 MDX 导入白名单，也不批准交互能力或创建任何组件。
 - Markdown 与 MDX 应服从同一套完整编辑模型和公开状态规则。
 - D-036 已确定模型能力范围；D-037 已确定元数据与正文保持单文件并采用分组式 frontmatter。
 - 少量核心字段位于顶层，复杂且可选的元数据按职责嵌套分组，不为每篇文章维护独立 sidecar 文件。
-- 已确认文章核心字段、受控 SEO 描述覆盖、显式日期、最小作者注册表，以及不设主分类的“项目-模块-主题标签”组织规则。单篇文章至多归属一个项目和该项目内的一个模块，主题使用 1-5 个受控 ID；这些字段只存放在必填 `classification` 对象中，不在顶层或其他分组建立副本。注册表与其余字段仍属于后续未决项。
+- 文章核心字段、SEO 描述回退、显式日期与“项目-模块-主题标签”组织规则保持不变。E-003 将作者、主题和项目模块分别固定到 `authors.json`、`topics.json` 与 `projects.json#writingModules`；无项目文章投影到“通用技术”，跨项目关系使用 `relations.projects` 且不改变规范归属。主题、作者、系列和归档不生成 M0 独立路由。
 
-组件存放目录、审核登记方式、允许的导入边界、静态与交互组件分类，以及对应机器门禁仍待设计确认。在这些规则落盘前，不创建 MDX 文章或安装 MDX 集成。
+MDX 可导入组件的唯一白名单入口是 `src/components/mdx/index.ts`，普通 `src/components/` 组件不会自动开放。M0 白名单为空且不创建 MDX 文章；后续每个新增导出都必须记录用途、交互、外部请求、数据处理和静态失败退化，并接受机器门禁与评审，不安装额外 MDX 集成。
 
 ## 数据所有权边界
 
 | 数据类型 | 目标真相源 | 当前状态 |
 |---|---|---|
-| 技术文章、项目介绍、页面文案 | Git 仓库内的受审内容 | 文章核心字段、日期、组织基数、`classification` 唯一分组、原生完整 `slug`、核心字段 fit-gap、最小内存适配和 `writing/` 类型边界已确认；完整 schema、内容根物理路径、内部组织和项目内容位置尚未决定 |
-| 项目、模块与主题注册信息 | Git 仓库内经过确认的注册表 | 稳定 ID 与可变显示名的边界已确认；结构、路径以及是否复用现有 `projects.json` 尚未决定 |
-| 作者注册表 | Git 仓库内的单一 JSON 对象 | 稳定作者 ID 为键；首版字段为 `displayName` 与 `links.github`，当前记录使用已确认的 GitHub 主页 |
-| 构建产物 | 由 Git 提交可重复生成的静态 release | Docusaurus 尚未接入 |
+| 技术文章与项目正文 | `site-content/writing/` 和 `site-content/projects/` 中受审 Markdown/MDX | 文章 frontmatter 拥有文章领域字段；项目正文只拥有长文，项目结构化字段由 `projects.json` 拥有；构建期只读投影，不回写 |
+| 项目、模块与主题注册信息 | `docs/contracts/projects.json` 与 `docs/contracts/topics.json` | 项目 ID、slug、公开事实、顺序和 `writingModules` 由项目注册表拥有；主题 ID、显示名与顺序由主题注册表拥有 |
+| 作者注册表 | `docs/contracts/authors.json` 的对象型 ID 映射 | 稳定作者 ID 为键；`displayName` 必填，`links.github` 对新增作者可选 |
+| 构建产物 | GitHub Actions 对精确 SHA 生成的 `build/` artifact | 目标契约已固定，尚未接入 Docusaurus 或生产发布 |
 | 全局账户 | 未来中央身份服务的数据边界 | 不收集账户数据 |
 | 技术分享评论 | 未来评论服务的数据边界 | 不收集评论数据 |
 | 项目业务与上传数据 | 对应项目服务自己的数据边界 | 不提供公共试用 |
@@ -275,7 +354,7 @@ D-052 约束主站浏览器产物、构建依赖、未来独立服务和开发�
 - 确需修改时，旧 URL 必须永久重定向到新 URL，并同步 canonical URL 与站点地图。
 - 项目 slug 逐项目登记；`docrestore` 已作为 DocRestore 的示例和目标标识。
 
-重定向清单的存储位置、生成方式和自动断链检查仍属于构建发布契约的一部分。
+精确重定向清单由 `docs/contracts/redirects.json` 保存，构建期生成静态跳转页并与 canonical、sitemap、页面路由、静态资源和断链检查共同校验。禁止通配、链和环。
 
 ## 内容详情页布局方向
 
@@ -287,7 +366,7 @@ D-052 约束主站浏览器产物、构建依赖、未来独立服务和开发�
 - 右栏主要显示当前页面 `H2/H3` 标题导航，可在下方显示少量已批准的上下文元数据。
 - 短页面没有足够标题时不制造目录，可只显示已有元数据或留空。
 
-文章左栏必须由单一规范组织归属生成：有模块时落在所选项目的该模块下，只有项目时落在项目根级，两者均为空时落在独立通用分组。跨项目相关关系不得让同一文章在多个项目侧栏重复出现；通用分组公开名称和目录排序仍未由用户决定。
+文章左栏必须由单一规范组织归属生成：有模块时落在所选项目的该模块下，只有项目时落在项目根级，两者均为空时落在“通用技术”。跨项目相关关系不得让同一文章在多个项目侧栏重复出现。排序固定为“通用技术”优先，再按项目 `navigationOrder`、模块 `navigationOrder`、文章 `publishedAt` 降序和 `articleId` 升序兜底。
 
 目录排序和右栏元数据受后续内容模型约束，不能为了填满侧栏新增未批准字段。D-034 固定渐进式折叠：
 
@@ -296,7 +375,7 @@ D-052 约束主站浏览器产物、构建依赖、未来独立服务和开发�
 - 窄屏使用单栏，“浏览本栏目”和“本页目录”均在正文上方默认收起。
 - 优先使用原生可访问折叠控件，不使用遮挡正文的抽屉。
 - 首版标题导航只使用静态锚点，不增加依赖客户端 JavaScript 的滚动高亮。
-- 精确断点根据正文可读宽度、视觉稿和真实浏览器截图确定。
+- 精确断点为 `>=1280px` 三栏、`996-1279px` 左栏折叠且保留右栏、`<996px` 两个目录均折叠到正文上方，并通过真实浏览器截图复核。
 
 ## 故障与变更隔离
 
@@ -306,7 +385,7 @@ D-052 约束主站浏览器产物、构建依赖、未来独立服务和开发�
 - 评论服务不可用：未来评论不可加载或提交，但文章正文仍可阅读。
 - 单个项目不可用：主站和其他项目继续工作，并能独立隐藏或标记该体验入口。
 
-具体降级文案、超时、重试、状态探测和回滚自动化尚未决定，不能从上述目标直接推导实现。
+M0 没有运行时服务调用，因此不设计超时、重试或客户端状态探测；构建失败保留上一 release，项目体验入口只根据经审核注册表显式显示。未来动态服务的降级文案、探测和重试在对应能力获批时独立设计。
 
 ## 安全与隐私边界
 
@@ -336,29 +415,23 @@ D-052 约束主站浏览器产物、构建依赖、未来独立服务和开发�
 
 ## 实施门禁
 
-以下事项没有因选择 Docusaurus 而自动获得批准：
+[主站编码规范 Spec](../engineering/main-site-coding-spec.md)是实现、测试和评审的工程入口。D-078 授权范围内的内部 API、命名、脚本路径、schema 代码、边界检查、测试 fixture、错误格式和 CI job 拆分，由实现者依据本架构形成最小可验证闭环，不再逐项请求用户选择；任何工程选择都必须可追溯到 D-xxx/E-xxx、在代码前落入对应 Spec，并以自动化或真实浏览器证据验证。
 
-- 项目/模块/主题注册表结构与路径、通用分组名称、跨项目相关关系字段、发布辅助命令实现、摘要长度、作者注册表路径、其余字段、项目字段、内容目录，以及 MDX 组件审核与机器校验机制。
-- D-059 已完成 [Docusaurus docs 原生 front matter](https://docusaurus.io/docs/api/plugins/@docusaurus/plugin-content-docs#markdown-front-matter)与技术文章核心字段的 fit-gap，并重新确认缩小后的 D-056 执行点；D-060 已确认 `writing/` 技术文章类型边界。内容根物理路径、路径包含与误放检测、完整 schema、函数 API、错误契约、页面 SEO 元数据组件、标签合并及其契约测试仍未确认；完成这些前不得实现解析钩子分流、纯投影、内容目录或 schema 分派，也不得要求作者双写派生字段。
-- 分类、系列、标签、分页和 RSS 是否需要独立路由，以及重定向清单的实现方式。
-- 目录分组排序、右栏元数据字段、桌面侧栏滚动行为和精确响应式断点。
-- Docusaurus 与 Node.js 具体版本、preset、插件实例、依赖清单、可选客户端 JavaScript 和测试工具。
-- 任何具体依赖、社区插件、组件库、CMS、搜索、身份、评论、分析、监控或外部服务；D-052 只建立候选准入规则，不构成选型授权。
-- D-053 已固定依赖、内容、路由、图表、许可证/SBOM、漏洞/Secret、制品网络、浏览器/可访问性、CSP 和发布后冒烟等门禁能力类别；具体扫描器、Action、配置、契约与报告格式、阈值和例外流程仍由构建发布契约确定。
-- Docusaurus 默认主题与 D-034 响应式目标的差异处理；完成真实浏览器 fit-gap 前，不把默认主题行为或深度 Swizzle 视为已批准实现。
-- 构建命令、产物目录、预览方式和 CI/服务器发布步骤。
-- 中央身份的自建或托管方案、协议、会话和账户生命周期。
-- 评论系统的产品规则、数据模型、存储、审核与反滥用方案。
-- 未来项目试用子域名的启用流程、运行服务部署及服务间 API 契约。
+进入 Docusaurus 代码迁移前仍须完成：
 
-这些事项必须逐项完成事实查证、方案比较和用户确认，确认前不得进入依赖该决定的实现。
+- 实现 D-077 的零第三方依赖策略、记录和派生制品协议；随后单独申请候选 lockfile 联网解析与 tarball 审查，对真实传递图取得最终准入结论。
+- 把 E-001 至 E-005 转化为内容 schema、注册表、路径与路由检查、主题 fit-gap、侧栏/SEO 投影、Node 24 双端点、静态构建和 artifact 制品检查。
+- 把 M0 主站 Spec 更新为 Docusaurus 多页面实现基线，并以 360、768、1024、1440 px 真实截图验证三栏折叠、首页与目录页。
+
+以下边界不属于 D-078 委托，仍须单独确认或现场核验：新增或变更 npm/Action 的真实依赖图及许可证/脚本例外；GitHub 仓库能力与 Secret；服务器、CAM/TAT、DNS、证书和生产发布操作；公开业务事实、真实截图与法律合规；浏览器第三方请求、费用、账户、评论、用户数据和项目在线体验。M0 不实现系列、主题/作者独立页、归档、筛选、分页、RSS、搜索或独立 `/about/`，出现真实需求时再进入产品决策。
 
 ## 当前设计验收
 
 - 已明确 Git 是内容编辑与审核边界，静态产物不是人工编辑源。
 - 已明确 Docusaurus 只在构建阶段运行，生产主站不运行 Docusaurus 或 Node.js 服务。
 - 已固定 Docusaurus 官方静态能力、现有 PlantUML 静态图表链路、Nginx/Certbot、GitHub Actions/TAT 和 Ubuntu/systemd 原生运维的首版职责组合。
-- 已固定 CI 与发布必须覆盖的质量和供应链能力类别，同时把具体工具、格式、阈值、构建位置和发布契约保留为后续门禁。
+- 已固定 CI 与发布必须覆盖的质量和供应链能力类别、独立 `tsc --noEmit` 与 Docusaurus build，以及 D-077 的首次依赖准入协议；E-005 又固定 GitHub Actions 构建默认 `build/`、不可变 artifact 和生产服务器只校验/解包的交付边界。
+- 已明确 Docusaurus 管理的目标源码使用显式严格 TypeScript，配置、侧栏、本地插件与适配使用 `.ts`，包含 JSX 的页面、主题覆盖和 React 组件使用 `.tsx`；现有 `.mjs` 质量脚本与未来作者 CLI 不在该迁移范围。
 - 已明确开源依赖按浏览器产物、独立服务、工具和素材分层准入，宽松许可证优先不等于具体依赖自动获批。
 - 已明确浏览器第三方请求和境外数据路径无论软件许可证为何都必须单独决策。
 - 已明确主站、身份、评论和项目服务的逻辑职责互不替代。
@@ -385,5 +458,5 @@ D-052 约束主站浏览器产物、构建依赖、未来独立服务和开发�
 - 已明确文章只有一个规范目录归属：项目与模块均可为空且各最多一个，模块必须隶属所选项目；无模块时归入项目根级，无项目和模块时归入独立通用分组。
 - 已明确主题必填 1-5 个受控 ID，跨项目文章只选一个主项目，其他项目关系不造成多个项目侧栏重复；组织重分类不改变文章 URL。
 - 已明确必填 `classification` 是项目、模块和主题字段的唯一组织真相源，不在 frontmatter 顶层或其他分组复制这些字段。
-- 已明确 D-059 以原生字段精确直用和两个必要内存派生重新确认 D-056，D-060 以独立的 `writing/` 子树重新确认技术文章类型判据；物理内容根、完整 schema 与错误契约完成前仍不得实施全局解析分流或文章 schema 分派。
-- 已把所有未确认的实现问题保留为门禁，而不是补成默认方案。
+- 已明确 D-059 以原生字段精确直用和两个必要内存派生重新确认 D-056，D-060 以独立的 `writing/` 子树重新确认技术文章类型判据，D-061 把该边界锚定到仓库根 `site-content/writing/`，D-062 固定每文独立源码目录和唯一正文入口，D-063 固定人工稳定可读的 `<source-name>` 格式与受控重命名规则，D-064 固定 UUIDv7 articleId、源码相对文章链接、侧栏身份引用方向及显式日期的未来构建期索引绑定，D-065 固定作者显式仓库 Node.js 创建入口与一次性 ID 写入，D-066 固定 Node 24 LTS 目标工具链、原生 UUIDv7 后端与非严格递增语义，D-067 固定精确执行版本源、最低版本兼容验证和升级治理，D-072 固定 Linux 作者执行环境与 Ubuntu-only CI，D-074 固定 Docusaurus 目标源码的严格 TypeScript 边界与独立类型检查/构建门禁，D-075 固定标准入口目录、跨层公共入口、导出和路径别名边界，D-076 固定首轮候选直接依赖和 `tsconfig` 基线，D-077 固定首次依赖准入协议；真实候选图及准入结论、D-077 策略与报告实现、完整 schema、文章创建命令接口与实现、Node 24 与 Ubuntu CI 版本门禁迁移、UUIDv7 文本与历史检查、索引实现、剩余路径契约、侧栏排序与生成器测试和错误契约完成前仍不得安装依赖或实施全局解析分流与文章 schema 分派。
+- 已通过 D-078 区分工程委托与用户门禁：M0 内部实现细节由 Agent 查证、落盘并验证，外部操作、真实依赖最终准入、基础设施、公开事实、数据和未来动态能力仍不得自行扩张。

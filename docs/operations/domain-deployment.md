@@ -1,7 +1,7 @@
 # 域名与生产发布设计
 
 状态：draft
-最近更新：2026-07-15
+最近更新：2026-07-18
 适用范围：M0 腾讯云域名、DNS、轻量应用服务器、HTTPS、自动发布与回滚
 
 ## 目的
@@ -24,18 +24,18 @@
 首版采用以下架构：
 
 - GitHub 仓库继续作为源码、内容和发布历史真相源。
-- GitHub Actions 对 PR 和 `main` 运行质量门禁，并通过 GitHub `production` environment 触发生产发布。
+- GitHub Actions 对 PR 和 `main` 运行质量门禁；只有 `main` 的精确 `GITHUB_SHA` 在主构建端点生成 Docusaurus 默认 `build/`，并通过 GitHub `production` environment 交付不可变 artifact。
 - 腾讯云云解析 DNS（DNSPod）管理 `axialmuse.com` 权威解析。
-- 腾讯云轻量应用服务器承载 Nginx 和静态文件，不运行应用后端或数据库。
+- 腾讯云轻量应用服务器承载 Nginx 和静态文件，不安装 Node/npm，不拉取主站源码，不从源码 checkout 执行主站脚本或构建，也不运行应用后端或数据库。
 - 已登记的静态项目体验使用 `<project-slug>.axialmuse.com`，共享服务器端口但隔离 Nginx 配置、证书、仓库与发布目录。
-- 腾讯云自动化助手 TAT 调用服务器上预先安装的固定发布命令，不为自动部署开放公网 SSH。
+- 腾讯云自动化助手 TAT 调用服务器上预先安装的固定发布命令，只传递 workflow run、artifact、提交 SHA 与预期摘要，不为自动部署开放公网 SSH。
 - Nginx 提供 HTTPS、根域跳转、安全响应头和静态文件服务。
 - Certbot（ACME 客户端）自动签发并续期覆盖 `axialmuse.com` 与 `www.axialmuse.com` 的证书。
 - canonical URL 为 `https://www.axialmuse.com/`，根域永久重定向到 `www`。
 
 腾讯云 TAT 是轻量应用服务器原生运维工具，可在不登录服务器、不开放额外入站端口的情况下执行命令，并支持 API 与 CAM 权限控制。参考：[轻量应用服务器使用 TAT](https://cloud.tencent.com/document/product/1207/52631/)、[TAT 访问管理](https://cloud.tencent.com/document/product/1340/56294)。
 
-该方案不引入 CMS、运行时 Node.js 服务、容器、数据库、页面分析脚本、广告或站内 Cookie。
+该方案不引入 CMS、服务器 Node.js/npm 工具链、容器、数据库、页面分析脚本、广告或站内 Cookie。
 
 ## 生产拓扑
 
@@ -46,9 +46,13 @@
                                            |
                                       合并到 main
                               |
-                    GitHub production job
+          GitHub Actions 对精确 main SHA 构建 build/
                               |
-                 腾讯云 API -> TAT 固定发布命令
+                 不可变 artifact + SHA-256 清单
+                              |
+       production job -> 腾讯云 API -> TAT 固定发布命令
+                              |
+                 校验、解包 releases/<sha>
                               |
 DNSPod -> axialmuse.com -> Nginx -> /srv/axialmuse/current
                                       |
@@ -91,24 +95,25 @@ M0 不额外建设公网 staging 子域名，避免增加服务器配置、证�
 | 组件 | 职责 | 约束 |
 |---|---|---|
 | Nginx | HTTPS、重定向、安全头、静态文件 | 使用系统包；不安装可视化服务器面板 |
-| Git | 拉取精确生产提交 | 只读仓库凭证；不保存 GitHub 写权限 |
+| 系统下载、归档与哈希工具 | 从固定 GitHub 仓库读取 artifact 元数据，安全解包并校验摘要和文件清单 | 不处理源码、不调用 Node/npm，也不从源码 checkout 执行脚本；具体系统包在实施前核验 |
 | Certbot | 签发与续期 TLS 证书 | 使用 webroot HTTP-01；续期后验证并 reload Nginx |
 | TAT agent | 接收腾讯云固定运维命令 | 保持在线；命令和实例按 CAM 最小授权 |
 | logrotate / systemd | 日志轮转、服务与续期定时器 | 不引入第三方常驻监控 agent |
 
-现有 `public/` 骨架的发布设计不在服务器构建，只导出已经通过门禁的精确提交。Docusaurus 目标改为发布经过验证的静态构建制品；构建位置、制品封装和传输方式由发布契约另行确定。生产服务器在任何方案下都不承担写作或源码编辑，也不得执行未经固定和审核的仓库脚本。
+当前仓库仍是迁移前 `public/` 骨架，目标 workflow、artifact 和服务器发布入口尚未实现。E-005 已固定目标链路：Docusaurus 只在 GitHub Actions 对 `main` 精确 SHA 构建默认 `build/`，生产服务器只接收、校验和提供该静态制品，不承担源码拉取、写作、编辑、依赖安装或构建。
 
 ### 目录契约
 
 ```text
 /srv/axialmuse/
-├── repo.git/                 # 只读 bare clone
+├── staging/                  # artifact 下载与安全解包临时区，不由 Nginx 提供
 ├── releases/
-│   └── <40-char-sha>/        # 不可变静态产物
+│   └── <40-char-sha>/        # 已核对 artifact 与逐文件清单的不可变静态产物
 └── current -> releases/<sha> # Nginx Web Root 指向的原子符号链接
 ```
 
 - 发布先写入同文件系统的临时目录，校验成功后改名为 SHA 目录，再原子切换 `current`。
+- Actions artifact 的 `metadata/` 只在 `staging/` 验证；`releases/<sha>` 只安装已经校验的 `payload/` 内容，不能把 release metadata 暴露到 Web Root。
 - 发布目录不得被 Nginx 或发布流程就地覆盖。
 - 默认保留最近 5 个成功版本；当前版本和上一个版本不得被清理。
 - 发布脚本与 Nginx 配置后续纳入仓库，安装到服务器的副本由 root 持有且不可被部署凭证修改。
@@ -121,14 +126,14 @@ M0-P 实施时按以下路径纳入仓库；表中路径是设计契约，文件
 |---|---|
 | `ops/nginx/axialmuse.conf` | 精确 Host、跳转、Web Root、错误页和缓存规则 |
 | `ops/nginx/snippets/security-headers.conf` | CSP、HSTS 以外的安全响应头；HSTS 由启用步骤单独控制 |
-| `ops/deploy/deploy.sh` | 校验 SHA、创建 release、冒烟、原子切换和失败回滚 |
+| `ops/deploy/deploy.sh` | 校验固定仓库的 workflow run、artifact、SHA、摘要、归档路径与文件清单，创建 release、冒烟、原子切换和失败回滚 |
 | `ops/deploy/rollback.sh` | 只切换到已存在且通过校验的上一 release |
 | `ops/systemd/` | 证书检查、服务器健康与维护 timer/service 模板 |
 | `ops/logrotate/` | Nginx error log 和认证日志保留策略模板 |
 | `.github/workflows/deploy-production.yml` | `main` 精确 SHA 到 TAT 的受限生产发布 |
 | `.github/workflows/maintenance.yml` | HTTPS、TLS、链接、DNS 和到期提醒的定时检查 |
 
-- 仓库只保存无 secret 模板；实例 ID、SecretId、SecretKey、deploy key 和证书私钥不得写入这些文件。
+- 仓库只保存无 secret 模板；实例 ID、SecretId、SecretKey、私有仓库 artifact 读取凭证和证书私钥不得写入这些文件。
 - 安装到 `/etc`、`/usr/local/sbin` 和 root 配置目录的副本由 root 持有，发布身份没有修改权限。
 - 模板变更先在测试路径执行语法与受控 hosts 验证，再由独立运维步骤安装；网页内容发布不能顺带覆盖系统配置。
 
@@ -151,7 +156,7 @@ M0-P 实施时按以下路径纳入仓库；表中路径是设计契约，文件
 - 管理员、Nginx 与发布脚本使用不同系统身份和文件权限。
 - GitHub 只保存专用 CAM 子账号的 SecretId/SecretKey，不保存腾讯云主账号凭证。
 - CAM 策略只允许对指定 TAT command 和指定轻量实例执行、查询；不授予任意命令、实例重装、删除或财务权限。
-- 只读 GitHub deploy key 仅用于服务器拉取本仓库；不复用个人 SSH 密钥。
+- 公开仓库的 artifact 使用无需凭证的读取路径；若 OD-009 核验结果为私有仓库，服务器只保存限于该仓库 `Actions: read` 的细粒度读取凭证，不授予 contents 写入、workflow 触发或其他仓库权限，也不复用个人访问凭证。
 
 ## 自动发布契约
 
@@ -159,10 +164,12 @@ M0-P 实施时按以下路径纳入仓库；表中路径是设计契约，文件
 
 生产 workflow 仅由 `main` push 或人工 `workflow_dispatch` 触发，并满足：
 
-- 先运行 `npm run quality`。
+- 对精确 `GITHUB_SHA` 运行冻结安装、质量、类型检查、Docusaurus 静态构建与制品检查；只有主端点生成可发布制品。
+- Docusaurus 使用默认 `build/` 输出目录；按 CODE-015 将它封装为 `payload/`，并附精确提交标识与逐文件 SHA-256 `metadata/`，形成不可变 GitHub Actions artifact。
 - 使用 `production` environment 保存腾讯云部署凭证。
 - 使用 concurrency group，任一时刻只允许一个生产发布。
 - 将当前 `GITHUB_SHA` 作为唯一发布版本，不发布浮动的“最新 main”。
+- 在调用 TAT 前核对 artifact 所属 workflow run、`head_sha` 与上传摘要，只向固定 command 传递 run/artifact 标识、SHA 和预期摘要，不传递任意下载 URL、shell 片段或路径。
 - TAT 返回成功后，从公网验证 canonical 首页和关键资源。
 - 部署失败时 workflow 失败，不把失败提交标记为已发布。
 
@@ -170,18 +177,15 @@ GitHub environment 可以限制部署分支、保护 secrets 并控制并发。�
 
 ### TAT 与服务器侧
 
-1. GitHub Actions 使用 `InvokeCommand` 请求执行已开启自定义参数的 `axialmuse-deploy` TAT command，并传入 40 位提交 SHA。
-以下第 4-5 步仍描述迁移前 `public/` 骨架。Docusaurus 的构建位置、制品交付和入口校验尚未确认，迁移实现前必须用新的发布契约替换这两步。
+1. GitHub Actions 使用 `InvokeCommand` 请求执行已开启自定义参数的 `axialmuse-deploy` TAT command，并传入 workflow run ID、artifact ID、40 位提交 SHA 与预期 SHA-256 摘要。
+2. root 持有的发布入口严格校验参数形态，并只访问脚本内固定的 GitHub owner/repository；不接受任意 URL、shell 片段、分支名或文件路径。
+3. 服务器读取 artifact 元数据，核对 workflow run、artifact ID、`head_sha`、未过期状态和预期摘要；公开仓库不带凭证，私有仓库只使用经 OD-009 核验和单独配置的 `Actions: read` 凭证。
+4. artifact 下载到 `staging/` 后，先拒绝绝对路径、父目录逃逸、越界链接和非预期归档结构，再核对外层摘要与内部逐文件 SHA-256 清单。
+5. 全部校验通过后，只把 `payload/` 安装到同文件系统的临时 release，校验入口、关键资源、文件权限和目录大小，再改名为 `releases/<sha>`；`metadata/` 留在 staging 验证边界，服务器不拉源码、不运行 Node/npm，也不从源码 checkout 执行脚本。
+6. 对候选 release 完成本机静态冒烟后原子切换 `current`；随后经 Nginx 再次本机检查，失败即切回原 symlink。
+7. 返回 workflow run、artifact、部署 SHA、摘要、前一版本和验证结果，GitHub Actions 再做公网冒烟检查。
 
-2. root 持有的发布入口严格校验 SHA 格式，不接受任意 shell 片段、分支名或路径。
-3. bare repo fetch `origin main`，确认目标 SHA 可从 `origin/main` 到达。
-4. 当前骨架从目标 SHA 导出 `public/` 到临时目录，不执行仓库内任意脚本。
-5. 当前骨架校验 `index.html`、CSS、关键锚点、文件权限和目录大小；Docusaurus 制品的校验入口待发布契约确认。
-6. 完成不可变 release，原子切换 `current`。
-7. 在服务器本机请求 Nginx 健康地址；失败则切回原 symlink。
-8. 返回部署 SHA、前一版本和验证结果，GitHub Actions 再做公网冒烟检查。
-
-TAT 命令输出不得包含 SecretKey、deploy key、证书私钥或腾讯云账号资料。TAT 执行历史不是长期发布账本；GitHub deployment 与项目进度保留正式记录。
+TAT 命令输出不得包含 SecretKey、artifact 读取凭证、证书私钥或腾讯云账号资料。TAT 执行历史不是长期发布账本；GitHub workflow run、artifact 元数据、deployment 与项目进度共同保留正式记录。
 
 TAT `InvokeCommand` 支持对已启用参数的固定 command 传入 JSON 编码参数，并返回 invocation ID；这使部署凭证只需触发既有命令，不需要 `RunCommand` 任意脚本权限。参考：[TAT 触发命令 API](https://cloud.tencent.com/document/api/1340/52678)。
 
@@ -283,8 +287,8 @@ Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩
 2. 核验 ICP 备案号、备案内容与腾讯云接入状态。
 3. 创建系统盘快照；确认实例套餐支持快照，并记录回滚影响。
 4. 加固腾讯云账号、轻量防火墙、SSH 和系统更新策略。
-5. 安装并验证 Nginx、Git、Certbot 与 TAT agent。
-6. 创建生产目录、只读仓库凭证、root-owned 发布脚本和固定 TAT command。
+5. 安装并验证 Nginx、Certbot、TAT agent 及目标发布所需的系统下载、归档和哈希工具；生产不安装 Node/npm，也不为主站准备源码 clone。
+6. 创建生产目录、root-owned 发布脚本和固定 TAT command；OD-009 核验仓库可见性后，公开仓库不配置 artifact 凭证，私有仓库另行授权配置单仓库 `Actions: read` 凭证。
 7. 配置 GitHub `production` environment、最小 CAM 凭证与 deployment workflow。
 8. 先通过服务器公网 IP 的受控测试或临时 hosts 验证 Nginx，不提前公开未完成页面。
 9. 保存 DNS 旧值，添加或修改 `@` 与 `www` A 记录。
@@ -318,7 +322,8 @@ Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩
 
 ### 发布与内容
 
-- `npm run quality` 通过，生产 release SHA 与 GitHub deployment 一致。
+- 精确 `main` SHA 的冻结安装、质量、类型检查、Docusaurus build 和制品门禁通过；生产 release 的 workflow run、artifact ID、`head_sha`、摘要、内部清单、SHA 与 GitHub deployment 一致。
+- 服务器没有主站源码 clone、Node/npm 或构建步骤，只从固定 GitHub 仓库接收已验证 artifact。
 - 连续两次发布和一次回滚均不产生半更新状态。
 - 每个项目可在不修改主站 symlink 的情况下独立发布与回滚。
 - 桌面端和移动端实际截图验证通过。
@@ -337,6 +342,6 @@ Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩
 
 ### 服务器故障
 
-GitHub 保存源码与内容，服务器只保存可再生 release。恢复顺序为：新建或恢复轻量实例、应用受控配置、恢复只读仓库、重新签发证书、从已验证 SHA 发布、切换 DNS。M0 目标 RTO 为 4 小时，RPO 为 GitHub 最后一个成功生产提交。
+GitHub 保存源码、内容、workflow 记录和有效期内的 artifact，服务器只保存已验证 release。恢复顺序为：新建或恢复轻量实例、应用受控配置、重新签发证书、重新获取对应成功 workflow 的已验证 artifact 并发布、切换 DNS；artifact 已过期时只能由 GitHub Actions 对同一精确 SHA 重新构建和验证，不能改由生产服务器构建。M0 目标 RTO 为 4 小时，RPO 为 GitHub 最后一个成功生产提交。
 
 腾讯云快照可用于系统盘故障和错误操作回滚，但销毁实例会同时删除其快照，因此快照不能替代 Git 与配置真相源。参考：[管理快照](https://cloud.tencent.com/document/product/1207/48546/)。

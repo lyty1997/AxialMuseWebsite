@@ -28,16 +28,15 @@
   "experiences": [
     {
       "id": "docrestore",
-      "title": "DocRestore",
+      "projectId": "docrestore",
       "hostname": "docrestore.axialmuse.com",
       "status": "planned",
-      "onlineExperience": false,
       "dnsProvisioning": "disabled",
-      "showcaseMode": "repository",
       "deliveryMode": "static",
-      "repository": "https://github.com/lyty1997/DocRestore",
-      "productionBranch": "main",
-      "buildWorkingDirectory": "frontend",
+      "deploymentSource": {
+        "kind": "project-repository",
+        "workingDirectory": "frontend"
+      },
       "qualityCommands": [
         "npm ci",
         "npm run typecheck",
@@ -50,13 +49,6 @@
       "indexing": "noindex",
       "dataBoundary": "docs/projects/docrestore-experience.md",
       "owner": "project-owner",
-      "showcase": {
-        "repositoryUrl": "https://github.com/lyty1997/DocRestore",
-        "demoVideoStatus": "asset-pending",
-        "demoVideoUrl": "unassigned",
-        "posterUrl": "unassigned",
-        "captionsUrl": "unassigned"
-      },
       "runtimeDependencies": {
         "apiRequired": true,
         "activation": "deferred",

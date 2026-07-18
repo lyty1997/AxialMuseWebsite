@@ -1,7 +1,7 @@
 # 生产环境清单
 
 状态：inactive
-最近更新：2026-07-13
+最近更新：2026-07-18
 适用范围：M0 生产环境非敏感事实与验证记录
 
 ## 使用规则
@@ -58,9 +58,15 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 | Web 服务 | 计划使用 Nginx |
 | Web Root | `/srv/axialmuse/current` |
 | 生产分支 | `main` |
-| 发布方式 | GitHub Actions -> 腾讯云 TAT -> 原子 release |
-| Build command | `npm run quality`，在 GitHub Actions 执行 |
-| Output directory | `public` |
+| 发布方式 | 目标：GitHub Actions 构建不可变 artifact -> 腾讯云 TAT 受限交付 -> 校验后原子 release；尚未实施 |
+| 构建位置 | 目标：仅 GitHub Actions 对 `main` 精确 `GITHUB_SHA` 构建；生产服务器不构建 |
+| Build command | 目标：冻结安装、质量、类型检查、Docusaurus build 与制品检查；具体 npm script 尚未实现 |
+| Output directory | 目标：Docusaurus 默认 `build/`；当前仓库仍是迁移前 `public/` 骨架 |
+| Artifact 身份 | 目标：workflow run ID、artifact ID、40 位提交 SHA、预期 SHA-256 摘要；尚未生成 |
+| Artifact 内容 | 目标：`payload/`（`build/` 的已验证复制）与 `metadata/`（提交标识、release manifest、逐文件 SHA-256 清单）；尚未生成 |
+| Artifact 读取 | OD-009 待核验；公开仓库无需凭证，私有仓库仅用单仓库 `Actions: read` 细粒度凭证 |
+| 服务器发布职责 | 目标：校验元数据、摘要、归档路径与文件清单，解包至 `releases/<sha>` 并切换 `current` |
+| 服务器主站工具边界 | 不安装 Node/npm，不拉取主站源码，不从源码 checkout 执行脚本或构建；尚待现场核验与配置 |
 
 ## 项目体验子域名
 
@@ -79,7 +85,7 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 
 | 项目 | 保留主机名 | 状态 | 当前公开方式 | DNS |
 |---|---|---|---|---|
-| DocRestore | `docrestore.axialmuse.com` | `planned` / `onlineExperience: false` | 主站项目说明和 GitHub 仓库；演示视频后续追加 | 禁止创建 |
+| DocRestore | `docrestore.axialmuse.com` | `planned` / `dnsProvisioning: disabled` | 主站项目说明和 GitHub 仓库；演示视频后续追加 | 禁止创建 |
 
 ## 备案与合规
 
@@ -126,6 +132,7 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 
 | 日期 | 变更 | 原因 | 验证 |
 |---|---|---|---|
+| 2026-07-18 | 记录 E-005 的 GitHub Actions `build/` artifact、TAT 受限参数和服务器只校验/解包/切换目标 | D-078 委托内部工程细节后形成静态制品交付决定 | 设计已落盘；Action、凭证、workflow、TAT、服务器与 DNS 操作均未实施，仍需对应准入、核验和授权 |
 | 2026-07-13 | DocRestore 改为公开仓库展示，演示视频作为后续增强，明确不提供在线体验 | 用户确认自有后端只用于私有运行和录制，首版不承担公网服务 | 注册表禁止 DNS provisioning；视频素材不阻塞首次上线 |
 | 2026-07-13 | 登记 DocRestore 静态前端入口，保持 `planned` 与 `noindex` | 用户提供首个项目、子域名、仓库、分支和外部后端边界 | 已核对本地 README、前端构建配置和相对 API 实现；外部后端与公网认证待决策 |
 | 2026-07-13 | 记录上海地域、Ubuntu Server 24.04 LTS 64bit、专用空机、完整 ICP 备案号和接入成功状态 | 用户补充生产事实 | 待腾讯云控制台、官方备案查询与服务器只读核验 |

@@ -4,8 +4,9 @@
 
 ## 开始之前
 
-1. 克隆后执行一次启用本地提交门禁：`git config core.hooksPath .githooks`。它是 CI 的本地镜像，会在每次提交前跑 `npm run quality`。
+1. 在获准运行本站 Node.js 的 Linux 工作区，克隆后执行一次 `git config core.hooksPath .githooks` 启用本地提交门禁；它会在每次提交前跑 `npm run quality`。Ubuntu CI 在合入与发布前执行统一验证。
 2. 动手前先读 [docs/README.md](docs/README.md) 确认设计真相源，再读本次任务相关的 [codex-rules/](codex-rules/global-AGENTS.md) 规则。
+3. 编码任务再读 [主站编码规范 Spec](docs/engineering/main-site-coding-spec.md)，按规则编号说明实现依据；该 Spec 不替代上层设计或用户决策门禁。
 
 ## 铁律：先设计后编码
 
@@ -20,10 +21,10 @@
 
 ## 提交前自检
 
-- 运行 `npm run quality` 并确保通过（与 CI 一致，Ubuntu/Windows 上跑同一条命令）。
+- 在获准的 Linux 执行环境运行 `npm run quality` 并确保通过；Ubuntu CI 在合入与发布前执行同一质量入口。
 - UI 改动做实际渲染或截图验证；纯静态页面至少检查入口文件、资源引用和关键链接。
 - 结束时更新 [docs/progress.md](docs/progress.md)；解决 bug 后把原因与方案追加到 [codex-rules/known-issues.md](codex-rules/known-issues.md)。
 
 ## 尚未落地的基建
 
-测试框架、依赖与锁文件策略等尚未确定，见 [docs/architecture/open-decisions.md](docs/architecture/open-decisions.md)。引入第三方框架或依赖前，先在该文件记录决策再实现。
+D-073、D-076 与 D-077 已确认目标框架、首轮候选直接依赖、唯一 lockfile 和首次供应链准入协议，但依赖、lockfile、准入策略、证据、派生制品与 CI 均尚未实现。新增或升级依赖必须先按 [待决策问题](docs/architecture/open-decisions.md) 和 [主站目标架构](docs/architecture/main-site-target-architecture.md) 对真实候选图取得准入结论；测试及其他质量工具仍按对应设计门禁确认后实施。
