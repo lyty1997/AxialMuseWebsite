@@ -26,10 +26,10 @@
 - GitHub 仓库继续作为源码、内容和发布历史真相源。
 - GitHub Actions 对 PR 和 `main` 运行质量门禁；只有 `main` 的精确 `GITHUB_SHA` 在主构建端点生成 Docusaurus 默认 `build/`，并通过 GitHub `production` environment 交付不可变 artifact。
 - 腾讯云云解析 DNS（DNSPod）管理 `axialmuse.com` 权威解析。
-- 腾讯云轻量应用服务器承载 Nginx 和静态文件，不安装 Node/npm，不拉取主站源码，不从源码 checkout 执行主站脚本或构建，也不运行应用后端或数据库。
+- 腾讯云轻量应用服务器承载 Nginx、静态 payload 和同版本服务端重定向配置，不安装 Node/npm，不拉取主站源码，不从源码 checkout 执行主站脚本或构建，也不运行应用后端或数据库。
 - 已登记的静态项目体验使用 `<project-slug>.axialmuse.com`，共享服务器端口但隔离 Nginx 配置、证书、仓库与发布目录。
-- 腾讯云自动化助手 TAT 调用服务器上预先安装的固定发布命令，只传递 workflow run、artifact、提交 SHA 与预期摘要，不为自动部署开放公网 SSH。
-- Nginx 提供 HTTPS、根域跳转、安全响应头和静态文件服务。
+- 腾讯云自动化助手 TAT 调用服务器上预先安装的固定发布命令，只传递 workflow run、artifact、提交 SHA、GitHub 外层 `artifactDigest` 与上传前 `releaseContentSha256`，不为自动部署开放公网 SSH。
+- Nginx 提供 HTTPS、根域/尾斜杠/旧 URL 301、安全响应头和静态文件服务；内容重定向配置与对应 payload 属于同一不可变 release。
 - Certbot（ACME 客户端）自动签发并续期覆盖 `axialmuse.com` 与 `www.axialmuse.com` 的证书。
 - canonical URL 为 `https://www.axialmuse.com/`，根域永久重定向到 `www`。
 
@@ -52,11 +52,12 @@
                               |
        production job -> 腾讯云 API -> TAT 固定发布命令
                               |
-                 校验、解包 releases/<sha>
+             校验、解包 releases/<sha>/{payload,config}
                               |
-DNSPod -> axialmuse.com -> Nginx -> /srv/axialmuse/current
+DNSPod -> axialmuse.com -> Nginx -> releases/<commit-sha>/payload
+                                      ^
                                       |
-                                      +-> releases/<commit-sha>
+                         current/config 仅在 reload 解析时选代
 DNSPod -> <project>.axialmuse.com -> Nginx -> /srv/axialmuse-experiences/<project>/current
 ```
 
@@ -94,13 +95,13 @@ M0 不额外建设公网 staging 子域名，避免增加服务器配置、证�
 
 | 组件 | 职责 | 约束 |
 |---|---|---|
-| Nginx | HTTPS、重定向、安全头、静态文件 | 使用系统包；不安装可视化服务器面板 |
+| Nginx | HTTPS、同版本 301、安全头、静态文件 | 使用系统包；不安装可视化服务器面板；请求期只引用精确 release SHA |
 | 系统下载、归档与哈希工具 | 从固定 GitHub 仓库读取 artifact 元数据，安全解包并校验摘要和文件清单 | 不处理源码、不调用 Node/npm，也不从源码 checkout 执行脚本；具体系统包在实施前核验 |
 | Certbot | 签发与续期 TLS 证书 | 使用 webroot HTTP-01；续期后验证并 reload Nginx |
 | TAT agent | 接收腾讯云固定运维命令 | 保持在线；命令和实例按 CAM 最小授权 |
 | logrotate / systemd | 日志轮转、服务与续期定时器 | 不引入第三方常驻监控 agent |
 
-当前仓库仍是迁移前 `public/` 骨架，目标 workflow、artifact 和服务器发布入口尚未实现。E-005 已固定目标链路：Docusaurus 只在 GitHub Actions 对 `main` 精确 SHA 构建默认 `build/`，生产服务器只接收、校验和提供该静态制品，不承担源码拉取、写作、编辑、依赖安装或构建。
+当前仓库仍是迁移前 `public/` 骨架，目标 workflow、artifact 和服务器发布入口尚未实现。E-005/E-014/E-015 已固定目标链路：Docusaurus 只在 GitHub Actions 构建默认 `build/`，`production-artifact` 对 `main` 精确 SHA 在 fresh runner 自包含重建、重验并封装，release 同时绑定静态 payload 与服务端 301 派生配置；生产服务器只接收、校验和提供该 release，不承担源码拉取、写作、编辑、依赖安装或构建。
 
 ### 目录契约
 
@@ -108,14 +109,25 @@ M0 不额外建设公网 staging 子域名，避免增加服务器配置、证�
 /srv/axialmuse/
 ├── staging/                  # artifact 下载与安全解包临时区，不由 Nginx 提供
 ├── releases/
-│   └── <40-char-sha>/        # 已核对 artifact 与逐文件清单的不可变静态产物
-└── current -> releases/<sha> # Nginx Web Root 指向的原子符号链接
+│   └── <40-char-sha>/        # 已核对 artifact 与逐文件清单的不可变 release
+│       ├── payload/          # Docusaurus build 静态文件，唯一 Web Root
+│       └── config/           # 不公开的同版本运行清单与 Nginx 配置
+│           ├── runtime-redirects.json
+│           ├── redirects.conf
+│           └── site-release.conf  # root-owned 脚本生成，只含精确 SHA 绝对引用
+└── current -> releases/<sha> # 只在配置解析/运维时选择活动 release，不作请求期 root
+
+/var/lib/axialmuse/
+└── url-exposure-ledger.json # root-owned 只追加生产 URL/301 暴露证据，非 Web Root
 ```
 
-- 发布先写入同文件系统的临时目录，校验成功后改名为 SHA 目录，再原子切换 `current`。
-- Actions artifact 的 `metadata/` 只在 `staging/` 验证；`releases/<sha>` 只安装已经校验的 `payload/` 内容，不能把 release metadata 暴露到 Web Root。
+- 发布先写入同文件系统的临时目录，校验成功后把 payload 与两个可部署派生文件改名为 SHA release；固定脚本再生成只引用该 release 绝对路径的 `site-release.conf`。
+- Actions artifact 的 `release.json` 和 `files.sha256` 只在 `staging/` 验证；已绑定摘要的运行清单与 `redirects.conf` 安装到非 Web Root `config/`，`payload/` 是唯一可公开目录。
+- 基础 Nginx 模板通过 `current/config/site-release.conf` 在 `nginx -t`/reload 解析时选择完整代；解析后的 `root` 与 redirect include 都含 40 位 SHA 绝对路径，因此旧 worker 不会随 `current` 改变而读取新 payload。
 - 发布目录不得被 Nginx 或发布流程就地覆盖。
-- 默认保留最近 5 个成功版本；当前版本和上一个版本不得被清理。
+- 默认保留最近 5 个成功版本；当前版本、上一兼容版本和仍被 graceful shutdown 旧 worker 使用的版本不得被清理。
+- `url-exposure-ledger.json` 不随 release 回滚或清理；它在 reload 前保存候选的全部规范 200 路径和新增或改指的 registered 边，按稳定 schema 原子追加并进入 root-owned 备份；`canonical-slash` 不单独入边账本，但它可能暴露的 canonical target 已由上述路由预写保护。丢失或损坏时停止发布，不用当前 release 或注册表静默重建。
+- 当前根域和 `www` 无 A/AAAA；首次上线可在 DNS 开放前、无活动 release 时经一次性上线授权创建空账本。一旦创建，缺失绝不得再被当作首次部署；既有站点迁移只能显式导入可审计的历史路径/重定向并人工复核。
 - 发布脚本与 Nginx 配置后续纳入仓库，安装到服务器的副本由 root 持有且不可被部署凭证修改。
 
 ### 配置即代码契约
@@ -124,10 +136,10 @@ M0-P 实施时按以下路径纳入仓库；表中路径是设计契约，文件
 
 | 计划路径 | 责任 |
 |---|---|
-| `ops/nginx/axialmuse.conf` | 精确 Host、跳转、Web Root、错误页和缓存规则 |
+| `ops/nginx/axialmuse.conf` | 精确 Host、ACME 边界、release include、兜底跳转、错误页和缓存规则 |
 | `ops/nginx/snippets/security-headers.conf` | CSP、HSTS 以外的安全响应头；HSTS 由启用步骤单独控制 |
-| `ops/deploy/deploy.sh` | 校验固定仓库的 workflow run、artifact、SHA、摘要、归档路径与文件清单，创建 release、冒烟、原子切换和失败回滚 |
-| `ops/deploy/rollback.sh` | 只切换到已存在且通过校验的上一 release |
+| `ops/deploy/deploy.sh` | 校验固定仓库的 workflow run、artifact、SHA、摘要、归档路径与文件清单，安装同版本 payload/config，用暴露账本检查历史 URL 闭包，生成精确 SHA 包装，执行隔离预检、`nginx -t`、reload、冒烟与受控恢复 |
+| `ops/deploy/rollback.sh` | 只整版切换到已存在、通过校验且使账本中历史 source/target 收敛到同一当前 200 终点的兼容 release |
 | `ops/systemd/` | 证书检查、服务器健康与维护 timer/service 模板 |
 | `ops/logrotate/` | Nginx error log 和认证日志保留策略模板 |
 | `.github/workflows/deploy-production.yml` | `main` 精确 SHA 到 TAT 的受限生产发布 |
@@ -162,14 +174,17 @@ M0-P 实施时按以下路径纳入仓库；表中路径是设计契约，文件
 
 ### GitHub 侧
 
-生产 workflow 仅由 `main` push 或人工 `workflow_dispatch` 触发，并满足：
+生产 workflow 仅由 canonical repository 的 `main` push，或明确选择 `refs/heads/main` 的人工 `workflow_dispatch` 触发，并满足：
 
-- 对精确 `GITHUB_SHA` 运行冻结安装、质量、类型检查、Docusaurus 静态构建与制品检查；只有主端点生成可发布制品。
-- Docusaurus 使用默认 `build/` 输出目录；按 CODE-015 将它封装为 `payload/`，并附精确提交标识与逐文件 SHA-256 `metadata/`，形成不可变 GitHub Actions artifact。
-- 使用 `production` environment 保存腾讯云部署凭证。
-- 使用 concurrency group，任一时刻只允许一个生产发布。
+- `website-quality`、`node-minimum`、`diagrams` 和 `supply-chain` 对精确 `GITHUB_SHA` 运行各自发布必需门禁；任一 failure、cancelled 或 skipped 都阻止最终 job，禁止 `always()` 或 `continue-on-error` 绕过。
+- 非 matrix `production-artifact` 在 fresh runner 对同一 SHA 完整 checkout，使用 E-010 为本次 job 新建且不复用的私有 npm cache 冻结安装并重新执行主端点完整 `quality`，实际生成并重验唯一 production `build/`；它不下载或复用 `website-quality` 的 job-local build，不配置 `actions/setup-node` cache、不调用 cache restore/save Action、不读取任何共享或复用的依赖/build cache，也不接受 preview 或本地旧目录 fallback。
+- 完整 `quality` 后立即按 CODE-015/CODE-019/CODE-020 将同一 `build/` 封装为 `payload/`，从同一 payload 路由和源注册表派生 `runtime-redirects.json`、`nginx/redirects.conf`，并附 source build tree、精确提交标识与逐文件 SHA-256 `metadata/`；独立复验后只上传一次精确 `dist/release/`。
+- Artifact 展示名含 SHA、run ID 和 run attempt；deploy 只消费 `production-artifact` 输出的唯一 artifact ID、外层 `artifactDigest`、上传前独立计算且不写入 artifact 的 `releaseContentSha256`、repository、run 和 SHA，不按名称、pattern、latest、URL 或跨 run 查询。
+- 四个 prerequisite 与 `production-artifact` 的 `GITHUB_TOKEN` 权限仅为 `contents: read`；`deploy-production` 仅为新鲜度和 artifact 元数据复核使用 `contents: read`、`actions: read`，未列权限全部为 `none`，禁止 write、OIDC/attestation scope 和 producer Secret。
+- 使用 `production` environment 保存腾讯云部署凭证。`deploy-production` 在引用 CAM Secret 或调用腾讯云 API 前，先用只读 GitHub API 证明 canonical `refs/heads/main` 仍等于本次 SHA，并复核当前 run/artifact/head SHA/digest；失败立即停止。普通人工重跑不能发布旧 SHA，历史恢复必须使用另行授权流程。
+- 使用 concurrency group，任一时刻只允许一个生产发布；GitHub 不保证等待顺序，因此 concurrency 不能替代上述 main HEAD 新鲜度检查。
 - 将当前 `GITHUB_SHA` 作为唯一发布版本，不发布浮动的“最新 main”。
-- 在调用 TAT 前核对 artifact 所属 workflow run、`head_sha` 与上传摘要，只向固定 command 传递 run/artifact 标识、SHA 和预期摘要，不传递任意下载 URL、shell 片段或路径。
+- 在调用 TAT 前核对 artifact 所属 workflow run、`head_sha` 与外层上传摘要，只向固定 command 分别传递 run/artifact 标识、SHA、`artifactDigest` 和 `releaseContentSha256`，不传递任意下载 URL、shell 片段或路径。
 - TAT 返回成功后，从公网验证 canonical 首页和关键资源。
 - 部署失败时 workflow 失败，不把失败提交标记为已发布。
 
@@ -177,15 +192,19 @@ GitHub environment 可以限制部署分支、保护 secrets 并控制并发。�
 
 ### TAT 与服务器侧
 
-1. GitHub Actions 使用 `InvokeCommand` 请求执行已开启自定义参数的 `axialmuse-deploy` TAT command，并传入 workflow run ID、artifact ID、40 位提交 SHA 与预期 SHA-256 摘要。
+1. GitHub Actions 使用 `InvokeCommand` 请求执行已开启自定义参数的 `axialmuse-deploy` TAT command，并传入且只传入 `workflowRunId`、`artifactId`、40 位 `commitSha`、GitHub 上传输出的 `artifactDigest` 与上传前 job output `releaseContentSha256`；两个摘要均为不带算法前缀的 64 位小写十六进制且职责不同，不能共用字段。
 2. root 持有的发布入口严格校验参数形态，并只访问脚本内固定的 GitHub owner/repository；不接受任意 URL、shell 片段、分支名或文件路径。
-3. 服务器读取 artifact 元数据，核对 workflow run、artifact ID、`head_sha`、未过期状态和预期摘要；公开仓库不带凭证，私有仓库只使用经 OD-009 核验和单独配置的 `Actions: read` 凭证。
-4. artifact 下载到 `staging/` 后，先拒绝绝对路径、父目录逃逸、越界链接和非预期归档结构，再核对外层摘要与内部逐文件 SHA-256 清单。
-5. 全部校验通过后，只把 `payload/` 安装到同文件系统的临时 release，校验入口、关键资源、文件权限和目录大小，再改名为 `releases/<sha>`；`metadata/` 留在 staging 验证边界，服务器不拉源码、不运行 Node/npm，也不从源码 checkout 执行脚本。
-6. 对候选 release 完成本机静态冒烟后原子切换 `current`；随后经 Nginx 再次本机检查，失败即切回原 symlink。
-7. 返回 workflow run、artifact、部署 SHA、摘要、前一版本和验证结果，GitHub Actions 再做公网冒烟检查。
+3. 服务器读取 artifact 元数据，核对 workflow run、artifact ID、`head_sha` 和未过期状态；REST `digest` 必须精确等于 ASCII `sha256:` 拼接 TAT 的裸 `artifactDigest`，缺失、其他算法、重复前缀、大小写或长度异常均失败，不做宽松归一化。公开仓库不带凭证，私有仓库只使用经 OD-009 核验和单独配置的 `Actions: read` 凭证。
+4. artifact 下载到 `staging/` 后，先对下载的外层字节计算裸 SHA-256 hex 并精确核对 `artifactDigest`，再拒绝绝对路径、父目录逃逸、越界链接和非预期归档结构；安全解包后由 root-owned 服务器 verifier 按 CODE-020 的稳定 wire format 从全部 release 普通文件独立重算并核对 artifact 外传入的 `releaseContentSha256`，随后才核对内部逐文件 SHA-256 清单、源注册表/公开路由摘要、运行清单、Nginx 配置和规则数。服务器 verifier 与仓库 Node 实现是跨信任边界的两个实现，接线前必须通过 CODE-020 的同一组 golden vectors 和负面路径 fixture；服务器不得运行/导入仓库脚本，也不得用 artifact 内自报字段替代任一 TAT 期望值。
+5. 全部校验通过后，把 `payload/` 与两个已绑定的可部署派生文件安装到同文件系统临时 release 的 `payload/`、`config/`，校验入口、关键资源、301 source/target、文件权限和目录大小；root-owned 固定脚本只根据已验证 40 位 SHA 生成绝对 payload root 与同 SHA redirect include，不解析源码注册表，也不运行仓库脚本、Node/npm 或构建。
+6. 候选在公开激活前用隔离的本机 Nginx 监听地址完成静态检查、全部 exact 301、唯一 `Location`、查询保留和目标 200 行为验证，不只运行 `nginx -t`。
+7. 部署排他锁内读取 root-owned 暴露账本，对候选定义最多一步的路径解析：历史规范 200 路径必须仍可解析，每条历史 301 边的 source 与历史 target 必须收敛到同一当前 200。只有目标文件而没有历史 source 规则仍判定不兼容。
+8. 候选的全部规范 200 路径，以及新增或改指后可能暴露的 registered 301 边，先并入候选账本；`canonical-slash` 不单独写入边账本，但其 canonical target 必须作为候选规范路由预写。激活前必须选出一个也满足更新后账本的 fallback release。不存在时默认拒绝发布；只有 production environment 的单独授权明确接受 forward-only，才允许在没有自动回滚的情况下继续。首次发布新 canonical URL 时，旧 release 通常没有该 target，因此通常属于此类 forward-only 激活。
+9. 先以临时文件、flush 和原子 rename 持久化候选账本，再原子切换 `current`、运行 `nginx -t` 并 graceful reload。旧 worker 继续使用旧 SHA 的 payload/规则，新 worker 同时使用候选 SHA 的 payload/规则；账本预写后的失败不得删除记录来猜测规则尚未暴露。
+10. 通过本机与公网冒烟后，核对预写账本摘要并完成 root-owned 备份和部署审计记录，随后才标记 deployment 成功；不得把候选规范路由延迟到冒烟后追加。任一验证或账本步骤失败，只能恢复预先选定的兼容 fallback；forward-only 发布则保持历史闭包并向前修复，不自动切回不兼容 release。
+11. 返回 workflow run、artifact、部署 SHA、`artifactDigest`、`releaseContentSha256`、规则摘要、账本前后摘要、fallback/forward-only 结论和验证结果。
 
-TAT 命令输出不得包含 SecretKey、artifact 读取凭证、证书私钥或腾讯云账号资料。TAT 执行历史不是长期发布账本；GitHub workflow run、artifact 元数据、deployment 与项目进度共同保留正式记录。
+TAT 命令输出不得包含 SecretKey、artifact 读取凭证、证书私钥或腾讯云账号资料。TAT 执行历史不是 URL 暴露账本；`/var/lib/axialmuse/url-exposure-ledger.json` 保存服务器强制兼容的只追加事实，GitHub workflow run、artifact 元数据、deployment 与项目进度另行保留发布审计记录。
 
 TAT `InvokeCommand` 支持对已启用参数的固定 command 传入 JSON 编码参数，并返回 invocation ID；这使部署凭证只需触发既有命令，不需要 `RunCommand` 任意脚本权限。参考：[TAT 触发命令 API](https://cloud.tencent.com/document/api/1340/52678)。
 
@@ -222,7 +241,9 @@ TAT `InvokeCommand` 支持对已启用参数的固定 command 传入 JSON 编码
 - `https://<project-slug>.axialmuse.com/*` 由该项目精确 `server_name` 提供独立体验内容。
 - 未知 `Host` 不提供站点内容。
 
-所有跳转保留路径和查询参数。主站 Nginx Web Root 只读指向 `/srv/axialmuse/current`；每个项目只读指向 `/srv/axialmuse-experiences/<project-slug>/current`。所有站点关闭目录列表并定义独立错误页，不从 Host 动态拼接磁盘路径。
+E-014 的 release 配置还在根域和 `www` 的 HTTP/HTTPS 已知主机中加载相同 exact-location 规则：登记旧路径及其无斜杠别名直接替换为最终 canonical 路径，活动页面无斜杠路径直接补成规范路径，全部固定返回 301 并保留查询参数。通用 scheme/host canonical 规则只写在兜底 `location /`，不能使用会在 location 搜索前执行的 server 级 `return`；因此 exact 旧路径可以一步到 `https://www.axialmuse.com<最终路径>`。ACME challenge 仍由专用 location 优先处理，重定向 schema 禁止 `/.well-known/` source。
+
+主站请求期 Web Root 是活动 `site-release.conf` 中带精确 40 位 SHA 的 `/srv/axialmuse/releases/<sha>/payload`，同一配置只 include `/srv/axialmuse/releases/<sha>/config/redirects.conf`；`current` 仅在 Nginx 解析配置时选择版本。项目体验继续只读指向各自独立 release 边界。所有站点关闭目录列表并定义独立错误页，不从 Host 动态拼接磁盘路径。scheme/host 兜底保持当前规范化路径和查询；内容与尾斜杠规则按运行清单替换路径并保留查询，fragment 不会发送到服务器。
 
 Certbot challenge webroot 独立于 `/srv/axialmuse/releases` 和 `current`，不允许 Certbot 写入、覆盖或修改不可变站点 release；确切目录、权限和 Nginx location 在部署配置实施前核验并落盘。
 
@@ -288,12 +309,12 @@ Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩
 3. 创建系统盘快照；确认实例套餐支持快照，并记录回滚影响。
 4. 加固腾讯云账号、轻量防火墙、SSH 和系统更新策略。
 5. 安装并验证 Nginx、Certbot、TAT agent 及目标发布所需的系统下载、归档和哈希工具；生产不安装 Node/npm，也不为主站准备源码 clone。
-6. 创建生产目录、root-owned 发布脚本和固定 TAT command；OD-009 核验仓库可见性后，公开仓库不配置 artifact 凭证，私有仓库另行授权配置单仓库 `Actions: read` 凭证。
-7. 配置 GitHub `production` environment、最小 CAM 凭证与 deployment workflow。
-8. 先通过服务器公网 IP 的受控测试或临时 hosts 验证 Nginx，不提前公开未完成页面。
+6. 创建生产目录、root-owned 发布/回滚脚本、只追加 URL 暴露账本和固定 TAT command；部署脚本必须整版安装 payload/config、生成精确 SHA 包装，并拒绝历史 source/target 不再收敛到同一 200 的回滚。OD-009 核验仓库可见性后，公开仓库不配置 artifact 凭证，私有仓库另行授权配置单仓库 `Actions: read` 凭证。
+7. 配置通过准入并固定 commit SHA 的 GitHub Actions、四个 prerequisite、E-015 `production-artifact`、`production` environment、最小 CAM 凭证与 deployment workflow；最终 job 不使用 environment/Secret，只有 deploy job 可以读取 CAM 凭证。
+8. 先通过服务器公网 IP 的受控测试或临时 hosts 验证 Nginx；使用最小 release 覆盖 exact 301、查询保留、目标 200、ACME 和未知 Host，不提前公开未完成页面。
 9. 保存 DNS 旧值，添加或修改 `@` 与 `www` A 记录。
-10. 签发证书，验证四种 HTTP/HTTPS 主机名行为和未知 Host 拒绝策略。
-11. 从 `main` 走一轮自动发布、失败回滚和上一个版本恢复演练。
+10. 签发证书，验证四种 HTTP/HTTPS 主机名行为、同版本旧路径/尾斜杠 301 和未知 Host 拒绝策略。
+11. 从 `main` 走两轮自动发布；先演练无新增永久边的兼容回滚，再证明“有历史 target 但缺 source 规则”的旧 release 会被拒绝，并分别验证有兼容 fallback 和经授权 forward-only 的恢复语义。
 12. 发布 canonical、`robots.txt`、`sitemap.xml`、ICP 页脚和安全响应头。
 13. 启用 DNSSEC，完成桌面端、移动端、公共解析、TLS 和生产冒烟验证。
 14. 连续观察至少 24 小时，更新生产清单；开站后按时完成公安联网备案。
@@ -323,8 +344,9 @@ Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩
 ### 发布与内容
 
 - 精确 `main` SHA 的冻结安装、质量、类型检查、Docusaurus build 和制品门禁通过；生产 release 的 workflow run、artifact ID、`head_sha`、摘要、内部清单、SHA 与 GitHub deployment 一致。
+- `runtime-redirects.json`、`redirects.conf`、源注册表、公开路由集合和 payload 摘要属于同一 release；旧 URL 及其无斜杠别名为单跳 301，查询保留，目标返回 200，source 没有静态 HTML。
 - 服务器没有主站源码 clone、Node/npm 或构建步骤，只从固定 GitHub 仓库接收已验证 artifact。
-- 连续两次发布和一次回滚均不产生半更新状态。
+- 连续两次发布和一次兼容回滚均不产生 payload/规则半更新；暴露账本只追加且摘要可追溯，缺少历史 source 规则、让历史 target 失效或不再收敛到同一 200 的旧 release 不能被选为回滚目标。
 - 每个项目可在不修改主站 symlink 的情况下独立发布与回滚。
 - 桌面端和移动端实际截图验证通过。
 - 生产允许索引，页面包含正确 canonical、站点地图与备案页脚。
@@ -334,7 +356,7 @@ Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩
 
 ### 错误发布
 
-发布脚本保留前一版本 symlink。公网冒烟失败时自动切回；人工回滚只能选择 `releases/` 中已验证 SHA，并同步在 GitHub deployment 与项目进度记录原因。
+发布脚本保留前一兼容版本，但“兼容”必须对暴露账本做完整路径解析，不是只检查目标文件。候选失败时，只能整版恢复使每个历史 published route 仍可解析、且每条历史边的 source/target 收敛到同一当前 200 的已验证 SHA；恢复后重新执行 `nginx -t`、graceful reload 和 HTTP 冒烟。候选新增 canonical 路径或新增、改指 registered 301 边后没有这样的 fallback 时默认不激活；如果经单独生产授权选择 forward-only，则暴露账本预写后不再删除记录或回到不兼容旧 release，只能从 Git 产生保持历史闭包的向前恢复 release。GitHub deployment 与项目进度记录失败原因、账本前后摘要、fallback/forward-only 结论和恢复方式。
 
 ### Nginx 或证书故障
 
@@ -342,6 +364,6 @@ Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩
 
 ### 服务器故障
 
-GitHub 保存源码、内容、workflow 记录和有效期内的 artifact，服务器只保存已验证 release。恢复顺序为：新建或恢复轻量实例、应用受控配置、重新签发证书、重新获取对应成功 workflow 的已验证 artifact 并发布、切换 DNS；artifact 已过期时只能由 GitHub Actions 对同一精确 SHA 重新构建和验证，不能改由生产服务器构建。M0 目标 RTO 为 4 小时，RPO 为 GitHub 最后一个成功生产提交。
+GitHub 保存源码、内容、workflow 记录和有效期内的 artifact，服务器只保存已验证 release。恢复顺序为：新建或恢复轻量实例、应用受控配置、重新签发证书、重新获取对应成功 workflow 的已验证 artifact 并发布、切换 DNS。artifact 已过期且对应 SHA 仍是 canonical `main` HEAD 时，只能由常规 GitHub Actions 对该 SHA 重新构建和验证，不能改由生产服务器构建；此路径和仍有有效 artifact 的路径以 4 小时为 M0 目标 RTO，RPO 为最近一个仍可按上述路径验证的成功生产提交。若 artifact 已过期且最后成功生产 SHA 已成为历史提交，E-015 会拒绝普通 rerun；该灾难恢复场景必须等待另行授权且尚未设计/实施的历史恢复流程，当前不承诺 4 小时 RTO，也不得为满足旧 RPO 绕过 main HEAD 门禁。
 
 腾讯云快照可用于系统盘故障和错误操作回滚，但销毁实例会同时删除其快照，因此快照不能替代 Git 与配置真相源。参考：[管理快照](https://cloud.tencent.com/document/product/1207/48546/)。
