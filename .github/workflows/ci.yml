@@ -25,7 +25,7 @@ jobs:
           node-version: "22"
 
       - name: Quality gates
-        run: npm run quality
+        run: node scripts/quality/run-quality.mjs
 
   diagrams:
     name: Diagram compile check
@@ -56,6 +56,6 @@ jobs:
           echo "${PUML_SHA256}  plantuml.jar" | sha256sum -c -
 
       - name: Check diagrams compile
-        run: npm run check:diagrams
+        run: node scripts/quality/check-diagrams.mjs
         env:
           PUML_JAR: ${{ github.workspace }}/plantuml.jar

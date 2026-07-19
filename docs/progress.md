@@ -4,6 +4,25 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-19 — 完成 #9 npm 隔离实现并前移版本契约
+
+- **主题**：按 Roadmap 串行实现 I-01 / #9；先完成零依赖 npm 隔离入口与反例门禁，再处理公开 CLI 被后置版本文件阻塞的问题。
+- **范围决定**：用户确认方案 A。`.nvmrc`、`package.json#engines.node` 和主/最低 Node/npm 双端点离线真实 CLI 验收从 #22 前移到 #9；#21 把该版本契约作为依赖准入输入，#22 只继续负责 Docusaurus scaffold、严格 TypeScript、模块边界、typecheck 与 build。该调整不改变 D-067/D-073 已确认的版本值或现有 Issue 依赖图。
+- **授权边界**：获准更新仓库文档与 GitHub #9/#21/#22，并仅从 Node.js 官方站点把两套 Linux x64 发行归档和校验文件下载到 `/tmp`，校验后离线验收并删除；完整验收和 Issue 关闭后，用户另行授权把本项形成独立 Git 提交。未授权 npm registry、依赖安装、系统级 Node 安装或 Git 推送。
+- **主要不变量**：只有由当前 Node 发行版前缀可信派生、且与 `.nvmrc`/`engines.node` 角色及 D-073 随附版本一致的 npm CLI，才能在项目配置、有效配置、空 cache、封闭环境、manifest/lock 来源和 profile 预检全部通过后启动；违反时以稳定 `NPM_*` code 失败，错误不回显原始凭据或敏感配置。
+- **完成内容**：
+  - 创建 `.nvmrc`、封闭的 `package.json#engines.node` 和九键 `.npmrc`；Node patch 只从 `.nvmrc` 与 `engines` 下界派生，代码只保存 D-073 两个角色的随附 npm 版本，避免第三份 Node patch 真相源。
+  - 创建 `scripts/quality/run-isolated-npm.mjs`、`lib/supply-chain/` 隔离实现与五个封闭 profile；隔离 HOME、user/global config、cache、日志、临时目录、PATH、proxy/CA/凭据环境，校验 CLI 信任树、有效配置、registry-only manifest/lock v3，并让 `resolve-lock` 在排他锁与 staging 校验后原子发布候选。
+  - 将 JS 语法、隔离门禁、文档、契约、Secret、静态入口和 E-010 测试接入统一零依赖质量负载；pre-commit 使用隔离入口，现有 Node 22 CI 暂时直接运行同一零 npm 聚合负载。操作文档、workflow、hook 与 package script 的包管理器旁路由静态门禁覆盖。
+  - `tests/build/run-isolated-npm.test.mjs` 覆盖正常路径以及配置污染、来源漂移、CLI/path/tree 逃逸、环境泄漏、profile 越权、workflow/job 代偿、操作文档旁路、lock 竞争/回滚和输入漂移反例；DocRestore 与 Project Scaffold 自身命令明确不属于本站操作入口扫描范围。
+- **验收证据**：
+  - 官方 `SHASUMS256.txt` 校验通过：主端点归档 SHA-256 `55aa7153f9d88f28d765fcdad5ae6945b5c0f98a36881703817e4c450fa76742`，最低端点归档 SHA-256 `d804845d34eddc21dc1092b519d643ef40b1f58ec5dec5c22b1f4bd8fabde6c9`。
+  - 主端点 `v24.18.0 / npm 11.16.0` 与最低端点 `v24.16.0 / npm 11.13.0` 分别执行 `node scripts/quality/run-isolated-npm.mjs run-script quality`，均退出 0、36/36 测试通过，并输出 `registry=official, cache=fresh, config=isolated`。
+  - 当前工作区 Node 22 执行同一公开入口时退出 1，并在 npm 启动前返回 `[NPM_RUNTIME_NODE]`；独立 `node --test tests/build/run-isolated-npm.test.mjs` 为 36/36，`git diff --check` 通过。
+  - 两套官方归档、校验文件、测试临时目录和 Issue 编辑临时文件均已从 `/tmp` 删除；未访问 npm registry、未安装依赖、未创建 lockfile、未修改系统 Node。
+- **下游交接**：#21 必须直接消费 `.nvmrc`、`engines.node`、`.npmrc`、`NPM_VERSIONS_BY_ROLE` 与现有 profile/error 契约；首次联网仍需单独授权，只允许主端点经 `resolve-lock` 生成候选，再按 D-077 完成 tarball、许可证、脚本、漏洞、SBOM/NOTICE 和人工准入，最低端点只读同一 lockfile。下游不得复制 Node patch、从 PATH 启动 npm、恢复共享配置/cache、切换 registry/包管理器或把 E-010 单项通过解释为依赖准入完成。
+- **残余边界**：仓库内 `resolve-lock` 执行者通过互斥锁串行化；对不遵守该锁的外部写入，发布器会在进入发布和最终 rename 前核对初始 lock 摘要并失败关闭，但标准文件系统原语不能消除最后一次摘要读取与 rename 之间的纳秒级竞争窗口，因此不把它表述为任意外部写入者下的线性一致性。静态旁路扫描覆盖仓库声明式操作入口，但不是任意动态命令执行的安全沙箱。E-011 确定性 SPDX、真实依赖图、冻结安装、Docusaurus/TypeScript、Node 24 Ubuntu CI 拓扑和 Action pinning 尚未实现，由后续 Roadmap 任务负责；#9 已关闭并由当前独立提交收口，#10 尚未启动。本轮未推送或发布。
+
 ## 2026-07-19 — 将 M0 设计拆解为可执行父子 Issue Roadmap
 
 - **主题**：按 `codex-rules/rules/issue-task-rules.md` 把已确认 M0 设计拆为一个总父任务、五个阶段父任务和单一不变量子任务；将现有 open issues 纳入真实依赖链，避免编码时重新解释范围或等待最终端到端验收才补证据。

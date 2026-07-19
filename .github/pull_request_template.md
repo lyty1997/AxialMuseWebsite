@@ -13,10 +13,9 @@
 
 ## 验证
 
-- [ ] `npm run quality`
+- [ ] `node scripts/quality/run-isolated-npm.mjs run-script quality`
 - [ ] UI 改动已完成实际渲染或截图验证。
 
 ## 备注
 
 - 
-

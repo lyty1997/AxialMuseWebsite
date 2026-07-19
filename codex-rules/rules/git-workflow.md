@@ -19,4 +19,4 @@
 ## CI
 
 - push 到 `main`/`dev` 或合并 PR 后必须观察 `.github/workflows/ci.yml`：PR 使用 `gh pr checks <PR号> --watch`，分支运行使用 `gh run watch`。
-- CI 失败时定位原因并修复；在获准的 Linux 执行环境重跑 `npm run quality`，重新推送并继续观察。CI 红色或状态未知时不得报告发布流程完成。
+- CI 失败时定位原因并修复；在获准的 Linux 执行环境重跑 `node scripts/quality/run-isolated-npm.mjs run-script quality`，重新推送并继续观察。CI 红色或状态未知时不得报告发布流程完成。

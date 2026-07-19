@@ -10,6 +10,8 @@ node_modules/
 # Build outputs
 dist/
 build/
+!tests/build/
+!tests/build/**
 .next/
 out/
 coverage/
@@ -29,4 +31,3 @@ yarn-error.log*
 
 # Claude Code 会话 worktree（本地产物，不进版本库）
 .claude/worktrees/
-

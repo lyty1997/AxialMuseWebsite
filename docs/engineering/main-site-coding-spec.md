@@ -1,15 +1,15 @@
 # 主站编码规范 Spec
 
 状态：active
-完整度：M0-design-closed（#5 至 #14 实现与 fixture 待跟踪）
-最近更新：2026-07-18
+完整度：M0-design-closed（#9 的 E-010 已闭环；#5 至 #8、#10 至 #14 继续跟踪）
+最近更新：2026-07-19
 适用范围：本站仓库内的主站页面与组件、Docusaurus 构建期适配、作者工具、质量脚本，以及这些代码之间的依赖边界
 
 ## 目的
 
 本文是从上层设计进入实现的工程入口。它只拥有“代码如何组织、依赖和验证”的规则，不复制内容字段、页面结果、基础设施或发布流程的完整语义。
 
-2026-07-18 审查确认的实施契约矛盾由 GitHub Issues #5 至 #14 跟踪。E-006 至 E-015 已补齐内容所有权、主预览、发布态素材、草稿预览、npm 隔离、SPDX 确定化、Node ESM 测试、完整 Git 历史门禁、同版本服务端 301 和 production job 字节所有权；对应 Issue 继续跟踪实现、fixture 与真实验收，不再代表活动设计缺口。D-078 的委托和已确认上层方向继续有效，但不能代替依赖准入、实现与验证。
+2026-07-18 审查确认的实施契约矛盾由 GitHub Issues #5 至 #14 跟踪。E-006 至 E-015 已补齐内容所有权、主预览、发布态素材、草稿预览、npm 隔离、SPDX 确定化、Node ESM 测试、完整 Git 历史门禁、同版本服务端 301 和 production job 字节所有权；#9 已完成 E-010 实现、fixture 与真实双端点验收，#5 至 #8、#10 至 #14 继续跟踪其余实现，不再代表活动设计缺口。D-078 的委托和已确认上层方向继续有效，但不能代替依赖准入、实现与验证。
 
 业务与架构行为仍直接引用原真相源及其 D-xxx 决策编号：
 
@@ -44,26 +44,26 @@
 | D-074 | Docusaurus 目标源码使用严格 TypeScript，类型检查与静态构建相互独立 | `tsc --noEmit` 与 Docusaurus build | 目标已确认，依赖、配置与 CI 接线尚未实现 |
 | D-075 | 标准入口目录、跨层公共入口、导出与首版路径别名边界 | 源码结构、导入图与模块契约检查 | 目标已确认，目录与自动检查尚未实现 |
 | D-076、D-079 | 首轮 React/MDX/TypeScript、Node 测试类型候选直接依赖、官方根 `tsconfig` 继承和本站收紧规则 | 依赖清单、锁文件、生产/测试 TypeScript program 与配置漂移检查 | 候选目标已确认，真实依赖准入、配置和安装尚未实现 |
-| D-077、E-010、E-011 | 官方 registry-only、启动前 npm 隔离、无脚本 tarball 证据、许可证与脚本处置、确定性 SPDX/NOTICE、漏洞阈值、双端点冻结安装和依赖事实防漂移 | 候选解析、隔离配置、供应链证据、人工准入、派生制品、显式审计与双端点检查 | npm 隔离与 SPDX 规范化设计已收口；策略、记录、真实候选图和 CI 接线尚未实现 |
+| D-077、E-010、E-011 | 官方 registry-only、启动前 npm 隔离、无脚本 tarball 证据、许可证与脚本处置、确定性 SPDX/NOTICE、漏洞阈值、双端点冻结安装和依赖事实防漂移 | 候选解析、隔离配置、供应链证据、人工准入、派生制品、显式审计与双端点检查 | E-010 隔离入口、版本契约和离线双端点 CLI 已实现；E-011、策略、记录、真实候选图和目标 CI 拓扑尚未实现 |
 | D-030 至 D-034、D-058、E-002、E-004、E-014 | 路由配置、文档站布局、主题与响应式适配、同版本服务端 301 | 路由制品、Nginx 派生配置、发布冒烟与真实浏览器 | M0 路由与 301 契约已固定，实现与浏览器 fit-gap 尚未完成 |
 | D-035 至 D-050、D-078、E-001、E-003、E-006、E-007 | 领域 schema、注册表、作者与分类引用、项目主预览、日期、可见性和 SEO 页面适配 | 领域契约、媒体字节、构建制品与浏览器 head | 项目叙事和媒体 schema 已收口；注册表、媒体校验和元数据组件尚未实现 |
 | D-053、E-008 | 按构建模式生成临时静态白名单树，并从生产制品排除未发布素材 | 源路径、白名单、制品字节和泄漏 fixture | 发布态素材隔离已收口；受控构建入口和检查尚未实现 |
 | D-072、E-009 | 在 Linux 对精确远端提交构建含 draft/noindex 的静态候选，并原子切换局域网预览 | Docusaurus 3.10.2 fixture、候选制品、失败保留与真实浏览器 | 预览设计已收口；当前脚本仍直接服务 `public/`，尚未实现 |
 | D-054 至 D-060、D-078、D-079、E-006、E-012 | 单一 docs 实例、唯一判型、校验先行、只读内存投影与公共 API | 临时编译后的 Node ESM 纯逻辑测试和 Docusaurus 集成测试 | Node ESM 测试契约已收口；依赖准入、runner、fixture 与集成测试尚未实现 |
 | D-061 至 D-064、D-078、E-013 | 内容根、源码布局、稳定身份、路径、源码相对链接、日期索引、侧栏与 HEAD 可达历史 | 路径、身份、历史 DAG、链接、索引和侧栏契约测试 | 完整 Git 历史边界已收口；检查器、作者集成、fixture 与 CI checkout 尚未实现 |
-| D-065 至 D-067、D-072、D-078 | 作者显式创建入口、UUIDv7 后端、版本治理和 Linux/Ubuntu 执行边界 | 作者工具、版本契约和 Ubuntu CI | 命令接口已固定，工具与 Node 24 迁移尚未实现 |
-| D-052、D-053、D-073、D-077、D-079、E-010、E-011、E-014、E-015 | 依赖准入、锁文件、隔离冻结安装、确定性供应链证据、质量、production job 字节闭包和带 301 配置的发布必需门禁 | 依赖、制品、浏览器与发布检查 | Node 类型候选、隔离、确定性、301 和自包含重建协议已确认；策略接口、记录、真实候选图和 CI 接线尚未完成 |
+| D-065 至 D-067、D-072、D-078 | 作者显式创建入口、UUIDv7 后端、版本治理和 Linux/Ubuntu 执行边界 | 作者工具、版本契约和 Ubuntu CI | Node 24 版本文件与 E-010 端点校验已实现；作者工具和目标 Ubuntu CI 拓扑尚未实现 |
+| D-052、D-053、D-073、D-077、D-079、E-010、E-011、E-014、E-015 | 依赖准入、锁文件、隔离冻结安装、确定性供应链证据、质量、production job 字节闭包和带 301 配置的发布必需门禁 | 依赖、制品、浏览器与发布检查 | E-010 隔离入口已实现；Node 类型候选、确定性证据、301、自包含重建、真实候选图和目标 CI 接线尚未完成 |
 | D-005 至 D-009、E-014、E-015 及生产发布设计 | canonical/隐私边界、最小权限发布和 payload/301 同版本 release 切换 | 真实制品与生产冒烟 | 服务端 301 与制品字节所有权已收口，服务器现场核验尚未完成 |
 | D-015、D-016 及项目体验架构 | 项目展示不得绕过体验状态与独立部署边界 | 注册表、页面制品与发布权限检查 | 当前项目体验不启用 |
 
 ## 当前实现画像
 
-下列是 2026-07-18 可从仓库查证的迁移事实，不代表目标工程已经就绪：
+下列是 2026-07-19 可从仓库查证的迁移事实，不代表目标工程已经就绪：
 
 - `package.json` 声明 ESM，现有质量脚本是 `.mjs`，只使用 Node.js 内置能力；D-074 不要求迁移这些脚本。仓库尚未安装 Docusaurus 或其他 npm 依赖，也没有 lockfile。
-- `public/` 仍是迁移前手写静态入口；`site-content/`、`.nvmrc`、Docusaurus 配置和目标测试目录尚不存在。
-- `npm run check:js` 只对 `package.json` 明列的现有质量脚本执行语法检查，不是全仓 lint。
-- `npm run check:docs` 检查 Markdown 内链和 `docs/README.md` 索引；`check:contracts` 检查现有契约词规则；`check:secrets` 是有限扩展名与有限模式的启发式扫描，不等于全仓 Secret 证明。
+- `public/` 仍是迁移前手写静态入口；`site-content/` 和 Docusaurus 配置尚不存在。`.nvmrc`、封闭 `engines.node`、E-010 隔离入口及 `tests/build/run-isolated-npm.test.mjs` 已建立。
+- `node scripts/quality/check-javascript.mjs` 只对当前仓库内明列范围执行语法检查，不是全仓 lint。
+- `node scripts/quality/check-markdown.mjs` 检查 Markdown 内链和 `docs/README.md` 索引；`check-contracts.mjs` 检查现有契约词规则；`check-secrets.mjs` 是有限扩展名与有限模式的启发式扫描，不等于全仓 Secret 证明。
 - `check:site` 只验证迁移前 `site-checks.json` 与手写入口；配置或入口缺失时当前会成功跳过，它尚不识别 Docusaurus 输入。
 - PlantUML CI 只证明 Markdown 中的源码可以编译，不证明已提交 SVG 与源码同步；刷新 SVG 当前仍需生成命令和人工 diff 审查。
 - `.editorconfig` 定义默认 UTF-8、LF、2 空格和末尾换行；`.gitattributes` 对 PowerShell 另有 CRLF 规则，但 EditorConfig 尚无对应例外。两者统一前不得把 PowerShell 文件格式表述为自动一致。
@@ -235,9 +235,9 @@
 ### CODE-012 质量入口与评审
 
 - 修改后运行与风险相称且当前可用的本地门禁；不得把当前有限扫描表述为已经覆盖未来 `.ts`、`.tsx`、`.mdx`、样式、Docusaurus 制品或全部 Secret 形态。
-- Docusaurus 目标源码必须独立运行 `tsc --noEmit`，Docusaurus build 必须独立验证框架加载和静态制品；两项都是发布必需门禁，任一成功都不能替代另一项。当前仓库尚未接入这两个目标门禁，`npm run quality` 通过不构成完成证据。
+- Docusaurus 目标源码必须独立运行 `tsc --noEmit`，Docusaurus build 必须独立验证框架加载和静态制品；两项都是发布必需门禁，任一成功都不能替代另一项。当前仓库尚未接入这两个目标门禁，现有 E-010 隔离 `quality` 负载通过不构成完成证据。
 - 目标质量门禁必须通过 `scripts/quality/check-module-boundaries.mjs` 失败关闭验证 D-075 的物理层边界、禁止的跨层深层导入、宽泛 `export *` 和未批准自定义路径别名。首版不提供通用忽略开关；框架入口的默认导出和官方别名例外在检查器中按精确路径编码并由 fixture 覆盖。当前仓库尚无该脚本，实施前不能宣称已覆盖。
-- 目标质量门禁还必须失败关闭执行 D-077 的候选来源、tarball/integrity、许可证与脚本、SPDX/NOTICE 漂移、显式 audit、双端点冻结安装和 manifest/lock 前后不变检查。当前 `npm run quality` 尚不包含这些能力，其通过不构成供应链准入证据。
+- 目标质量门禁还必须失败关闭执行 D-077 的候选来源、tarball/integrity、许可证与脚本、SPDX/NOTICE 漂移、显式 audit、双端点冻结安装和 manifest/lock 前后不变检查。当前 E-010 隔离 `quality` 负载只实现启动前边界与离线 CLI 验收，不包含这些后续能力，其通过不构成供应链准入证据。
 - workflow 与 package script 静态门禁必须拒绝在候选解析、ci、audit、SBOM 和 CI 质量路径中直接调用 npm 绕过 E-010。`run-script` 只允许 CODE-016 的受控质量/构建名称，显式作者命令继续遵守 D-065 的独立本地入口，但不得在其内部解析或安装依赖。
 - 新增一种源码或制品类型时，必须在同一实施阶段把它纳入获批的 lint、类型检查、测试、Secret、许可证和制品检查；D-074 已固定 `tsc --noEmit` 与 Docusaurus build，D-077 已固定首次供应链准入工具组合和阈值。D-078 允许 Agent 根据真实用途选择其余工具和 CI job 编排，但任何新增包、Action 或联网行为仍须先通过既有供应链与外部操作门禁。
 - 合入和发布以前必须以 Ubuntu CI required checks 为准；本地 hook 只提供快速反馈。
@@ -259,7 +259,7 @@
 
 ### CODE-014 作者命令
 
-- 新文章入口固定为 `npm run content:new -- --source-name <name> --title <text> --slug </writing/...> --summary <text> --author <id> --topic <id>`，实现文件为 `scripts/author/create-article.mjs`。`--author` 与 `--topic` 可重复，`--project`、`--module` 可选。M0 只创建 `index.md`，不提供 `--format` 或 MDX 快捷入口；未来 MDX 白名单出现真实获批组件后再扩展命令。
+- 新文章入口固定为 `node scripts/author/create-article.mjs --source-name <name> --title <text> --slug </writing/...> --summary <text> --author <id> --topic <id>`。`--author` 与 `--topic` 可重复，`--project`、`--module` 可选。M0 只创建 `index.md`，不提供 `--format` 或 MDX 快捷入口；未来 MDX 白名单出现真实获批组件后再扩展命令。
 - 命令只接受完整非交互参数，先验证全部字段、注册表引用、目标目录不存在和精确 Node 版本，再取得排他作者锁并重新验证目标与当前工作区。随后只在内存生成 UUIDv7，把显式 source-name、全部字段和新 articleId 投影为候选交给 CODE-018；完整历史与候选同时通过后才能创建同一文件系统内的 `site-content/.author-staging-*` 并写入完整 `index.md`。flush 文件和目录后把整个临时目录原子 rename 为目标目录。任一步失败都删除本次临时目录并释放锁；质量、预览和构建发现作者锁或残留 staging 时失败，不读取半成品。不得覆盖、修复或补写既有文章。
 - draft 模板不填写 `publishedAt`，不从系统时间、UUID、标题或路径推导任何业务字段；`updatedAt` 也不由创建命令自动写入。命令不运行 Git add/commit/push，不调用发布、预览或构建，也不得被 CI、hook 或 Docusaurus 隐式调用。
 - UUIDv7 文本校验同时检查规范小写连字符形式、version 7、RFC variant、当前树唯一和 Git 历史未复用；历史只读检查由 `scripts/quality/check-content-history.mjs` 统一拥有，创建命令调用 `scripts/quality/lib/content-history.mjs` 的同一候选校验，不复制正则、身份提取、父状态或 Git 扫描算法。
@@ -345,9 +345,11 @@
 
 ## 实施前置清单
 
-下列内容影响目标源码结构，必须在依赖代码创建前完成事实查证并写入对应设计。#5 至 #14 已完成设计并继续跟踪实现与 fixture。D-078 委托范围内的工程细节由 Agent 形成可验证决定，不再逐项请求用户确认；D-078 排除的外部操作、依赖最终准入、数据与基础设施事项仍执行用户门禁：
+下列内容影响目标源码结构，必须在依赖代码创建前完成事实查证并写入对应设计。#9 已完成 E-010 实现与 fixture，#5 至 #8、#10 至 #14 继续跟踪其余实现。D-078 委托范围内的工程细节由 Agent 形成可验证决定，不再逐项请求用户确认；D-078 排除的外部操作、依赖最终准入、数据与基础设施事项仍执行用户门禁：
 
-1. 按 E-010/E-011 实现隔离 npm 入口、项目配置、registry/lock 扫描、SPDX 规范化和 fixture，再实现 D-077 策略与记录；实际联网和安装前，对真实候选 lockfile 和传递图取得人工通过结论，生成并校验 SBOM/NOTICE，完成显式 audit、双端点失败关闭验证、制品网络检查和浏览器 allowlist。
+Roadmap 的实现所有权固定为：I-01 / #9 在隔离入口同一任务中创建 D-067 的 `.nvmrc`、`engines.node` 兼容边界，并以 D-073 主/最低随附 npm 完成离线真实 CLI 验收；I-03 / #21 消费该版本契约完成真实依赖准入；I-04 / #22 不再创建或选择版本文件，只在已验收版本与依赖图上建立 Docusaurus scaffold、严格 TypeScript、模块边界、typecheck 与 build。该调整只消除任务产物倒置，不改变上层版本治理或外部操作授权。
+
+1. 消费已验收的 E-010 隔离入口、项目配置、registry/lock 扫描和双端点版本契约，继续实现 E-011 SPDX 规范化及 D-077 策略与记录；实际联网和安装前，对真实候选 lockfile 和传递图取得人工通过结论，生成并校验 SBOM/NOTICE，完成显式 audit、双端点冻结安装、制品网络检查和浏览器 allowlist。
 2. 按 CODE-002 至 CODE-005 创建并机器校验实际 `tsconfig`、公共入口、命名和模块边界脚本；这些是实现任务，不再重新选择目录和 API 契约。
 3. 按 D-079/E-012 接入独立 `tsc --noEmit`、临时编译后的 Node ESM 测试与 Docusaurus build；先让 `@types/node` 随真实候选图通过 D-077，再创建测试配置、runner 和 fixture。formatter、lint、真实浏览器与可访问性工具继续依据 D-078 选择；新增第三方包或 Action 必须先通过 D-077，不因工具选择已委托而跳过实际准入。
 4. 按 E-007 至 E-009、CODE-008 和 CODE-017 实现主预览 schema、临时静态白名单树、草稿候选、失败保留旧预览和泄漏 fixture；再按 E-004 和 CODE-006 至 CODE-008 实现 React、Infima、CSS Modules 与令牌。只有浏览器 fit-gap 证据允许最小主题包装。
@@ -361,11 +363,12 @@
 
 | 规则或事实 | 当前证据 | 自动化状态 |
 |---|---|---|
-| 文档索引与内部链接 | `npm run check:docs` | 已自动化 |
-| 现有契约词规则 | `npm run check:contracts` | 已自动化，范围有限 |
-| 现有质量脚本语法 | `npm run check:js` | 已自动化，仅明列 `.mjs` |
-| 常见密钥形态 | `npm run check:secrets` | 已自动化，启发式且扩展名有限 |
-| 迁移前手写入口 | `npm run check:site` | 已自动化，缺失输入会跳过 |
+| 文档索引与内部链接 | `node scripts/quality/check-markdown.mjs` | 已自动化 |
+| 现有契约词规则 | `node scripts/quality/check-contracts.mjs` | 已自动化，范围有限 |
+| 现有质量脚本语法 | `node scripts/quality/check-javascript.mjs` | 已自动化，仅明列 `.mjs` |
+| npm 启动前隔离、版本与旁路边界 | `node scripts/quality/check-npm-isolation.mjs`、E-010 fixture | 已自动化；真实依赖准入未开始 |
+| 常见密钥形态 | `node scripts/quality/check-secrets.mjs` | 已自动化，启发式且扩展名有限 |
+| 迁移前手写入口 | `node scripts/quality/check-static-site.mjs` | 已自动化，缺失输入会跳过 |
 | PlantUML 源码可编译 | Ubuntu `diagrams` job 或本地 `check:diagrams` | 已自动化 |
 | PlantUML SVG 已刷新 | `gen:diagrams` 后人工 diff | 尚无稳定门禁 |
 | 通用文件卫生 | `.editorconfig`、`.gitattributes` | 仅配置约定，尚无 CI 检查 |
@@ -377,8 +380,8 @@
 | HEAD 可达完整 Git 历史与稳定 ID | E-013、CODE-018 | 设计已确认，检查器、临时 Git DAG fixture、作者集成与 CI checkout 均未实现 |
 | 服务端 301 与同版本 release | E-014、CODE-015/CODE-019 | 设计已确认，生成器、派生配置、摘要、Nginx 冒烟和回滚兼容检查均未实现 |
 | Production build 与最终 artifact | E-015、CODE-015/CODE-016/CODE-020 | 设计已确认，自包含重建、树摘要、workflow 门禁、上传和 deploy 输出校验均未实现 |
-| Docusaurus/React/内容/制品/浏览器契约 | D-078、E-001 至 E-015、CODE-003 至 CODE-020 | 目标已固定，当前未实现 |
-| Node 24 精确与最低端点 | 无 `.nvmrc` 或目标 job | 阻塞 |
+| Docusaurus/React/内容/制品/浏览器契约 | D-078、E-001 至 E-015、CODE-003 至 CODE-020 | E-010 已实现；其余目标已固定，当前未实现 |
+| Node 24 精确与最低端点 | `.nvmrc`、`engines.node`、E-010 双端点离线 CLI | 本地契约与真实 CLI 已验收；目标 Ubuntu jobs 由后续任务接线 |
 
 ## 本 Spec 验收
 

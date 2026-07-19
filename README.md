@@ -21,11 +21,15 @@ Axial Muse Website 是个人项目与技术分享网站。第一版聚焦个人�
 
 ## Linux 执行环境检查
 
+先把 Node 切换到仓库 `.nvmrc` 的精确版本，再运行：
+
 ```bash
-npm run quality
+node scripts/quality/run-isolated-npm.mjs run-script quality
 ```
 
-在获准运行本站 Node.js 的 Linux 工作区，提交前门禁与 CI 共用同一质量入口；克隆后执行一次即可启用本地 pre-commit 钩子：
+该入口只使用当前 Node 发行版随附的 npm，并在任何 npm 子进程启动前隔离用户配置、全局配置、缓存、代理和凭据环境。正常作者端点由 `.nvmrc` 精确固定，最低兼容端点由 `package.json#engines.node` 下界固定。
+
+在获准运行本站 Node.js 的 Linux 工作区，提交前门禁与 CI 执行同一质量负载；克隆后执行一次即可启用本地 pre-commit 钩子：
 
 ```bash
 git config core.hooksPath .githooks
@@ -35,7 +39,10 @@ git config core.hooksPath .githooks
 
 当前首版不依赖第三方包，`quality` 使用 Node.js 内置能力检查：
 
+- JavaScript 质量脚本语法。
+- npm 配置、运行时、隔离环境、lockfile 来源和旁路入口。
 - Markdown 内部链接和 `docs/README.md` 索引完整性。
 - 契约词表和禁用旧名回潮。
 - 常见密钥形态。
 - 静态站点入口和资源引用。
+- E-010 正常路径、反例和边界 fixture。

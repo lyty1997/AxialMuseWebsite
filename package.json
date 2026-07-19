@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "quality": "npm run check:js && npm run check:docs && npm run check:contracts && npm run check:secrets && npm run check:site",
-    "check:js": "node --check scripts/quality/lib/files.mjs && node --check scripts/quality/lib/plantuml.mjs && node --check scripts/quality/check-markdown.mjs && node --check scripts/quality/check-contracts.mjs && node --check scripts/quality/check-secrets.mjs && node --check scripts/quality/check-static-site.mjs && node --check scripts/quality/check-diagrams.mjs && node --check scripts/quality/render-diagrams.mjs",
+    "quality": "node scripts/quality/run-quality.mjs",
+    "test": "node --test tests/build/run-isolated-npm.test.mjs",
+    "check:js": "node scripts/quality/check-javascript.mjs",
+    "check:npm-isolation": "node scripts/quality/check-npm-isolation.mjs",
     "check:docs": "node scripts/quality/check-markdown.mjs",
     "check:contracts": "node scripts/quality/check-contracts.mjs",
     "check:secrets": "node scripts/quality/check-secrets.mjs",
@@ -14,7 +16,6 @@
     "gen:diagrams": "node scripts/quality/render-diagrams.mjs"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24.16.0 <25"
   }
 }
-
