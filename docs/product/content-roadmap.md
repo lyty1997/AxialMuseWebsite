@@ -1,7 +1,7 @@
 # 内容与产品路线
 
 状态：active
-最近更新：2026-07-18
+最近更新：2026-07-19
 
 ## M0：个人技术分享入口
 
@@ -25,17 +25,19 @@
 - [内容发布流程](../operations/content-publishing.md)
 - [自动化维护与运行手册](../operations/maintenance.md)
 
+实施任务链由 [M0 Roadmap #15](https://github.com/lyty1997/AxialMuseWebsite/issues/15) 统一汇总，并使用 GitHub 原生 sub-issues 表达阶段与子任务层级。Issue 只跟踪执行状态、依赖和验收证据，不替代上述设计真相源；外部操作仍按各子任务的授权门禁单独确认。
+
 交付阶段：
 
-| 阶段 | 主要工作 | 完成门槛 |
-|---|---|---|
-| M0-D 设计评审 | 对齐定位、技术选型、系统架构、主站 Spec、编码 Spec 和生产边界 | #5 至 #14 对应的阻塞实施设计问题均有单一结论，活动真相源无冲突 |
-| M0-C 内容准备 | 形成 2 个可信项目条目、真实视觉证据和技术分享空状态 | 来源、状态、图片和隐私审核通过；完整文章不阻塞主站上线 |
-| M0-I 主站实现 | 按已评审 Spec 实现首页、项目目录与详情、技术分享目录与详情、基础 SEO 和契约门禁 | 质量门禁和桌面/平板/移动渲染通过 |
-| M0-P 生产准备 | 加固腾讯云轻量服务器，配置 Nginx、TAT 自动发布和生产清单 | IP/hosts 受控测试、payload/301 同版本发布、逐规则冒烟、只追加 URL 暴露账本、历史 source/target 收敛与 fallback/forward-only 恢复验证通过 |
-| M0-L 域名上线 | 配置 DNSPod、HTTPS、DNSSEC、备案页脚和搜索引擎抓取基础 | 上线验收全部通过并观察 24 小时 |
-| M0-S 项目展示 | 登记公开仓库与真实视觉证据；视频作为可选增强，不阻塞首版 | 项目说明、源码链接和图片通过事实、隐私、版权及桌面/移动检查 |
-| M0-O 运行维护 | 增加定时冒烟、链接、TLS 和 DNS 检查 | 告警路径与恢复演练通过 |
+| 阶段 | 主要工作 | 完成门槛 | GitHub 跟踪 |
+|---|---|---|---|
+| M0-D 设计评审 | 对齐定位、技术选型、系统架构、主站 Spec、编码 Spec 和生产边界 | #5 至 #14 对应的阻塞实施设计问题均有单一结论，活动真相源无冲突 | [#4（已完成）](https://github.com/lyty1997/AxialMuseWebsite/issues/4) |
+| M0-C 内容准备 | 形成 2 个可信项目条目、真实视觉证据和技术分享空状态 | 来源、状态、图片和隐私审核通过；完整文章不阻塞主站上线 | [#17](https://github.com/lyty1997/AxialMuseWebsite/issues/17) |
+| M0-I 主站实现 | 按已评审 Spec 实现首页、项目目录与详情、技术分享目录与详情、基础 SEO 和契约门禁 | 质量门禁和桌面/平板/移动渲染通过 | [#16](https://github.com/lyty1997/AxialMuseWebsite/issues/16) |
+| M0-P 生产准备 | 加固腾讯云轻量服务器，配置 Nginx、TAT 自动发布和生产清单 | IP/hosts 受控测试、payload/301 同版本发布、逐规则冒烟、只追加 URL 暴露账本、历史 source/target 收敛与 fallback/forward-only 恢复验证通过 | [#18](https://github.com/lyty1997/AxialMuseWebsite/issues/18) |
+| M0-L 域名上线 | 配置 DNSPod、HTTPS、DNSSEC、备案页脚和搜索引擎抓取基础 | 上线验收全部通过并观察 24 小时 | [#19](https://github.com/lyty1997/AxialMuseWebsite/issues/19) |
+| M0-S 项目展示 | 登记公开仓库与真实视觉证据；视频作为可选增强，不阻塞首版 | 项目说明、源码链接和图片通过事实、隐私、版权及桌面/移动检查 | [#17](https://github.com/lyty1997/AxialMuseWebsite/issues/17) |
+| M0-O 运行维护 | 增加定时冒烟、链接、TLS 和 DNS 检查 | 告警路径与恢复演练通过 | [#20](https://github.com/lyty1997/AxialMuseWebsite/issues/20) |
 
 首批内容方向：
 

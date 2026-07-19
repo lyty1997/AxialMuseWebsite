@@ -4,6 +4,23 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-19 — 将 M0 设计拆解为可执行父子 Issue Roadmap
+
+- **主题**：按 `codex-rules/rules/issue-task-rules.md` 把已确认 M0 设计拆为一个总父任务、五个阶段父任务和单一不变量子任务；将现有 open issues 纳入真实依赖链，避免编码时重新解释范围或等待最终端到端验收才补证据。
+- **完成内容**：
+  - 创建 GitHub milestone [M0 静态主站上线](https://github.com/lyty1997/AxialMuseWebsite/milestone/1) 和总父任务 [#15](https://github.com/lyty1997/AxialMuseWebsite/issues/15)；以原生 sub-issues 建立 [#16 M0-I](https://github.com/lyty1997/AxialMuseWebsite/issues/16)、[#17 M0-C/M0-S](https://github.com/lyty1997/AxialMuseWebsite/issues/17)、[#18 M0-P](https://github.com/lyty1997/AxialMuseWebsite/issues/18)、[#19 M0-L](https://github.com/lyty1997/AxialMuseWebsite/issues/19) 和 [#20 M0-O](https://github.com/lyty1997/AxialMuseWebsite/issues/20) 五个阶段父任务。
+  - 保留 #5 至 #14 的问题发现历史，把正文顶部改成实现期契约：每项固定主要不变量、设计真相源、对外接口或产物、范围与非范围、最小 `blocked-by / blocks`、正常路径、反例和关闭证据；#13 收窄为仓库侧 301 派生，服务器账本与原子激活独立进入 #37；#14 收窄为 fresh `production-artifact` 字节所有权，deploy 身份与服务器 verifier 分别进入 #34、#35。
+  - 新建 #21 至 #43，补齐真实依赖准入、Node/TypeScript 基线、内容领域与作者工具、页面和响应式、两个项目内容包、CI/release、服务器、DNS/TLS、首次上线、定时维护和恢复演练。全部外部联网、GitHub 接线、服务器、TAT、DNS、证书、Git 发布和生产操作继续保留单独授权门禁。
+  - #4 的原始职责只是活动设计文档一致性，其验收已完成；在链接新 Roadmap 和保留原始上下文后按 completed 关闭。#5 至 #14 的有效实现范围没有弃做或关闭。
+  - M1 只在 M0 上线并积累真实内容后复评可发现性能力，M2 的账户、评论、订阅和用户数据仍需新的产品与隐私决策；本轮没有把它们拆成已授权编码任务。
+- **验证结果**：
+  - GitHub #4 至 #43 共 40 个里程碑条目，#4 为 closed，#5 至 #43 共 39 个 open；没有缺失 milestone、任务必填段落或父子关系。
+  - 五个阶段父任务共挂载 33 个执行子任务；40 条直接依赖边在 `blocked-by` 与 `blocks` 两侧完全对称，拓扑排序覆盖全部 33 个节点且无环。
+  - 任务图的最短主链为“npm 隔离/确定性 SPDX -> 真实依赖准入 -> Node/测试/内容/构建 -> 项目内容 -> release/artifact -> 服务器原子激活 -> DNS/HTTPS -> 24 小时观察 -> 自动维护与恢复”。
+- **遗留项**：
+  - 编码应从可并行、无网络的 #9 和 #10 开始；它们闭环后，#21 的首次 npm 解析、tarball、audit 和双端点安装仍需用户明确授权。
+  - 本轮未开始站点实现，未提交、推送或创建 PR，未操作服务器、TAT、DNS、证书或生产环境；外部写入仅限用户已授权的 GitHub milestone、Issue 正文/层级和 #4 关闭操作，未引入新的第三方服务或用户数据处理。
+
 ## 2026-07-18 — 独立验收 11 个 open issue 的验收标准
 
 - **主题**：对 [Issues #4 至 #14](https://github.com/lyty1997/AxialMuseWebsite/issues?q=is%3Aissue) 逐条验收其“验收标准”，判定各 issue 当前是否可关闭，并把结论与复核发现留痕到 issue 与本文件。本轮为只读验收，未改动任何设计、代码、配置或基础设施。
