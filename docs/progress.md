@@ -4,6 +4,14 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-19 — 修复 E-010 迁移期 CI runtime 信任根
+
+- **主题**：首次把 #9、#10 与 Git 规则提交推送到 `dev` 后，run `29690235381` 的 `Website quality gates` 在 E-010 测试加载阶段以 `NPM_CLI_FILE_TRUST` 失败；`Diagram compile check` 同 run 通过。
+- **根因**：迁移期 workflow 仍按既定边界使用 `actions/setup-node@v5` 的 Node 22；GitHub hosted toolcache 中随附 npm 关键路径存在 E-010 禁止的硬链接或宽写权限。官方 Node 24.18.0 发行归档在本地同一提交上通过完整质量负载，因此失败来自 CI runtime 文件系统信任形态，不是规则改动、测试语义或 npm workload。
+- **修复边界**：保留 Node 22 迁移期聚合负载和 #22 对 Node 24 主/最低入口、Action 固定及完整 CI 拓扑的所有权；不放宽 CLI 信任规则、不跳过测试、不绕过 E-010。`website-quality` 在 setup-node 后先确认当前可执行文件恰好位于 `RUNNER_TOOL_CACHE/node` 下的发行前缀，再把该前缀复制到全新的 runner 私有临时目录，打断源硬链接、移除组/其他用户写权限，并通过 `GITHUB_PATH` 让原质量步骤使用该前缀。来源不匹配、目标预先存在、复制失败或质量门禁失败都直接阻断。
+- **本地证据**：以官方 SHA-256 校验通过的 `Node 24.18.0 / npm 11.16.0` 发行版执行同一工作流步骤，并把源 npm CLI 人为置为双链接、`0666`；复制后对应文件为单链接、`0600`，E-010 能从目标前缀派生 npm。该目标前缀的完整隔离质量入口退出 0，E-010 36/36、E-011 19/19。实际 GitHub CI 修复 run 仍须在 push 后观察到 `completed` 且 `conclusion=success` 才能关闭本项。
+- **残余边界**：本项不安装依赖、不访问 npm registry、不改变 Node/npm 版本契约、Diagram job、站点运行时、第三方服务或用户数据处理；临时 Node 归档与测试目录在 CI 验收完成后删除。
+
 ## 2026-07-19 — 完成 #10 确定性 SPDX 规范化实现
 
 - **主题**：按 Roadmap 串行实现 I-02 / #10；在 #9 的 E-010 隔离 npm 入口上建立确定性 SPDX、显式时间状态机、旧证据复核和两文件一致发布，不提前执行 #21 的真实依赖解析与准入。
