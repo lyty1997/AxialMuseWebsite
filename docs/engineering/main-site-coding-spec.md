@@ -1,7 +1,7 @@
 # 主站编码规范 Spec
 
 状态：active
-完整度：M0-design-closed（#9 的 E-010 已闭环；#5 至 #8、#10 至 #14 继续跟踪）
+完整度：M0-design-closed（#9 的 E-010 与 #10 的 E-011 已闭环；#5 至 #8、#11 至 #14 继续跟踪）
 最近更新：2026-07-19
 适用范围：本站仓库内的主站页面与组件、Docusaurus 构建期适配、作者工具、质量脚本，以及这些代码之间的依赖边界
 
@@ -9,7 +9,7 @@
 
 本文是从上层设计进入实现的工程入口。它只拥有“代码如何组织、依赖和验证”的规则，不复制内容字段、页面结果、基础设施或发布流程的完整语义。
 
-2026-07-18 审查确认的实施契约矛盾由 GitHub Issues #5 至 #14 跟踪。E-006 至 E-015 已补齐内容所有权、主预览、发布态素材、草稿预览、npm 隔离、SPDX 确定化、Node ESM 测试、完整 Git 历史门禁、同版本服务端 301 和 production job 字节所有权；#9 已完成 E-010 实现、fixture 与真实双端点验收，#5 至 #8、#10 至 #14 继续跟踪其余实现，不再代表活动设计缺口。D-078 的委托和已确认上层方向继续有效，但不能代替依赖准入、实现与验证。
+2026-07-18 审查确认的实施契约矛盾由 GitHub Issues #5 至 #14 跟踪。E-006 至 E-015 已补齐内容所有权、主预览、发布态素材、草稿预览、npm 隔离、SPDX 确定化、Node ESM 测试、完整 Git 历史门禁、同版本服务端 301 和 production job 字节所有权；#9 已完成 E-010 实现、fixture 与真实双端点验收，#10 已完成 E-011 实现、真实 npm shape 与双端点全量验收，#5 至 #8、#11 至 #14 继续跟踪其余实现，不再代表活动设计缺口。D-078 的委托和已确认上层方向继续有效，但不能代替真实依赖准入、其余实现与验证。
 
 业务与架构行为仍直接引用原真相源及其 D-xxx 决策编号：
 
@@ -44,7 +44,7 @@
 | D-074 | Docusaurus 目标源码使用严格 TypeScript，类型检查与静态构建相互独立 | `tsc --noEmit` 与 Docusaurus build | 目标已确认，依赖、配置与 CI 接线尚未实现 |
 | D-075 | 标准入口目录、跨层公共入口、导出与首版路径别名边界 | 源码结构、导入图与模块契约检查 | 目标已确认，目录与自动检查尚未实现 |
 | D-076、D-079 | 首轮 React/MDX/TypeScript、Node 测试类型候选直接依赖、官方根 `tsconfig` 继承和本站收紧规则 | 依赖清单、锁文件、生产/测试 TypeScript program 与配置漂移检查 | 候选目标已确认，真实依赖准入、配置和安装尚未实现 |
-| D-077、E-010、E-011 | 官方 registry-only、启动前 npm 隔离、无脚本 tarball 证据、许可证与脚本处置、确定性 SPDX/NOTICE、漏洞阈值、双端点冻结安装和依赖事实防漂移 | 候选解析、隔离配置、供应链证据、人工准入、派生制品、显式审计与双端点检查 | E-010 隔离入口、版本契约和离线双端点 CLI 已实现；E-011、策略、记录、真实候选图和目标 CI 拓扑尚未实现 |
+| D-077、E-010、E-011 | 官方 registry-only、启动前 npm 隔离、无脚本 tarball 证据、许可证与脚本处置、确定性 SPDX/NOTICE、漏洞阈值、双端点冻结安装和依赖事实防漂移 | 候选解析、隔离配置、供应链证据、人工准入、派生制品、显式审计与双端点检查 | E-010 隔离入口与 E-011 确定性 SPDX 已实现并通过双端点真实 npm 离线验收；策略其余部分、记录、真实候选图、正式 SBOM/NOTICE 和目标 CI 拓扑尚未实现 |
 | D-030 至 D-034、D-058、E-002、E-004、E-014 | 路由配置、文档站布局、主题与响应式适配、同版本服务端 301 | 路由制品、Nginx 派生配置、发布冒烟与真实浏览器 | M0 路由与 301 契约已固定，实现与浏览器 fit-gap 尚未完成 |
 | D-035 至 D-050、D-078、E-001、E-003、E-006、E-007 | 领域 schema、注册表、作者与分类引用、项目主预览、日期、可见性和 SEO 页面适配 | 领域契约、媒体字节、构建制品与浏览器 head | 项目叙事和媒体 schema 已收口；注册表、媒体校验和元数据组件尚未实现 |
 | D-053、E-008 | 按构建模式生成临时静态白名单树，并从生产制品排除未发布素材 | 源路径、白名单、制品字节和泄漏 fixture | 发布态素材隔离已收口；受控构建入口和检查尚未实现 |
@@ -52,7 +52,7 @@
 | D-054 至 D-060、D-078、D-079、E-006、E-012 | 单一 docs 实例、唯一判型、校验先行、只读内存投影与公共 API | 临时编译后的 Node ESM 纯逻辑测试和 Docusaurus 集成测试 | Node ESM 测试契约已收口；依赖准入、runner、fixture 与集成测试尚未实现 |
 | D-061 至 D-064、D-078、E-013 | 内容根、源码布局、稳定身份、路径、源码相对链接、日期索引、侧栏与 HEAD 可达历史 | 路径、身份、历史 DAG、链接、索引和侧栏契约测试 | 完整 Git 历史边界已收口；检查器、作者集成、fixture 与 CI checkout 尚未实现 |
 | D-065 至 D-067、D-072、D-078 | 作者显式创建入口、UUIDv7 后端、版本治理和 Linux/Ubuntu 执行边界 | 作者工具、版本契约和 Ubuntu CI | Node 24 版本文件与 E-010 端点校验已实现；作者工具和目标 Ubuntu CI 拓扑尚未实现 |
-| D-052、D-053、D-073、D-077、D-079、E-010、E-011、E-014、E-015 | 依赖准入、锁文件、隔离冻结安装、确定性供应链证据、质量、production job 字节闭包和带 301 配置的发布必需门禁 | 依赖、制品、浏览器与发布检查 | E-010 隔离入口已实现；Node 类型候选、确定性证据、301、自包含重建、真实候选图和目标 CI 接线尚未完成 |
+| D-052、D-053、D-073、D-077、D-079、E-010、E-011、E-014、E-015 | 依赖准入、锁文件、隔离冻结安装、确定性供应链证据、质量、production job 字节闭包和带 301 配置的发布必需门禁 | 依赖、制品、浏览器与发布检查 | E-010 隔离入口与 E-011 确定性证据生成/校验已实现；Node 类型候选准入、正式依赖证据、301、自包含重建、真实候选图和目标 CI 接线尚未完成 |
 | D-005 至 D-009、E-014、E-015 及生产发布设计 | canonical/隐私边界、最小权限发布和 payload/301 同版本 release 切换 | 真实制品与生产冒烟 | 服务端 301 与制品字节所有权已收口，服务器现场核验尚未完成 |
 | D-015、D-016 及项目体验架构 | 项目展示不得绕过体验状态与独立部署边界 | 注册表、页面制品与发布权限检查 | 当前项目体验不启用 |
 
@@ -61,7 +61,7 @@
 下列是 2026-07-19 可从仓库查证的迁移事实，不代表目标工程已经就绪：
 
 - `package.json` 声明 ESM，现有质量脚本是 `.mjs`，只使用 Node.js 内置能力；D-074 不要求迁移这些脚本。仓库尚未安装 Docusaurus 或其他 npm 依赖，也没有 lockfile。
-- `public/` 仍是迁移前手写静态入口；`site-content/` 和 Docusaurus 配置尚不存在。`.nvmrc`、封闭 `engines.node`、E-010 隔离入口及 `tests/build/run-isolated-npm.test.mjs` 已建立。
+- `public/` 仍是迁移前手写静态入口；`site-content/` 和 Docusaurus 配置尚不存在。`.nvmrc`、封闭 `engines.node`、E-010 隔离入口、E-011 确定性 SPDX 生成器及对应 build fixtures 已建立；真实 lockfile 与正式供应链派生制品仍待 #21。
 - `node scripts/quality/check-javascript.mjs` 只对当前仓库内明列范围执行语法检查，不是全仓 lint。
 - `node scripts/quality/check-markdown.mjs` 检查 Markdown 内链和 `docs/README.md` 索引；`check-contracts.mjs` 检查现有契约词规则；`check-secrets.mjs` 是有限扩展名与有限模式的启发式扫描，不等于全仓 Secret 证明。
 - `check:site` 只验证迁移前 `site-checks.json` 与手写入口；配置或入口缺失时当前会成功跳过，它尚不识别 Docusaurus 输入。
@@ -228,9 +228,10 @@
 - E-012 fixture 至少覆盖合法 `.js` 说明符编译并直接运行、无扩展名编译失败、空测试集失败、编译失败与测试失败后清理、清理失败传播，以及源码、内容树、`build/`、`dist/` 不产生测试文件。主 Node 与最低 Node 端点必须调用同一入口和同一测试集合。
 - E-007 媒体 fixture 至少覆盖：公开项目缺预览、未发布项目省略预览、未知媒体字段、跨项目或逃逸路径、重复引用、孤儿文件、符号链接、错误签名、动画 WebP、尺寸或登记值不符、超过字节上限、空白/多行/过长/复述标题的 `alt`。成功 fixture 必须从登记字段得到唯一公开 URL，不允许文件名猜测。
 - E-008 构建 fixture 必须用同一最小内容树分别生成 production 与 preview 白名单，断言 production 只含公开状态项目、preview 含全部已登记项目且输出目录彼此隔离；另覆盖 `static-public/` 中误放项目素材、原始静态目录直连、缺失模式或受控临时目录、大小写目标冲突，以及把未发布字节改名后混入 `build/` 的失败路径。
+- E-011 fixture 必须用小型 golden 固定完整 canonical SPDX、evidence 与三个摘要，并在两个空临时目录中故意改变 native 时间、namespace、对象键以及实际可多值的 packages/relationships 顺序后证明输出逐字节一致；受控 npm schema 中精确单值的 creator、`documentDescribes`、checksum 与 external reference 以 cardinality、重复项反例和 golden 验证对应排序边界，不虚构 npm 不会产生的多值输入。metamorphic 与 mutation 反例必须分别改变一个合法包、checksum 或 relationship，证明 `semanticSha256`、namespace 和 `fileSha256` 随语义变化；另覆盖受控 native schema/数组漂移、重复排序键、npm creator、lock/tarball expected graph、旧 evidence、显式时间状态机和 canonical 字节被篡改时的稳定 `SPDX_*` 失败。上游集成 fixture 必须让 E-010 `sbom-native` profile 在两个全新隔离 workspace 返回合成 native 输出，并另用当前端点随附 npm 的真实离线 native 输出验证 shape，再把纯 stdout 交给同一规范器；不得增加绕过 E-010 的公开 raw SPDX 输入。
 - E-014 重定向 fixture 必须覆盖空注册表、稳定排序、登记 source 有斜杠和无斜杠别名都单跳最终目标、活动页面无斜杠 canonical、查询串保留、目标 payload 页面存在，以及重复/规范化冲突、保留路径、危险字符、静态 source HTML、目标缺失、自跳转、链和环失败。Nginx fixture 断言只产生 exact `location` 与固定 canonical origin，不含 `reason`、regex、`map`、`if`、server 级 `return` 或可变 Host。生产暴露账本 fixture 还必须覆盖：历史 source 被删除、历史 target 404、旧 source 与旧 target 分裂到不同终点、缺少旧规则但碰巧存在目标页面均失败；`/old/ -> /middle/` 后迁移为 `/old/ -> /new/` 与 `/middle/ -> /new/` 的同终点单跳闭包通过；新边预写账本后不存在兼容 fallback 时默认拒绝；账本丢失、损坏、未知字段、非追加改写、写入失败和失败后静默重建均失败关闭。
 
-来源：D-053、D-079、E-012、E-014；[自动化维护与运行手册](../operations/maintenance.md)。
+来源：D-053、D-079、E-011、E-012、E-014；[自动化维护与运行手册](../operations/maintenance.md)。
 
 ### CODE-012 质量入口与评审
 
@@ -273,6 +274,13 @@
 - 提交的派生证据固定为 `docs/generated/supply-chain/dependency-evidence.json`、`docs/generated/supply-chain/sbom.spdx.json` 和仓库根 `THIRD_PARTY_NOTICES`。生成器输出稳定排序且不读取系统时间、不写本机路径或临时下载位置；tarball 本体、npm cache 和原始 audit 响应不提交。
 - SPDX 生成固定为“E-010 隔离 native npm 输出 -> E-011 严格解析与规范化 -> 漂移验证”。规范器只移除 native `creationInfo.created`/`documentNamespace`，加入 `Tool: axial-muse-supply-chain-1.0.0`，按明确 SPDX 无序集合键排序并递归排序对象键；未知数组或 schema 漂移失败，禁止改写包、许可证、关系和校验和语义。
 - `dependency-evidence.json.sbom` 精确包含 `normalizerVersion`、`semanticSha256`、`createdAt`、`fileSha256`。首次或语义变化时，显式生成命令要求 `--created-at` UTC 秒精度值；相同语义复用旧值，构建/CI 不读取墙钟补齐。namespace 由省略自身后的 canonical 文档摘要派生为 E-011 固定 HTTPS URI；该 URI 只是 SPDX 标识，不创建公开站点路由。
+- `scripts/quality/generate-supply-chain-artifacts.mjs` 的公开参数只允许空参数或单个 `--created-at <YYYY-MM-DDThh:mm:ssZ>`，不开放 root、input、output、force、now 或 raw SPDX 参数。入口在当前 `.nvmrc` 主端点直接调用 E-010 `runIsolatedNpm({profile: "sbom-native"})` 两次；两个运行各自建立全新隔离 workspace，保留当前主 npm creator，并在规范化后要求结果逐字节相同。最低端点只验证同一 lock 的安装兼容性，不生成第二份 SBOM；缺 lock、expected graph、既有证据或主端点时失败，不能跳过或降级。
+- E-011 的“严格 SPDX 2.3”只指精确受控 npm native 子集，不声称实现任意 SPDX 文档的通用验证器。顶层、`creationInfo`、package、relationship、checksum 和 external reference 均使用精确字段集合；native `created` 允许 npm 实际产生的 UTC 小数秒，持久化 `createdAt` 只允许 UTC 秒精度。native namespace 必须是无凭据、query、fragment 的绝对 HTTP(S) URI；npm creator 必须与当前 E-010 主端点随附版本精确一致，native 已含本站稳定 creator 时拒绝而非重复规范化。
+- 六类无序集合只用 unsigned UTF-8 byte 比较：packages 按 `SPDXID/name/versionInfo/packageFileName/downloadLocation`，relationships 按 `spdxElementId/relationshipType/relatedSpdxElement`，`documentDescribes` 与 creators 按字符串值，checksums 按 `algorithm/checksumValue`，externalRefs 按 `referenceCategory/referenceType/referenceLocator`。相同身份或复合排序键一律失败，不静默去重；任何其他数组路径失败。对象键递归按 ASCII 排序，canonical JSON 固定 2 空格、LF 和单个末尾换行。
+- `semanticSha256` 的前像是 `{normalizerVersion, document}` 的 canonical UTF-8 字节，其中 document 已移除 native created/namespace、加入稳定 creator 并完成排序；末尾 LF 参与摘要。首次生成必须显式提供 `createdAt`；相同语义必须省略该参数并复用已验证旧值，仍传参数即失败；语义变化必须提供与旧值不同的合法时间，但不暗自增加单调递增要求。写入 created 后，在仍省略 namespace 的 canonical document 字节上计算 `documentSha256`；namespace 精确为 `https://www.axialmuse.com/spdx/npm/axial-muse-website/<documentSha256>`，最终 canonical 文件字节计算 `fileSha256`。
+- `dependency-evidence.json` 使用精确封套 `version: "0.1.0"`、`kind: "axial_muse_dependency_evidence"`、`status: "active"`、`owner: "AxialMuseWebsite"` 和 `sbom`；所有层级拒绝未知字段。既有制品先按其自身唯一 npm creator 版本重新验证 canonical 字节、稳定 creator、semantic 摘要、created、namespace 与 file 摘要，不能只信 evidence 自报值；只有本轮 native 语义与旧 `semanticSha256` 相同时才复用旧 `createdAt`，本轮 expected graph 已由 native 对照间接绑定。合法依赖图或 Node 随附 npm patch 变化必须能携带不同显式时间进入新语义分支，不得先用新 graph/creator 错误拒绝旧制品。
+- 规范器只消费由共享供应链层从已经验证的唯一 lockfile 与 tarball 证据派生的内存 expected graph；该投影精确绑定 package SPDX ID、路径、名称、版本、resolved、purl、checksum 与完整 relationship，且允许 #21 在同一受控 schema 中增加由 tarball 证明的 `licenseDeclared`、homepage、description 绑定，不得提交、人工编辑或成为第二份依赖图。关系投影按受控 npm Arborist 的 edge precedence 处理 peer/peerOptional、prod、optional 与根 dev，`peerOptional` 依 npm native 映射为 `DEPENDENCY_OF`；重叠声明由定向 fixture 固定，不能依赖对象遍历偶然覆盖。#10 用合成 expected graph 验收规范化与交叉校验；#21 必须让真实 tarball 校验和唯一 lock parser 产生同一投影，并把上述可选 tarball 字段收紧为生产必需，不能在 SPDX 模块另写依赖解析算法。
+- 两份 artifact 先完整写入并 fsync 同一候选目录，再以“活动目录改名为备份、父目录 fsync、候选目录改名为活动目录、父目录 fsync”的目录级切换保证任一可见 artifact 目录都只含完整两文件快照；两个 rename 之间活动路径可能短暂 `ENOENT`，因此该协议不宣称无锁读者路径连续可读或具备单操作崩溃原子性，生产部署不得在生成期间并发读取该作者目录。激活前后都复核四个生成输入与旧/新制品完整快照。旧备份在任一切换阶段丢失或变化时不得重新激活已知无效备份，也不得删除当前有效候选并宣称恢复，而应保留可检查目录并以 `SPDX_ARTIFACT_PUBLISH_UNCERTAIN` 失败；首次发布失败则恢复为无目标目录。排他锁只约束本生成器，外部不守锁写入由摘要与快照复核失败关闭，但不宣称消除最后一次复核与文件系统操作之间的纳秒级窗口。
 - 确定性门禁在两个空临时目录分别执行 native SBOM，要求原始 created/UUID 的变化被规范化后输出逐字节相同；随后重算 semantic、document namespace 和最终文件摘要，与 evidence 交叉验证。fixture 覆盖缺失/非法/被覆盖 createdAt、毫秒或非 UTC 时间、含 `#`/非绝对 namespace、native 随机字段、输入顺序变化，以及包或关系变化必须更换 namespace。
 - 候选解析与 tarball 审查的原始日志、显式 audit JSON 和双端点安装证明作为受限 CI artifact 保留 30 天；报告不得包含 registry 凭证、环境 Secret 或站点内容。准入结论、lockfile、派生证据和 PR 审查记录提供长期追溯，不用延长原始 tarball 保存期。
 - Docusaurus 仍只输出默认 `build/`。`scripts/release/package-site.mjs` 在 `dist/release/` 建立临时交付包：`payload/` 是 E-015 当前 production job 中已重验 `build/` 的逐文件复制；`metadata/runtime-redirects.json` 与 `metadata/nginx/redirects.conf` 按 CODE-019 从同一 build 派生；`metadata/release.json` 保存固定 schema version、仓库标识、40 位 commit SHA、`sourceBuildTreeSha256`、payload 根、源重定向注册表摘要、公开路由集合摘要、两个派生文件摘要、规则数和文件清单摘要。`metadata/files.sha256` 按相对 POSIX 路径排序，覆盖全部 `payload/**` 以及两个可部署派生文件；不得写构建时间、runner 路径、workflow run 或分支浮动名。
@@ -345,11 +353,11 @@
 
 ## 实施前置清单
 
-下列内容影响目标源码结构，必须在依赖代码创建前完成事实查证并写入对应设计。#9 已完成 E-010 实现与 fixture，#5 至 #8、#10 至 #14 继续跟踪其余实现。D-078 委托范围内的工程细节由 Agent 形成可验证决定，不再逐项请求用户确认；D-078 排除的外部操作、依赖最终准入、数据与基础设施事项仍执行用户门禁：
+下列内容影响目标源码结构，必须在依赖代码创建前完成事实查证并写入对应设计。#9 已完成 E-010，#10 已完成 E-011，#5 至 #8、#11 至 #14 继续跟踪其余实现。D-078 委托范围内的工程细节由 Agent 形成可验证决定，不再逐项请求用户确认；D-078 排除的外部操作、依赖最终准入、数据与基础设施事项仍执行用户门禁：
 
 Roadmap 的实现所有权固定为：I-01 / #9 在隔离入口同一任务中创建 D-067 的 `.nvmrc`、`engines.node` 兼容边界，并以 D-073 主/最低随附 npm 完成离线真实 CLI 验收；I-03 / #21 消费该版本契约完成真实依赖准入；I-04 / #22 不再创建或选择版本文件，只在已验收版本与依赖图上建立 Docusaurus scaffold、严格 TypeScript、模块边界、typecheck 与 build。该调整只消除任务产物倒置，不改变上层版本治理或外部操作授权。
 
-1. 消费已验收的 E-010 隔离入口、项目配置、registry/lock 扫描和双端点版本契约，继续实现 E-011 SPDX 规范化及 D-077 策略与记录；实际联网和安装前，对真实候选 lockfile 和传递图取得人工通过结论，生成并校验 SBOM/NOTICE，完成显式 audit、双端点冻结安装、制品网络检查和浏览器 allowlist。
+1. 消费已验收的 E-010 隔离入口、E-011 确定性 SPDX、项目配置、registry/lock 扫描和双端点版本契约，继续实现 #21 的 D-077 策略其余部分与记录；实际联网和安装前，对真实候选 lockfile 和传递图取得人工通过结论，生成并校验正式 SBOM/NOTICE，完成显式 audit、双端点冻结安装、制品网络检查和浏览器 allowlist。
 2. 按 CODE-002 至 CODE-005 创建并机器校验实际 `tsconfig`、公共入口、命名和模块边界脚本；这些是实现任务，不再重新选择目录和 API 契约。
 3. 按 D-079/E-012 接入独立 `tsc --noEmit`、临时编译后的 Node ESM 测试与 Docusaurus build；先让 `@types/node` 随真实候选图通过 D-077，再创建测试配置、runner 和 fixture。formatter、lint、真实浏览器与可访问性工具继续依据 D-078 选择；新增第三方包或 Action 必须先通过 D-077，不因工具选择已委托而跳过实际准入。
 4. 按 E-007 至 E-009、CODE-008 和 CODE-017 实现主预览 schema、临时静态白名单树、草稿候选、失败保留旧预览和泄漏 fixture；再按 E-004 和 CODE-006 至 CODE-008 实现 React、Infima、CSS Modules 与令牌。只有浏览器 fit-gap 证据允许最小主题包装。
@@ -367,6 +375,7 @@ Roadmap 的实现所有权固定为：I-01 / #9 在隔离入口同一任务中�
 | 现有契约词规则 | `node scripts/quality/check-contracts.mjs` | 已自动化，范围有限 |
 | 现有质量脚本语法 | `node scripts/quality/check-javascript.mjs` | 已自动化，仅明列 `.mjs` |
 | npm 启动前隔离、版本与旁路边界 | `node scripts/quality/check-npm-isolation.mjs`、E-010 fixture | 已自动化；真实依赖准入未开始 |
+| 确定性 SPDX 与证据状态机 | `node --test tests/build/deterministic-spdx.test.mjs`、E-011 golden/mutation/真实 npm offline fixture | 已自动化并通过双目标端点；正式依赖图与 SBOM 仍待 #21 |
 | 常见密钥形态 | `node scripts/quality/check-secrets.mjs` | 已自动化，启发式且扩展名有限 |
 | 迁移前手写入口 | `node scripts/quality/check-static-site.mjs` | 已自动化，缺失输入会跳过 |
 | PlantUML 源码可编译 | Ubuntu `diagrams` job 或本地 `check:diagrams` | 已自动化 |
@@ -380,7 +389,7 @@ Roadmap 的实现所有权固定为：I-01 / #9 在隔离入口同一任务中�
 | HEAD 可达完整 Git 历史与稳定 ID | E-013、CODE-018 | 设计已确认，检查器、临时 Git DAG fixture、作者集成与 CI checkout 均未实现 |
 | 服务端 301 与同版本 release | E-014、CODE-015/CODE-019 | 设计已确认，生成器、派生配置、摘要、Nginx 冒烟和回滚兼容检查均未实现 |
 | Production build 与最终 artifact | E-015、CODE-015/CODE-016/CODE-020 | 设计已确认，自包含重建、树摘要、workflow 门禁、上传和 deploy 输出校验均未实现 |
-| Docusaurus/React/内容/制品/浏览器契约 | D-078、E-001 至 E-015、CODE-003 至 CODE-020 | E-010 已实现；其余目标已固定，当前未实现 |
+| Docusaurus/React/内容/制品/浏览器契约 | D-078、E-001 至 E-015、CODE-003 至 CODE-020 | E-010/E-011 已实现；其余目标已固定，当前未实现 |
 | Node 24 精确与最低端点 | `.nvmrc`、`engines.node`、E-010 双端点离线 CLI | 本地契约与真实 CLI 已验收；目标 Ubuntu jobs 由后续任务接线 |
 
 ## 本 Spec 验收

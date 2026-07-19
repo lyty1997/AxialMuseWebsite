@@ -22,7 +22,7 @@ export const RUN_SCRIPT_COMMANDS = Object.freeze({
   quality: Object.freeze(["node scripts/quality/run-quality.mjs"]),
   typecheck: Object.freeze(["tsc --noEmit"]),
   test: Object.freeze([
-    "node --test tests/build/run-isolated-npm.test.mjs",
+    "node --test tests/build/run-isolated-npm.test.mjs tests/build/deterministic-spdx.test.mjs",
     "node scripts/quality/run-tests.mjs",
   ]),
   build: Object.freeze(["node scripts/build/build-site.mjs --mode production"]),

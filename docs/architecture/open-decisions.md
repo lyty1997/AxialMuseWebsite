@@ -164,7 +164,7 @@
 
 ## 后续技术选型
 
-- Docusaurus、Node/npm、TypeScript、内容模型、路由、主题、注册表、Linux/Ubuntu-only 执行边界、供应链协议、默认 `build/` 产物、production job 字节所有权及 GitHub Actions/TAT 交付方向已经确定。内部脚本、API、schema、测试和 CI 接线仍属于 D-078 委托范围；#9 已完成 E-010，#5 至 #8、#10 至 #14 继续跟踪其余实现。首次真实依赖图最终准入、新增外部工具、Action 与凭证、Git 发布和基础设施操作仍保留对应门禁。
+- Docusaurus、Node/npm、TypeScript、内容模型、路由、主题、注册表、Linux/Ubuntu-only 执行边界、供应链协议、默认 `build/` 产物、production job 字节所有权及 GitHub Actions/TAT 交付方向已经确定。内部脚本、API、schema、测试和 CI 接线仍属于 D-078 委托范围；#9 已完成 E-010，#10 已完成 E-011，#5 至 #8 与 #11 至 #14 继续跟踪其余实现。首次真实依赖图最终准入、新增外部工具、Action 与凭证、Git 发布和基础设施操作仍保留对应门禁。
 - E-010 的 npm 配置与缓存隔离、官方 registry/lock 来源预检、版本闭包、旁路门禁和双端点离线 CLI 已实现并验收。第一次实际安装 Docusaurus 或其他 npm 依赖前，仍须按 E-011 实现确定性 SPDX 规范化，再按 D-077 完成候选 lockfile 解析、零第三方依赖策略预检、精确 tarball 证据审查、许可证与脚本人工预审、SPDX SBOM 与 `THIRD_PARTY_NOTICES` 生成、显式全图审计、最终人工准入、双 npm 端点冻结安装和 manifest/lock 前后哈希防漂移验证，并继续完成 Docusaurus 构建产物与浏览器外部请求检查。D-077 已固定工具组合、SPDX 格式、漏洞阈值、失败关闭与审计外发边界；E-011/D-077 实现和 E-010 目标 CI 接线仍须完成。
 - 内容编辑采用 Markdown 默认、MDX 受控例外；M0 不启用其他解析模式，`src/components/mdx/index.ts` 白名单初始为空。任何后续 MDX 组件、浏览器行为或外部请求都必须按新增能力重新准入。
 - M0 路由职责、尾斜杠、保留路径、冲突与重定向、项目内容来源、注册表、“通用技术”、跨项目关系、三栏断点和不生成的系列/主题/作者/归档路由已经由 E-001 至 E-004 固定。

@@ -237,8 +237,11 @@ function assertQualityTopology(root, hookPath) {
   const testCount = QUALITY_COMMANDS
     .filter((command) => command.join(" ") === "--test tests/build/run-isolated-npm.test.mjs")
     .length;
-  if (checkerCount !== 1 || testCount !== 1) {
-    throw new Error("质量聚合入口必须精确包含一次 npm 隔离门禁和一次 E-010 测试入口。");
+  const spdxTestCount = QUALITY_COMMANDS
+    .filter((command) => command.join(" ") === "--test tests/build/deterministic-spdx.test.mjs")
+    .length;
+  if (checkerCount !== 1 || testCount !== 1 || spdxTestCount !== 1) {
+    throw new Error("质量聚合入口必须精确包含 npm 隔离门禁、E-010 测试和 E-011 测试入口。");
   }
 
   const ciPath = resolve(root, ".github/workflows/ci.yml");

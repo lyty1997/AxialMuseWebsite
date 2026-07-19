@@ -14,6 +14,7 @@ export const QUALITY_COMMANDS = Object.freeze([
   ["scripts/quality/check-secrets.mjs"],
   ["scripts/quality/check-static-site.mjs"],
   ["--test", "tests/build/run-isolated-npm.test.mjs"],
+  ["--test", "tests/build/deterministic-spdx.test.mjs"],
 ].map((command) => Object.freeze(command)));
 
 export function runQuality() {

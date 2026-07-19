@@ -134,6 +134,38 @@ function validateIntegrity(integrity, packagePath) {
   if (digest.length !== 64 || digest.toString("base64") !== match[1]) {
     fail("NPM_LOCK_INTEGRITY", `package-lock.json#packages.${packagePath}.integrity 编码无效。`);
   }
+  return {
+    algorithm: "SHA512",
+    checksumValue: digest.toString("hex"),
+  };
+}
+
+function spdxPackageId(name, version) {
+  const id = `SPDXRef-Package-${name.replace(/^@/, "").replaceAll("/", ".")}-${version}`;
+  if (!/^SPDXRef-[A-Za-z0-9.-]+$/.test(id)) {
+    fail("NPM_LOCK_SPDX_ID", `${name}@${version} 无法投影为合法 SPDXID。`);
+  }
+  return id;
+}
+
+function npmPurl(name, version) {
+  const encodedName = name.startsWith("@") ? `%40${name.slice(1)}` : name;
+  return `pkg:npm/${encodedName}@${version}`;
+}
+
+function parentPackagePath(packagePath) {
+  const boundary = packagePath.lastIndexOf("/node_modules/");
+  return boundary === -1 ? "" : packagePath.slice(0, boundary);
+}
+
+function resolveDependencyPath(packages, sourcePath, dependencyName) {
+  let ancestor = sourcePath;
+  while (true) {
+    const candidate = `${ancestor ? `${ancestor}/` : ""}node_modules/${dependencyName}`;
+    if (Object.hasOwn(packages, candidate)) return candidate;
+    if (ancestor === "") return null;
+    ancestor = parentPackagePath(ancestor);
+  }
 }
 
 export function validateLockfileObject(lockfile, manifest) {
@@ -194,6 +226,121 @@ export function readAndValidateLockfileSource(root, manifest) {
     lockfile: validateLockfileObject(parseLockfile(text), manifest),
     text,
   };
+}
+
+export function buildExpectedSpdxGraph(lockfile, manifest) {
+  const validated = validateLockfileObject(lockfile, manifest);
+  const packages = [];
+  const packageIdsByPath = new Map();
+  for (const [packagePath, entry] of Object.entries(validated.packages)) {
+    if (packagePath === "") {
+      const SPDXID = spdxPackageId(manifest.name, manifest.version);
+      packages.push({
+        SPDXID,
+        checksums: [],
+        downloadLocation: "NOASSERTION",
+        name: manifest.name,
+        packageFileName: "",
+        purl: npmPurl(manifest.name, manifest.version),
+        versionInfo: manifest.version,
+      });
+      packageIdsByPath.set(packagePath, SPDXID);
+      continue;
+    }
+    const name = packageNameFromPath(packagePath);
+    const SPDXID = spdxPackageId(name, entry.version);
+    packages.push({
+      SPDXID,
+      checksums: [validateIntegrity(entry.integrity, packagePath)],
+      downloadLocation: entry.resolved,
+      name,
+      packageFileName: packagePath,
+      purl: npmPurl(name, entry.version),
+      versionInfo: entry.version,
+    });
+    packageIdsByPath.set(packagePath, SPDXID);
+  }
+  packages.sort((left, right) => Buffer.compare(
+    Buffer.from(left.SPDXID, "utf8"),
+    Buffer.from(right.SPDXID, "utf8"),
+  ));
+  for (let index = 1; index < packages.length; index += 1) {
+    if (packages[index - 1].SPDXID === packages[index].SPDXID) {
+      fail("NPM_LOCK_SPDX_ID", `${packages[index].SPDXID} 在 lock 投影中重复。`);
+    }
+  }
+  const relationshipsByIdentity = new Map();
+  relationshipsByIdentity.set(
+    `SPDXRef-DOCUMENT\0DESCRIBES\0${packageIdsByPath.get("")}`,
+    {
+      spdxElementId: "SPDXRef-DOCUMENT",
+      relationshipType: "DESCRIBES",
+      relatedSpdxElement: packageIdsByPath.get(""),
+    },
+  );
+  for (const [sourcePath, entry] of Object.entries(validated.packages)) {
+    const edges = new Map();
+    const peerMeta = entry.peerDependenciesMeta ?? {};
+    if (peerMeta === null || typeof peerMeta !== "object" || Array.isArray(peerMeta)) {
+      fail("NPM_LOCK_PEER_META", `package-lock.json#packages.${sourcePath}.peerDependenciesMeta 必须是 object。`);
+    }
+    for (const dependencyName of Object.keys(entry.peerDependencies ?? {})) {
+      const meta = peerMeta[dependencyName];
+      if (
+        meta !== undefined
+        && (
+          meta === null
+          || typeof meta !== "object"
+          || Array.isArray(meta)
+          || Object.keys(meta).some((key) => key !== "optional")
+          || (meta.optional !== undefined && typeof meta.optional !== "boolean")
+        )
+      ) {
+        fail("NPM_LOCK_PEER_META", `package-lock.json#packages.${sourcePath}.peerDependenciesMeta.${dependencyName} 非法。`);
+      }
+      edges.set(dependencyName, {
+        relationshipType: meta?.optional === true ? "DEPENDENCY_OF" : "PREREQUISITE_FOR",
+        required: meta?.optional !== true,
+      });
+    }
+    for (const dependencyName of Object.keys(entry.dependencies ?? {})) {
+      edges.set(dependencyName, { relationshipType: "DEPENDENCY_OF", required: true });
+    }
+    for (const dependencyName of Object.keys(entry.optionalDependencies ?? {})) {
+      edges.set(dependencyName, { relationshipType: "OPTIONAL_DEPENDENCY_OF", required: false });
+    }
+    if (sourcePath === "") {
+      for (const dependencyName of Object.keys(entry.devDependencies ?? {})) {
+        edges.set(dependencyName, { relationshipType: "DEV_DEPENDENCY_OF", required: true });
+      }
+    }
+    for (const [dependencyName, edge] of edges) {
+      const targetPath = resolveDependencyPath(validated.packages, sourcePath, dependencyName);
+      if (targetPath === null) {
+        if (edge.required) {
+          fail(
+            "NPM_LOCK_DEPENDENCY_MISSING",
+            `package-lock.json#packages.${sourcePath} 的必需依赖 ${dependencyName} 缺少锁定节点。`,
+          );
+        }
+        continue;
+      }
+      const relationship = {
+        spdxElementId: packageIdsByPath.get(targetPath),
+        relationshipType: edge.relationshipType,
+        relatedSpdxElement: packageIdsByPath.get(sourcePath),
+      };
+      relationshipsByIdentity.set(
+        `${relationship.spdxElementId}\0${relationship.relatedSpdxElement}`,
+        relationship,
+      );
+    }
+  }
+  const relationships = [...relationshipsByIdentity.values()].sort((left, right) => Buffer.compare(
+    Buffer.from(`${left.spdxElementId}\0${left.relationshipType}\0${left.relatedSpdxElement}`, "utf8"),
+    Buffer.from(`${right.spdxElementId}\0${right.relationshipType}\0${right.relatedSpdxElement}`, "utf8"),
+  ));
+  return { packages, relationships };
 }
 
 export function hashProjectFile(root, relativePath, { optional = false } = {}) {

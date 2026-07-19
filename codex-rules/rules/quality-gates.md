@@ -17,6 +17,7 @@ node scripts/quality/check-contracts.mjs
 node scripts/quality/check-secrets.mjs
 node scripts/quality/check-static-site.mjs
 node --test tests/build/run-isolated-npm.test.mjs
+node --test tests/build/deterministic-spdx.test.mjs
 
 # 不在 quality 链路里：需本机装 Java 并设置 PUML_JAR 才能跑
 PUML_JAR=/path/to/plantuml.jar node scripts/quality/check-diagrams.mjs

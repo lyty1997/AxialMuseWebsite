@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "quality": "node scripts/quality/run-quality.mjs",
-    "test": "node --test tests/build/run-isolated-npm.test.mjs",
+    "test": "node --test tests/build/run-isolated-npm.test.mjs tests/build/deterministic-spdx.test.mjs",
     "check:js": "node scripts/quality/check-javascript.mjs",
     "check:npm-isolation": "node scripts/quality/check-npm-isolation.mjs",
     "check:docs": "node scripts/quality/check-markdown.mjs",

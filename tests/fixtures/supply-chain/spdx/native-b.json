@@ -1,0 +1,100 @@
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "creationInfo": {
+    "created": "2026-07-19T09:08:07.987Z",
+    "creators": [
+      "Tool: npm/cli-11.16.0"
+    ]
+  },
+  "dataLicense": "CC0-1.0",
+  "documentDescribes": [
+    "SPDXRef-Package-e011-fixture-1.0.0"
+  ],
+  "documentNamespace": "http://spdx.org/spdxdocs/e011-fixture-1.0.0-22222222-2222-4222-8222-222222222222",
+  "name": "e011-fixture@1.0.0",
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Package-alpha-1.2.3",
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "description": "Synthetic alpha package",
+      "downloadLocation": "https://registry.npmjs.org/alpha/-/alpha-1.2.3.tgz",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:npm/alpha@1.2.3",
+          "referenceType": "purl"
+        }
+      ],
+      "filesAnalyzed": false,
+      "homepage": "https://example.test/alpha",
+      "licenseDeclared": "MIT",
+      "name": "alpha",
+      "packageFileName": "node_modules/alpha",
+      "versionInfo": "1.2.3"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-e011-fixture-1.0.0",
+      "downloadLocation": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:npm/e011-fixture@1.0.0",
+          "referenceType": "purl"
+        }
+      ],
+      "filesAnalyzed": false,
+      "homepage": "NOASSERTION",
+      "licenseDeclared": "UNLICENSED",
+      "name": "e011-fixture",
+      "packageFileName": "",
+      "primaryPackagePurpose": "APPLICATION",
+      "versionInfo": "1.0.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-scope.beta-2.0.0",
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "downloadLocation": "https://registry.npmjs.org/@scope/beta/-/beta-2.0.0.tgz",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:npm/%40scope/beta@2.0.0",
+          "referenceType": "purl"
+        }
+      ],
+      "filesAnalyzed": false,
+      "homepage": "NOASSERTION",
+      "licenseDeclared": "Apache-2.0",
+      "name": "@scope/beta",
+      "packageFileName": "node_modules/@scope/beta",
+      "versionInfo": "2.0.0"
+    }
+  ],
+  "relationships": [
+    {
+      "relatedSpdxElement": "SPDXRef-Package-e011-fixture-1.0.0",
+      "relationshipType": "DEPENDENCY_OF",
+      "spdxElementId": "SPDXRef-Package-alpha-1.2.3"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-e011-fixture-1.0.0",
+      "relationshipType": "DESCRIBES",
+      "spdxElementId": "SPDXRef-DOCUMENT"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-e011-fixture-1.0.0",
+      "relationshipType": "DEV_DEPENDENCY_OF",
+      "spdxElementId": "SPDXRef-Package-scope.beta-2.0.0"
+    }
+  ],
+  "spdxVersion": "SPDX-2.3"
+}

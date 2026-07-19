@@ -4,6 +4,23 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-19 — 完成 #10 确定性 SPDX 规范化实现
+
+- **主题**：按 Roadmap 串行实现 I-02 / #10；在 #9 的 E-010 隔离 npm 入口上建立确定性 SPDX、显式时间状态机、旧证据复核和两文件一致发布，不提前执行 #21 的真实依赖解析与准入。
+- **主要不变量**：相同 npm native SPDX 语义无论原生时间、随机 namespace、对象键和可多值集合顺序如何变化，都必须产生逐字节相同的 canonical SPDX 与 evidence；合法包、checksum 或 relationship 语义变化必须同时改变 semantic 摘要、document namespace 和最终文件摘要。schema、creator、expected graph、旧证据、两次 native 结果、生成输入或发布快照不一致时以稳定 `SPDX_*`/`NPM_LOCK_*` code 失败关闭。
+- **完成内容**：
+  - 新增 `spdx.mjs` 严格解析 npm 受控 SPDX 2.3 子集，固定 unsigned UTF-8 排序、递归 canonical JSON、单末尾 LF、三段摘要前像、确定性 namespace、显式 `createdAt` 生命周期和固定 evidence 封套；公开生成命令只允许空参数或 `--created-at`，不开放 raw input/output/root/force/now 旁路。
+  - 扩展唯一 lock parser 生成内存 expected graph，绑定根包、包身份、路径、resolved、purl、SHA-512 与完整 relationship；按受控 Arborist precedence 处理 peer/peerOptional、prod、optional 与根 dev，并拒绝缺失必需节点。#21 继续负责用真实 tarball evidence 补齐许可证、homepage、description 并收紧生产投影，不建立第二份依赖清单。
+  - 生成器连续调用两次 E-010 `sbom-native` profile，各用全新 HOME/config/cache/log/tmp，要求规范化结果一致；既有制品先按自身 npm creator 自洽复核，只有相同语义才复用旧时间，合法 graph 或 npm patch 变化可携带新时间进入更新分支。
+  - 两文件先写入并 fsync 候选目录，再经备份目录切换；生成锁、四个输入摘要、旧/新完整快照、候选文件/目录 fsync 和每次父目录 fsync 均有定向证据。备份丢失或变化时保留可检查状态并报 `SPDX_ARTIFACT_PUBLISH_UNCERTAIN`，不得重新激活已知无效字节或误报恢复。
+  - 新增完整 golden、metamorphic、mutation、状态机、旧证据篡改、双 native 漂移、graph A→B、npm patch A→B、发布回滚/不确定状态、锁竞争、激活后输入漂移、真实随附 npm offline shape 等 19 项 E-011 验收；统一质量入口继续独立运行 #9 的 36 项上游回归。
+- **验收证据**：
+  - 固定 golden：`semanticSha256=490df7add3035780f366e3e3a013d79541502ff67bc9898daa443dd0e94a78b0`，`documentSha256=e353bcf6093a23416a493c4efe155e45b0caf97de89f834c4d9963a1f6816845`，`fileSha256=82a8f8c5f90ef0864c99e0b26ba35acb3741b2b30121df984afbc59159087de2`。
+  - Node.js 官方 `SHASUMS256.txt` 再次校验主端点归档 `55aa7153f9d88f28d765fcdad5ae6945b5c0f98a36881703817e4c450fa76742`、最低端点归档 `d804845d34eddc21dc1092b519d643ef40b1f58ec5dec5c22b1f4bd8fabde6c9`；校验失败的首次 24.18.0 续传文件未执行，完整重下并匹配官方摘要后才验收。
+  - 最新字节分别在 `Node 24.18.0 / npm 11.16.0` 与 `Node 24.16.0 / npm 11.13.0` 执行 `node scripts/quality/run-quality.mjs`，两端均退出 0；每端 E-010 36/36、E-011 19/19，通过真实 `npm sbom --package-lock-only --sbom-format=spdx --sbom-type=application --offline` shape。`git diff --check`、核心模块语法和独立对抗式复核也通过，复核未留下 P1/P2。
+- **下游交接**：#21 必须复用本项公开生成入口、E-010 profiles、唯一 lock parser、expected graph schema、稳定错误码和 evidence 路径；真实候选图的首次解析、tarball 下载、许可证/NOTICE/脚本检查、显式 audit、NOTICE 生成、双端点冻结安装和最终人工准入仍需单独 npm 联网与准入授权。不得绕过隔离入口、人工编辑 expected graph/SBOM、从墙钟补时间或以本合成 fixture 冒充真实依赖准入完成。
+- **残余边界**：目录切换的两个 rename 之间活动作者路径可能短暂 `ENOENT`，不承诺无锁读者路径连续可读或单操作崩溃原子性；生产部署不得并发读取该生成目录。排他锁不约束外部不协作写入者，摘要与快照复核仍存在最后一次检查到文件系统操作之间的极窄竞争窗口。当前未创建真实 `package-lock.json`、正式 SBOM/NOTICE 或依赖准入结论，未访问 npm registry、未安装依赖、未推送或发布。
+
 ## 2026-07-19 — 完成 #9 npm 隔离实现并前移版本契约
 
 - **主题**：按 Roadmap 串行实现 I-01 / #9；先完成零依赖 npm 隔离入口与反例门禁，再处理公开 CLI 被后置版本文件阻塞的问题。

@@ -16,6 +16,8 @@ const FILES = [
   "scripts/quality/lib/supply-chain/lockfile.mjs",
   "scripts/quality/lib/supply-chain/profiles.mjs",
   "scripts/quality/lib/supply-chain/runner.mjs",
+  "scripts/quality/lib/supply-chain/sbom-artifacts.mjs",
+  "scripts/quality/lib/supply-chain/spdx.mjs",
   "scripts/quality/check-javascript.mjs",
   "scripts/quality/check-npm-isolation.mjs",
   "scripts/quality/check-markdown.mjs",
@@ -24,8 +26,10 @@ const FILES = [
   "scripts/quality/check-static-site.mjs",
   "scripts/quality/check-diagrams.mjs",
   "scripts/quality/render-diagrams.mjs",
+  "scripts/quality/generate-supply-chain-artifacts.mjs",
   "scripts/quality/run-isolated-npm.mjs",
   "scripts/quality/run-quality.mjs",
+  "tests/build/deterministic-spdx.test.mjs",
   "tests/build/run-isolated-npm.test.mjs",
 ].map((path) => resolve(ROOT, path));
 const CHILD_ENVIRONMENT = buildQualityChildEnvironment();
