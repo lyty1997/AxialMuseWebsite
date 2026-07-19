@@ -5,6 +5,7 @@
 | 任务触发条件 | 追加读取 |
 |---|---|
 | 修改仓库内容、处理用户决策 | [`rules/codex-workflow.md`](rules/codex-workflow.md) |
+| 新模块、跨层契约、复杂任务、Issue 编写或拆解、subagent 协作或跨会话交接 | [`rules/issue-task-rules.md`](rules/issue-task-rules.md) |
 | 公开内容、产品服务、反馈或讨论 | [`rules/content-product-rules.md`](rules/content-product-rules.md) |
 | 页面、样式、交互、前端依赖 | [`rules/frontend-web-rules.md`](rules/frontend-web-rules.md) |
 | `docs/` 或 Markdown | [`rules/markdown-docs.md`](rules/markdown-docs.md) |
