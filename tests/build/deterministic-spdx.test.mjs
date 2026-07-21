@@ -15,7 +15,10 @@ import {
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { PROJECT_NPM_CONFIG } from "../../scripts/quality/lib/supply-chain/contracts.mjs";
+import {
+  NPM_VERSIONS_BY_ROLE,
+  PROJECT_NPM_CONFIG,
+} from "../../scripts/quality/lib/supply-chain/contracts.mjs";
 import { deriveNpmCli } from "../../scripts/quality/lib/supply-chain/environment.mjs";
 import { NpmIsolationError } from "../../scripts/quality/lib/supply-chain/errors.mjs";
 import { buildExpectedSpdxGraph } from "../../scripts/quality/lib/supply-chain/lockfile.mjs";
@@ -35,7 +38,9 @@ import {
 
 const TEST_DIRECTORY = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const FIXTURE_DIRECTORY = resolve(TEST_DIRECTORY, "../fixtures/supply-chain/spdx");
-const NPM_VERSION = "11.16.0";
+const NPM_VERSION = NPM_VERSIONS_BY_ROLE.primary;
+const TARGET_NPM_VERSIONS = new Set(Object.values(NPM_VERSIONS_BY_ROLE));
+const MIGRATION_NPM_VERSIONS = new Set(["10.9.4", "10.9.8"]);
 const CREATED_AT = "2026-07-19T10:11:12Z";
 
 function readJsonFixture(name) {
@@ -48,6 +53,12 @@ function readTextFixture(name) {
 
 function clone(value) {
   return structuredClone(value);
+}
+
+function npmSpdxShape(version) {
+  if (TARGET_NPM_VERSIONS.has(version)) return "target";
+  if (MIGRATION_NPM_VERSIONS.has(version)) return "migration";
+  assert.fail(`未审查 npm ${version} 的原生 SPDX shape。`);
 }
 
 function expectCode(action, code) {
@@ -1851,6 +1862,46 @@ test("E-011 deterministic SPDX contract", async (suite) => {
       expectCode(() => buildExpectedSpdxGraph(lockfile, manifest), "NPM_LOCK_SPDX_ID");
     }
 
+    const versionCollisionManifest = manifestForCurrentRuntime();
+    versionCollisionManifest.dependencies = {
+      alpha: "1.0.0+build",
+      container: "1.0.0",
+    };
+    versionCollisionManifest.devDependencies = {};
+    const versionCollisionLock = {
+      lockfileVersion: 3,
+      name: versionCollisionManifest.name,
+      packages: {
+        "": {
+          dependencies: clone(versionCollisionManifest.dependencies),
+          devDependencies: {},
+          name: versionCollisionManifest.name,
+          version: versionCollisionManifest.version,
+        },
+        "node_modules/alpha": {
+          integrity: `sha512-${Buffer.alloc(64, 0xaa).toString("base64")}`,
+          resolved: "https://registry.npmjs.org/alpha/-/alpha-1.0.0+build.tgz",
+          version: "1.0.0+build",
+        },
+        "node_modules/container": {
+          dependencies: { alpha: "1.0.0-build" },
+          integrity: `sha512-${Buffer.alloc(64, 0xbb).toString("base64")}`,
+          resolved: "https://registry.npmjs.org/container/-/container-1.0.0.tgz",
+          version: "1.0.0",
+        },
+        "node_modules/container/node_modules/alpha": {
+          integrity: `sha512-${Buffer.alloc(64, 0xcc).toString("base64")}`,
+          resolved: "https://registry.npmjs.org/alpha/-/alpha-1.0.0-build.tgz",
+          version: "1.0.0-build",
+        },
+      },
+      version: versionCollisionManifest.version,
+    };
+    expectCode(
+      () => buildExpectedSpdxGraph(versionCollisionLock, versionCollisionManifest),
+      "NPM_LOCK_SPDX_ID",
+    );
+
     const buildMetadata = createNativeIdentifierIntegrationFixture({
       manifestSpec: "^1.0.0",
       name: "alpha",
@@ -1858,24 +1909,72 @@ test("E-011 deterministic SPDX contract", async (suite) => {
     });
     try {
       const nativeDocument = runBundledNpmSpdx(buildMetadata);
-      assert.equal(
-        nativeDocument.packages.find((package_) => package_.name === "alpha").SPDXID,
-        "SPDXRef-Package-alpha-1.0.0+build",
-      );
       const expectedGraph = buildExpectedSpdxGraph(
         buildMetadata.lockfile,
         buildMetadata.manifest,
       );
-      const normalized = normalizeNpmSpdx({
+      const nativePackage = nativeDocument.packages.find((package_) => package_.name === "alpha");
+      const targetNativeDocument = clone(nativeDocument);
+      const targetNativePackage = targetNativeDocument.packages.find(
+        (package_) => package_.name === "alpha",
+      );
+      const targetNativeId = "SPDXRef-Package-alpha-1.0.0+build";
+      const lossyNativeId = "SPDXRef-Package-alpha-1.0.0";
+      targetNativeDocument.creationInfo.creators = [`Tool: npm/cli-${NPM_VERSION}`];
+      targetNativePackage.SPDXID = targetNativeId;
+      targetNativePackage.versionInfo = "1.0.0+build";
+      targetNativePackage.externalRefs[0].referenceLocator = "pkg:npm/alpha@1.0.0+build";
+      for (const relationship of targetNativeDocument.relationships) {
+        if (relationship.spdxElementId === lossyNativeId) {
+          relationship.spdxElementId = targetNativeId;
+        }
+        if (relationship.relatedSpdxElement === lossyNativeId) {
+          relationship.relatedSpdxElement = targetNativeId;
+        }
+      }
+      const targetNormalized = normalizeNpmSpdx({
         createdAt: CREATED_AT,
         expectedGraph,
-        nativeDocument,
-        npmVersion: buildMetadata.actualNpmVersion,
+        nativeDocument: targetNativeDocument,
+        npmVersion: NPM_VERSION,
       });
       assert.equal(
-        normalized.document.packages.find((package_) => package_.name === "alpha").SPDXID,
+        targetNormalized.document.packages.find((package_) => package_.name === "alpha").SPDXID,
         "SPDXRef-Package-alpha-1.0.0-build",
       );
+
+      const shape = npmSpdxShape(buildMetadata.actualNpmVersion);
+      if (shape === "target") {
+        assert.equal(nativePackage.SPDXID, "SPDXRef-Package-alpha-1.0.0+build");
+        assert.equal(nativePackage.versionInfo, "1.0.0+build");
+        const normalized = normalizeNpmSpdx({
+          createdAt: CREATED_AT,
+          expectedGraph,
+          nativeDocument,
+          npmVersion: buildMetadata.actualNpmVersion,
+        });
+        assert.equal(
+          normalized.document.packages.find((package_) => package_.name === "alpha").SPDXID,
+          "SPDXRef-Package-alpha-1.0.0-build",
+        );
+      } else {
+        assert.equal(nativePackage.SPDXID, "SPDXRef-Package-alpha-1.0.0");
+        assert.equal(nativePackage.versionInfo, "1.0.0");
+        assert.equal(
+          nativePackage.externalRefs[0].referenceLocator,
+          "pkg:npm/alpha@1.0.0",
+        );
+        assert.ok(nativeDocument.relationships.some((relationship) => (
+          relationship.spdxElementId === "SPDXRef-Package-alpha-1.0.0+build"
+          || relationship.relatedSpdxElement === "SPDXRef-Package-alpha-1.0.0+build"
+        )));
+        expectCode(() => normalizeNpmSpdx({
+          createdAt: CREATED_AT,
+          expectedGraph,
+          nativeDocument,
+          npmVersion: buildMetadata.actualNpmVersion,
+        }), "SPDX_GRAPH_MISMATCH");
+      }
     } finally {
       rmSync(buildMetadata.outer, { recursive: true, force: true });
     }
@@ -1899,7 +1998,10 @@ test("E-011 deterministic SPDX contract", async (suite) => {
             packageFileName: package_.packageFileName,
             versionInfo: package_.versionInfo,
           }))
-          .sort((left, right) => left.SPDXID.localeCompare(right.SPDXID)),
+          .sort((left, right) => Buffer.compare(
+            Buffer.from(JSON.stringify(left), "utf8"),
+            Buffer.from(JSON.stringify(right), "utf8"),
+          )),
         relationships: document.relationships
           .filter((relationship) => relationship.relationshipType !== "DESCRIBES")
           .map((relationship) => ({
@@ -1942,8 +2044,34 @@ test("E-011 deterministic SPDX contract", async (suite) => {
           },
         ],
       };
-      assert.deepEqual(project(orderedDocument), expected);
-      assert.deepEqual(project(reversedDocument), expected);
+      const shape = npmSpdxShape(ordered.actualNpmVersion);
+      assert.equal(npmSpdxShape(reversed.actualNpmVersion), shape);
+      assert.equal(npmSpdxShape(duplicateRelationship.actualNpmVersion), shape);
+      if (shape === "target") {
+        assert.deepEqual(project(orderedDocument), expected);
+        assert.deepEqual(project(reversedDocument), expected);
+      } else {
+        const npm10Expected = clone(expected);
+        npm10Expected.packages.splice(1, 0, {
+          SPDXID: "SPDXRef-Package-alpha-1.2.3",
+          name: "alpha",
+          packageFileName: "node_modules/container/node_modules/alpha",
+          versionInfo: "1.2.3",
+        });
+        assert.deepEqual(project(orderedDocument), npm10Expected);
+        assert.deepEqual(project(reversedDocument), npm10Expected);
+        for (const [fixture, document] of [
+          [ordered, orderedDocument],
+          [reversed, reversedDocument],
+        ]) {
+          expectCode(() => normalizeNpmSpdx({
+            createdAt: CREATED_AT,
+            expectedGraph: buildExpectedSpdxGraph(fixture.lockfile, fixture.manifest),
+            nativeDocument: document,
+            npmVersion: fixture.actualNpmVersion,
+          }), "SPDX_COLLECTION_DUPLICATE");
+        }
+      }
 
       const orderedExpectedGraph = buildExpectedSpdxGraph(ordered.lockfile, ordered.manifest);
       const reversedExpectedGraph = buildExpectedSpdxGraph(reversed.lockfile, reversed.manifest);
@@ -1973,23 +2101,60 @@ test("E-011 deterministic SPDX contract", async (suite) => {
         && relationship.relationshipType === "DEPENDENCY_OF"
       ));
       assert.equal(duplicateTriples.length, 2);
-      const normalizedDuplicateRelationship = normalizeNpmSpdx({
+      const duplicateExpectedGraph = buildExpectedSpdxGraph(
+        duplicateRelationship.lockfile,
+        duplicateRelationship.manifest,
+      );
+      const targetDuplicateRelationshipDocument = clone(duplicateRelationshipDocument);
+      targetDuplicateRelationshipDocument.creationInfo.creators = [`Tool: npm/cli-${NPM_VERSION}`];
+      const expectedPackagesById = new Map(
+        duplicateExpectedGraph.packages.map((package_) => [package_.SPDXID, package_]),
+      );
+      targetDuplicateRelationshipDocument.packages =
+        targetDuplicateRelationshipDocument.packages.filter((package_) => {
+          const expectedPackage = expectedPackagesById.get(package_.SPDXID);
+          return (
+            expectedPackage === undefined
+            || expectedPackage.packageFileName === package_.packageFileName
+          );
+        });
+      const targetNormalizedDuplicateRelationship = normalizeNpmSpdx({
         createdAt: CREATED_AT,
-        expectedGraph: buildExpectedSpdxGraph(
-          duplicateRelationship.lockfile,
-          duplicateRelationship.manifest,
-        ),
-        nativeDocument: duplicateRelationshipDocument,
-        npmVersion: duplicateRelationship.actualNpmVersion,
+        expectedGraph: duplicateExpectedGraph,
+        nativeDocument: targetDuplicateRelationshipDocument,
+        npmVersion: NPM_VERSION,
       });
       assert.equal(
-        normalizedDuplicateRelationship.document.relationships.filter((relationship) => (
+        targetNormalizedDuplicateRelationship.document.relationships.filter((relationship) => (
           relationship.spdxElementId === "SPDXRef-Package-leaf-1.0.0"
           && relationship.relatedSpdxElement === "SPDXRef-Package-alpha-1.2.3"
           && relationship.relationshipType === "DEPENDENCY_OF"
         )).length,
         1,
       );
+      if (shape === "target") {
+        const normalizedDuplicateRelationship = normalizeNpmSpdx({
+          createdAt: CREATED_AT,
+          expectedGraph: duplicateExpectedGraph,
+          nativeDocument: duplicateRelationshipDocument,
+          npmVersion: duplicateRelationship.actualNpmVersion,
+        });
+        assert.equal(
+          normalizedDuplicateRelationship.document.relationships.filter((relationship) => (
+            relationship.spdxElementId === "SPDXRef-Package-leaf-1.0.0"
+            && relationship.relatedSpdxElement === "SPDXRef-Package-alpha-1.2.3"
+            && relationship.relationshipType === "DEPENDENCY_OF"
+          )).length,
+          1,
+        );
+      } else {
+        expectCode(() => normalizeNpmSpdx({
+          createdAt: CREATED_AT,
+          expectedGraph: duplicateExpectedGraph,
+          nativeDocument: duplicateRelationshipDocument,
+          npmVersion: duplicateRelationship.actualNpmVersion,
+        }), "SPDX_COLLECTION_DUPLICATE");
+      }
     } finally {
       rmSync(ordered.outer, { recursive: true, force: true });
       rmSync(reversed.outer, { recursive: true, force: true });

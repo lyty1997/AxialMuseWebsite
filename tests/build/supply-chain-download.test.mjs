@@ -15,6 +15,22 @@ function expectCode(action, code) {
   return assert.rejects(action, (error) => error instanceof NpmIsolationError && error.code === code);
 }
 
+async function expectCodeWithin(action, code, deadlineMs) {
+  let deadlineTimer;
+  try {
+    await Promise.race([
+      expectCode(action, code),
+      new Promise((_, reject) => {
+        deadlineTimer = setTimeout(() => {
+          reject(new Error(`${code} 未在 ${deadlineMs}ms 测试保护期限内返回。`));
+        }, deadlineMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(deadlineTimer);
+  }
+}
+
 function lockedPackage(identity = "alpha@1.2.3") {
   const separator = identity.lastIndexOf("@");
   const name = identity.slice(0, separator);
@@ -163,13 +179,14 @@ test("D-077 official registry tarball downloader", async (suite) => {
   await suite.test("fails closed after an idle body or the bounded hard deadline", async () => {
     const idleBody = new PassThrough();
     idleBody.write("a");
-    await expectCode(
+    await expectCodeWithin(
       () => downloadRegistryTarball(lockedPackage(), {
         bodyHardTimeoutMs: 2_500,
         request: async () => response(Buffer.alloc(1), { body: idleBody, headers: {} }),
         timeoutMs: 1_000,
       }),
       "SUPPLY_CHAIN_TARBALL_DOWNLOAD_TIMEOUT",
+      2_000,
     );
     assert.equal(idleBody.destroyed, true);
 
@@ -177,7 +194,7 @@ test("D-077 official registry tarball downloader", async (suite) => {
     progressingBody.write("a");
     const interval = setInterval(() => progressingBody.write("b"), 300);
     try {
-      await expectCode(
+      await expectCodeWithin(
         () => downloadRegistryTarball(lockedPackage(), {
           bodyHardTimeoutMs: 1_200,
           request: async () => response(Buffer.alloc(1), {
@@ -187,6 +204,7 @@ test("D-077 official registry tarball downloader", async (suite) => {
           timeoutMs: 1_000,
         }),
         "SUPPLY_CHAIN_TARBALL_DOWNLOAD_TIMEOUT",
+        2_000,
       );
       assert.equal(progressingBody.destroyed, true);
     } finally {
@@ -215,13 +233,14 @@ test("D-077 official registry tarball downloader", async (suite) => {
         };
       },
     };
-    await expectCode(
+    await expectCodeWithin(
       () => downloadRegistryTarball(lockedPackage(), {
         bodyHardTimeoutMs: 2_500,
         request: async () => response(Buffer.alloc(1), { body, headers: {} }),
         timeoutMs: 1_000,
       }),
       "SUPPLY_CHAIN_TARBALL_DOWNLOAD_TIMEOUT",
+      2_000,
     );
     assert.equal(nextCalls, 1);
     assert.equal(returnCalls, 1);

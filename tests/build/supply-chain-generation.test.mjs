@@ -13,8 +13,17 @@ import {
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { checkSupplyChain } from "../../scripts/quality/lib/supply-chain/check.mjs";
-import { PROJECT_NPM_CONFIG } from "../../scripts/quality/lib/supply-chain/contracts.mjs";
+import {
+  checkSupplyChain,
+  validateSupplyChainClosure,
+} from "../../scripts/quality/lib/supply-chain/check.mjs";
+import {
+  NPM_VERSIONS_BY_ROLE,
+  PROJECT_NPM_CONFIG,
+} from "../../scripts/quality/lib/supply-chain/contracts.mjs";
+import {
+  DUAL_ENDPOINT_CI_RUNTIME,
+} from "../../scripts/quality/lib/supply-chain/dual-endpoint-ci.mjs";
 import { deriveNpmCli } from "../../scripts/quality/lib/supply-chain/environment.mjs";
 import { NpmIsolationError } from "../../scripts/quality/lib/supply-chain/errors.mjs";
 import { generateReviewedSupplyChainArtifacts } from "../../scripts/quality/lib/supply-chain/formal-generation.mjs";
@@ -31,6 +40,37 @@ import { emptyDependencyLicenseEvidence } from "./supply-chain-license-evidence-
 const TEST_DIRECTORY = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const SPDX_FIXTURES = resolve(TEST_DIRECTORY, "../fixtures/supply-chain/spdx");
 const CREATED_AT = "2026-07-20T10:11:12Z";
+const CURRENT_RUNTIME = Object.freeze({
+  nodeVersion: process.versions.node,
+  npmVersion: deriveNpmCli(process.execPath).npmVersion,
+});
+const MIGRATION_CI_RUNTIMES = Object.freeze([
+  Object.freeze({ nodeVersion: "22.22.0", npmVersion: "10.9.4" }),
+  Object.freeze({ nodeVersion: "22.23.1", npmVersion: "10.9.8" }),
+]);
+
+function currentRuntimeKind() {
+  for (const role of ["primary", "minimum"]) {
+    const runtime = DUAL_ENDPOINT_CI_RUNTIME[role];
+    if (
+      runtime.nodeVersion === CURRENT_RUNTIME.nodeVersion
+      && runtime.npmVersion === CURRENT_RUNTIME.npmVersion
+    ) {
+      return role;
+    }
+  }
+  if (MIGRATION_CI_RUNTIMES.some((runtime) => (
+    runtime.nodeVersion === CURRENT_RUNTIME.nodeVersion
+    && runtime.npmVersion === CURRENT_RUNTIME.npmVersion
+  ))) {
+    return "migration";
+  }
+  assert.fail(
+    `未审查供应链生成测试运行时 ${CURRENT_RUNTIME.nodeVersion}/npm${CURRENT_RUNTIME.npmVersion}。`,
+  );
+}
+
+const CURRENT_RUNTIME_KIND = currentRuntimeKind();
 
 function clone(value) {
   return structuredClone(value);
@@ -76,12 +116,19 @@ async function withWorkingDirectory(path, action) {
   }
 }
 
-function manifestFixture() {
-  const major = Number(process.versions.node.split(".")[0]);
+function manifestFixture({ targetRuntime = false } = {}) {
+  const minimumNodeVersion = DUAL_ENDPOINT_CI_RUNTIME.minimum.nodeVersion;
+  const primaryNodeVersion = DUAL_ENDPOINT_CI_RUNTIME.primary.nodeVersion;
+  const currentMajor = Number(process.versions.node.split(".")[0]);
+  const targetUpperMajor = Number(primaryNodeVersion.split(".")[0]) + 1;
   return {
     dependencies: { alpha: "1.2.3" },
     devDependencies: { "@scope/beta": "2.0.0" },
-    engines: { node: `>=${process.versions.node} <${major + 1}` },
+    engines: {
+      node: targetRuntime
+        ? `>=${minimumNodeVersion} <${targetUpperMajor}`
+        : `>=${process.versions.node} <${currentMajor + 1}`,
+    },
     name: "e011-fixture",
     private: true,
     type: "module",
@@ -202,11 +249,11 @@ function nativeDocuments(npmVersion) {
   });
 }
 
-function createFixture({ licenseByIdentity = {} } = {}) {
+function createFixture({ licenseByIdentity = {}, targetRuntime = false } = {}) {
   const outer = mkdtempSync("/tmp/axial-muse-d077-generation-");
   const root = join(outer, "project");
   mkdirSync(root);
-  const manifest = manifestFixture();
+  const manifest = manifestFixture({ targetRuntime });
   const lockfile = lockfileFixture(manifest);
   const lockedPackages = collectLockedPackages(lockfile, manifest);
   const inspections = lockedPackages.map((lockedPackage) => inspectionFor(
@@ -219,29 +266,61 @@ function createFixture({ licenseByIdentity = {} } = {}) {
   writeJson(join(root, "package.json"), manifest);
   writeJson(join(root, "package-lock.json"), lockfile);
   writeText(join(root, ".npmrc"), expectedNpmrc());
-  writeText(join(root, ".nvmrc"), `${process.versions.node}\n`);
+  writeText(
+    join(root, ".nvmrc"),
+    `${targetRuntime ? DUAL_ENDPOINT_CI_RUNTIME.primary.nodeVersion : process.versions.node}\n`,
+  );
   writeCanonicalJson(
     join(root, "docs/contracts/dependency-policy.json"),
     EXPECTED_DEPENDENCY_POLICY,
   );
+  const licenseEvidence = emptyDependencyLicenseEvidence();
   writeCanonicalJson(
     join(root, "docs/contracts/dependency-license-evidence.json"),
-    emptyDependencyLicenseEvidence(),
+    licenseEvidence,
   );
   writeCanonicalJson(
     join(root, "docs/contracts/dependency-admissions.json"),
     admissions,
   );
-  const npmVersion = deriveNpmCli(process.execPath).npmVersion;
+  const npmVersion = CURRENT_RUNTIME.npmVersion;
   return {
     admissions,
     inspections,
+    licenseEvidence,
+    lockfile,
     lockedPackages,
+    manifest,
     npmVersion,
-    npmVersionsByRole: { minimum: npmVersion, primary: npmVersion },
+    npmVersionsByRole: targetRuntime
+      ? NPM_VERSIONS_BY_ROLE
+      : { minimum: npmVersion, primary: npmVersion },
     outer,
     root,
   };
+}
+
+function validateGeneratedFixtureClosure(fixture, result) {
+  return validateSupplyChainClosure({
+    admissions: fixture.admissions,
+    evidenceBytes: result.evidenceBytes,
+    lockfile: fixture.lockfile,
+    licenseEvidence: fixture.licenseEvidence,
+    manifest: fixture.manifest,
+    noticeBytes: result.noticeBytes,
+    npmVersion: fixture.npmVersion,
+    policy: EXPECTED_DEPENDENCY_POLICY,
+    sbomBytes: result.bytes,
+  });
+}
+
+function assertProductionStaticBoundary(fixture) {
+  if (CURRENT_RUNTIME_KIND === "primary") return checkSupplyChain({ root: fixture.root });
+  assert.throws(
+    () => checkSupplyChain({ root: fixture.root }),
+    (error) => error instanceof NpmIsolationError && error.code === "SPDX_CREATOR_MISMATCH",
+  );
+  return null;
 }
 
 function createNativeStub(fixture) {
@@ -307,7 +386,11 @@ test("D-077 formal supply-chain generation closure", async (suite) => {
       assert.match(result.noticeBytes, /Homepage: https:\/\/example\.test\/alpha/u);
       assert.match(result.noticeBytes, /Description-Bytes: 23\nSynthetic alpha package/u);
 
-      const closure = checkSupplyChain({ root: fixture.root });
+      const closure = validateGeneratedFixtureClosure(fixture, result);
+      const productionClosure = assertProductionStaticBoundary(fixture);
+      if (productionClosure !== null) {
+        assert.equal(productionClosure.notices.length, closure.notices.length);
+      }
       assert.deepEqual(
         closure.lockedPackages.map(({ identity }) => identity),
         ["@scope/beta@2.0.0", "alpha@1.2.3"],
@@ -350,15 +433,28 @@ test("D-077 formal supply-chain generation closure", async (suite) => {
     }
   });
 
-  await suite.test("consumes pinned npm package-lock-only metadata in formal mode", async () => {
-    const fixture = createFixture();
+  await suite.test("正式主端点消费真实 npm 元数据，其他 runner 在生成前失败关闭", async () => {
+    const fixture = createFixture({ targetRuntime: true });
     try {
-      const result = await runFormalGeneration(fixture);
-      assert.equal(
-        readFileSync(join(fixture.root, "docs/generated/supply-chain/sbom.spdx.json"), "utf8"),
-        result.bytes,
-      );
-      assert.equal(checkSupplyChain({ root: fixture.root }).notices.length, 2);
+      if (CURRENT_RUNTIME_KIND === "primary") {
+        const result = await runFormalGeneration(fixture);
+        assert.equal(
+          readFileSync(join(fixture.root, "docs/generated/supply-chain/sbom.spdx.json"), "utf8"),
+          result.bytes,
+        );
+        assert.equal(checkSupplyChain({ root: fixture.root }).notices.length, 2);
+      } else {
+        await expectCode(
+          () => runFormalGeneration(fixture),
+          CURRENT_RUNTIME_KIND === "minimum" ? "SPDX_PRIMARY_ONLY" : "NPM_RUNTIME_NODE",
+        );
+        assert.equal(existsSync(join(fixture.root, "docs/generated/supply-chain")), false);
+        assert.equal(existsSync(join(fixture.root, "THIRD_PARTY_NOTICES")), false);
+        assert.equal(
+          existsSync(join(fixture.root, "docs/generated/.supply-chain.formal.lock")),
+          false,
+        );
+      }
     } finally {
       rmSync(fixture.outer, { recursive: true, force: true });
     }

@@ -32,6 +32,7 @@ import {
   validateExtractedRuntimeTree,
 } from "../../scripts/quality/lib/supply-chain/dual-endpoint-ci.mjs";
 import { PROJECT_NPM_CONFIG } from "../../scripts/quality/lib/supply-chain/contracts.mjs";
+import { deriveNpmCli } from "../../scripts/quality/lib/supply-chain/environment.mjs";
 import { NpmIsolationError } from "../../scripts/quality/lib/supply-chain/errors.mjs";
 import { canonicalJsonBytes } from "../../scripts/quality/lib/supply-chain/spdx.mjs";
 import {
@@ -44,6 +45,10 @@ const REAL_WORKER_PATH = fileURLToPath(new URL(
   "../../scripts/quality/run-dual-endpoint-ci-worker.mjs",
   import.meta.url,
 ));
+const MIGRATION_CI_RUNTIMES = Object.freeze([
+  Object.freeze({ nodeVersion: "22.22.0", npmVersion: "10.9.4" }),
+  Object.freeze({ nodeVersion: "22.23.1", npmVersion: "10.9.8" }),
+]);
 
 function writePrivateFile(path, bytes) {
   writeFileSync(path, bytes, { mode: 0o600 });
@@ -187,13 +192,25 @@ test("D-077 双端点冻结安装离线自动化", async (suite) => {
     }
   });
 
-  await suite.test("当前 Node 真实 spawn worker 并由 E-010 完成空依赖 npm ci", () => {
+  await suite.test("正式端点真实运行空依赖 npm ci，迁移 runner 失败关闭", () => {
     const fixture = createFixture();
     const packageName = "dual-endpoint-real-worker-fixture";
     try {
+      const currentRuntime = {
+        nodeVersion: process.versions.node,
+        npmVersion: deriveNpmCli(process.execPath).npmVersion,
+      };
       const currentRole = Object.entries(DUAL_ENDPOINT_CI_RUNTIME)
-        .find(([, runtime]) => runtime.nodeVersion === process.versions.node)?.[0];
-      assert.ok(currentRole === "primary" || currentRole === "minimum");
+        .find(([, runtime]) => (
+          runtime.nodeVersion === currentRuntime.nodeVersion
+          && runtime.npmVersion === currentRuntime.npmVersion
+        ))?.[0];
+      if (currentRole === undefined) {
+        assert.ok(MIGRATION_CI_RUNTIMES.some((runtime) => (
+          runtime.nodeVersion === currentRuntime.nodeVersion
+          && runtime.npmVersion === currentRuntime.npmVersion
+        )), `未审查迁移 runner ${currentRuntime.nodeVersion}/npm${currentRuntime.npmVersion}。`);
+      }
       writePrivateFile(join(fixture.root, ".npmrc"), exactProjectNpmrc());
       writePrivateFile(join(fixture.root, "package.json"), `${JSON.stringify({
         name: packageName,
@@ -229,9 +246,18 @@ test("D-077 双端点冻结安装离线自动化", async (suite) => {
       });
       assert.equal(result.error, undefined);
       assert.equal(result.signal, null);
-      assert.equal(result.status, 0, result.stderr);
-      assert.equal(result.stderr, "");
-      assert.equal(result.stdout, canonicalJsonBytes(expectedWorkerResult(currentRole)));
+      if (currentRole === undefined) {
+        assert.equal(result.status, 1);
+        assert.equal(result.stdout, "");
+        assert.equal(
+          result.stderr,
+          "[NPM_RUNTIME_NODE] 当前 Node 既不是 .nvmrc 主端点，也不是 engines 下界端点。\n",
+        );
+      } else {
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.stderr, "");
+        assert.equal(result.stdout, canonicalJsonBytes(expectedWorkerResult(currentRole)));
+      }
       assert.equal(existsSync(join(fixture.root, "node_modules")), false);
     } finally {
       removeFixture(fixture);
