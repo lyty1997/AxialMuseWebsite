@@ -1,7 +1,7 @@
 # 自动化维护与运行手册
 
 状态：draft
-最近更新：2026-07-19
+最近更新：2026-07-21
 适用范围：M0 腾讯云主站与项目体验子域名的自动发布、监测、备份、安全维护与故障处理
 
 ## 目的
@@ -49,8 +49,9 @@ D-053 已固定 Docusaurus 官方静态能力、现有 PlantUML、Nginx/Certbot�
 - D-076/D-079 的首轮候选直接依赖名称和 manifest 版本表达必须精确匹配获批清单，其中 `@types/node` 只作为 E-012 测试类型直接开发候选；范围的实际解析结果由唯一 lockfile 冻结。未列直接依赖、候选传递依赖或 lockfile 漂移必须进入 D-052 准入流程，不能因模板存在、传递提升或 ambient 声明而放行。
 - 只有主端点可通过 E-010 的隔离 `resolve-lock` profile 解析已批准 manifest；入口在启动 npm 前清除用户与全局配置、共享 cache、代理和自定义 CA 影响，并离线核验官方 registry 与无 scoped/auth 配置。候选 lockfile 必须是版本 3，只能引用官方 npm registry，并由零第三方依赖策略脚本失败关闭检查直接清单、来源、适用节点的 `resolved`/`integrity`、声明许可证与安装脚本标记。
 - 正常安装前按 lockfile 获取精确 tarball，但不得执行包代码或脚本；复核 integrity，并检查实际 `package.json`、许可证文件、NOTICE 和生命周期脚本。许可证证据缺失、未知、推测性、复杂或未批准时暂停，生命周期脚本默认拒绝，任何例外必须按精确 `name@version` 重新取得用户确认。
-- 隔离 `sbom-native` profile 只生成 npm 原生 SPDX 2.3 语义输入；E-011 规范器移除原生易变时间与 UUID namespace，按明确无序集合稳定排序，并使用显式 UTC 秒精度 `createdAt` 与 canonical 摘要派生 namespace，随后生成提交的确定性 SBOM 与 `THIRD_PARTY_NOTICES`。两个空临时目录的输出必须逐字节相同；CI 和构建不得读取系统时间补齐。`package.json`、lockfile、人工准入记录与两个派生制品分别只拥有直接意图、完整图、不可派生结论和生成结果，不得相互复制成人工维护的依赖清单。
-- 隔离 `audit` profile 的显式全图审计必须包含开发依赖；`moderate`、`high`、`critical` 阻断，`low` 报告，禁止使用审计自动修复子命令，registry/audit 不可用时失败关闭，最终人工准入结论只能在漏洞门禁通过后形成。该构建期请求会向官方 npm registry 发送包名和版本，回退协议可能发送完整 lockfile 树及 npm/Node/平台/架构/环境元数据；不包含站点内容或访问者、账户、评论数据，也不产生浏览器请求。
+- 候选报告先供人工填写尚未提交的逐包预审 admissions；这些字段只表示许可证、脚本、用途和义务预审已闭合，不表示真实图最终准入。隔离 `sbom-native` profile 只生成 npm 原生 SPDX 2.3 语义输入；E-011 规范器移除原生易变时间与 UUID namespace，按明确无序集合稳定排序，并对固定 npm 生成但不符合 SPDX 2.3 `idstring` 的 package ID 做逐包证明、全引用一致且碰撞失败的语法合法化；固定 npm 因重复物理路径输出的完全相同 relationship triple 只在字段和引用验证后收敛为一个集合成员；lock 缺失许可证而 native 为 `NOASSERTION` 时，只允许同轮 integrity 已验证 tarball 的实际声明补足 canonical `licenseDeclared`，任何非空声明冲突仍失败。随后使用显式 UTC 秒精度 `createdAt` 与 canonical 摘要派生 namespace；name、version、purl 和关系语义不得改变，并生成 canonical 但尚未准入的确定性 SBOM、evidence 与 `THIRD_PARTY_NOTICES`。两个空临时目录的输出必须逐字节相同；CI 和构建不得读取系统时间补齐。`package.json`、lockfile、人工准入记录与派生制品分别只拥有直接意图、完整图、不可派生结论和生成结果，不得相互复制成人工维护的依赖清单。
+- 隔离 `audit` profile 的显式全图审计必须包含开发依赖；`moderate`、`high`、`critical` 阻断，`low` 报告，禁止使用审计自动修复子命令，registry/audit 不可用时失败关闭，最终人工图准入结论只能在漏洞门禁通过后形成。audit 失败时不得提交预审 admissions 或三件套，也不得运行双端点 `ci`。当前 admissions schema 和派生制品都不单独编码 audit/最终批准状态，因此最终结论还必须由同一次受限 audit 证据、显式决定记录和双端点结果共同证明，不能由静态闭包代替。该构建期请求会向官方 npm registry 发送包名和版本，回退协议可能发送完整 lockfile 树及 npm/Node/平台/架构/环境元数据；不包含站点内容或访问者、账户、评论数据，也不产生浏览器请求。
+- audit 与显式最终准入决定通过后，首次真实图完整准入使用 `node scripts/quality/run-final-supply-chain-admission.mjs`，并按固定顺序提供候选报告/receipt、原始 audit/receipt 和最终决定五个绝对受限路径；入口不生成或推断人工决定。它先持有并复核五份 `/tmp` 证据、仓库六项供应链固定输入、正式 admissions/evidence/NOTICE/SBOM 及目录链，再调用下层零参数 `run-dual-endpoint-ci.mjs` 核心。双端点命令必须由精确主端点在 Linux x64 运行；它不调用 nvm、不改变本机默认版本、不接触仓库根 `node_modules`，而是在两个私有 `/tmp` project copy 中分别调用 E-010 `ci`。最低 Node 只从固定 Node.js 官方 `24.16.0` Linux x64 制品临时下载；在 64 MiB 上限内核对固定 SHA-256 后，受控系统 tar 只消费该已验证内存快照，archive 在 tar 后仍复核，解压信任树在版本/npm 探针和最低 worker 前后保持同一身份与内容状态。主端点使用当前 Node `24.18.0`/npm `11.16.0`。任一证据、端点、共同输入摘要、根输入复核、临时对象身份复核或安全清理失败都不产生最终成功 receipt。双端点 receipt 和最终 composite receipt 分别保存在 `/tmp` 的 `0700` 目录和 `0600` 文件中；最终 receipt 嵌入无包名准入摘要、完整双端点结果及其摘要，只有命令成功返回的精确 `receipt.json` 才能作为最终 artifact，`receipt.pending` 和 cleanup-uncertain 残留必须拒绝。失败输出只保留受控错误码与泛化说明，普通日志不得包含包名、npm 输出、本机路径或环境值。临时安装树和最低 Node 在先 quarantine、后逐对象证明所有权的清理闭环中删除，受限证据作为 CI artifact 保留 30 天。单独双端点 receipt 只证明安装端点，不构成最终准入。该流程要求仓库根与同 UID 临时区没有并发写者；纯 Node 最后一次身份检查到逐路径删除之间的纳秒级窗口不是可被 receipt 消除的原子隔离。
 - 构建配置保持 `future.v4: true` 与 `blog: false`，且不启用搜索、统计或其他未批准的浏览器外部请求。
 - Docusaurus 管理的目标源码按 D-076 的官方根 `tsconfig` 继承、显式收紧、首轮 `include` 和无自定义 `paths` 规则独立运行 `tsc --noEmit`；E-012 的测试 program 另行覆盖 NodeNext/ES2024、Node types 与临时 emit，由当前 Node `--test` 直接执行；Docusaurus build 再独立验证框架加载和静态制品。三项都必须通过，不能互相替代。
 - 失败关闭检查 D-075 的物理层边界、跨层深层导入、宽泛 `export *` 与未批准自定义路径别名；具体工具和接线按 D-078 在实现前落盘并验证。
@@ -65,7 +66,13 @@ D-053 已固定 Docusaurus 官方静态能力、现有 PlantUML、Nginx/Certbot�
 - 桌面端和移动端真实浏览器、关键链接和可访问性检查。
 - 发布后 HTTPS、逐条单跳 301、唯一 `Location`、查询保留、目标 200、关键页面和资源冒烟。
 
-D-077 已固定 npm 原生能力加零第三方依赖策略脚本、SPDX JSON、NOTICE 生成、漏洞阈值、脚本默认拒绝和审计失败关闭边界；E-010/E-011 已进一步固定隔离入口、项目 `.npmrc` schema、临时环境、官方 registry 预检、lock 来源扫描、SPDX 规范化和稳定 evidence。首版不把第三方许可证扫描器、SBOM 生成器或 GitHub Dependency Review Action 作为必需工具，本决定也不授权将它们作为可选补充引入。E-010 runner、项目配置、版本契约、旁路检查和 fixture 已实现；E-011/D-077 策略与 schema、报告保留、目标 CI 接线，以及其他质量扫描器、Action、浏览器工具、例外流程和报告契约，均按编码 Spec 实施；这不免除新增依赖、Action 和外部操作原有准入门禁。当前依赖准入、lockfile、确定性证据、类型检查、E-012 测试、E-013 历史检查、E-014 重定向生成、E-015 production job、构建和模块边界检查均尚未实现。实现时必须把缺失输入、零测试、浅/不完整历史、缺失或预存构建制品、静态重定向页、build 竞争修改或 payload/规则摘要不一致视为失败，不能沿用迁移前检查中对不存在入口的跳过行为；所有发布必需 job 必须通过后，`production-artifact` 才能在 fresh runner 重建、重验并封装最终 build。D-065 的文章创建命令只允许作者在获准的 Linux 作者环境显式运行；Git hook、CI、预览、发布和生产内容门禁发现缺失、非法、重复或被改写的 articleId 时只能失败并定位源文件，不得生成、修复、暂存或提交内容。D-066 的目标迁移必须让获准的作者工具、质量 job、PlantUML job 与 Docusaurus 构建执行器统一使用 Node 24.x 且不低于 24.16.0，并由文章创建命令调用原生 `randomUUIDv7()`。D-067 进一步确认 `.nvmrc` 是正常执行的唯一精确版本源，`engines.node` 表达兼容范围。D-072 已把作者 Node.js、质量和构建负载收敛到 Linux 执行环境与 Ubuntu-only CI。D-073 要求主基线和最低端点使用各自 Node 发行版随附的获批 npm 读取同一 lockfile；任何版本、配置、lockfile、外部请求或冻结安装偏离都必须失败，不能切换包管理器、生成第二种 lockfile 或回退到浮动安装。D-074/D-076 固定生产源码严格类型与官方根配置所有权，D-079/E-012 固定 Node 测试类型候选、独立测试配置、临时编译和执行边界；类型检查、测试或 build 成功都不能替代另外两项。E-013 又固定 `@docusaurus/utils@3.10.2` 结构化解码候选、完整 checkout、HEAD 可达 DAG 和稳定身份 lineage 父状态 ledger；E-014 固定从同一 payload 路由和注册表派生运行清单/Nginx 配置，并以 exact location 单跳 301；E-015 固定不传递 `website-quality` build，而由最终 job 完整重建和检查。当前 workflow 已只使用 Ubuntu，但仍是 Node 22、浮动 checkout tag 且默认单提交的迁移前实现；`website-quality` 在 setup-node 后先确认当前可执行文件来自 `RUNNER_TOOL_CACHE/node` 下的发行前缀，再把该前缀机械复制到 runner 私有临时目录，打断工具缓存中的硬链接并移除组/其他用户写权限，然后运行同一零 npm 聚合负载；该过渡只满足 E-010 已实现的 CLI 文件信任前提，不替代 #22 的 Node 24 主/最低入口、Action 固定或目标 CI 拓扑。版本文件和 E-010/E-011 本地实现已落地，依赖、lockfile、真实 D-077 准入证据、TypeScript 配置、E-012 测试 runner、内容解码适配、历史检查器、重定向生成器、目标 CI 接线、模块边界检查、production artifact 和作者工具迁移仍未实施。真实内容树始终只读；测试、历史、301 与字节闭包契约已收敛，但尚未实现。
+D-077 已固定 npm 原生能力加零第三方依赖策略脚本、SPDX JSON、NOTICE 生成、漏洞阈值、脚本默认拒绝和审计失败关闭边界；E-010/E-011 已进一步固定并实现隔离入口、项目 `.npmrc` schema、临时环境、官方 registry 预检、lock 来源扫描、SPDX 规范化和稳定 evidence。#21 已完成固定策略与 admission schema、真实候选审查、精确 tarball 下载/解析、NOTICE 与 evidence、audit v2 严格解析、正式三制品发布、静态闭包、最终证据持有、双端点冻结安装和 composite receipt 的真实图本地验收。首版仍不引入第三方许可证扫描器、SBOM 生成器或 GitHub Dependency Review Action。
+
+上述实现最初由离线 fixture 验收；D-081/D-082 授权后，真实解析、1,225 项精确候选/admissions、35/11/12 补充法律证据、正式 SBOM/evidence/NOTICE、漏洞全零 audit、最终决定及 Node 24.18.0/24.16.0 双端点证明均已闭合。最初诊断的 20 个 moderate、1 个 high 已由两项精确传递 override 后的最终 lock 和实际 audit 全零结果取代。后续联网动作继续受官方来源与受限证据边界约束；新增依赖、Action、脚本例外和其他外部操作继续受原门禁约束。缺失输入、零测试、浅/不完整历史、缺失或预存构建制品、静态重定向页、build 竞争修改或 payload/规则摘要不一致必须失败，不能沿用迁移前检查中对不存在入口的跳过行为；所有发布必需 job 通过后，`production-artifact` 才能在 fresh runner 重建、重验并封装最终 build。
+
+D-065 的文章创建命令只允许作者在获准的 Linux 作者环境显式运行；Git hook、CI、预览、发布和生产内容门禁只能失败并定位非法内容，不得生成、修复、暂存或提交。D-066/D-067/D-072/D-073 要求获准作者工具、质量、PlantUML 和构建执行器使用 Node 24，主/最低端点以各自随附 npm 读取同一 lockfile，任何版本、配置、lockfile、外部请求或冻结安装偏离都失败。D-074/D-076 与 D-079/E-012 分别固定生产源码类型和独立测试边界；E-013 至 E-015 固定完整历史、同版本 301 和 production job 自包含重建。当前 workflow 仍是 Node 22、浮动 checkout tag 和默认单提交的迁移前实现；其 runtime 私有复制只满足 E-010 CLI 文件信任，不替代 #22 的 Node 24 主/最低入口、Action 固定或目标 CI。#21 的候选报告、正式三制品、最终决定和真实双端点依赖闭环已经完成；TypeScript 配置、E-012 runner、内容解码和历史检查器、重定向、模块边界、production artifact 与作者工具迁移仍未完成，真实内容树始终只读。
+
+D-080 已单独完成当前 Linux 作者用户的固定 nvm/Node 24 安装与本地 pre-commit 自动选择：系统和新 Bash 默认 Node 保持不变，hook 不读取用户 npm `prefix`、不修改 shell 初始化或 alias，缺少精确运行时时失败且不联网。上文和下文的“作者工具尚未迁移”只指文章创建等仓库工具尚未实现，不再包含本地作者 Node 运行时。
 
 D-067 的目标 Ubuntu CI 版本入口按以下边界实现：
 
@@ -75,7 +82,9 @@ D-067 的目标 Ubuntu CI 版本入口按以下边界实现：
 - 只有明确的受审依赖变更可以在主基线按 D-077 生成候选 `package-lock.json`；候选经过证据审查和人工准入后，才可与对应 `package.json` 一并进入正常冻结安装。普通作者验证、非依赖 PR、最低端点和发布流程不得改写依赖图。首次迁移必须证明两个 npm 端点能读取同一 lockfile；任一端点失败时阻止迁移并回到依赖决策，不得重写锁文件掩盖不兼容。
 - Node 24 安全 patch 被发现后及时发起独立升级 PR；其他 patch 至少每月检查。升级 PR 先修改 `.nvmrc` 候选值，Ubuntu CI 的主任务和最低版本任务、PlantUML 及届时发布必需门禁通过后才允许合并，不得自动合并，也不得在普通 patch PR 中修改 `engines` 边界。
 
-Ubuntu 所用 nvm 的精确版本与安装校验、Action 的版本与 commit SHA、两个入口和共享负载的具体编排、D-075 模块边界检查工具与接线、D-077/E-011 策略和 schema 实现、E-010 的目标 CI 接线、报告保留、required check 名称及迁移顺序仍待实施。`tsc --noEmit`、E-012 测试与 Docusaurus build 的 npm script 名称已由 CODE-016 固定为 `typecheck`、`test` 与 `build`；CI 只经隔离 `run-script` 调用。D-079 的类型候选、E-012 的配置/runner/fixture，以及 E-013 的历史检查器、DAG fixture 和完整 checkout 尚未通过真实依赖准入或实现。E-005/E-015 已确定 Docusaurus 只在 GitHub Actions 构建默认 `build/`，最终 artifact 由 `production-artifact` fresh runner 自包含重建、重验和封装；生产服务器不安装 Node/npm、不拉源码、不执行构建。具体 Action 与 commit SHA、公开或私有 artifact 读取分支、凭证创建、TAT 和服务器配置仍须完成准入、现场核验和操作授权。
+Ubuntu 所用 nvm 的精确版本与安装校验、Action 的版本与 commit SHA、两个入口和共享负载的具体编排、D-075 模块边界检查工具与接线、D-077 的目标 CI 接线、受限 artifact retention、required check 名称及迁移顺序仍待实施；#21 的本地真实图闭环不等于这些远端能力已经接线。`tsc --noEmit`、E-012 测试与 Docusaurus build 的 npm script 名称已由 CODE-016 固定为 `typecheck`、`test` 与 `build`；CI 只经隔离 `run-script` 调用。D-079/E-013 的类型与 frontmatter 解析依赖已随首轮图准入，但 E-012 的配置/runner/fixture，以及 E-013 的历史检查器、DAG fixture 和完整 checkout 尚未实现。E-005/E-015 已确定 Docusaurus 只在 GitHub Actions 构建默认 `build/`，最终 artifact 由 `production-artifact` fresh runner 自包含重建、重验和封装；生产服务器不安装 Node/npm、不拉源码、不执行构建。具体 Action 与 commit SHA、公开或私有 artifact 读取分支、凭证创建、TAT 和服务器配置仍须完成准入、现场核验和操作授权。
+
+这里仍待确定的 nvm 精确版本仅指 Ubuntu CI 执行器；Linux 作者本地版本已由 D-080 固定并验收。
 
 影响 UI 的 PR 还必须在 E-009 的局域网静态预览制品完成桌面端、平板端和移动端截图。预览状态须报告活动 artifact SHA 与待验收提交一致；每个 HTML 均为 `noindex, nofollow`、无 sitemap，且 draft 只在“草稿”组可见。M0 没有公网 PR 预览，截图和质量结果共同作为合并证据；当前脚本尚未迁移完成，因此迁移前 `public/` 截图不能作为 Docusaurus 页面验收。
 
@@ -300,7 +309,7 @@ GitHub 计划任务可能延迟，不作为分钟级监控。M0 不注入浏览�
 - 最终 artifact 的 source build 可追溯到同一 `production-artifact` job 的完整主端点质量、build tree 摘要和封装校验；`website-quality` 的 job-local build 不具有部署身份。
 - 每个生产版本的 payload、运行重定向清单、Nginx exact-location 配置和活动绝对 root/include 绑定同一 SHA；不存在只切页面或只切规则的成功状态。
 - 任何发布必需的质量、供应链、图表或发布后冒烟门禁失败时，release 不得标记成功，上一已验证版本保持可用。
-- 已确认的是门禁能力类别、D-074 明确指定的独立 `tsc --noEmit` 与 Docusaurus build、D-075 的模块边界检查目标、D-076/D-079/E-013 的候选直接依赖、生产/测试 `tsconfig` 基线、E-012 的临时编译 Node ESM 测试、E-013 的统一结构化解码、完整 Git 历史与稳定 ID lineage 状态机、E-014 的同版本服务端 301、E-015 的 production job 字节所有权，以及 D-077 的首次供应链准入工具组合、格式、阈值、外发边界与失败关闭协议。E-010 的启动前隔离、版本闭包、旁路门禁和真实双端点离线 CLI 已实现；D-077/E-011 策略、记录、真实候选图、正式 SBOM/NOTICE、审计结果和目标 CI 覆盖，E-012 的依赖/配置/runner/fixture，E-013 的解码适配、检查器、完整 checkout 与 Git DAG fixture，E-014 的生成器、派生配置、Nginx 冒烟和回滚兼容检查，以及 E-015 的 workflow、树摘要和上传/deploy fixture 均未实现；不能把 E-010 单项通过误报为这些后续能力已经覆盖。
+- 已确认的是门禁能力类别、D-074 明确指定的独立 `tsc --noEmit` 与 Docusaurus build、D-075 的模块边界检查目标、D-076/D-079/E-013 的直接依赖、生产/测试 `tsconfig` 基线、E-012 的临时编译 Node ESM 测试、E-013 的统一结构化解码、完整 Git 历史与稳定 ID lineage 状态机、E-014 的同版本服务端 301、E-015 的 production job 字节所有权，以及 D-077 的首次供应链准入工具组合、格式、阈值、外发边界与失败关闭协议。E-010/E-011 与 #21 的真实图准入、正式三制品、audit 全零和双端点 composite receipt 已完成本地验收。目标 CI、E-012 的配置/runner/fixture、E-013 的解码适配、检查器、完整 checkout 与 Git DAG fixture、E-014 的生成器、派生配置、Nginx 冒烟和回滚兼容检查，以及 E-015 的 workflow、树摘要和上传/deploy fixture 均未完成；不能把 #21 本地闭环误报为远端 CI、提交、发布或后续链路已经完成。
 - 自动部署不需要公网部署 SSH；生产服务器不保存主站源码、不安装 Node/npm，也不能执行任意仓库脚本或构建。
 - DNS、备案、TLS、服务器和内容都有检查、告警与回滚路径。
 - 访问日志默认关闭，保留的技术日志有用途、权限和删除周期。

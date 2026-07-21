@@ -234,14 +234,30 @@ function assertQualityTopology(root, hookPath) {
   const checkerCount = QUALITY_COMMANDS
     .filter((command) => command.length === 1 && command[0] === "scripts/quality/check-npm-isolation.mjs")
     .length;
-  const testCount = QUALITY_COMMANDS
-    .filter((command) => command.join(" ") === "--test tests/build/run-isolated-npm.test.mjs")
+  const supplyChainCheckerCount = QUALITY_COMMANDS
+    .filter((command) => command.length === 1 && command[0] === "scripts/quality/check-supply-chain.mjs")
     .length;
-  const spdxTestCount = QUALITY_COMMANDS
-    .filter((command) => command.join(" ") === "--test tests/build/deterministic-spdx.test.mjs")
-    .length;
-  if (checkerCount !== 1 || testCount !== 1 || spdxTestCount !== 1) {
-    throw new Error("质量聚合入口必须精确包含 npm 隔离门禁、E-010 测试和 E-011 测试入口。");
+  const requiredTestCommands = [
+    "--test tests/build/run-isolated-npm.test.mjs",
+    "--test tests/build/deterministic-spdx.test.mjs",
+    "--test tests/build/supply-chain-audit-report.test.mjs",
+    "--test tests/build/supply-chain-audit.test.mjs",
+    "--test tests/build/supply-chain-candidate-review.test.mjs",
+    "--test tests/build/supply-chain-download.test.mjs",
+    "--test tests/build/supply-chain-dual-endpoint-ci.test.mjs",
+    "--test tests/build/supply-chain-final-admission.test.mjs",
+    "--test tests/build/supply-chain-final-admission-runner.test.mjs",
+    "--test tests/build/supply-chain-generation.test.mjs",
+    "--test tests/build/supply-chain-notices.test.mjs",
+    "--test tests/build/supply-chain-policy.test.mjs",
+    "--test tests/build/supply-chain-review-report.test.mjs",
+    "--test tests/build/supply-chain-tarball.test.mjs",
+  ];
+  const hasExactRequiredTests = requiredTestCommands.every((expected) => (
+    QUALITY_COMMANDS.filter((command) => command.join(" ") === expected).length === 1
+  ));
+  if (checkerCount !== 1 || supplyChainCheckerCount !== 1 || !hasExactRequiredTests) {
+    throw new Error("质量聚合入口必须精确包含 npm 隔离门禁、E-010、E-011 和全部 #21 离线供应链测试入口。");
   }
 
   const ciPath = resolve(root, ".github/workflows/ci.yml");

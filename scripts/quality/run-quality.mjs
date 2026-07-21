@@ -13,8 +13,21 @@ export const QUALITY_COMMANDS = Object.freeze([
   ["scripts/quality/check-contracts.mjs"],
   ["scripts/quality/check-secrets.mjs"],
   ["scripts/quality/check-static-site.mjs"],
+  ["scripts/quality/check-supply-chain.mjs"],
   ["--test", "tests/build/run-isolated-npm.test.mjs"],
   ["--test", "tests/build/deterministic-spdx.test.mjs"],
+  ["--test", "tests/build/supply-chain-audit-report.test.mjs"],
+  ["--test", "tests/build/supply-chain-audit.test.mjs"],
+  ["--test", "tests/build/supply-chain-candidate-review.test.mjs"],
+  ["--test", "tests/build/supply-chain-download.test.mjs"],
+  ["--test", "tests/build/supply-chain-dual-endpoint-ci.test.mjs"],
+  ["--test", "tests/build/supply-chain-final-admission.test.mjs"],
+  ["--test", "tests/build/supply-chain-final-admission-runner.test.mjs"],
+  ["--test", "tests/build/supply-chain-generation.test.mjs"],
+  ["--test", "tests/build/supply-chain-notices.test.mjs"],
+  ["--test", "tests/build/supply-chain-policy.test.mjs"],
+  ["--test", "tests/build/supply-chain-review-report.test.mjs"],
+  ["--test", "tests/build/supply-chain-tarball.test.mjs"],
 ].map((command) => Object.freeze(command)));
 
 export function runQuality() {

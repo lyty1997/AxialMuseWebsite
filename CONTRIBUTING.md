@@ -4,7 +4,7 @@
 
 ## 开始之前
 
-1. 在获准运行本站 Node.js 的 Linux 工作区，先使用仓库 `.nvmrc` 的精确 Node 版本，再执行一次 `git config core.hooksPath .githooks` 启用本地提交门禁；它会在每次提交前通过 E-010 隔离入口运行统一质量负载。Ubuntu CI 在合入与发布前执行统一验证。
+1. 在获准运行本站 Node.js 的 Linux 工作区，先按 D-080 一次性安装固定的用户级 nvm 与 `.nvmrc` 精确 Node，再执行一次 `git config core.hooksPath .githooks` 启用本地提交门禁；hook 会在自己的子进程内自动选择该版本并通过 E-010 隔离入口运行统一质量负载，不改变系统或父 shell 的默认 Node。缺少精确运行时时门禁失败且不联网安装。Ubuntu CI 在合入与发布前执行统一验证。
 2. 动手前先读 [docs/README.md](docs/README.md) 确认设计真相源，再读本次任务相关的 [codex-rules/](codex-rules/global-AGENTS.md) 规则。
 3. 编码任务再读 [主站编码规范 Spec](docs/engineering/main-site-coding-spec.md)，按规则编号说明实现依据；该 Spec 不替代上层设计或用户决策门禁。
 
@@ -21,10 +21,10 @@
 
 ## 提交前自检
 
-- 在获准的 Linux 执行环境运行 `node scripts/quality/run-isolated-npm.mjs run-script quality` 并确保通过；Ubuntu CI 在合入与发布前执行同一质量负载。
+- 在获准的 Linux 执行环境运行 `bash .githooks/pre-commit`，确认自动选择 `.nvmrc` 精确版本并通过完整质量负载；Ubuntu CI 在合入与发布前执行同一质量负载。
 - UI 改动做实际渲染或截图验证；纯静态页面至少检查入口文件、资源引用和关键链接。
 - 结束时更新 [docs/progress.md](docs/progress.md)；解决 bug 后把原因与方案追加到 [codex-rules/known-issues.md](codex-rules/known-issues.md)。
 
 ## 尚未落地的基建
 
-D-073 的 Node/npm 双端点版本契约与 E-010 隔离入口已经实现；D-076、D-077 已确认目标框架、首轮候选直接依赖、唯一 lockfile 和首次供应链准入协议，但依赖、lockfile、准入策略、证据、派生制品与目标 CI 拓扑仍未实现。新增或升级依赖必须先按 [待决策问题](docs/architecture/open-decisions.md) 和 [主站目标架构](docs/architecture/main-site-target-architecture.md) 对真实候选图取得准入结论；测试及其他质量工具仍按对应设计门禁确认后实施。
+D-073 的 Node/npm 双端点版本契约、E-010 隔离入口、E-011 确定性 SPDX 与 #21 首次真实依赖图准入均已实现并完成本地验收。当前唯一 lock 包含 1,345 个非根物理记录、对应 1,225 个 canonical identity；D-082 的 35/11/12 补充法律证据边界、1,225 项 admissions、正式 SBOM/evidence/NOTICE、实际 audit 全零结果，以及 Node `24.18.0`/npm `11.16.0` 与 Node `24.16.0`/npm `11.13.0` 双端点冻结安装均已闭合。仓库根仍无 `node_modules/`；尚未落地的是目标 CI 拓扑、Docusaurus/TypeScript 基线及后续站点能力。新增或升级依赖仍必须先按 [待决策问题](docs/architecture/open-decisions.md) 和 [主站目标架构](docs/architecture/main-site-target-architecture.md) 重新取得准入结论；测试及其他质量工具按对应设计门禁实施。

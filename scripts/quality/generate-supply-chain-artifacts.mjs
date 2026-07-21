@@ -2,15 +2,15 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { projectRoot } from "./lib/files.mjs";
 import { formatSupplyChainError } from "./lib/supply-chain/errors.mjs";
+import { generateReviewedSupplyChainArtifacts } from "./lib/supply-chain/formal-generation.mjs";
 import {
-  generateSupplyChainArtifacts,
   parseGenerateSupplyChainArguments,
 } from "./lib/supply-chain/sbom-artifacts.mjs";
 
-export function main(arguments_ = process.argv.slice(2)) {
+export async function main(arguments_ = process.argv.slice(2)) {
   try {
     const { createdAt } = parseGenerateSupplyChainArguments(arguments_);
-    generateSupplyChainArtifacts({
+    await generateReviewedSupplyChainArtifacts({
       root: projectRoot(),
       createdAt,
     });
@@ -23,5 +23,5 @@ export function main(arguments_ = process.argv.slice(2)) {
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  process.exitCode = main();
+  process.exitCode = await main();
 }

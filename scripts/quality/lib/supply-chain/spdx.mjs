@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 import { fail } from "./errors.mjs";
+import {
+  npmNativeSpdxPackageId,
+  spdxPackageId,
+} from "./lockfile.mjs";
 
 export const SPDX_NORMALIZER_VERSION = "axial-muse-supply-chain-1.0.0";
 export const SPDX_NAMESPACE_PREFIX = "https://www.axialmuse.com/spdx/npm/axial-muse-website/";
@@ -343,7 +347,9 @@ function validateExpectedPackage(value, pointer) {
   };
   for (const key of EXPECTED_PACKAGE_OPTIONAL_KEYS) {
     if (value[key] !== undefined) {
-      result[key] = assertString(value[key], `${pointer}.${key}`);
+      result[key] = key === "description" && value[key] === null
+        ? null
+        : assertString(value[key], `${pointer}.${key}`);
     }
   }
   return result;
@@ -422,6 +428,104 @@ function validatePackage(value, pointer) {
   return result;
 }
 
+function mapNativeNpmSpdxReference(value, pointer, nativeToCanonical) {
+  const nativeId = assertString(value, pointer);
+  if (nativeId === "SPDXRef-DOCUMENT") return nativeId;
+  const canonicalId = nativeToCanonical.get(nativeId);
+  if (canonicalId === undefined) {
+    fail("SPDX_GRAPH_MISMATCH", `${pointer} 引用了未知 npm 原生 SPDXID。`);
+  }
+  return canonicalId;
+}
+
+function normalizeNativeNpmSpdxIdentifiers(nativeDocument, expectedGraph) {
+  const nativeToCanonical = new Map();
+  const canonicalToNative = new Map();
+  const expectedById = new Map(expectedGraph.packages.map((package_) => [
+    package_.SPDXID,
+    package_,
+  ]));
+  const packages = assertArray(nativeDocument.packages, "$.packages")
+    .map((package_, index) => {
+      const pointer = `$.packages[${index}]`;
+      assertKeys(package_, PACKAGE_REQUIRED_KEYS, PACKAGE_OPTIONAL_KEYS, pointer);
+      const name = assertString(package_.name, `${pointer}.name`);
+      const version = assertExactVersion(package_.versionInfo, `${pointer}.versionInfo`);
+      const nativeId = assertString(package_.SPDXID, `${pointer}.SPDXID`);
+      const expectedNativeId = npmNativeSpdxPackageId(name, version);
+      if (nativeId !== expectedNativeId) {
+        fail("SPDX_GRAPH_MISMATCH", `${pointer}.SPDXID 与固定 npm 投影不一致。`);
+      }
+      const canonicalId = spdxPackageId(name, version);
+      if (nativeToCanonical.has(nativeId)) {
+        fail("SPDX_COLLECTION_DUPLICATE", "$.packages 包含重复 npm 原生 SPDXID。" );
+      }
+      const previousNativeId = canonicalToNative.get(canonicalId);
+      if (previousNativeId !== undefined && previousNativeId !== nativeId) {
+        fail("SPDX_GRAPH_MISMATCH", "npm 原生 SPDXID 合法化产生包身份碰撞。" );
+      }
+      nativeToCanonical.set(nativeId, canonicalId);
+      canonicalToNative.set(canonicalId, nativeId);
+      const expected = expectedById.get(canonicalId);
+      return {
+        ...package_,
+        SPDXID: canonicalId,
+        ...(
+          package_.licenseDeclared === "NOASSERTION"
+          && expected?.licenseDeclared !== undefined
+          && expected.licenseDeclared !== "NOASSERTION"
+            ? { licenseDeclared: expected.licenseDeclared }
+            : {}
+        ),
+      };
+    });
+  const documentDescribes = assertArray(nativeDocument.documentDescribes, "$.documentDescribes")
+    .map((id, index) => mapNativeNpmSpdxReference(
+      id,
+      `$.documentDescribes[${index}]`,
+      nativeToCanonical,
+    ));
+  const relationshipsByIdentity = new Map();
+  assertArray(nativeDocument.relationships, "$.relationships")
+    .forEach((relationship, index) => {
+      const pointer = `$.relationships[${index}]`;
+      assertKeys(relationship, RELATIONSHIP_KEYS, [], pointer);
+      const normalized = {
+        relatedSpdxElement: mapNativeNpmSpdxReference(
+          relationship.relatedSpdxElement,
+          `${pointer}.relatedSpdxElement`,
+          nativeToCanonical,
+        ),
+        relationshipType: assertString(
+          relationship.relationshipType,
+          `${pointer}.relationshipType`,
+        ),
+        spdxElementId: mapNativeNpmSpdxReference(
+          relationship.spdxElementId,
+          `${pointer}.spdxElementId`,
+          nativeToCanonical,
+        ),
+      };
+      if (!RELATIONSHIP_TYPES.has(normalized.relationshipType)) {
+        fail("SPDX_SCHEMA_INVALID", `${pointer}.relationshipType 超出 npm native 子集。`);
+      }
+      const identity = [
+        normalized.spdxElementId,
+        normalized.relationshipType,
+        normalized.relatedSpdxElement,
+      ].join("\u0000");
+      if (!relationshipsByIdentity.has(identity)) {
+        relationshipsByIdentity.set(identity, normalized);
+      }
+    });
+  return {
+    ...nativeDocument,
+    documentDescribes,
+    packages,
+    relationships: [...relationshipsByIdentity.values()],
+  };
+}
+
 function validateRelationship(value, pointer, packageIds) {
   assertKeys(value, RELATIONSHIP_KEYS, [], pointer);
   const relationship = {
@@ -453,7 +557,14 @@ function comparePackageWithExpectation(package_, expected) {
     fail("SPDX_GRAPH_MISMATCH", `${package_.SPDXID}.externalRefs 与 lock 身份不一致。`);
   }
   for (const key of EXPECTED_PACKAGE_OPTIONAL_KEYS) {
-    if (expected[key] !== undefined && package_[key] !== expected[key]) {
+    if (
+      expected[key] !== undefined
+      && (
+        (key === "description" && expected[key] === null)
+          ? package_[key] !== undefined
+          : package_[key] !== expected[key]
+      )
+    ) {
       fail("SPDX_GRAPH_MISMATCH", `${package_.SPDXID}.${key} 与 tarball evidence 不一致。`);
     }
   }
@@ -651,7 +762,7 @@ export function normalizeNpmSpdx({
 }) {
   const expectedGraph = validateExpectedSpdxGraph(expectedGraphInput);
   const semanticDocument = validateAndNormalizeNativeDocument(
-    cloneValue(nativeDocument),
+    normalizeNativeNpmSpdxIdentifiers(cloneValue(nativeDocument), expectedGraph),
     expectedGraph,
     npmVersion,
   );

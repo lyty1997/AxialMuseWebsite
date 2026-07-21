@@ -4,6 +4,7 @@ import {
   chmodSync,
   existsSync,
   linkSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -11,6 +12,7 @@ import {
   realpathSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -20,9 +22,14 @@ import {
   findOperationalPackageManagerCommands,
   OPERATIONAL_NPM_BOUNDARY_PATHS,
 } from "../../scripts/quality/check-npm-isolation.mjs";
+import { projectRoot } from "../../scripts/quality/lib/files.mjs";
 import { buildQualityChildEnvironment } from "../../scripts/quality/lib/process-environment.mjs";
+import { writeIsolatedNpmResult } from "../../scripts/quality/run-isolated-npm.mjs";
 import { QUALITY_COMMANDS } from "../../scripts/quality/run-quality.mjs";
-import { PROJECT_NPM_CONFIG } from "../../scripts/quality/lib/supply-chain/contracts.mjs";
+import {
+  PROJECT_NPM_CONFIG,
+  ROOT_DEPENDENCY_OVERRIDES,
+} from "../../scripts/quality/lib/supply-chain/contracts.mjs";
 import {
   parseProjectNpmrc,
   validateRuntimeContract,
@@ -39,7 +46,12 @@ import {
   formatIsolationError,
   NpmIsolationError,
 } from "../../scripts/quality/lib/supply-chain/errors.mjs";
-import { validateLockfileObject } from "../../scripts/quality/lib/supply-chain/lockfile.mjs";
+import {
+  buildExpectedSpdxGraph,
+  collectLockedPackages,
+  validateLockfileObject,
+} from "../../scripts/quality/lib/supply-chain/lockfile.mjs";
+import { EXPECTED_DEPENDENCY_POLICY } from "../../scripts/quality/lib/supply-chain/policy.mjs";
 import {
   buildProfileArguments,
   parseProfileArguments,
@@ -48,6 +60,7 @@ import {
   publishLockfile,
   runIsolatedNpm,
 } from "../../scripts/quality/lib/supply-chain/runner.mjs";
+import { canonicalJsonBytes } from "../../scripts/quality/lib/supply-chain/spdx.mjs";
 import {
   findShellPackageManagerCommands,
   findWorkflowPackageManagerCommands,
@@ -57,6 +70,7 @@ const NODE_VERSION = process.versions.node;
 const NODE_MAJOR = Number(NODE_VERSION.split(".")[0]);
 const TEST_MINIMUM_NODE_VERSION = `${NODE_MAJOR}.0.0`;
 const ACTUAL_NPM_VERSION = deriveNpmCli(process.execPath).npmVersion;
+const REPOSITORY_ROOT = projectRoot();
 const TEST_NPM_VERSIONS = Object.freeze({
   primary: ACTUAL_NPM_VERSION,
   minimum: "0.0.0",
@@ -75,7 +89,7 @@ function baseManifest() {
     scripts: {
       quality: "node scripts/quality/run-quality.mjs",
       typecheck: "tsc --noEmit",
-      test: "node --test tests/build/run-isolated-npm.test.mjs tests/build/deterministic-spdx.test.mjs",
+      test: "node --test tests/build/run-isolated-npm.test.mjs tests/build/deterministic-spdx.test.mjs tests/build/supply-chain-audit-report.test.mjs tests/build/supply-chain-audit.test.mjs tests/build/supply-chain-candidate-review.test.mjs tests/build/supply-chain-download.test.mjs tests/build/supply-chain-dual-endpoint-ci.test.mjs tests/build/supply-chain-final-admission.test.mjs tests/build/supply-chain-final-admission-runner.test.mjs tests/build/supply-chain-generation.test.mjs tests/build/supply-chain-notices.test.mjs tests/build/supply-chain-policy.test.mjs tests/build/supply-chain-review-report.test.mjs tests/build/supply-chain-tarball.test.mjs",
       build: "node scripts/build/build-site.mjs --mode production",
       "check:artifact": "node scripts/quality/check-artifact.mjs",
     },
@@ -87,6 +101,17 @@ function baseManifest() {
 
 function writeJson(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function replaceRegularFileWithSameBytes(path, mode = null) {
+  const bytes = readFileSync(path);
+  const before = lstatSync(path);
+  unlinkSync(path);
+  writeFileSync(path, bytes);
+  if (mode !== null) chmodSync(path, mode);
+  const after = lstatSync(path);
+  assert.ok(before.dev !== after.dev || before.ino !== after.ino);
+  return { bytes, identity: { dev: after.dev, ino: after.ino } };
 }
 
 function createFakeNodeDistribution(outer) {
@@ -209,8 +234,29 @@ if (behavior.writeCandidateLock) {
 if (behavior.rootLockMutation) {
   writeFileSync(behavior.rootLockMutation.path, behavior.rootLockMutation.text, "utf8");
 }
-process.stdout.write("fixture workload\\n");
-process.exit(behavior.workloadExitCode ?? 0);
+if (behavior.rootLockRoundTrip) {
+  writeFileSync(
+    behavior.rootLockRoundTrip.path,
+    behavior.rootLockRoundTrip.replacementText,
+    "utf8",
+  );
+  writeFileSync(
+    behavior.rootLockRoundTrip.path,
+    behavior.rootLockRoundTrip.originalText,
+    "utf8",
+  );
+}
+if (behavior.rootPolicyMutation) {
+  writeFileSync(behavior.rootPolicyMutation.path, behavior.rootPolicyMutation.text, "utf8");
+}
+if (behavior.workloadSignal) {
+  process.kill(process.pid, behavior.workloadSignal);
+  setTimeout(() => process.exit(99), 1000);
+} else {
+  process.stdout.write(behavior.workloadStdout ?? "fixture workload\\n");
+  if (behavior.workloadStderr) process.stderr.write(behavior.workloadStderr);
+  process.exit(behavior.workloadExitCode ?? 0);
+}
 `;
 }
 
@@ -283,6 +329,96 @@ function writeControlledQualityPaths(fixture, {
   }
 }
 
+function createPreCommitFixture({
+  nvmVersion = "0.40.6",
+  installedNode = `v${NODE_VERSION}`,
+  nvmrc = `${NODE_VERSION}\n`,
+} = {}) {
+  const outer = mkdtempSync("/tmp/axial-muse-pre-commit-test-");
+  const root = join(outer, "project");
+  const home = join(outer, "home");
+  const nvmDirectory = join(home, ".nvm");
+  const fakeNodeVersionDirectory = join(nvmDirectory, "versions/node", `v${NODE_VERSION}`);
+  const fakeNodeBin = join(fakeNodeVersionDirectory, "bin");
+  const callsPath = join(outer, "nvm-calls.txt");
+  const sentinelPath = join(outer, "quality-sentinel.json");
+  mkdirSync(join(root, ".githooks"), { recursive: true });
+  mkdirSync(join(root, "scripts/quality"), { recursive: true });
+  mkdirSync(nvmDirectory, { recursive: true });
+  chmodSync(nvmDirectory, 0o755);
+  mkdirSync(fakeNodeBin, { recursive: true });
+  chmodSync(fakeNodeVersionDirectory, 0o755);
+  chmodSync(fakeNodeBin, 0o755);
+  writeFileSync(join(root, ".nvmrc"), nvmrc, "utf8");
+  writeFileSync(
+    join(root, ".githooks/pre-commit"),
+    readFileSync(join(REPOSITORY_ROOT, ".githooks/pre-commit"), "utf8"),
+    "utf8",
+  );
+  chmodSync(join(root, ".githooks/pre-commit"), 0o755);
+  writeFileSync(
+    join(root, "scripts/quality/run-isolated-npm.mjs"),
+    `import { writeFileSync } from "node:fs";\nwriteFileSync(process.env.HOOK_QUALITY_SENTINEL, JSON.stringify({ args: process.argv.slice(2), home: process.env.HOME, nodeVersion: process.versions.node }) + "\\n", "utf8");\n`,
+    "utf8",
+  );
+  writeFileSync(
+    join(fakeNodeBin, "node"),
+    `#!/usr/bin/env bash\nexec "\${FAKE_REAL_NODE:?}" "$@"\n`,
+    "utf8",
+  );
+  chmodSync(join(fakeNodeBin, "node"), 0o755);
+  writeFileSync(
+    join(nvmDirectory, "nvm.sh"),
+    `printf 'source:%s\\n' "\${1-}" >> "\${HOOK_NVM_CALLS:?}"
+nvm() {
+  printf 'nvm:%s\\n' "$*" >> "\${HOOK_NVM_CALLS:?}"
+  case "$1" in
+    --version) printf '%s\\n' "\${FAKE_NVM_VERSION:?}" ;;
+    version) printf '%s\\n' "\${FAKE_INSTALLED_NODE:?}" ;;
+    which) printf '%s/node\\n' "\${FAKE_NVM_BIN:?}" ;;
+    use) return 96 ;;
+    install|alias|unalias) return 97 ;;
+    *) return 98 ;;
+  esac
+}
+`,
+    "utf8",
+  );
+  chmodSync(join(nvmDirectory, "nvm.sh"), 0o644);
+  const initialized = spawnSync("git", ["init", "--quiet", root], {
+    encoding: "utf8",
+    env: { PATH: process.env.PATH },
+  });
+  assert.equal(initialized.status, 0, initialized.stderr);
+  return {
+    outer,
+    root,
+    home,
+    nvmDirectory,
+    fakeNodeVersionDirectory,
+    callsPath,
+    sentinelPath,
+    environment: {
+      FAKE_INSTALLED_NODE: installedNode,
+      FAKE_NVM_BIN: fakeNodeBin,
+      FAKE_NVM_VERSION: nvmVersion,
+      FAKE_REAL_NODE: process.execPath,
+      HOME: home,
+      HOOK_NVM_CALLS: callsPath,
+      HOOK_QUALITY_SENTINEL: sentinelPath,
+      PATH: process.env.PATH,
+    },
+  };
+}
+
+function runPreCommitFixture(fixture) {
+  return spawnSync("bash", [join(fixture.root, ".githooks/pre-commit")], {
+    cwd: fixture.root,
+    encoding: "utf8",
+    env: fixture.environment,
+  });
+}
+
 function readCalls(fixture) {
   if (!existsSync(fixture.callsPath)) return [];
   return readFileSync(fixture.callsPath, "utf8")
@@ -301,6 +437,9 @@ function runFixture(fixture, request = { profile: "run-script", scriptName: "qua
       ...request,
       runProcess(executable, arguments_, options) {
         fixture.invocations.push({ executable, arguments: [...arguments_] });
+        if (fixture.workloadResultOverride && arguments_[1] !== "config") {
+          return fixture.workloadResultOverride;
+        }
         return spawnSync(executable, [fixture.fakeCli, ...arguments_.slice(1)], options);
       },
       npmVersionsByRole: TEST_NPM_VERSIONS,
@@ -366,6 +505,80 @@ function validLockfile(manifest) {
   };
 }
 
+const AUDIT_SEVERITIES = Object.freeze(["info", "low", "moderate", "high", "critical"]);
+
+function auditVulnerability(name, severity) {
+  return {
+    name,
+    severity,
+    isDirect: true,
+    via: [{
+      source: 1001,
+      name,
+      dependency: name,
+      title: `Synthetic ${severity} advisory for ${name}`,
+      url: "https://github.com/advisories/GHSA-synthetic-1001",
+      severity,
+      range: "<2.0.0",
+    }],
+    effects: [],
+    range: "<2.0.0",
+    nodes: [`node_modules/${name}`],
+    fixAvailable: false,
+  };
+}
+
+function auditReport(vulnerabilities = {}) {
+  const counts = Object.fromEntries(AUDIT_SEVERITIES.map((severity) => [severity, 0]));
+  for (const vulnerability of Object.values(vulnerabilities)) {
+    counts[vulnerability.severity] += 1;
+  }
+  return {
+    auditReportVersion: 2,
+    vulnerabilities,
+    metadata: {
+      vulnerabilities: {
+        ...counts,
+        total: Object.keys(vulnerabilities).length,
+      },
+      dependencies: {
+        prod: 1,
+        dev: 0,
+        optional: 0,
+        peer: 0,
+        peerOptional: 0,
+        total: 1,
+      },
+    },
+  };
+}
+
+function writeDependencyPolicy(fixture, policy = EXPECTED_DEPENDENCY_POLICY) {
+  const contracts = join(fixture.root, "docs/contracts");
+  mkdirSync(contracts, { recursive: true });
+  writeFileSync(
+    join(contracts, "dependency-policy.json"),
+    canonicalJsonBytes(policy),
+    "utf8",
+  );
+}
+
+function createAuditFixture({ behavior = {}, report = auditReport(), status = 0 } = {}) {
+  const manifest = baseManifest();
+  manifest.dependencies = { "example-package": "^1.0.0" };
+  const fixture = createFixture({
+    manifest,
+    behavior: {
+      workloadExitCode: status,
+      workloadStdout: `${JSON.stringify(report)}\n`,
+      ...behavior,
+    },
+  });
+  writeJson(join(fixture.root, "package-lock.json"), validLockfile(manifest));
+  writeDependencyPolicy(fixture);
+  return fixture;
+}
+
 test("E-010 npm isolation contract", async (t) => {
   await t.test("removes secrets and debug controls from quality child environments", () => {
     const syntheticSecret = "synthetic-e010-secret-value";
@@ -421,8 +634,21 @@ test("E-010 npm isolation contract", async (t) => {
       ["scripts/quality/check-contracts.mjs"],
       ["scripts/quality/check-secrets.mjs"],
       ["scripts/quality/check-static-site.mjs"],
+      ["scripts/quality/check-supply-chain.mjs"],
       ["--test", "tests/build/run-isolated-npm.test.mjs"],
       ["--test", "tests/build/deterministic-spdx.test.mjs"],
+      ["--test", "tests/build/supply-chain-audit-report.test.mjs"],
+      ["--test", "tests/build/supply-chain-audit.test.mjs"],
+      ["--test", "tests/build/supply-chain-candidate-review.test.mjs"],
+      ["--test", "tests/build/supply-chain-download.test.mjs"],
+      ["--test", "tests/build/supply-chain-dual-endpoint-ci.test.mjs"],
+      ["--test", "tests/build/supply-chain-final-admission.test.mjs"],
+      ["--test", "tests/build/supply-chain-final-admission-runner.test.mjs"],
+      ["--test", "tests/build/supply-chain-generation.test.mjs"],
+      ["--test", "tests/build/supply-chain-notices.test.mjs"],
+      ["--test", "tests/build/supply-chain-policy.test.mjs"],
+      ["--test", "tests/build/supply-chain-review-report.test.mjs"],
+      ["--test", "tests/build/supply-chain-tarball.test.mjs"],
     ]);
 
     const valid = createFixture();
@@ -526,6 +752,94 @@ test("E-010 npm isolation contract", async (t) => {
     }
   });
 
+  await t.test("boots pre-commit through pinned nvm without installing or changing the caller", () => {
+    const callerNodeVersion = process.versions.node;
+    const valid = createPreCommitFixture();
+    try {
+      const result = runPreCommitFixture(valid);
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(
+        readFileSync(valid.callsPath, "utf8").trim().split("\n"),
+        [
+          "source:--no-use",
+          "nvm:--version",
+          `nvm:version ${NODE_VERSION}`,
+          `nvm:which ${NODE_VERSION}`,
+        ],
+      );
+      assert.deepEqual(JSON.parse(readFileSync(valid.sentinelPath, "utf8")), {
+        args: ["run-script", "quality"],
+        home: valid.home,
+        nodeVersion: NODE_VERSION,
+      });
+      assert.equal(process.versions.node, callerNodeVersion);
+    } finally {
+      rmSync(valid.outer, { recursive: true, force: true });
+    }
+
+    for (const fixture of [
+      createPreCommitFixture({ nvmVersion: "0.40.5" }),
+      createPreCommitFixture({ installedNode: "N/A" }),
+      createPreCommitFixture({ nvmrc: `${NODE_VERSION}\nextra` }),
+      createPreCommitFixture({ nvmrc: `${NODE_MAJOR}\n` }),
+      createPreCommitFixture({ nvmrc: NODE_VERSION }),
+    ]) {
+      try {
+        const result = runPreCommitFixture(fixture);
+        assert.notEqual(result.status, 0);
+        assert.equal(existsSync(fixture.sentinelPath), false);
+        const calls = existsSync(fixture.callsPath)
+          ? readFileSync(fixture.callsPath, "utf8")
+          : "";
+        assert.ok(!/^nvm:(?:install|alias|unalias)\b/m.test(calls));
+      } finally {
+        rmSync(fixture.outer, { recursive: true, force: true });
+      }
+    }
+
+    const writable = createPreCommitFixture();
+    try {
+      chmodSync(writable.nvmDirectory, 0o775);
+      const result = runPreCommitFixture(writable);
+      assert.notEqual(result.status, 0);
+      assert.equal(existsSync(writable.sentinelPath), false);
+      assert.equal(existsSync(writable.callsPath), false);
+    } finally {
+      rmSync(writable.outer, { recursive: true, force: true });
+    }
+
+    const missingNvm = createPreCommitFixture();
+    try {
+      rmSync(missingNvm.nvmDirectory, { recursive: true, force: true });
+      const result = runPreCommitFixture(missingNvm);
+      assert.notEqual(result.status, 0);
+      assert.equal(existsSync(missingNvm.sentinelPath), false);
+      assert.equal(existsSync(missingNvm.callsPath), false);
+    } finally {
+      rmSync(missingNvm.outer, { recursive: true, force: true });
+    }
+
+    const writableNode = createPreCommitFixture();
+    try {
+      chmodSync(writableNode.fakeNodeVersionDirectory, 0o775);
+      const result = runPreCommitFixture(writableNode);
+      assert.notEqual(result.status, 0);
+      assert.equal(existsSync(writableNode.sentinelPath), false);
+    } finally {
+      rmSync(writableNode.outer, { recursive: true, force: true });
+    }
+
+    const escapedNode = createPreCommitFixture();
+    try {
+      escapedNode.environment.FAKE_NVM_BIN = dirname(process.execPath);
+      const result = runPreCommitFixture(escapedNode);
+      assert.notEqual(result.status, 0);
+      assert.equal(existsSync(escapedNode.sentinelPath), false);
+    } finally {
+      rmSync(escapedNode.outer, { recursive: true, force: true });
+    }
+  });
+
   await t.test("accepts only the exact nine-key project npmrc", () => {
     assert.deepEqual(parseProjectNpmrc(expectedNpmrc()), PROJECT_NPM_CONFIG);
     const cases = [
@@ -567,9 +881,25 @@ test("E-010 npm isolation contract", async (t) => {
         expectCode(() => validateManifestObject(manifest), "NPM_MANIFEST_SOURCE");
       }
     }
-    const manifest = baseManifest();
-    manifest.overrides = { "example-package": "1.0.0" };
-    expectCode(() => validateManifestObject(manifest), "NPM_MANIFEST_SOURCE_FIELD");
+    const exactOverrides = baseManifest();
+    exactOverrides.overrides = structuredClone(ROOT_DEPENDENCY_OVERRIDES);
+    assert.deepEqual(validateManifestObject(exactOverrides).overrides, ROOT_DEPENDENCY_OVERRIDES);
+    for (const overrides of [
+      { "example-package": "1.0.0" },
+      { ...ROOT_DEPENDENCY_OVERRIDES, "example-package": "1.0.0" },
+      { ...ROOT_DEPENDENCY_OVERRIDES, uuid: "11.1.0" },
+      { ...ROOT_DEPENDENCY_OVERRIDES, uuid: { ".": "11.1.1" } },
+    ]) {
+      const manifest = baseManifest();
+      manifest.overrides = overrides;
+      expectCode(() => validateManifestObject(manifest), "NPM_MANIFEST_OVERRIDES");
+    }
+    const realManifestWithoutOverrides = baseManifest();
+    realManifestWithoutOverrides.name = "axial-muse-website";
+    expectCode(
+      () => validateManifestObject(realManifestWithoutOverrides),
+      "NPM_MANIFEST_OVERRIDES",
+    );
     for (const [field, value] of [
       ["packageManager", "pnpm@9.0.0"],
       ["devEngines", { packageManager: { name: "pnpm" } }],
@@ -625,6 +955,141 @@ test("E-010 npm isolation contract", async (t) => {
       integrity,
     };
     assert.equal(validateLockfileObject(scopedLock, scopedManifest).lockfileVersion, 3);
+
+    const overriddenManifest = baseManifest();
+    overriddenManifest.dependencies = { "dependency-parent": "1.0.0" };
+    overriddenManifest.overrides = structuredClone(ROOT_DEPENDENCY_OVERRIDES);
+    const overriddenLock = {
+      name: overriddenManifest.name,
+      version: overriddenManifest.version,
+      lockfileVersion: 3,
+      packages: {
+        "": {
+          name: overriddenManifest.name,
+          version: overriddenManifest.version,
+          dependencies: structuredClone(overriddenManifest.dependencies),
+        },
+        "node_modules/dependency-parent": {
+          version: "1.0.0",
+          resolved: "https://registry.npmjs.org/dependency-parent/-/dependency-parent-1.0.0.tgz",
+          integrity,
+          dependencies: {
+            "serialize-javascript": "^6.0.0",
+            uuid: "^9.0.0",
+          },
+        },
+        "node_modules/serialize-javascript": {
+          version: ROOT_DEPENDENCY_OVERRIDES["serialize-javascript"],
+          resolved: "https://registry.npmjs.org/serialize-javascript/-/serialize-javascript-7.0.5.tgz",
+          integrity,
+        },
+        "node_modules/uuid": {
+          version: ROOT_DEPENDENCY_OVERRIDES.uuid,
+          resolved: "https://registry.npmjs.org/uuid/-/uuid-11.1.1.tgz",
+          integrity,
+        },
+      },
+    };
+    assert.equal(
+      validateLockfileObject(overriddenLock, overriddenManifest).lockfileVersion,
+      3,
+    );
+    const missingOverride = structuredClone(overriddenLock);
+    delete missingOverride.packages["node_modules/uuid"];
+    expectCode(
+      () => validateLockfileObject(missingOverride, overriddenManifest),
+      "NPM_LOCK_OVERRIDE_MISSING",
+    );
+    const driftedOverride = structuredClone(overriddenLock);
+    driftedOverride.packages["node_modules/uuid"].version = "11.1.0";
+    driftedOverride.packages["node_modules/uuid"].resolved =
+      "https://registry.npmjs.org/uuid/-/uuid-11.1.0.tgz";
+    expectCode(
+      () => validateLockfileObject(driftedOverride, overriddenManifest),
+      "NPM_LOCK_OVERRIDE_DRIFT",
+    );
+
+    const aliasManifest = baseManifest();
+    aliasManifest.dependencies = { "alias-parent": "1.0.0" };
+    const aliasLock = {
+      name: aliasManifest.name,
+      version: aliasManifest.version,
+      lockfileVersion: 3,
+      requires: true,
+      packages: {
+        "": {
+          name: aliasManifest.name,
+          version: aliasManifest.version,
+          dependencies: aliasManifest.dependencies,
+        },
+        "node_modules/alias-parent": {
+          version: "1.0.0",
+          resolved: "https://registry.npmjs.org/alias-parent/-/alias-parent-1.0.0.tgz",
+          integrity,
+          dependencies: {
+            "compat-name": "npm:@scope/actual@2.3.4",
+          },
+          peerDependencies: {
+            "compat-name": "*",
+            react: "^18.0.0 || ^19.0.0",
+          },
+          peerDependenciesMeta: {
+            react: { optional: true },
+          },
+        },
+        "node_modules/compat-name": {
+          name: "@scope/actual",
+          version: "2.3.4",
+          resolved: "https://registry.npmjs.org/@scope/actual/-/actual-2.3.4.tgz",
+          integrity,
+        },
+      },
+    };
+    assert.equal(validateLockfileObject(aliasLock, aliasManifest).lockfileVersion, 3);
+    assert.deepEqual(
+      collectLockedPackages(aliasLock, aliasManifest).map(({ identity }) => identity),
+      ["@scope/actual@2.3.4", "alias-parent@1.0.0"],
+    );
+    const aliasGraph = buildExpectedSpdxGraph(aliasLock, aliasManifest);
+    const actualPackage = aliasGraph.packages.find(({ name }) => name === "@scope/actual");
+    assert.equal(actualPackage.packageFileName, "node_modules/compat-name");
+    assert.equal(actualPackage.purl, "pkg:npm/%40scope/actual@2.3.4");
+
+    const duplicatedAliasPlacement = structuredClone(aliasLock);
+    duplicatedAliasPlacement.packages["node_modules/alias-parent/node_modules/compat-name"] =
+      structuredClone(duplicatedAliasPlacement.packages["node_modules/compat-name"]);
+    assert.equal(
+      validateLockfileObject(duplicatedAliasPlacement, aliasManifest).lockfileVersion,
+      3,
+    );
+
+    const rangeAlias = structuredClone(aliasLock);
+    rangeAlias.packages["node_modules/alias-parent"].dependencies["compat-name"] =
+      "npm:@scope/actual@^2.3.0";
+    expectCode(
+      () => validateLockfileObject(rangeAlias, aliasManifest),
+      "NPM_LOCK_DEPENDENCY_SOURCE",
+    );
+    const mismatchedAlias = structuredClone(aliasLock);
+    mismatchedAlias.packages["node_modules/alias-parent"].dependencies["compat-name"] =
+      "npm:@scope/other@2.3.4";
+    expectCode(
+      () => validateLockfileObject(mismatchedAlias, aliasManifest),
+      "NPM_LOCK_PACKAGE_NAME",
+    );
+    const unboundAliasTarget = structuredClone(aliasLock);
+    unboundAliasTarget.packages["node_modules/alias-parent"].dependencies["compat-name"] = "2.3.4";
+    expectCode(
+      () => validateLockfileObject(unboundAliasTarget, aliasManifest),
+      "NPM_LOCK_PACKAGE_NAME",
+    );
+    const repositoryShorthand = structuredClone(aliasLock);
+    repositoryShorthand.packages["node_modules/alias-parent"].dependencies["compat-name"] =
+      "owner/repository";
+    expectCode(
+      () => validateLockfileObject(repositoryShorthand, aliasManifest),
+      "NPM_LOCK_DEPENDENCY_SOURCE",
+    );
 
     const mutations = [
       [(value) => { value.lockfileVersion = 2; }, "NPM_LOCK_VERSION"],
@@ -1181,19 +1646,347 @@ test("E-010 npm isolation contract", async (t) => {
       const fixture = createFixture({ manifest });
       try {
         writeJson(join(fixture.root, "package-lock.json"), lockfile);
+        if (profile === "audit") {
+          writeDependencyPolicy(fixture);
+          updateBehavior(fixture, {
+            workloadStdout: `${JSON.stringify(auditReport())}\n`,
+          });
+        }
         const result = runFixture(fixture, { profile, scriptName: null });
         assert.deepEqual(result.arguments, expectedArguments);
+        if (profile === "audit") {
+          assert.equal(result.audit.outcome, "pass");
+          assert.deepEqual(result.audit.blocking, []);
+        }
         const calls = readCalls(fixture);
         assert.equal(calls.length, 2);
         assert.deepEqual(calls[0].args, ["config", "list", "--json"]);
         assert.deepEqual(calls[1].args, expectedArguments);
-        assert.equal(calls[1].cwd, fixture.root);
+        if (profile === "audit") assert.notEqual(calls[1].cwd, fixture.root);
+        else assert.equal(calls[1].cwd, fixture.root);
         assert.equal(calls[1].lockBefore, `${JSON.stringify(lockfile, null, 2)}\n`);
         assert.ok(!existsSync(calls[0].home));
       } finally {
         destroyFixture(fixture);
       }
     }
+  });
+
+  await t.test("parses audit results only after policy-bound post-checks", () => {
+    const clean = createAuditFixture();
+    try {
+      const result = runFixture(clean, { profile: "audit", scriptName: null });
+      assert.equal(result.audit.outcome, "pass");
+      assert.equal(result.audit.exitCode, 0);
+      assert.deepEqual(result.audit.reportOnly, []);
+      assert.equal(result.stdout, `${JSON.stringify(auditReport())}\n`);
+    } finally {
+      destroyFixture(clean);
+    }
+
+    const lowReport = auditReport({
+      "low-package": auditVulnerability("low-package", "low"),
+    });
+    const low = createAuditFixture({ report: lowReport });
+    try {
+      const result = runFixture(low, { profile: "audit", scriptName: null });
+      assert.equal(result.audit.outcome, "pass");
+      assert.deepEqual(result.audit.reportOnly, [
+        { name: "low-package", severity: "low" },
+      ]);
+      assert.equal(result.stdout, `${JSON.stringify(lowReport)}\n`);
+    } finally {
+      destroyFixture(low);
+    }
+
+    const blockedReport = auditReport({
+      "moderate-package": auditVulnerability("moderate-package", "moderate"),
+    });
+    const blocked = createAuditFixture({ report: blockedReport, status: 1 });
+    try {
+      expectCode(
+        () => runFixture(blocked, { profile: "audit", scriptName: null }),
+        "SUPPLY_CHAIN_AUDIT_BLOCKED",
+      );
+      assert.equal(readCalls(blocked).length, 2);
+    } finally {
+      destroyFixture(blocked);
+    }
+
+    for (const [fixture, code] of [
+      [createAuditFixture({ behavior: { workloadStdout: "not-json\n" }, status: 1 }), "SUPPLY_CHAIN_AUDIT_JSON"],
+      [createAuditFixture({ status: 1 }), "SUPPLY_CHAIN_AUDIT_EXIT_MISMATCH"],
+      [createAuditFixture({ report: blockedReport, status: 0 }), "SUPPLY_CHAIN_AUDIT_EXIT_MISMATCH"],
+      [createAuditFixture({ status: 2 }), "NPM_WORKLOAD_FAILED"],
+      [createAuditFixture({ behavior: { workloadSignal: "SIGTERM" } }), "NPM_WORKLOAD_FAILED"],
+    ]) {
+      try {
+        expectCode(() => runFixture(fixture, { profile: "audit", scriptName: null }), code);
+      } finally {
+        destroyFixture(fixture);
+      }
+    }
+
+    const invalidPolicy = createAuditFixture();
+    try {
+      writeFileSync(
+        join(invalidPolicy.root, "docs/contracts/dependency-policy.json"),
+        "{\"audit\":{}}\n",
+        "utf8",
+      );
+      expectCode(
+        () => runFixture(invalidPolicy, { profile: "audit", scriptName: null }),
+        "SUPPLY_CHAIN_POLICY_SCHEMA",
+      );
+      assert.deepEqual(readCalls(invalidPolicy), []);
+    } finally {
+      destroyFixture(invalidPolicy);
+    }
+
+    const preflightPolicyDrift = createAuditFixture();
+    try {
+      updateBehavior(preflightPolicyDrift, {
+        preflightRootMutation: {
+          path: join(preflightPolicyDrift.root, "docs/contracts/dependency-policy.json"),
+          text: `${canonicalJsonBytes(EXPECTED_DEPENDENCY_POLICY)}\n`,
+        },
+      });
+      expectCode(
+        () => runFixture(preflightPolicyDrift, { profile: "audit", scriptName: null }),
+        "NPM_INPUT_DRIFT",
+      );
+      assert.equal(readCalls(preflightPolicyDrift).length, 1);
+    } finally {
+      destroyFixture(preflightPolicyDrift);
+    }
+
+    const driftingPolicy = createAuditFixture({
+      behavior: { workloadStdout: "not-json\n" },
+    });
+    try {
+      updateBehavior(driftingPolicy, {
+        rootPolicyMutation: {
+          path: join(driftingPolicy.root, "docs/contracts/dependency-policy.json"),
+          text: `${canonicalJsonBytes(EXPECTED_DEPENDENCY_POLICY)}\n`,
+        },
+      });
+      expectCode(
+        () => runFixture(driftingPolicy, { profile: "audit", scriptName: null }),
+        "NPM_INPUT_DRIFT",
+      );
+      assert.equal(readCalls(driftingPolicy).length, 2);
+    } finally {
+      destroyFixture(driftingPolicy);
+    }
+
+    const spawnFailure = createAuditFixture();
+    try {
+      spawnFailure.workloadResultOverride = {
+        error: new Error("synthetic spawn failure"),
+        status: null,
+        signal: null,
+        stdout: `${JSON.stringify(auditReport())}\n`,
+        stderr: "",
+      };
+      expectCode(
+        () => runFixture(spawnFailure, { profile: "audit", scriptName: null }),
+        "NPM_WORKLOAD_SPAWN",
+      );
+    } finally {
+      destroyFixture(spawnFailure);
+    }
+
+    const nonAuditStatusOne = createFixture({ behavior: { workloadExitCode: 1 } });
+    try {
+      expectCode(() => runFixture(nonAuditStatusOne), "NPM_WORKLOAD_FAILED");
+    } finally {
+      destroyFixture(nonAuditStatusOne);
+    }
+  });
+
+  await t.test("binds audit execution to an immutable copy of the initial lockfile", () => {
+    const fixture = createAuditFixture();
+    const lockPath = join(fixture.root, "package-lock.json");
+    const originalText = readFileSync(lockPath, "utf8");
+    const replacement = JSON.parse(originalText);
+    replacement.packages["node_modules/example-package"].version = "9.9.9";
+    const replacementText = `${JSON.stringify(replacement, null, 2)}\n`;
+    updateBehavior(fixture, {
+      rootLockRoundTrip: {
+        path: lockPath,
+        originalText,
+        replacementText,
+      },
+    });
+    try {
+      const result = runFixture(fixture, { profile: "audit", scriptName: null });
+      assert.equal(result.audit.outcome, "pass");
+      const calls = readCalls(fixture);
+      assert.notEqual(calls[1].cwd, fixture.root);
+      assert.equal(calls[1].lockBefore, originalText);
+      assert.equal(readFileSync(lockPath, "utf8"), originalText);
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("invokes the trusted audit callback after post-checks and parsing but before blocking", () => {
+    const clean = createAuditFixture();
+    try {
+      const observed = [];
+      const result = runFixture(clean, {
+        profile: "audit",
+        scriptName: null,
+        onAuditResult: ({ audit, stdout }) => observed.push({ audit, stdout }),
+      });
+      assert.equal(result.audit.outcome, "pass");
+      assert.equal(observed.length, 1);
+      assert.equal(observed[0].audit.outcome, "pass");
+      assert.equal(observed[0].stdout, `${JSON.stringify(auditReport())}\n`);
+    } finally {
+      destroyFixture(clean);
+    }
+
+    const blockedReport = auditReport({
+      "moderate-package": auditVulnerability("moderate-package", "moderate"),
+    });
+    const blocked = createAuditFixture({ report: blockedReport, status: 1 });
+    try {
+      let callbacks = 0;
+      expectCode(
+        () => runFixture(blocked, {
+          profile: "audit",
+          scriptName: null,
+          onAuditResult: ({ audit, stdout }) => {
+            callbacks += 1;
+            assert.equal(audit.outcome, "blocked");
+            assert.equal(stdout, `${JSON.stringify(blockedReport)}\n`);
+            audit.blocking.length = 0;
+          },
+        }),
+        "SUPPLY_CHAIN_AUDIT_BLOCKED",
+      );
+      assert.equal(callbacks, 1);
+    } finally {
+      destroyFixture(blocked);
+    }
+
+    for (const [fixture, expectedCode] of [
+      [createAuditFixture({ behavior: { workloadStdout: "not-json\n" }, status: 1 }), "SUPPLY_CHAIN_AUDIT_JSON"],
+      [createAuditFixture({
+        behavior: {
+          rootPolicyMutation: {
+            path: null,
+            text: `${canonicalJsonBytes(EXPECTED_DEPENDENCY_POLICY)}\n`,
+          },
+        },
+      }), "NPM_INPUT_DRIFT"],
+    ]) {
+      try {
+        if (expectedCode === "NPM_INPUT_DRIFT") {
+          const behaviorPath = join(fixture.outer, "behavior.json");
+          const behavior = JSON.parse(readFileSync(behaviorPath, "utf8"));
+          behavior.rootPolicyMutation.path = join(
+            fixture.root,
+            "docs/contracts/dependency-policy.json",
+          );
+          writeJson(behaviorPath, behavior);
+        }
+        let callbacks = 0;
+        expectCode(
+          () => runFixture(fixture, {
+            profile: "audit",
+            scriptName: null,
+            onAuditResult: () => { callbacks += 1; },
+          }),
+          expectedCode,
+        );
+        assert.equal(callbacks, 0);
+      } finally {
+        destroyFixture(fixture);
+      }
+    }
+
+    const callbackFailure = createAuditFixture();
+    try {
+      expectCode(
+        () => runFixture(callbackFailure, {
+          profile: "audit",
+          scriptName: null,
+          onAuditResult: () => {
+            throw new NpmIsolationError(
+              "SUPPLY_CHAIN_AUDIT_REPORT_WRITE",
+              "synthetic callback write failure",
+            );
+          },
+        }),
+        "SUPPLY_CHAIN_AUDIT_REPORT_WRITE",
+      );
+    } finally {
+      destroyFixture(callbackFailure);
+    }
+
+    const invalidScope = createFixture();
+    try {
+      expectCode(
+        () => runFixture(invalidScope, {
+          profile: "run-script",
+          scriptName: "quality",
+          onAuditResult: () => {},
+        }),
+        "NPM_AUDIT_CALLBACK_SCOPE",
+      );
+      assert.deepEqual(readCalls(invalidScope), []);
+    } finally {
+      destroyFixture(invalidScope);
+    }
+  });
+
+  await t.test("keeps raw audit JSON out of CLI logs while retaining it in the result", () => {
+    const report = auditReport({
+      "low-package": auditVulnerability("low-package", "low"),
+    });
+    const fixture = createAuditFixture({
+      report,
+      behavior: { workloadStderr: "synthetic raw audit stderr marker\n" },
+    });
+    try {
+      const result = runFixture(fixture, { profile: "audit", scriptName: null });
+      assert.equal(result.stdout, `${JSON.stringify(report)}\n`);
+      assert.equal(result.stderr, "synthetic raw audit stderr marker\n");
+
+      let loggedOutput = "";
+      let loggedError = "";
+      writeIsolatedNpmResult(result, {
+        standardOutput: { write: (chunk) => { loggedOutput += chunk; } },
+        standardError: { write: (chunk) => { loggedError += chunk; } },
+      });
+      assert.equal(loggedOutput, "");
+      assert.equal(
+        loggedError,
+        "Isolated npm audit passed: {\"auditReportVersion\":2,\"outcome\":\"pass\",\"total\":1,\"info\":0,\"low\":1,\"moderate\":0,\"high\":0,\"critical\":0,\"reportOnly\":1,\"blocking\":0} (registry=official, cache=fresh, config=isolated).\n",
+      );
+      assert.ok(!loggedError.includes("low-package"));
+      assert.ok(!loggedError.includes("synthetic raw audit stderr marker"));
+    } finally {
+      destroyFixture(fixture);
+    }
+
+    let loggedOutput = "";
+    let loggedError = "";
+    writeIsolatedNpmResult({
+      profile: "ci",
+      stdout: "fixture stdout\n",
+      stderr: "fixture stderr\n",
+    }, {
+      standardOutput: { write: (chunk) => { loggedOutput += chunk; } },
+      standardError: { write: (chunk) => { loggedError += chunk; } },
+    });
+    assert.equal(
+      loggedOutput,
+      "fixture stdout\nIsolated npm profile passed: ci (registry=official, cache=fresh, config=isolated).\n",
+    );
+    assert.equal(loggedError, "fixture stderr\n");
   });
 
   await t.test("rejects local bin escapes before a run-script workload", () => {
@@ -1548,6 +2341,636 @@ test("E-010 npm isolation contract", async (t) => {
       } finally {
         destroyFixture(fixture);
       }
+    }
+  });
+
+  await t.test("rejects a same-byte target inode replacement before publication", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const original = validLockfile(manifest);
+    const candidate = structuredClone(original);
+    candidate.packages["node_modules/example-package"].version = "1.2.4";
+    candidate.packages["node_modules/example-package"].resolved =
+      "https://registry.npmjs.org/example-package/-/example-package-1.2.4.tgz";
+    const fixture = createFixture({ manifest, behavior: { writeCandidateLock: candidate } });
+    const target = join(fixture.root, "package-lock.json");
+    const originalText = `${JSON.stringify(original, null, 2)}\n`;
+    let replacement;
+    try {
+      writeFileSync(target, originalText, "utf8");
+      expectCode(
+        () => runFixture(fixture, {
+          profile: "resolve-lock",
+          scriptName: null,
+          publishCandidate(text, root, options) {
+            return publishLockfile(text, root, {
+              ...options,
+              beforeRename() {
+                replacement = replaceRegularFileWithSameBytes(target, 0o644);
+              },
+            });
+          },
+        }),
+        "NPM_LOCK_CONCURRENT_CHANGE",
+      );
+      const targetStat = lstatSync(target);
+      assert.deepEqual(
+        { dev: targetStat.dev, ino: targetStat.ino },
+        replacement.identity,
+      );
+      assert.equal(readFileSync(target, "utf8"), originalText);
+      assert.deepEqual(
+        readdirSync(fixture.root).filter((name) => name.includes("package-lock.json.e010")),
+        [],
+      );
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("retains a target created between absence check and no-replace activation", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const candidate = validLockfile(manifest);
+    const fixture = createFixture({ manifest, behavior: { writeCandidateLock: candidate } });
+    const externalText = "external check-to-activation target\n";
+    try {
+      expectCode(
+        () => runFixture(fixture, {
+          profile: "resolve-lock",
+          scriptName: null,
+          publishCandidate(text, root, options) {
+            return publishLockfile(text, root, {
+              ...options,
+              afterTargetOwnershipCheck(target) {
+                writeFileSync(target, externalText, "utf8");
+              },
+            });
+          },
+        }),
+        "NPM_LOCK_PUBLISH_UNCERTAIN",
+      );
+      assert.equal(
+        readFileSync(join(fixture.root, "package-lock.json"), "utf8"),
+        externalText,
+      );
+      assert.deepEqual(
+        readdirSync(fixture.root).filter((name) => name.includes("package-lock.json.e010")),
+        [],
+      );
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("retains a same-byte candidate inode replacement", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const original = validLockfile(manifest);
+    const candidate = structuredClone(original);
+    candidate.packages["node_modules/example-package"].version = "1.2.4";
+    candidate.packages["node_modules/example-package"].resolved =
+      "https://registry.npmjs.org/example-package/-/example-package-1.2.4.tgz";
+    const fixture = createFixture({ manifest, behavior: { writeCandidateLock: candidate } });
+    const originalText = `${JSON.stringify(original, null, 2)}\n`;
+    let candidatePath;
+    let replacement;
+    try {
+      writeFileSync(join(fixture.root, "package-lock.json"), originalText, "utf8");
+      expectCode(
+        () => runFixture(fixture, {
+          profile: "resolve-lock",
+          scriptName: null,
+          publishCandidate(text, root, options) {
+            return publishLockfile(text, root, {
+              ...options,
+              afterCandidateSync(path) {
+                candidatePath = path;
+                replacement = replaceRegularFileWithSameBytes(path, 0o644);
+              },
+            });
+          },
+        }),
+        "NPM_LOCK_PUBLISH_UNCERTAIN",
+      );
+      assert.equal(readFileSync(join(fixture.root, "package-lock.json"), "utf8"), originalText);
+      assert.equal(readFileSync(candidatePath, "utf8"), `${JSON.stringify(candidate, null, 2)}\n`);
+      const candidateStat = lstatSync(candidatePath);
+      assert.deepEqual(
+        { dev: candidateStat.dev, ino: candidateStat.ino },
+        replacement.identity,
+      );
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("retains a target replacement moved into backup during check-to-rename", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const original = validLockfile(manifest);
+    const candidate = structuredClone(original);
+    candidate.packages["node_modules/example-package"].version = "1.2.4";
+    candidate.packages["node_modules/example-package"].resolved =
+      "https://registry.npmjs.org/example-package/-/example-package-1.2.4.tgz";
+    const fixture = createFixture({ manifest, behavior: { writeCandidateLock: candidate } });
+    const target = join(fixture.root, "package-lock.json");
+    const backup = join(fixture.root, `.package-lock.json.e010-${process.pid}.backup`);
+    const originalText = `${JSON.stringify(original, null, 2)}\n`;
+    let replacement;
+    try {
+      writeFileSync(target, originalText, "utf8");
+      expectCode(
+        () => runFixture(fixture, {
+          profile: "resolve-lock",
+          scriptName: null,
+          publishCandidate(text, root, options) {
+            return publishLockfile(text, root, {
+              ...options,
+              afterTargetOwnershipCheck() {
+                replacement = replaceRegularFileWithSameBytes(target, 0o644);
+              },
+            });
+          },
+        }),
+        "NPM_LOCK_PUBLISH_UNCERTAIN",
+      );
+      assert.equal(readFileSync(target, "utf8"), originalText);
+      assert.equal(readFileSync(backup, "utf8"), originalText);
+      const backupStat = lstatSync(backup);
+      assert.deepEqual(
+        { dev: backupStat.dev, ino: backupStat.ino },
+        replacement.identity,
+      );
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("keeps the committed target when backup cleanup loses ownership", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const original = validLockfile(manifest);
+    const candidate = structuredClone(original);
+    candidate.packages["node_modules/example-package"].version = "1.2.4";
+    candidate.packages["node_modules/example-package"].resolved =
+      "https://registry.npmjs.org/example-package/-/example-package-1.2.4.tgz";
+    const fixture = createFixture({ manifest, behavior: { writeCandidateLock: candidate } });
+    const target = join(fixture.root, "package-lock.json");
+    const candidateText = `${JSON.stringify(candidate, null, 2)}\n`;
+    let replacement;
+    try {
+      writeJson(target, original);
+      expectCode(
+        () => runFixture(fixture, {
+          profile: "resolve-lock",
+          scriptName: null,
+          publishCandidate(text, root, options) {
+            return publishLockfile(text, root, {
+              ...options,
+              afterBackupCleanupOwnershipCheck(path) {
+                replacement = replaceRegularFileWithSameBytes(path, 0o644);
+              },
+            });
+          },
+        }),
+        "NPM_LOCK_PUBLISH_CLEANUP",
+      );
+      assert.equal(readFileSync(target, "utf8"), candidateText);
+      const quarantineDirectory = readdirSync(fixture.root).find((name) => (
+        name.startsWith(`..package-lock.json.e010-${process.pid}.backup.quarantine-`)
+      ));
+      assert.equal(typeof quarantineDirectory, "string");
+      const retainedBackup = join(
+        fixture.root,
+        `.package-lock.json.e010-${process.pid}.backup`,
+      );
+      assert.equal(readFileSync(retainedBackup, "utf8"), `${JSON.stringify(original, null, 2)}\n`);
+      const retainedStat = lstatSync(retainedBackup);
+      assert.deepEqual(
+        { dev: retainedStat.dev, ino: retainedStat.ino },
+        replacement.identity,
+      );
+      assert.deepEqual(readdirSync(join(fixture.root, quarantineDirectory)), []);
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("preserves the old backup when active changes during committed cleanup", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const original = validLockfile(manifest);
+    const candidate = structuredClone(original);
+    candidate.packages["node_modules/example-package"].version = "1.2.4";
+    candidate.packages["node_modules/example-package"].resolved =
+      "https://registry.npmjs.org/example-package/-/example-package-1.2.4.tgz";
+    const fixture = createFixture({ manifest, behavior: { writeCandidateLock: candidate } });
+    const target = join(fixture.root, "package-lock.json");
+    const backup = join(fixture.root, `.package-lock.json.e010-${process.pid}.backup`);
+    const originalText = `${JSON.stringify(original, null, 2)}\n`;
+    let replacement;
+    try {
+      writeFileSync(target, originalText, "utf8");
+      expectCode(
+        () => runFixture(fixture, {
+          profile: "resolve-lock",
+          scriptName: null,
+          publishCandidate(text, root, options) {
+            return publishLockfile(text, root, {
+              ...options,
+              afterBackupCleanupOwnershipCheck() {
+                replacement = replaceRegularFileWithSameBytes(target, 0o644);
+              },
+            });
+          },
+        }),
+        "NPM_LOCK_PUBLISH_UNCERTAIN",
+      );
+      const targetStat = lstatSync(target);
+      assert.deepEqual(
+        { dev: targetStat.dev, ino: targetStat.ino },
+        replacement.identity,
+      );
+      assert.equal(readFileSync(backup, "utf8"), originalText);
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("restores the old target after candidate-link cleanup fails", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const original = validLockfile(manifest);
+    const candidate = structuredClone(original);
+    candidate.packages["node_modules/example-package"].version = "1.2.4";
+    candidate.packages["node_modules/example-package"].resolved =
+      "https://registry.npmjs.org/example-package/-/example-package-1.2.4.tgz";
+    const fixture = createFixture({ manifest, behavior: { writeCandidateLock: candidate } });
+    const target = join(fixture.root, "package-lock.json");
+    const originalText = `${JSON.stringify(original, null, 2)}\n`;
+    let cleanupCalls = 0;
+    try {
+      writeFileSync(target, originalText, "utf8");
+      expectCode(
+        () => runFixture(fixture, {
+          profile: "resolve-lock",
+          scriptName: null,
+          publishCandidate(text, root, options) {
+            return publishLockfile(text, root, {
+              ...options,
+              afterCandidateCleanupOwnershipCheck() {
+                cleanupCalls += 1;
+                if (cleanupCalls === 1) {
+                  throw new Error("synthetic candidate-link cleanup failure");
+                }
+              },
+            });
+          },
+        }),
+        "NPM_LOCK_PUBLISH",
+      );
+      assert.equal(cleanupCalls, 2);
+      assert.equal(readFileSync(target, "utf8"), originalText);
+      assert.deepEqual(
+        readdirSync(fixture.root).filter((name) => name.includes("package-lock")),
+        ["package-lock.json"],
+      );
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("preserves an active replacement and the old backup during rollback", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const original = validLockfile(manifest);
+    const candidate = structuredClone(original);
+    candidate.packages["node_modules/example-package"].version = "1.2.4";
+    candidate.packages["node_modules/example-package"].resolved =
+      "https://registry.npmjs.org/example-package/-/example-package-1.2.4.tgz";
+    const fixture = createFixture({ manifest, behavior: { writeCandidateLock: candidate } });
+    const target = join(fixture.root, "package-lock.json");
+    const originalText = `${JSON.stringify(original, null, 2)}\n`;
+    let replacement;
+    try {
+      writeFileSync(target, originalText, "utf8");
+      expectCode(
+        () => runFixture(fixture, {
+          profile: "resolve-lock",
+          scriptName: null,
+          publishCandidate(text, root, options) {
+            return publishLockfile(text, root, {
+              ...options,
+              afterRename() {
+                throw new Error("synthetic post-activation failure");
+              },
+              afterRollbackOwnershipCheck(path) {
+                replacement = replaceRegularFileWithSameBytes(path, 0o644);
+              },
+            });
+          },
+        }),
+        "NPM_LOCK_PUBLISH_UNCERTAIN",
+      );
+      assert.equal(
+        readFileSync(target, "utf8"),
+        `${JSON.stringify(candidate, null, 2)}\n`,
+      );
+      const targetStat = lstatSync(target);
+      assert.deepEqual(
+        { dev: targetStat.dev, ino: targetStat.ino },
+        replacement.identity,
+      );
+      assert.equal(
+        readFileSync(
+          join(fixture.root, `.package-lock.json.e010-${process.pid}.backup`),
+          "utf8",
+        ),
+        originalText,
+      );
+      const quarantineDirectory = readdirSync(fixture.root).find((name) => (
+        name.startsWith(".package-lock.json.quarantine-")
+      ));
+      assert.equal(typeof quarantineDirectory, "string");
+      assert.deepEqual(readdirSync(join(fixture.root, quarantineDirectory)), []);
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("preserves pre-existing candidate and backup competitors", () => {
+    const fixture = createFixture();
+    const candidateText = "synthetic candidate\n";
+    try {
+      for (const suffix of ["tmp", "backup"]) {
+        const path = join(
+          fixture.root,
+          `.package-lock.json.e010-${process.pid}.${suffix}`,
+        );
+        writeFileSync(path, `external ${suffix}\n`, "utf8");
+        expectCode(
+          () => publishLockfile(candidateText, fixture.root),
+          "NPM_LOCK_PUBLISH",
+        );
+        assert.equal(readFileSync(path, "utf8"), `external ${suffix}\n`);
+        unlinkSync(path);
+      }
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("does not overwrite a backup competitor created in the publication window", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const original = validLockfile(manifest);
+    const candidate = structuredClone(original);
+    candidate.packages["node_modules/example-package"].version = "1.2.4";
+    const fixture = createFixture();
+    const target = join(fixture.root, "package-lock.json");
+    const backup = join(fixture.root, `.package-lock.json.e010-${process.pid}.backup`);
+    const originalText = `${JSON.stringify(original, null, 2)}\n`;
+    try {
+      writeFileSync(target, originalText, "utf8");
+      expectCode(
+        () => publishLockfile(`${JSON.stringify(candidate, null, 2)}\n`, fixture.root, {
+          afterTargetOwnershipCheck() {
+            writeFileSync(backup, "external backup competitor\n", "utf8");
+          },
+        }),
+        "NPM_LOCK_PUBLISH",
+      );
+      assert.equal(readFileSync(target, "utf8"), originalText);
+      assert.equal(readFileSync(backup, "utf8"), "external backup competitor\n");
+      assert.equal(
+        existsSync(join(fixture.root, `.package-lock.json.e010-${process.pid}.tmp`)),
+        false,
+      );
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("preserves a target replaced immediately before old-target unlink", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const original = validLockfile(manifest);
+    const fixture = createFixture();
+    const target = join(fixture.root, "package-lock.json");
+    const backup = join(fixture.root, `.package-lock.json.e010-${process.pid}.backup`);
+    const originalText = `${JSON.stringify(original, null, 2)}\n`;
+    let replacement;
+    try {
+      writeFileSync(target, originalText, "utf8");
+      expectCode(
+        () => publishLockfile("candidate\n", fixture.root, {
+          beforeTargetUnlink() {
+            replacement = replaceRegularFileWithSameBytes(target, 0o644);
+          },
+        }),
+        "NPM_LOCK_PUBLISH_UNCERTAIN",
+      );
+      const targetStat = lstatSync(target);
+      assert.deepEqual(
+        { dev: targetStat.dev, ino: targetStat.ino },
+        replacement.identity,
+      );
+      assert.equal(readFileSync(target, "utf8"), originalText);
+      assert.equal(readFileSync(backup, "utf8"), originalText);
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("rejects a canonical replacement during the final parent sync", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const original = validLockfile(manifest);
+    const candidate = structuredClone(original);
+    candidate.packages["node_modules/example-package"].version = "1.2.4";
+    const fixture = createFixture();
+    const target = join(fixture.root, "package-lock.json");
+    const backup = join(fixture.root, `.package-lock.json.e010-${process.pid}.backup`);
+    const originalText = `${JSON.stringify(original, null, 2)}\n`;
+    let armed = false;
+    let replacement;
+    try {
+      writeFileSync(target, originalText, "utf8");
+      expectCode(
+        () => publishLockfile(`${JSON.stringify(candidate, null, 2)}\n`, fixture.root, {
+          afterRename() {
+            armed = true;
+          },
+          syncParentDirectory() {
+            if (armed) {
+              armed = false;
+              replacement = replaceRegularFileWithSameBytes(target, 0o644);
+            }
+          },
+        }),
+        "NPM_LOCK_PUBLISH_UNCERTAIN",
+      );
+      const targetStat = lstatSync(target);
+      assert.deepEqual(
+        { dev: targetStat.dev, ino: targetStat.ino },
+        replacement.identity,
+      );
+      assert.equal(readFileSync(backup, "utf8"), originalText);
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("rejects an extra hard link added to the active lockfile", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const original = validLockfile(manifest);
+    const candidate = structuredClone(original);
+    candidate.packages["node_modules/example-package"].version = "1.2.4";
+    const fixture = createFixture();
+    const target = join(fixture.root, "package-lock.json");
+    const alias = join(fixture.root, "external-lock-alias");
+    const backup = join(fixture.root, `.package-lock.json.e010-${process.pid}.backup`);
+    const originalText = `${JSON.stringify(original, null, 2)}\n`;
+    try {
+      writeFileSync(target, originalText, "utf8");
+      expectCode(
+        () => publishLockfile(`${JSON.stringify(candidate, null, 2)}\n`, fixture.root, {
+          afterRename() {
+            linkSync(target, alias);
+          },
+        }),
+        "NPM_LOCK_PUBLISH_UNCERTAIN",
+      );
+      assert.equal(lstatSync(target).nlink, 2);
+      assert.equal(readFileSync(alias, "utf8"), readFileSync(target, "utf8"));
+      assert.equal(readFileSync(backup, "utf8"), originalText);
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("cleans an owned candidate when its file sync fails", () => {
+    const fixture = createFixture();
+    try {
+      expectCode(
+        () => publishLockfile("synthetic candidate\n", fixture.root, {
+          syncFile() {
+            throw new Error("synthetic sync failure");
+          },
+        }),
+        "NPM_LOCK_PUBLISH",
+      );
+      assert.deepEqual(
+        readdirSync(fixture.root).filter((name) => name.includes("package-lock")),
+        [],
+      );
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("does not adopt candidate hardlinks or modes changed during file sync", () => {
+    for (const mutation of ["hardlink", "mode"]) {
+      const fixture = createFixture();
+      const temporary = join(fixture.root, `.package-lock.json.e010-${process.pid}.tmp`);
+      const alias = join(fixture.root, `external-${mutation}-alias`);
+      try {
+        expectCode(
+          () => publishLockfile("synthetic candidate\n", fixture.root, {
+            syncFile() {
+              if (mutation === "hardlink") linkSync(temporary, alias);
+              else chmodSync(temporary, 0o600);
+            },
+          }),
+          "NPM_LOCK_PUBLISH_UNCERTAIN",
+        );
+        assert.equal(readFileSync(temporary, "utf8"), "synthetic candidate\n");
+        if (mutation === "hardlink") {
+          assert.equal(readFileSync(alias, "utf8"), "synthetic candidate\n");
+          assert.equal(lstatSync(temporary).nlink, 2);
+        } else {
+          assert.equal(lstatSync(temporary).mode & 0o777, 0o600);
+        }
+      } finally {
+        destroyFixture(fixture);
+      }
+    }
+  });
+
+  await t.test("retains a resolver lock replaced in the check-to-quarantine window", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const candidate = validLockfile(manifest);
+    const fixture = createFixture({ manifest, behavior: { writeCandidateLock: candidate } });
+    let replacement;
+    try {
+      expectCode(
+        () => runFixture(fixture, {
+          profile: "resolve-lock",
+          scriptName: null,
+          resolverLockCleanupOptions: {
+            afterOwnershipCheck(path) {
+              replacement = replaceRegularFileWithSameBytes(path, 0o600);
+            },
+          },
+        }),
+        "NPM_RESOLVE_LOCK_CLEANUP",
+      );
+      assert.equal(
+        readFileSync(join(fixture.root, "package-lock.json"), "utf8"),
+        `${JSON.stringify(candidate, null, 2)}\n`,
+      );
+      const retainedLock = join(fixture.root, ".e010-resolve-lock");
+      assert.equal(existsSync(retainedLock), true);
+      const retainedStat = lstatSync(retainedLock);
+      assert.deepEqual(
+        { dev: retainedStat.dev, ino: retainedStat.ino },
+        replacement.identity,
+      );
+      const quarantineDirectory = readdirSync(fixture.root).find((name) => (
+        name.startsWith("..e010-resolve-lock.quarantine-")
+      ));
+      assert.equal(typeof quarantineDirectory, "string");
+      assert.deepEqual(readdirSync(join(fixture.root, quarantineDirectory)), []);
+    } finally {
+      destroyFixture(fixture);
+    }
+  });
+
+  await t.test("does not overwrite a resolver-lock quarantine competitor", () => {
+    const manifest = baseManifest();
+    manifest.dependencies = { "example-package": "^1.0.0" };
+    const candidate = validLockfile(manifest);
+    const fixture = createFixture({ manifest, behavior: { writeCandidateLock: candidate } });
+    let competitorPath = null;
+    try {
+      expectCode(
+        () => runFixture(fixture, {
+          profile: "resolve-lock",
+          scriptName: null,
+          resolverLockCleanupOptions: {
+            syncParentDirectory(path) {
+              if (competitorPath !== null || path !== fixture.root) return;
+              const directory = readdirSync(fixture.root).find((name) => (
+                name.startsWith("..e010-resolve-lock.quarantine-")
+              ));
+              if (!directory) return;
+              competitorPath = join(fixture.root, directory, ".e010-resolve-lock");
+              writeFileSync(competitorPath, "external quarantine competitor\n", "utf8");
+            },
+          },
+        }),
+        "NPM_RESOLVE_LOCK_CLEANUP",
+      );
+      assert.equal(
+        readFileSync(competitorPath, "utf8"),
+        "external quarantine competitor\n",
+      );
+      assert.equal(existsSync(join(fixture.root, ".e010-resolve-lock")), true);
+    } finally {
+      destroyFixture(fixture);
     }
   });
 

@@ -1,5 +1,11 @@
 export const OFFICIAL_REGISTRY = "https://registry.npmjs.org/";
 
+// D-082 只允许这两个精确传递覆盖；任何新增键、嵌套或版本变化都重新决策。
+export const ROOT_DEPENDENCY_OVERRIDES = Object.freeze({
+  "serialize-javascript": "7.0.5",
+  uuid: "11.1.1",
+});
+
 export const PROJECT_NPM_CONFIG = Object.freeze({
   registry: OFFICIAL_REGISTRY,
   "replace-registry-host": "never",
@@ -22,7 +28,7 @@ export const RUN_SCRIPT_COMMANDS = Object.freeze({
   quality: Object.freeze(["node scripts/quality/run-quality.mjs"]),
   typecheck: Object.freeze(["tsc --noEmit"]),
   test: Object.freeze([
-    "node --test tests/build/run-isolated-npm.test.mjs tests/build/deterministic-spdx.test.mjs",
+    "node --test tests/build/run-isolated-npm.test.mjs tests/build/deterministic-spdx.test.mjs tests/build/supply-chain-audit-report.test.mjs tests/build/supply-chain-audit.test.mjs tests/build/supply-chain-candidate-review.test.mjs tests/build/supply-chain-download.test.mjs tests/build/supply-chain-dual-endpoint-ci.test.mjs tests/build/supply-chain-final-admission.test.mjs tests/build/supply-chain-final-admission-runner.test.mjs tests/build/supply-chain-generation.test.mjs tests/build/supply-chain-notices.test.mjs tests/build/supply-chain-policy.test.mjs tests/build/supply-chain-review-report.test.mjs tests/build/supply-chain-tarball.test.mjs",
     "node scripts/quality/run-tests.mjs",
   ]),
   build: Object.freeze(["node scripts/build/build-site.mjs --mode production"]),

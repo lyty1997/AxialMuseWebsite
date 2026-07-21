@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { OFFICIAL_REGISTRY } from "./contracts.mjs";
+import { OFFICIAL_REGISTRY, ROOT_DEPENDENCY_OVERRIDES } from "./contracts.mjs";
 import { manifestDependencySnapshot, readRegularProjectFile } from "./config.mjs";
 import { fail } from "./errors.mjs";
 
@@ -9,6 +9,8 @@ const EXACT_PACKAGE_VERSION = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?
 const SHA512_INTEGRITY = /^sha512-([A-Za-z0-9+/]+={0,2})$/;
 const PACKAGE_COMPONENT = /^[a-z0-9][a-z0-9._-]*$/;
 const SCOPE_COMPONENT = /^@[a-z0-9][a-z0-9._-]*$/;
+// npm 11.16.0 先以 @isaacs/string-locale-compare("en") 排 location，再按 SPDXID 取首项。
+const NPM_LOCATION_COLLATOR = new Intl.Collator("en");
 
 function parseLockfile(text) {
   let lockfile;
@@ -31,12 +33,46 @@ function stableValue(value) {
   return value;
 }
 
-function validateRegistrySpec(spec, fieldPath) {
+function isPackageName(name) {
+  return PACKAGE_COMPONENT.test(name)
+    || /^@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/.test(name);
+}
+
+function parseExactRegistryAlias(spec, fieldPath) {
+  const target = spec.slice("npm:".length);
+  const versionSeparator = target.lastIndexOf("@");
+  const name = target.slice(0, versionSeparator);
+  const version = target.slice(versionSeparator + 1);
+  if (
+    versionSeparator <= 0
+    || !isPackageName(name)
+    || !EXACT_PACKAGE_VERSION.test(version)
+  ) {
+    fail(
+      "NPM_LOCK_DEPENDENCY_SOURCE",
+      `${fieldPath} 只允许绑定精确 name@version 的 registry alias。`,
+    );
+  }
+  return { name, version };
+}
+
+function validateRegistrySpec(spec, fieldPath, { allowExactAlias = false } = {}) {
   if (
     typeof spec !== "string"
     || spec.trim() !== spec
     || spec === ""
-    || /^[a-z][a-z0-9+.-]*:/i.test(spec)
+    || /[\u0000-\u001f\u007f]/.test(spec)
+  ) {
+    fail("NPM_LOCK_DEPENDENCY_SOURCE", `${fieldPath} 不是 registry 依赖表达。`);
+  }
+  if (spec.startsWith("npm:")) {
+    if (!allowExactAlias) {
+      fail("NPM_LOCK_DEPENDENCY_SOURCE", `${fieldPath} 不允许 registry alias。`);
+    }
+    return parseExactRegistryAlias(spec, fieldPath);
+  }
+  if (
+    /^[a-z][a-z0-9+.-]*:/i.test(spec)
     || spec.startsWith(".")
     || spec.startsWith("/")
     || spec.startsWith("\\")
@@ -44,25 +80,32 @@ function validateRegistrySpec(spec, fieldPath) {
     || spec.includes("://")
     || spec.startsWith("git@")
     || /(?:^|[\\/])[^\\/]+\.(?:tgz|tar|tar\.gz|zip)$/i.test(spec)
-    || /[\u0000-\u001f\u007f]/.test(spec)
   ) {
     fail("NPM_LOCK_DEPENDENCY_SOURCE", `${fieldPath} 不是 registry 依赖表达。`);
   }
+  return null;
 }
 
 function validateEntryDependencySources(entry, packagePath) {
+  const declarations = [];
   for (const section of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
     if (entry[section] === undefined) continue;
     if (entry[section] === null || typeof entry[section] !== "object" || Array.isArray(entry[section])) {
       fail("NPM_LOCK_DEPENDENCY_SECTION", `package-lock.json#packages.${packagePath}.${section} 必须是 object。`);
     }
     for (const [name, spec] of Object.entries(entry[section])) {
-      if (!PACKAGE_COMPONENT.test(name) && !/^@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/.test(name)) {
+      if (!isPackageName(name)) {
         fail("NPM_LOCK_DEPENDENCY_NAME", `package-lock.json#packages.${packagePath}.${section} 包含非法包名。`);
       }
-      validateRegistrySpec(spec, `package-lock.json#packages.${packagePath}.${section}.${name}`);
+      const alias = validateRegistrySpec(
+        spec,
+        `package-lock.json#packages.${packagePath}.${section}.${name}`,
+        { allowExactAlias: packagePath !== "" },
+      );
+      declarations.push({ alias, dependencyName: name, section, sourcePath: packagePath });
     }
   }
+  return declarations;
 }
 
 function packageNameFromPath(packagePath) {
@@ -99,6 +142,15 @@ function packageNameFromPath(packagePath) {
     }
   }
   return packageName;
+}
+
+function lockedPackageName(packagePath, entry) {
+  const locationName = packageNameFromPath(packagePath);
+  if (entry.name === undefined) return locationName;
+  if (!isPackageName(entry.name)) {
+    fail("NPM_LOCK_PACKAGE_NAME", `package-lock.json#packages.${packagePath}.name 不是合法包名。`);
+  }
+  return entry.name;
 }
 
 function validateResolved(resolved, packagePath, packageName, version) {
@@ -140,8 +192,12 @@ function validateIntegrity(integrity, packagePath) {
   };
 }
 
-function spdxPackageId(name, version) {
-  const id = `SPDXRef-Package-${name.replace(/^@/, "").replaceAll("/", ".")}-${version}`;
+export function npmNativeSpdxPackageId(name, version) {
+  return `SPDXRef-Package-${name.replace(/^@/, "").replaceAll("/", ".")}-${version}`;
+}
+
+export function spdxPackageId(name, version) {
+  const id = npmNativeSpdxPackageId(name, version).replace(/[^A-Za-z0-9.-]/gu, "-");
   if (!/^SPDXRef-[A-Za-z0-9.-]+$/.test(id)) {
     fail("NPM_LOCK_SPDX_ID", `${name}@${version} 无法投影为合法 SPDXID。`);
   }
@@ -151,6 +207,17 @@ function spdxPackageId(name, version) {
 function npmPurl(name, version) {
   const encodedName = name.startsWith("@") ? `%40${name.slice(1)}` : name;
   return `pkg:npm/${encodedName}@${version}`;
+}
+
+export function exactPackageIdentity(name, version) {
+  if (
+    !isPackageName(name)
+    || typeof version !== "string"
+    || !EXACT_PACKAGE_VERSION.test(version)
+  ) {
+    fail("NPM_LOCK_PACKAGE_IDENTITY", "依赖身份必须是合法的精确 name@version。");
+  }
+  return `${name}@${version}`;
 }
 
 function parentPackagePath(packagePath) {
@@ -168,7 +235,14 @@ function resolveDependencyPath(packages, sourcePath, dependencyName) {
   }
 }
 
-export function validateLockfileObject(lockfile, manifest) {
+function aliasContractIdentity(dependencyName, packageName, version) {
+  return `${dependencyName}\u0000${packageName}\u0000${version}`;
+}
+
+export function validateLockfileObject(lockfile, manifest, { allowOverrideDrift = false } = {}) {
+  if (typeof allowOverrideDrift !== "boolean") {
+    fail("NPM_LOCK_OPTIONS", "package-lock.json 校验选项不合法。");
+  }
   if (lockfile.lockfileVersion !== 3) {
     fail("NPM_LOCK_VERSION", "package-lock.json#lockfileVersion 必须精确为 3。" );
   }
@@ -195,47 +269,222 @@ export function validateLockfileObject(lockfile, manifest) {
   if (JSON.stringify(actualDependencies) !== JSON.stringify(expectedDependencies)) {
     fail("NPM_LOCK_MANIFEST_DRIFT", "package-lock.json 根依赖声明与 package.json 不一致。" );
   }
-  validateEntryDependencySources(rootPackage, "");
+  const dependencyDeclarations = validateEntryDependencySources(rootPackage, "");
+  const aliasedPackagePaths = new Set();
+  const activeAliasContracts = new Set();
+  const enforceRootOverrides = manifest.overrides !== undefined;
+  const overrideCounts = Object.fromEntries(
+    Object.keys(ROOT_DEPENDENCY_OVERRIDES).map((name) => [name, 0]),
+  );
 
   for (const [packagePath, entry] of Object.entries(lockfile.packages)) {
     if (packagePath === "") continue;
-    const packageName = packageNameFromPath(packagePath);
     if (entry === null || typeof entry !== "object" || Array.isArray(entry) || entry.link === true) {
       fail("NPM_LOCK_PACKAGE_ENTRY", `package-lock.json#packages.${packagePath} 不是 registry 包记录。`);
     }
     if (typeof entry.version !== "string" || !EXACT_PACKAGE_VERSION.test(entry.version)) {
       fail("NPM_LOCK_PACKAGE_VERSION", `package-lock.json#packages.${packagePath}.version 不是精确 registry 版本。`);
     }
-    if (entry.name !== undefined && entry.name !== packageName) {
-      fail("NPM_LOCK_PACKAGE_NAME", `package-lock.json#packages.${packagePath}.name 与路径身份不一致。`);
+    const packageName = lockedPackageName(packagePath, entry);
+    if (enforceRootOverrides && Object.hasOwn(ROOT_DEPENDENCY_OVERRIDES, packageName)) {
+      if (!allowOverrideDrift && entry.version !== ROOT_DEPENDENCY_OVERRIDES[packageName]) {
+        fail(
+          "NPM_LOCK_OVERRIDE_DRIFT",
+          `package-lock.json 中 ${packageName} 没有闭合到 D-082 精确覆盖版本。`,
+        );
+      }
+      overrideCounts[packageName] += 1;
     }
-    validateEntryDependencySources(entry, packagePath);
+    dependencyDeclarations.push(...validateEntryDependencySources(entry, packagePath));
     validateResolved(entry.resolved, packagePath, packageName, entry.version);
     validateIntegrity(entry.integrity, packagePath);
+  }
+
+  for (const [name, count] of enforceRootOverrides ? Object.entries(overrideCounts) : []) {
+    if (count === 0) {
+      fail("NPM_LOCK_OVERRIDE_MISSING", `package-lock.json 未消费 D-082 覆盖 ${name}。`);
+    }
+  }
+
+  for (const declaration of dependencyDeclarations.filter(({ alias }) => alias !== null)) {
+    const targetPath = resolveDependencyPath(
+      lockfile.packages,
+      declaration.sourcePath,
+      declaration.dependencyName,
+    );
+    if (targetPath === null) continue;
+    const targetEntry = lockfile.packages[targetPath];
+    const targetName = lockedPackageName(targetPath, targetEntry);
+    if (
+      targetName !== declaration.alias.name
+      || targetEntry.version !== declaration.alias.version
+    ) {
+      fail(
+        "NPM_LOCK_PACKAGE_NAME",
+        `package-lock.json#packages.${targetPath} 与精确 registry alias 目标不一致。`,
+      );
+    }
+    activeAliasContracts.add(aliasContractIdentity(
+      declaration.dependencyName,
+      targetName,
+      targetEntry.version,
+    ));
+    aliasedPackagePaths.add(targetPath);
+  }
+
+  for (const declaration of dependencyDeclarations.filter(({ alias }) => alias === null)) {
+    const targetPath = resolveDependencyPath(
+      lockfile.packages,
+      declaration.sourcePath,
+      declaration.dependencyName,
+    );
+    if (targetPath === null) continue;
+    const targetEntry = lockfile.packages[targetPath];
+    const targetName = lockedPackageName(targetPath, targetEntry);
+    if (
+      targetName !== declaration.dependencyName
+      && !activeAliasContracts.has(aliasContractIdentity(
+        declaration.dependencyName,
+        targetName,
+        targetEntry.version,
+      ))
+    ) {
+      fail(
+        "NPM_LOCK_PACKAGE_NAME",
+        `package-lock.json#packages.${targetPath}.name 未由精确 registry alias 绑定。`,
+      );
+    }
+  }
+
+  for (const [packagePath, entry] of Object.entries(lockfile.packages)) {
+    if (packagePath === "") continue;
+    const locationName = packageNameFromPath(packagePath);
+    const packageName = lockedPackageName(packagePath, entry);
+    if (packageName === locationName || aliasedPackagePaths.has(packagePath)) continue;
+    if (!activeAliasContracts.has(aliasContractIdentity(
+      locationName,
+      packageName,
+      entry.version,
+    ))) {
+      fail(
+        "NPM_LOCK_PACKAGE_NAME",
+        `package-lock.json#packages.${packagePath}.name 未由精确 registry alias 引用。`,
+      );
+    }
   }
   return lockfile;
 }
 
-export function readAndValidateLockfile(root, manifest) {
-  return readAndValidateLockfileSource(root, manifest).lockfile;
+export function readAndValidateLockfile(root, manifest, options = {}) {
+  return readAndValidateLockfileSource(root, manifest, options).lockfile;
 }
 
-export function readAndValidateLockfileSource(root, manifest) {
+export function readAndValidateLockfileSource(root, manifest, options = {}) {
   const text = readRegularProjectFile(root, "package-lock.json", "NPM_LOCK_FILE");
   return {
-    lockfile: validateLockfileObject(parseLockfile(text), manifest),
+    lockfile: validateLockfileObject(parseLockfile(text), manifest, options),
     text,
   };
 }
 
-export function buildExpectedSpdxGraph(lockfile, manifest) {
+export function collectLockedPackages(lockfile, manifest) {
   const validated = validateLockfileObject(lockfile, manifest);
-  const packages = [];
+  const byIdentity = new Map();
+  for (const [packagePath, entry] of Object.entries(validated.packages)) {
+    if (packagePath === "") continue;
+    if (entry.hasInstallScript !== undefined && typeof entry.hasInstallScript !== "boolean") {
+      fail(
+        "NPM_LOCK_INSTALL_SCRIPT",
+        `package-lock.json#packages.${packagePath}.hasInstallScript 必须是 boolean。`,
+      );
+    }
+    const name = lockedPackageName(packagePath, entry);
+    const identity = exactPackageIdentity(name, entry.version);
+    const current = {
+      identity,
+      name,
+      version: entry.version,
+      resolved: entry.resolved,
+      integrity: entry.integrity,
+      hasInstallScript: entry.hasInstallScript === true,
+      paths: [packagePath],
+    };
+    const previous = byIdentity.get(identity);
+    if (!previous) {
+      byIdentity.set(identity, current);
+      continue;
+    }
+    if (
+      previous.resolved !== current.resolved
+      || previous.integrity !== current.integrity
+      || previous.hasInstallScript !== current.hasInstallScript
+    ) {
+      fail(
+        "NPM_LOCK_PACKAGE_IDENTITY",
+        `${identity} 的重复锁定节点没有绑定同一 tarball 与脚本标记。`,
+      );
+    }
+    previous.paths.push(packagePath);
+  }
+  return [...byIdentity.values()]
+    .map((package_) => ({
+      ...package_,
+      paths: package_.paths.sort((left, right) => Buffer.compare(
+        Buffer.from(left, "utf8"),
+        Buffer.from(right, "utf8"),
+      )),
+    }))
+    .sort((left, right) => Buffer.compare(
+      Buffer.from(left.identity, "utf8"),
+      Buffer.from(right.identity, "utf8"),
+    ));
+}
+
+function validateTarballMetadata(metadata, identity) {
+  if (
+    metadata === null
+    || typeof metadata !== "object"
+    || Array.isArray(metadata)
+    || metadata.identity !== identity
+    || typeof metadata.licenseDeclared !== "string"
+    || metadata.licenseDeclared.length === 0
+    || typeof metadata.homepage !== "string"
+    || metadata.homepage.length === 0
+    || (
+      metadata.description !== null
+      && typeof metadata.description !== "string"
+    )
+  ) {
+    fail("NPM_LOCK_TARBALL_METADATA", `${identity} 的 tarball SPDX metadata 不合法。`);
+  }
+  return metadata;
+}
+
+export function buildExpectedSpdxGraph(lockfile, manifest, {
+  packageMetadataByIdentity = null,
+  requirePackageMetadata = false,
+} = {}) {
+  const validated = validateLockfileObject(lockfile, manifest);
+  collectLockedPackages(validated, manifest);
+  if (
+    packageMetadataByIdentity !== null
+    && !(packageMetadataByIdentity instanceof Map)
+  ) {
+    fail("NPM_LOCK_TARBALL_METADATA", "tarball SPDX metadata 必须使用 Map 按精确身份索引。" );
+  }
+  if (requirePackageMetadata && packageMetadataByIdentity === null) {
+    fail("NPM_LOCK_TARBALL_METADATA", "生产 SPDX 图缺少 tarball metadata。" );
+  }
+  const packagesBySpdxId = new Map();
   const packageIdsByPath = new Map();
+  const consumedMetadata = new Set();
   for (const [packagePath, entry] of Object.entries(validated.packages)) {
     if (packagePath === "") {
       const SPDXID = spdxPackageId(manifest.name, manifest.version);
-      packages.push({
+      if (packagesBySpdxId.has(SPDXID)) {
+        fail("NPM_LOCK_SPDX_ID", `${SPDXID} 被根包与依赖包共同使用。`);
+      }
+      packagesBySpdxId.set(SPDXID, {
         SPDXID,
         checksums: [],
         downloadLocation: "NOASSERTION",
@@ -247,9 +496,18 @@ export function buildExpectedSpdxGraph(lockfile, manifest) {
       packageIdsByPath.set(packagePath, SPDXID);
       continue;
     }
-    const name = packageNameFromPath(packagePath);
+    const name = lockedPackageName(packagePath, entry);
+    const identity = exactPackageIdentity(name, entry.version);
+    const metadata = packageMetadataByIdentity?.get(identity) ?? null;
+    if (requirePackageMetadata && metadata === null) {
+      fail("NPM_LOCK_TARBALL_METADATA", `${identity} 缺少 tarball metadata。`);
+    }
+    if (metadata !== null) {
+      validateTarballMetadata(metadata, identity);
+      consumedMetadata.add(identity);
+    }
     const SPDXID = spdxPackageId(name, entry.version);
-    packages.push({
+    const expectedPackage = {
       SPDXID,
       checksums: [validateIntegrity(entry.integrity, packagePath)],
       downloadLocation: entry.resolved,
@@ -257,18 +515,53 @@ export function buildExpectedSpdxGraph(lockfile, manifest) {
       packageFileName: packagePath,
       purl: npmPurl(name, entry.version),
       versionInfo: entry.version,
-    });
+    };
+    if (metadata !== null) {
+      // `npm sbom --package-lock-only` builds dependency nodes from lock v3 metadata.
+      // The pinned Arborist lock projection retains license but not homepage/description.
+      expectedPackage.description = null;
+      expectedPackage.homepage = "NOASSERTION";
+      expectedPackage.licenseDeclared = metadata.licenseDeclared;
+    }
+    const existingPackage = packagesBySpdxId.get(SPDXID);
+    if (existingPackage !== undefined) {
+      if (
+        existingPackage.packageFileName === ""
+        || expectedPackage.packageFileName === ""
+        || existingPackage.name !== expectedPackage.name
+        || existingPackage.versionInfo !== expectedPackage.versionInfo
+      ) {
+        fail("NPM_LOCK_SPDX_ID", `${SPDXID} 被不同精确包身份复用。`);
+      }
+      const locationOrder = NPM_LOCATION_COLLATOR.compare(
+        expectedPackage.packageFileName,
+        existingPackage.packageFileName,
+      );
+      if (
+        locationOrder === 0
+        && expectedPackage.packageFileName !== existingPackage.packageFileName
+      ) {
+        fail("NPM_LOCK_SPDX_ID", `${SPDXID} 的 npm location 排序身份不唯一。`);
+      }
+      if (locationOrder < 0) packagesBySpdxId.set(SPDXID, expectedPackage);
+    } else {
+      packagesBySpdxId.set(SPDXID, expectedPackage);
+    }
     packageIdsByPath.set(packagePath, SPDXID);
   }
-  packages.sort((left, right) => Buffer.compare(
+  if (
+    packageMetadataByIdentity !== null
+    && (
+      consumedMetadata.size !== packageMetadataByIdentity.size
+      || [...packageMetadataByIdentity.keys()].some((identity) => !consumedMetadata.has(identity))
+    )
+  ) {
+    fail("NPM_LOCK_TARBALL_METADATA", "tarball metadata 包集合与 lock 不一致。" );
+  }
+  const packages = [...packagesBySpdxId.values()].sort((left, right) => Buffer.compare(
     Buffer.from(left.SPDXID, "utf8"),
     Buffer.from(right.SPDXID, "utf8"),
   ));
-  for (let index = 1; index < packages.length; index += 1) {
-    if (packages[index - 1].SPDXID === packages[index].SPDXID) {
-      fail("NPM_LOCK_SPDX_ID", `${packages[index].SPDXID} 在 lock 投影中重复。`);
-    }
-  }
   const relationshipsByIdentity = new Map();
   relationshipsByIdentity.set(
     `SPDXRef-DOCUMENT\0DESCRIBES\0${packageIdsByPath.get("")}`,
@@ -331,7 +624,7 @@ export function buildExpectedSpdxGraph(lockfile, manifest) {
         relatedSpdxElement: packageIdsByPath.get(sourcePath),
       };
       relationshipsByIdentity.set(
-        `${relationship.spdxElementId}\0${relationship.relatedSpdxElement}`,
+        `${relationship.spdxElementId}\0${relationship.relationshipType}\0${relationship.relatedSpdxElement}`,
         relationship,
       );
     }

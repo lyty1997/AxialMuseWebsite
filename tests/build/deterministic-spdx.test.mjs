@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import {
   existsSync,
+  linkSync,
+  lstatSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
@@ -84,7 +88,7 @@ function manifestForCurrentRuntime() {
     scripts: {
       quality: "node scripts/quality/run-quality.mjs",
       typecheck: "tsc --noEmit",
-      test: "node --test tests/build/run-isolated-npm.test.mjs tests/build/deterministic-spdx.test.mjs",
+      test: "node --test tests/build/run-isolated-npm.test.mjs tests/build/deterministic-spdx.test.mjs tests/build/supply-chain-audit-report.test.mjs tests/build/supply-chain-audit.test.mjs tests/build/supply-chain-candidate-review.test.mjs tests/build/supply-chain-download.test.mjs tests/build/supply-chain-dual-endpoint-ci.test.mjs tests/build/supply-chain-final-admission.test.mjs tests/build/supply-chain-final-admission-runner.test.mjs tests/build/supply-chain-generation.test.mjs tests/build/supply-chain-notices.test.mjs tests/build/supply-chain-policy.test.mjs tests/build/supply-chain-review-report.test.mjs tests/build/supply-chain-tarball.test.mjs",
       build: "node scripts/build/build-site.mjs --mode production",
       "check:artifact": "node scripts/quality/check-artifact.mjs",
     },
@@ -132,12 +136,12 @@ function expectedNpmrc() {
   return `${Object.entries(PROJECT_NPM_CONFIG).map(([key, value]) => `${key}=${value}`).join("\n")}\n`;
 }
 
-function createIntegrationFixture() {
+function createIntegrationFixture({ manifest: inputManifest = null, lockfile: inputLockfile = null } = {}) {
   const outer = mkdtempSync("/tmp/axial-muse-e011-test-");
   const root = join(outer, "project");
   mkdirSync(root);
-  const manifest = manifestForCurrentRuntime();
-  const lockfile = lockfileFor(manifest);
+  const manifest = inputManifest ?? manifestForCurrentRuntime();
+  const lockfile = inputLockfile ?? lockfileFor(manifest);
   writeJson(join(root, "package.json"), manifest);
   writeJson(join(root, "package-lock.json"), lockfile);
   writeFileSync(join(root, ".npmrc"), expectedNpmrc(), "utf8");
@@ -155,6 +159,95 @@ function createIntegrationFixture() {
     outer,
     root,
   };
+}
+
+function createDuplicateIdentityIntegrationFixture({
+  duplicateOutgoingRelationship = false,
+  reversePackagePaths = false,
+} = {}) {
+  const manifest = manifestForCurrentRuntime();
+  manifest.dependencies = {
+    alpha: "1.2.3",
+    container: "1.0.0",
+  };
+  manifest.devDependencies = {};
+  const alpha = {
+    ...(duplicateOutgoingRelationship ? { dependencies: { leaf: "1.0.0" } } : {}),
+    integrity: `sha512-${Buffer.alloc(64, 0xaa).toString("base64")}`,
+    resolved: "https://registry.npmjs.org/alpha/-/alpha-1.2.3.tgz",
+    version: "1.2.3",
+  };
+  const packageEntries = [
+    ["node_modules/alpha", clone(alpha)],
+    ["node_modules/container", {
+      dependencies: { alpha: "1.2.3" },
+      integrity: `sha512-${Buffer.alloc(64, 0xcc).toString("base64")}`,
+      resolved: "https://registry.npmjs.org/container/-/container-1.0.0.tgz",
+      version: "1.0.0",
+    }],
+    ["node_modules/container/node_modules/alpha", clone(alpha)],
+    ...(duplicateOutgoingRelationship ? [["node_modules/leaf", {
+      integrity: `sha512-${Buffer.alloc(64, 0xee).toString("base64")}`,
+      resolved: "https://registry.npmjs.org/leaf/-/leaf-1.0.0.tgz",
+      version: "1.0.0",
+    }]] : []),
+  ];
+  if (reversePackagePaths) packageEntries.reverse();
+  const lockfile = {
+    lockfileVersion: 3,
+    name: manifest.name,
+    packages: Object.fromEntries([
+      ["", {
+        dependencies: clone(manifest.dependencies),
+        devDependencies: {},
+        name: manifest.name,
+        version: manifest.version,
+      }],
+      ...packageEntries,
+    ]),
+    version: manifest.version,
+  };
+  return createIntegrationFixture({ lockfile, manifest });
+}
+
+function createNativeIdentifierIntegrationFixture({
+  manifestSpec = null,
+  name = "string_decoder",
+  version = "1.1.1",
+} = {}) {
+  const manifest = manifestForCurrentRuntime();
+  manifest.dependencies = { [name]: manifestSpec ?? version };
+  manifest.devDependencies = {};
+  const unscopedName = name.includes("/") ? name.split("/")[1] : name;
+  const lockfile = {
+    lockfileVersion: 3,
+    name: manifest.name,
+    packages: {
+      "": {
+        dependencies: clone(manifest.dependencies),
+        devDependencies: {},
+        name: manifest.name,
+        version: manifest.version,
+      },
+      [`node_modules/${name}`]: {
+        integrity: `sha512-${Buffer.alloc(64, 0xdd).toString("base64")}`,
+        resolved: `https://registry.npmjs.org/${name}/-/${unscopedName}-${version}.tgz`,
+        version,
+      },
+    },
+    version: manifest.version,
+  };
+  return createIntegrationFixture({ lockfile, manifest });
+}
+
+function runBundledNpmSpdx(fixture) {
+  const result = withWorkingDirectory(fixture.root, () => runIsolatedNpm({
+    npmVersionsByRole: fixture.npmVersionsByRole,
+    profile: "sbom-native",
+    root: fixture.root,
+    temporaryParent: fixture.outer,
+  }));
+  return JSON.parse(result.stdout);
 }
 
 function effectiveConfig(environment, override = {}) {
@@ -338,7 +431,17 @@ test("E-011 deterministic SPDX contract", async (suite) => {
 
     const duplicateRelationship = readJsonFixture("native-a.json");
     duplicateRelationship.relationships.push(clone(duplicateRelationship.relationships[0]));
-    expectCode(() => normalize(duplicateRelationship), "SPDX_COLLECTION_DUPLICATE");
+    assert.equal(normalize(duplicateRelationship).bytes, normalize(readJsonFixture("native-a.json")).bytes);
+
+    const duplicatePersistedRelationship = normalize(readJsonFixture("native-a.json"));
+    const duplicatePersistedDocument = clone(duplicatePersistedRelationship.document);
+    duplicatePersistedDocument.relationships.push(clone(duplicatePersistedDocument.relationships[0]));
+    expectCode(() => validateCanonicalSpdxArtifacts({
+      evidenceBytes: duplicatePersistedRelationship.evidenceBytes,
+      expectedGraph: readJsonFixture("expected-graph.json"),
+      npmVersion: NPM_VERSION,
+      sbomBytes: canonicalJsonBytes(duplicatePersistedDocument),
+    }), "SPDX_COLLECTION_DUPLICATE");
 
     const duplicatePackage = readJsonFixture("native-a.json");
     duplicatePackage.packages.push(clone(duplicatePackage.packages[0]));
@@ -603,14 +706,18 @@ test("E-011 deterministic SPDX contract", async (suite) => {
         afterActivate: () => {
           writeFileSync(join(artifactDirectory, "sbom.spdx.json"), "tampered\n", "utf8");
         },
-      }), "SPDX_ARTIFACT_CONCURRENT_CHANGE");
+      }), "SPDX_ARTIFACT_PUBLISH_UNCERTAIN");
       assert.equal(
         readFileSync(join(artifactDirectory, "sbom.spdx.json"), "utf8"),
-        baseline.bytes,
+        "tampered\n",
       );
       assert.equal(
         readFileSync(join(artifactDirectory, "dependency-evidence.json"), "utf8"),
-        baseline.evidenceBytes,
+        changed.evidenceBytes,
+      );
+      assert.equal(
+        readFileSync(join(outer, ".supply-chain.backup", "sbom.spdx.json"), "utf8"),
+        baseline.bytes,
       );
 
       const externalDirectory = join(outer, "external-case");
@@ -700,6 +807,755 @@ test("E-011 deterministic SPDX contract", async (suite) => {
     }
   });
 
+  await suite.test("preserves a same-byte external artifact replacement by inode", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-publish-same-byte-");
+    const artifactDirectory = join(outer, "supply-chain");
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      publishSpdxArtifacts({ artifactDirectory, result: baseline, expectedPrevious: null });
+      const changedDocument = readJsonFixture("native-a.json");
+      changedDocument.packages.find((package_) => package_.name === "alpha").description = "Changed";
+      const changed = normalize(changedDocument, { createdAt: "2026-07-20T10:11:12Z" });
+      expectCode(() => publishSpdxArtifacts({
+        artifactDirectory,
+        result: changed,
+        expectedPrevious: {
+          evidenceBytes: baseline.evidenceBytes,
+          sbomBytes: baseline.bytes,
+        },
+        afterActivate: () => {
+          rmSync(artifactDirectory, { recursive: true });
+          mkdirSync(artifactDirectory);
+          writeFileSync(
+            join(artifactDirectory, "dependency-evidence.json"),
+            changed.evidenceBytes,
+            "utf8",
+          );
+          writeFileSync(join(artifactDirectory, "sbom.spdx.json"), changed.bytes, "utf8");
+          throw new Error("synthetic same-byte external replacement");
+        },
+      }), "SPDX_ARTIFACT_PUBLISH_UNCERTAIN");
+      assert.equal(
+        readFileSync(join(artifactDirectory, "sbom.spdx.json"), "utf8"),
+        changed.bytes,
+      );
+      assert.equal(
+        readFileSync(join(outer, ".supply-chain.backup", "sbom.spdx.json"), "utf8"),
+        baseline.bytes,
+      );
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("does not adopt a same-byte canonical artifact child replaced during candidate sync", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-canonical-child-sync-");
+    const artifactDirectory = join(outer, "supply-chain");
+    const sbomPath = join(artifactDirectory, "sbom.spdx.json");
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      publishSpdxArtifacts({ artifactDirectory, result: baseline, expectedPrevious: null });
+      const changedDocument = readJsonFixture("native-a.json");
+      changedDocument.packages.find((package_) => package_.name === "alpha").description = "Changed";
+      const changed = normalize(changedDocument, { createdAt: "2026-07-20T10:11:12Z" });
+      let externalInode = null;
+      let replaced = false;
+      expectCode(() => publishSpdxArtifacts({
+        artifactDirectory,
+        result: changed,
+        expectedPrevious: {
+          evidenceBytes: baseline.evidenceBytes,
+          sbomBytes: baseline.bytes,
+        },
+        syncFile: () => {
+          if (replaced) return;
+          replaced = true;
+          unlinkSync(sbomPath);
+          writeFileSync(sbomPath, baseline.bytes, "utf8");
+          externalInode = lstatSync(sbomPath).ino;
+        },
+      }), "SPDX_ARTIFACT_PUBLISH_UNCERTAIN");
+      assert.equal(lstatSync(sbomPath).ino, externalInode);
+      assert.equal(readFileSync(sbomPath, "utf8"), baseline.bytes);
+      assert.equal(existsSync(join(outer, ".supply-chain.backup")), false);
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("does not adopt a same-byte canonical NOTICE replaced during candidate sync", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-canonical-notice-sync-");
+    const artifactParent = join(outer, "docs", "generated");
+    const artifactDirectory = join(artifactParent, "supply-chain");
+    const noticePath = join(outer, "THIRD_PARTY_NOTICES");
+    mkdirSync(artifactParent, { recursive: true });
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      const oldNotice = "old notices\n";
+      publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: null,
+        noticePath,
+        noticeBytes: oldNotice,
+        expectedPreviousNotice: null,
+      });
+      const changedDocument = readJsonFixture("native-a.json");
+      changedDocument.packages.find((package_) => package_.name === "alpha").description = "Changed";
+      const changed = normalize(changedDocument, { createdAt: "2026-07-20T10:11:12Z" });
+      let externalInode = null;
+      let replaced = false;
+      expectCode(() => publishSpdxArtifacts({
+        artifactDirectory,
+        result: changed,
+        expectedPrevious: {
+          evidenceBytes: baseline.evidenceBytes,
+          sbomBytes: baseline.bytes,
+        },
+        noticePath,
+        noticeBytes: "new notices\n",
+        expectedPreviousNotice: oldNotice,
+        syncFile: () => {
+          if (replaced) return;
+          replaced = true;
+          unlinkSync(noticePath);
+          writeFileSync(noticePath, oldNotice, "utf8");
+          externalInode = lstatSync(noticePath).ino;
+        },
+      }), "SPDX_ARTIFACT_PUBLISH_UNCERTAIN");
+      assert.equal(lstatSync(noticePath).ino, externalInode);
+      assert.equal(readFileSync(noticePath, "utf8"), oldNotice);
+      assert.equal(readFileSync(join(artifactDirectory, "sbom.spdx.json"), "utf8"), baseline.bytes);
+      assert.equal(existsSync(join(artifactParent, ".supply-chain.backup")), false);
+      assert.equal(existsSync(join(outer, ".THIRD_PARTY_NOTICES.backup")), false);
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("keeps a same-byte artifact candidate child replaced inside syncFile", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-candidate-child-sync-");
+    const artifactDirectory = join(outer, "supply-chain");
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      let externalPath = null;
+      let externalInode = null;
+      expectCode(() => publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: null,
+        syncFile: () => {
+          if (externalPath !== null) return;
+          const candidate = readdirSync(outer).find((entry) => (
+            entry.startsWith(".supply-chain.candidate-")
+          ));
+          assert.equal(typeof candidate, "string");
+          externalPath = join(outer, candidate, "dependency-evidence.json");
+          unlinkSync(externalPath);
+          writeFileSync(externalPath, baseline.evidenceBytes, "utf8");
+          externalInode = lstatSync(externalPath).ino;
+        },
+      }), "SPDX_ARTIFACT_PUBLISH_UNCERTAIN");
+      assert.equal(lstatSync(externalPath).ino, externalInode);
+      assert.equal(readFileSync(externalPath, "utf8"), baseline.evidenceBytes);
+      assert.equal(existsSync(artifactDirectory), false);
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("keeps a same-byte NOTICE candidate replaced inside syncFile", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-candidate-notice-sync-");
+    const artifactParent = join(outer, "docs", "generated");
+    const artifactDirectory = join(artifactParent, "supply-chain");
+    const noticePath = join(outer, "THIRD_PARTY_NOTICES");
+    const noticeBytes = "new notices\n";
+    mkdirSync(artifactParent, { recursive: true });
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      let externalPath = null;
+      let externalInode = null;
+      let syncCalls = 0;
+      expectCode(() => publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: null,
+        noticePath,
+        noticeBytes,
+        expectedPreviousNotice: null,
+        syncFile: () => {
+          syncCalls += 1;
+          if (syncCalls !== 3) return;
+          const candidate = readdirSync(outer).find((entry) => (
+            entry.startsWith(".THIRD_PARTY_NOTICES.candidate-")
+          ));
+          assert.equal(typeof candidate, "string");
+          externalPath = join(outer, candidate, "THIRD_PARTY_NOTICES");
+          unlinkSync(externalPath);
+          writeFileSync(externalPath, noticeBytes, "utf8");
+          externalInode = lstatSync(externalPath).ino;
+        },
+      }), "SPDX_ARTIFACT_PUBLISH_UNCERTAIN");
+      assert.equal(lstatSync(externalPath).ino, externalInode);
+      assert.equal(readFileSync(externalPath, "utf8"), noticeBytes);
+      assert.equal(existsSync(artifactDirectory), false);
+      assert.equal(existsSync(noticePath), false);
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("quarantines rather than deletes an artifact replaced after rollback ownership check", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-publish-window-");
+    const artifactDirectory = join(outer, "supply-chain");
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      publishSpdxArtifacts({ artifactDirectory, result: baseline, expectedPrevious: null });
+      const changedDocument = readJsonFixture("native-a.json");
+      changedDocument.packages.find((package_) => package_.name === "alpha").description = "Changed";
+      const changed = normalize(changedDocument, { createdAt: "2026-07-20T10:11:12Z" });
+      expectCode(() => publishSpdxArtifacts({
+        artifactDirectory,
+        result: changed,
+        expectedPrevious: {
+          evidenceBytes: baseline.evidenceBytes,
+          sbomBytes: baseline.bytes,
+        },
+        afterActivate: () => {
+          throw new Error("synthetic rollback");
+        },
+        afterRollbackOwnershipCheck: (kind) => {
+          assert.equal(kind, "artifact");
+          rmSync(artifactDirectory, { recursive: true });
+          mkdirSync(artifactDirectory);
+          writeFileSync(
+            join(artifactDirectory, "dependency-evidence.json"),
+            changed.evidenceBytes,
+            "utf8",
+          );
+          writeFileSync(join(artifactDirectory, "sbom.spdx.json"), changed.bytes, "utf8");
+        },
+      }), "SPDX_ARTIFACT_PUBLISH_UNCERTAIN");
+      assert.equal(existsSync(artifactDirectory), false);
+      const quarantineDirectory = readdirSync(outer).find((entry) => (
+        entry.startsWith(".supply-chain.rollback-")
+      ));
+      assert.equal(typeof quarantineDirectory, "string");
+      assert.equal(
+        readFileSync(
+          join(outer, quarantineDirectory, "supply-chain", "sbom.spdx.json"),
+          "utf8",
+        ),
+        changed.bytes,
+      );
+      assert.equal(
+        readFileSync(join(outer, ".supply-chain.backup", "sbom.spdx.json"), "utf8"),
+        baseline.bytes,
+      );
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("publishes a first SPDX and THIRD_PARTY_NOTICES triplet after syncing every candidate", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-triplet-first-");
+    const artifactParent = join(outer, "docs", "generated");
+    const artifactDirectory = join(artifactParent, "supply-chain");
+    const noticePath = join(outer, "THIRD_PARTY_NOTICES");
+    const noticeBytes = "AxialMuseWebsite THIRD_PARTY_NOTICES v1\n";
+    mkdirSync(artifactParent, { recursive: true });
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      const syncedFiles = [];
+      const syncedCandidates = [];
+      const syncedParents = [];
+      publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: null,
+        noticePath,
+        noticeBytes,
+        expectedPreviousNotice: null,
+        syncFile: (descriptor) => syncedFiles.push(descriptor),
+        syncCandidateDirectory: (path) => syncedCandidates.push(path),
+        syncParentDirectory: (path) => syncedParents.push(path),
+      });
+      assert.equal(
+        readFileSync(join(artifactDirectory, "dependency-evidence.json"), "utf8"),
+        baseline.evidenceBytes,
+      );
+      assert.equal(
+        readFileSync(join(artifactDirectory, "sbom.spdx.json"), "utf8"),
+        baseline.bytes,
+      );
+      assert.equal(readFileSync(noticePath, "utf8"), noticeBytes);
+      assert.equal(syncedFiles.length, 3);
+      assert.equal(syncedCandidates.length, 2);
+      assert.equal(syncedCandidates[0].startsWith(`${artifactParent}/.supply-chain.candidate-`), true);
+      assert.equal(syncedCandidates[1].startsWith(`${outer}/.THIRD_PARTY_NOTICES.candidate-`), true);
+      assert.equal(syncedParents.includes(artifactParent), true);
+      assert.equal(syncedParents.includes(outer), true);
+      assert.deepEqual(
+        readdirSync(outer).filter((entry) => entry.startsWith(".THIRD_PARTY_NOTICES")),
+        [],
+      );
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("updates the SPDX and THIRD_PARTY_NOTICES triplet together", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-triplet-update-");
+    const artifactParent = join(outer, "docs", "generated");
+    const artifactDirectory = join(artifactParent, "supply-chain");
+    const noticePath = join(outer, "THIRD_PARTY_NOTICES");
+    mkdirSync(artifactParent, { recursive: true });
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      const oldNotice = "old notices\n";
+      publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: null,
+        noticePath,
+        noticeBytes: oldNotice,
+        expectedPreviousNotice: null,
+      });
+      const changedDocument = readJsonFixture("native-a.json");
+      changedDocument.packages.find((package_) => package_.name === "alpha").description = "Changed";
+      const changed = normalize(changedDocument, { createdAt: "2026-07-20T10:11:12Z" });
+      const newNotice = "new notices\n";
+      publishSpdxArtifacts({
+        artifactDirectory,
+        result: changed,
+        expectedPrevious: {
+          evidenceBytes: baseline.evidenceBytes,
+          sbomBytes: baseline.bytes,
+        },
+        noticePath,
+        noticeBytes: Buffer.from(newNotice, "utf8"),
+        expectedPreviousNotice: Buffer.from(oldNotice, "utf8"),
+      });
+      assert.equal(
+        readFileSync(join(artifactDirectory, "dependency-evidence.json"), "utf8"),
+        changed.evidenceBytes,
+      );
+      assert.equal(readFileSync(join(artifactDirectory, "sbom.spdx.json"), "utf8"), changed.bytes);
+      assert.equal(readFileSync(noticePath, "utf8"), newNotice);
+      assert.equal(existsSync(join(artifactParent, ".supply-chain.backup")), false);
+      assert.equal(existsSync(join(outer, ".THIRD_PARTY_NOTICES.backup")), false);
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("keeps the committed triplet canonical when old-backup cleanup fails", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-triplet-cleanup-");
+    const artifactParent = join(outer, "docs", "generated");
+    const artifactDirectory = join(artifactParent, "supply-chain");
+    const noticePath = join(outer, "THIRD_PARTY_NOTICES");
+    const noticeBackup = join(outer, ".THIRD_PARTY_NOTICES.backup");
+    mkdirSync(artifactParent, { recursive: true });
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      const oldNotice = "old notices\n";
+      publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: null,
+        noticePath,
+        noticeBytes: oldNotice,
+        expectedPreviousNotice: null,
+      });
+      const changedDocument = readJsonFixture("native-a.json");
+      changedDocument.packages.find((package_) => package_.name === "alpha").description = "Changed";
+      const changed = normalize(changedDocument, { createdAt: "2026-07-20T10:11:12Z" });
+      const newNotice = "new notices\n";
+      let activated = false;
+      expectCode(() => publishSpdxArtifacts({
+        artifactDirectory,
+        result: changed,
+        expectedPrevious: {
+          evidenceBytes: baseline.evidenceBytes,
+          sbomBytes: baseline.bytes,
+        },
+        noticePath,
+        noticeBytes: newNotice,
+        expectedPreviousNotice: oldNotice,
+        afterActivate: () => {
+          activated = true;
+        },
+        syncParentDirectory: (path) => {
+          if (activated && path === outer) {
+            throw new Error("synthetic NOTICE backup cleanup failure");
+          }
+        },
+      }), "SPDX_ARTIFACT_PUBLISH_UNCERTAIN");
+      assert.equal(
+        readFileSync(join(artifactDirectory, "sbom.spdx.json"), "utf8"),
+        changed.bytes,
+      );
+      assert.equal(
+        readFileSync(join(artifactDirectory, "dependency-evidence.json"), "utf8"),
+        changed.evidenceBytes,
+      );
+      assert.equal(readFileSync(noticePath, "utf8"), newNotice);
+      assert.equal(existsSync(join(artifactParent, ".supply-chain.backup")), false);
+      assert.equal(readFileSync(noticeBackup, "utf8"), oldNotice);
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("rolls back the complete triplet when activation fails", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-triplet-rollback-");
+    const artifactParent = join(outer, "docs", "generated");
+    const artifactDirectory = join(artifactParent, "supply-chain");
+    const noticePath = join(outer, "THIRD_PARTY_NOTICES");
+    mkdirSync(artifactParent, { recursive: true });
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      const oldNotice = "old notices\n";
+      publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: null,
+        noticePath,
+        noticeBytes: oldNotice,
+        expectedPreviousNotice: null,
+      });
+      const changedDocument = readJsonFixture("native-a.json");
+      changedDocument.packages.find((package_) => package_.name === "alpha").description = "Changed";
+      const changed = normalize(changedDocument, { createdAt: "2026-07-20T10:11:12Z" });
+      expectCode(() => publishSpdxArtifacts({
+        artifactDirectory,
+        result: changed,
+        expectedPrevious: {
+          evidenceBytes: baseline.evidenceBytes,
+          sbomBytes: baseline.bytes,
+        },
+        noticePath,
+        noticeBytes: "new notices\n",
+        expectedPreviousNotice: oldNotice,
+        afterActivate: () => {
+          throw new Error("injected triplet activation failure");
+        },
+      }), "SPDX_ARTIFACT_PUBLISH");
+      assert.equal(
+        readFileSync(join(artifactDirectory, "dependency-evidence.json"), "utf8"),
+        baseline.evidenceBytes,
+      );
+      assert.equal(readFileSync(join(artifactDirectory, "sbom.spdx.json"), "utf8"), baseline.bytes);
+      assert.equal(readFileSync(noticePath, "utf8"), oldNotice);
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("preserves an external active NOTICE and both old backups", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-triplet-external-active-");
+    const artifactParent = join(outer, "docs", "generated");
+    const artifactDirectory = join(artifactParent, "supply-chain");
+    const artifactBackup = join(artifactParent, ".supply-chain.backup");
+    const noticePath = join(outer, "THIRD_PARTY_NOTICES");
+    const noticeBackup = join(outer, ".THIRD_PARTY_NOTICES.backup");
+    mkdirSync(artifactParent, { recursive: true });
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      const oldNotice = "old notices\n";
+      publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: null,
+        noticePath,
+        noticeBytes: oldNotice,
+        expectedPreviousNotice: null,
+      });
+      const changedDocument = readJsonFixture("native-a.json");
+      changedDocument.packages.find((package_) => package_.name === "alpha").description = "Changed";
+      const changed = normalize(changedDocument, { createdAt: "2026-07-20T10:11:12Z" });
+      expectCode(() => publishSpdxArtifacts({
+        artifactDirectory,
+        result: changed,
+        expectedPrevious: {
+          evidenceBytes: baseline.evidenceBytes,
+          sbomBytes: baseline.bytes,
+        },
+        noticePath,
+        noticeBytes: "new notices\n",
+        expectedPreviousNotice: oldNotice,
+        afterActivate: () => {
+          writeFileSync(noticePath, "external active notice\n", "utf8");
+          throw new Error("injected external NOTICE replacement");
+        },
+      }), "SPDX_ARTIFACT_PUBLISH_UNCERTAIN");
+      assert.equal(readFileSync(noticePath, "utf8"), "external active notice\n");
+      assert.equal(
+        readFileSync(join(artifactDirectory, "sbom.spdx.json"), "utf8"),
+        changed.bytes,
+      );
+      assert.equal(
+        readFileSync(join(artifactBackup, "sbom.spdx.json"), "utf8"),
+        baseline.bytes,
+      );
+      assert.equal(readFileSync(noticeBackup, "utf8"), oldNotice);
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("preserves same-byte external artifact, child and NOTICE replacements by inode", () => {
+    for (const replacement of ["artifact", "artifact-child", "notice"]) {
+      const outer = mkdtempSync(`/tmp/axial-muse-e011-triplet-same-${replacement}-`);
+      const artifactParent = join(outer, "docs", "generated");
+      const artifactDirectory = join(artifactParent, "supply-chain");
+      const noticePath = join(outer, "THIRD_PARTY_NOTICES");
+      mkdirSync(artifactParent, { recursive: true });
+      try {
+        const baseline = normalize(readJsonFixture("native-a.json"));
+        const oldNotice = "old notices\n";
+        publishSpdxArtifacts({
+          artifactDirectory,
+          result: baseline,
+          expectedPrevious: null,
+          noticePath,
+          noticeBytes: oldNotice,
+          expectedPreviousNotice: null,
+        });
+        const changedDocument = readJsonFixture("native-a.json");
+        changedDocument.packages.find((package_) => package_.name === "alpha").description = "Changed";
+        const changed = normalize(changedDocument, { createdAt: "2026-07-20T10:11:12Z" });
+        const newNotice = "new notices\n";
+        expectCode(() => publishSpdxArtifacts({
+          artifactDirectory,
+          result: changed,
+          expectedPrevious: {
+            evidenceBytes: baseline.evidenceBytes,
+            sbomBytes: baseline.bytes,
+          },
+          noticePath,
+          noticeBytes: newNotice,
+          expectedPreviousNotice: oldNotice,
+          afterActivate: () => {
+            if (replacement === "artifact") {
+              rmSync(artifactDirectory, { recursive: true });
+              mkdirSync(artifactDirectory);
+              writeFileSync(
+                join(artifactDirectory, "dependency-evidence.json"),
+                changed.evidenceBytes,
+                "utf8",
+              );
+              writeFileSync(join(artifactDirectory, "sbom.spdx.json"), changed.bytes, "utf8");
+            } else if (replacement === "artifact-child") {
+              const sbomPath = join(artifactDirectory, "sbom.spdx.json");
+              unlinkSync(sbomPath);
+              writeFileSync(sbomPath, changed.bytes, "utf8");
+            } else {
+              unlinkSync(noticePath);
+              writeFileSync(noticePath, newNotice, "utf8");
+            }
+            if (replacement !== "artifact-child") {
+              throw new Error("synthetic same-byte triplet replacement");
+            }
+          },
+        }), "SPDX_ARTIFACT_PUBLISH_UNCERTAIN");
+        assert.equal(
+          readFileSync(join(artifactDirectory, "sbom.spdx.json"), "utf8"),
+          changed.bytes,
+        );
+        assert.equal(readFileSync(noticePath, "utf8"), newNotice);
+        assert.equal(
+          readFileSync(join(artifactParent, ".supply-chain.backup", "sbom.spdx.json"), "utf8"),
+          baseline.bytes,
+        );
+        assert.equal(readFileSync(join(outer, ".THIRD_PARTY_NOTICES.backup"), "utf8"), oldNotice);
+      } finally {
+        rmSync(outer, { recursive: true, force: true });
+      }
+    }
+  });
+
+  await suite.test("quarantines a NOTICE replaced inside the rollback ownership window", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-triplet-window-");
+    const artifactParent = join(outer, "docs", "generated");
+    const artifactDirectory = join(artifactParent, "supply-chain");
+    const noticePath = join(outer, "THIRD_PARTY_NOTICES");
+    mkdirSync(artifactParent, { recursive: true });
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      const oldNotice = "old notices\n";
+      publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: null,
+        noticePath,
+        noticeBytes: oldNotice,
+        expectedPreviousNotice: null,
+      });
+      const changedDocument = readJsonFixture("native-a.json");
+      changedDocument.packages.find((package_) => package_.name === "alpha").description = "Changed";
+      const changed = normalize(changedDocument, { createdAt: "2026-07-20T10:11:12Z" });
+      const newNotice = "new notices\n";
+      expectCode(() => publishSpdxArtifacts({
+        artifactDirectory,
+        result: changed,
+        expectedPrevious: {
+          evidenceBytes: baseline.evidenceBytes,
+          sbomBytes: baseline.bytes,
+        },
+        noticePath,
+        noticeBytes: newNotice,
+        expectedPreviousNotice: oldNotice,
+        afterActivate: () => {
+          throw new Error("synthetic rollback");
+        },
+        afterRollbackOwnershipCheck: (kind) => {
+          if (kind !== "notice") return;
+          unlinkSync(noticePath);
+          writeFileSync(noticePath, newNotice, "utf8");
+        },
+      }), "SPDX_ARTIFACT_PUBLISH_UNCERTAIN");
+      const noticeQuarantine = readdirSync(outer).find((entry) => (
+        entry.startsWith(".THIRD_PARTY_NOTICES.rollback-")
+      ));
+      assert.equal(typeof noticeQuarantine, "string");
+      assert.equal(
+        readFileSync(join(outer, noticeQuarantine, "THIRD_PARTY_NOTICES"), "utf8"),
+        newNotice,
+      );
+      const artifactQuarantine = readdirSync(artifactParent).find((entry) => (
+        entry.startsWith(".supply-chain.rollback-")
+      ));
+      assert.equal(typeof artifactQuarantine, "string");
+      assert.equal(
+        readFileSync(
+          join(artifactParent, artifactQuarantine, "supply-chain", "sbom.spdx.json"),
+          "utf8",
+        ),
+        changed.bytes,
+      );
+      assert.equal(
+        readFileSync(join(artifactParent, ".supply-chain.backup", "sbom.spdx.json"), "utf8"),
+        baseline.bytes,
+      );
+      assert.equal(readFileSync(join(outer, ".THIRD_PARTY_NOTICES.backup"), "utf8"), oldNotice);
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("rejects an old THIRD_PARTY_NOTICES snapshot drift before publication", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-triplet-drift-");
+    const artifactParent = join(outer, "docs", "generated");
+    const artifactDirectory = join(artifactParent, "supply-chain");
+    const noticePath = join(outer, "THIRD_PARTY_NOTICES");
+    mkdirSync(artifactParent, { recursive: true });
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      const oldNotice = "old notices\n";
+      publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: null,
+        noticePath,
+        noticeBytes: oldNotice,
+        expectedPreviousNotice: null,
+      });
+      writeFileSync(noticePath, "external notice writer\n", "utf8");
+      expectCode(() => publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: {
+          evidenceBytes: baseline.evidenceBytes,
+          sbomBytes: baseline.bytes,
+        },
+        noticePath,
+        noticeBytes: "new notices\n",
+        expectedPreviousNotice: oldNotice,
+      }), "SPDX_ARTIFACT_CONCURRENT_CHANGE");
+      assert.equal(readFileSync(noticePath, "utf8"), "external notice writer\n");
+      assert.equal(readFileSync(join(artifactDirectory, "sbom.spdx.json"), "utf8"), baseline.bytes);
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("reports an uncertain triplet when the old NOTICE backup drifts", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-triplet-uncertain-");
+    const artifactParent = join(outer, "docs", "generated");
+    const artifactDirectory = join(artifactParent, "supply-chain");
+    const noticePath = join(outer, "THIRD_PARTY_NOTICES");
+    const noticeBackup = join(outer, ".THIRD_PARTY_NOTICES.backup");
+    mkdirSync(artifactParent, { recursive: true });
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      const oldNotice = "old notices\n";
+      publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: null,
+        noticePath,
+        noticeBytes: oldNotice,
+        expectedPreviousNotice: null,
+      });
+      expectCode(() => publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: {
+          evidenceBytes: baseline.evidenceBytes,
+          sbomBytes: baseline.bytes,
+        },
+        noticePath,
+        noticeBytes: "new notices\n",
+        expectedPreviousNotice: oldNotice,
+        afterBackup: () => {
+          writeFileSync(noticeBackup, "tampered backup\n", "utf8");
+          throw new Error("injected NOTICE backup drift");
+        },
+      }), "SPDX_ARTIFACT_PUBLISH_UNCERTAIN");
+      assert.equal(existsSync(artifactDirectory), false);
+      assert.equal(existsSync(noticePath), false);
+      assert.equal(readFileSync(noticeBackup, "utf8"), "tampered backup\n");
+      assert.equal(existsSync(join(artifactParent, ".supply-chain.backup")), true);
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("rejects symlink, multiple-hard-link and non-file NOTICE snapshots", () => {
+    const outer = mkdtempSync("/tmp/axial-muse-e011-triplet-file-type-");
+    const artifactParent = join(outer, "docs", "generated");
+    const artifactDirectory = join(artifactParent, "supply-chain");
+    const noticePath = join(outer, "THIRD_PARTY_NOTICES");
+    const target = join(outer, "notice-target");
+    mkdirSync(artifactParent, { recursive: true });
+    writeFileSync(target, "old notices\n", "utf8");
+    try {
+      const baseline = normalize(readJsonFixture("native-a.json"));
+      const publish = () => publishSpdxArtifacts({
+        artifactDirectory,
+        result: baseline,
+        expectedPrevious: null,
+        noticePath,
+        noticeBytes: "new notices\n",
+        expectedPreviousNotice: "old notices\n",
+      });
+
+      symlinkSync(target, noticePath);
+      expectCode(publish, "SPDX_EVIDENCE_INVALID");
+      unlinkSync(noticePath);
+
+      linkSync(target, noticePath);
+      expectCode(publish, "SPDX_EVIDENCE_INVALID");
+      unlinkSync(noticePath);
+
+      mkdirSync(noticePath);
+      expectCode(publish, "SPDX_EVIDENCE_INVALID");
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
   await suite.test("fsyncs candidate bytes and every successful publication transition", () => {
     const outer = mkdtempSync("/tmp/axial-muse-e011-sync-");
     const artifactDirectory = join(outer, "supply-chain");
@@ -728,8 +1584,7 @@ test("E-011 deterministic SPDX contract", async (suite) => {
           phases.push("candidate-sync");
         },
         syncParentDirectory: (path) => {
-          assert.equal(path, outer);
-          phases.push("sync");
+          phases.push(path === outer ? "sync" : "quarantine-sync");
         },
         afterBackup: () => phases.push("backup-checked"),
         afterActivate: () => phases.push("active-checked"),
@@ -742,6 +1597,9 @@ test("E-011 deterministic SPDX contract", async (suite) => {
         "backup-checked",
         "sync",
         "active-checked",
+        "sync",
+        "sync",
+        "quarantine-sync",
         "sync",
       ]);
     } finally {
@@ -832,6 +1690,310 @@ test("E-011 deterministic SPDX contract", async (suite) => {
       assert.equal(result.sbomEvidence.createdAt, CREATED_AT);
     } finally {
       rmSync(fixture.outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("legalizes only fixed npm native identifiers and every graph reference", () => {
+    const fixture = createNativeIdentifierIntegrationFixture();
+    try {
+      const nativeDocument = runBundledNpmSpdx(fixture);
+      const nativePackage = nativeDocument.packages.find((package_) => (
+        package_.name === "string_decoder"
+      ));
+      assert.equal(nativePackage.SPDXID, "SPDXRef-Package-string_decoder-1.1.1");
+      const expectedGraph = buildExpectedSpdxGraph(fixture.lockfile, fixture.manifest);
+      const canonicalId = "SPDXRef-Package-string-decoder-1.1.1";
+      assert.equal(
+        expectedGraph.packages.find((package_) => package_.name === "string_decoder").SPDXID,
+        canonicalId,
+      );
+      const normalized = normalizeNpmSpdx({
+        createdAt: CREATED_AT,
+        expectedGraph,
+        nativeDocument,
+        npmVersion: fixture.actualNpmVersion,
+      });
+      assert.equal(
+        normalized.document.packages.find((package_) => package_.name === "string_decoder").SPDXID,
+        canonicalId,
+      );
+      assert.equal(
+        normalized.document.relationships.some((relationship) => (
+          relationship.spdxElementId === canonicalId
+          || relationship.relatedSpdxElement === canonicalId
+        )),
+        true,
+      );
+      for (const id of [
+        ...normalized.document.documentDescribes,
+        ...normalized.document.packages.map((package_) => package_.SPDXID),
+        ...normalized.document.relationships.flatMap((relationship) => [
+          relationship.spdxElementId,
+          relationship.relatedSpdxElement,
+        ]),
+      ]) {
+        assert.match(id, /^SPDXRef-[A-Za-z0-9.-]+$/u);
+      }
+      validateCanonicalSpdxArtifacts({
+        evidenceBytes: normalized.evidenceBytes,
+        expectedGraph,
+        npmVersion: fixture.actualNpmVersion,
+        sbomBytes: normalized.bytes,
+      });
+
+      const forgedNative = clone(nativeDocument);
+      forgedNative.packages.find((package_) => package_.name === "string_decoder").SPDXID =
+        canonicalId;
+      expectCode(() => normalizeNpmSpdx({
+        createdAt: CREATED_AT,
+        expectedGraph,
+        nativeDocument: forgedNative,
+        npmVersion: fixture.actualNpmVersion,
+      }), "SPDX_GRAPH_MISMATCH");
+
+      const persistedRawId = clone(normalized.document);
+      persistedRawId.packages.find((package_) => package_.name === "string_decoder").SPDXID =
+        nativePackage.SPDXID;
+      expectCode(() => validateCanonicalSpdxArtifacts({
+        evidenceBytes: normalized.evidenceBytes,
+        expectedGraph,
+        npmVersion: fixture.actualNpmVersion,
+        sbomBytes: canonicalJsonBytes(persistedRawId),
+      }), "SPDX_SCHEMA_INVALID");
+    } finally {
+      rmSync(fixture.outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("fills only native NOASSERTION from reviewed tarball license metadata", () => {
+    const expectedGraph = readJsonFixture("expected-graph.json");
+    expectedGraph.packages.find((package_) => package_.name === "alpha").licenseDeclared = "MIT";
+    const missingLockLicense = readJsonFixture("native-a.json");
+    missingLockLicense.packages.find((package_) => package_.name === "alpha").licenseDeclared =
+      "NOASSERTION";
+    const normalized = normalizeNpmSpdx({
+      createdAt: CREATED_AT,
+      expectedGraph,
+      nativeDocument: missingLockLicense,
+      npmVersion: NPM_VERSION,
+    });
+    assert.equal(
+      normalized.document.packages.find((package_) => package_.name === "alpha").licenseDeclared,
+      "MIT",
+    );
+    validateCanonicalSpdxArtifacts({
+      evidenceBytes: normalized.evidenceBytes,
+      expectedGraph,
+      npmVersion: NPM_VERSION,
+      sbomBytes: normalized.bytes,
+    });
+
+    const conflictingLockLicense = readJsonFixture("native-a.json");
+    conflictingLockLicense.packages.find((package_) => package_.name === "alpha").licenseDeclared =
+      "Apache-2.0";
+    expectCode(() => normalizeNpmSpdx({
+      createdAt: CREATED_AT,
+      expectedGraph,
+      nativeDocument: conflictingLockLicense,
+      npmVersion: NPM_VERSION,
+    }), "SPDX_GRAPH_MISMATCH");
+
+    const persistedNoAssertion = clone(normalized.document);
+    persistedNoAssertion.packages.find((package_) => package_.name === "alpha").licenseDeclared =
+      "NOASSERTION";
+    expectCode(() => validateCanonicalSpdxArtifacts({
+      evidenceBytes: normalized.evidenceBytes,
+      expectedGraph,
+      npmVersion: NPM_VERSION,
+      sbomBytes: canonicalJsonBytes(persistedNoAssertion),
+    }), "SPDX_GRAPH_MISMATCH");
+  });
+
+  await suite.test("fails closed on legalized identifier collisions and covers SemVer build metadata", () => {
+    const collisionFixture = (reverse) => {
+      const manifest = manifestForCurrentRuntime();
+      manifest.dependencies = {
+        "string-decoder": "1.1.1",
+        string_decoder: "1.1.1",
+      };
+      manifest.devDependencies = {};
+      const entries = [
+        ["node_modules/string-decoder", {
+          integrity: `sha512-${Buffer.alloc(64, 0xaa).toString("base64")}`,
+          resolved: "https://registry.npmjs.org/string-decoder/-/string-decoder-1.1.1.tgz",
+          version: "1.1.1",
+        }],
+        ["node_modules/string_decoder", {
+          integrity: `sha512-${Buffer.alloc(64, 0xbb).toString("base64")}`,
+          resolved: "https://registry.npmjs.org/string_decoder/-/string_decoder-1.1.1.tgz",
+          version: "1.1.1",
+        }],
+      ];
+      if (reverse) entries.reverse();
+      return {
+        lockfileVersion: 3,
+        name: manifest.name,
+        packages: Object.fromEntries([
+          ["", {
+            dependencies: clone(manifest.dependencies),
+            devDependencies: {},
+            name: manifest.name,
+            version: manifest.version,
+          }],
+          ...entries,
+        ]),
+        version: manifest.version,
+        manifest,
+      };
+    };
+    for (const reverse of [false, true]) {
+      const { manifest, ...lockfile } = collisionFixture(reverse);
+      expectCode(() => buildExpectedSpdxGraph(lockfile, manifest), "NPM_LOCK_SPDX_ID");
+    }
+
+    const buildMetadata = createNativeIdentifierIntegrationFixture({
+      manifestSpec: "^1.0.0",
+      name: "alpha",
+      version: "1.0.0+build",
+    });
+    try {
+      const nativeDocument = runBundledNpmSpdx(buildMetadata);
+      assert.equal(
+        nativeDocument.packages.find((package_) => package_.name === "alpha").SPDXID,
+        "SPDXRef-Package-alpha-1.0.0+build",
+      );
+      const expectedGraph = buildExpectedSpdxGraph(
+        buildMetadata.lockfile,
+        buildMetadata.manifest,
+      );
+      const normalized = normalizeNpmSpdx({
+        createdAt: CREATED_AT,
+        expectedGraph,
+        nativeDocument,
+        npmVersion: buildMetadata.actualNpmVersion,
+      });
+      assert.equal(
+        normalized.document.packages.find((package_) => package_.name === "alpha").SPDXID,
+        "SPDXRef-Package-alpha-1.0.0-build",
+      );
+    } finally {
+      rmSync(buildMetadata.outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("matches bundled npm projection for duplicate physical package identities", () => {
+    const ordered = createDuplicateIdentityIntegrationFixture();
+    const reversed = createDuplicateIdentityIntegrationFixture({ reversePackagePaths: true });
+    const duplicateRelationship = createDuplicateIdentityIntegrationFixture({
+      duplicateOutgoingRelationship: true,
+    });
+    try {
+      const orderedDocument = runBundledNpmSpdx(ordered);
+      const reversedDocument = runBundledNpmSpdx(reversed);
+      const project = (document) => ({
+        packages: document.packages
+          .filter((package_) => ["alpha", "container"].includes(package_.name))
+          .map((package_) => ({
+            SPDXID: package_.SPDXID,
+            name: package_.name,
+            packageFileName: package_.packageFileName,
+            versionInfo: package_.versionInfo,
+          }))
+          .sort((left, right) => left.SPDXID.localeCompare(right.SPDXID)),
+        relationships: document.relationships
+          .filter((relationship) => relationship.relationshipType !== "DESCRIBES")
+          .map((relationship) => ({
+            relatedSpdxElement: relationship.relatedSpdxElement,
+            relationshipType: relationship.relationshipType,
+            spdxElementId: relationship.spdxElementId,
+          }))
+          .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
+      });
+      const expected = {
+        packages: [
+          {
+            SPDXID: "SPDXRef-Package-alpha-1.2.3",
+            name: "alpha",
+            packageFileName: "node_modules/alpha",
+            versionInfo: "1.2.3",
+          },
+          {
+            SPDXID: "SPDXRef-Package-container-1.0.0",
+            name: "container",
+            packageFileName: "node_modules/container",
+            versionInfo: "1.0.0",
+          },
+        ],
+        relationships: [
+          {
+            relatedSpdxElement: "SPDXRef-Package-container-1.0.0",
+            relationshipType: "DEPENDENCY_OF",
+            spdxElementId: "SPDXRef-Package-alpha-1.2.3",
+          },
+          {
+            relatedSpdxElement: "SPDXRef-Package-e011-fixture-1.0.0",
+            relationshipType: "DEPENDENCY_OF",
+            spdxElementId: "SPDXRef-Package-alpha-1.2.3",
+          },
+          {
+            relatedSpdxElement: "SPDXRef-Package-e011-fixture-1.0.0",
+            relationshipType: "DEPENDENCY_OF",
+            spdxElementId: "SPDXRef-Package-container-1.0.0",
+          },
+        ],
+      };
+      assert.deepEqual(project(orderedDocument), expected);
+      assert.deepEqual(project(reversedDocument), expected);
+
+      const orderedExpectedGraph = buildExpectedSpdxGraph(ordered.lockfile, ordered.manifest);
+      const reversedExpectedGraph = buildExpectedSpdxGraph(reversed.lockfile, reversed.manifest);
+      assert.deepEqual(project(orderedExpectedGraph), expected);
+      assert.deepEqual(project(reversedExpectedGraph), expected);
+      assert.deepEqual(orderedExpectedGraph, reversedExpectedGraph);
+
+      const tarballConflict = clone(ordered.lockfile);
+      tarballConflict.packages["node_modules/container/node_modules/alpha"].integrity =
+        `sha512-${Buffer.alloc(64, 0xdd).toString("base64")}`;
+      expectCode(
+        () => buildExpectedSpdxGraph(tarballConflict, ordered.manifest),
+        "NPM_LOCK_PACKAGE_IDENTITY",
+      );
+
+      const scriptConflict = clone(ordered.lockfile);
+      scriptConflict.packages["node_modules/container/node_modules/alpha"].hasInstallScript = true;
+      expectCode(
+        () => buildExpectedSpdxGraph(scriptConflict, ordered.manifest),
+        "NPM_LOCK_PACKAGE_IDENTITY",
+      );
+
+      const duplicateRelationshipDocument = runBundledNpmSpdx(duplicateRelationship);
+      const duplicateTriples = duplicateRelationshipDocument.relationships.filter((relationship) => (
+        relationship.spdxElementId === "SPDXRef-Package-leaf-1.0.0"
+        && relationship.relatedSpdxElement === "SPDXRef-Package-alpha-1.2.3"
+        && relationship.relationshipType === "DEPENDENCY_OF"
+      ));
+      assert.equal(duplicateTriples.length, 2);
+      const normalizedDuplicateRelationship = normalizeNpmSpdx({
+        createdAt: CREATED_AT,
+        expectedGraph: buildExpectedSpdxGraph(
+          duplicateRelationship.lockfile,
+          duplicateRelationship.manifest,
+        ),
+        nativeDocument: duplicateRelationshipDocument,
+        npmVersion: duplicateRelationship.actualNpmVersion,
+      });
+      assert.equal(
+        normalizedDuplicateRelationship.document.relationships.filter((relationship) => (
+          relationship.spdxElementId === "SPDXRef-Package-leaf-1.0.0"
+          && relationship.relatedSpdxElement === "SPDXRef-Package-alpha-1.2.3"
+          && relationship.relationshipType === "DEPENDENCY_OF"
+        )).length,
+        1,
+      );
+    } finally {
+      rmSync(ordered.outer, { recursive: true, force: true });
+      rmSync(reversed.outer, { recursive: true, force: true });
+      rmSync(duplicateRelationship.outer, { recursive: true, force: true });
     }
   });
 
@@ -1053,6 +2215,71 @@ test("E-011 deterministic SPDX contract", async (suite) => {
       assert.equal(processState.workloadCount, 0);
       assert.equal(readFileSync(lockPath, "utf8"), "held by first generator\n");
       assert.equal(existsSync(fixture.artifactDirectory), false);
+    } finally {
+      rmSync(fixture.outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("persists a failed generation-lock acquisition cleanup", () => {
+    const fixture = createIntegrationFixture();
+    const artifactParent = resolve(fixture.artifactDirectory, "..");
+    const lockPath = join(artifactParent, ".supply-chain.generation.lock");
+    const processState = createNativeProcess([]);
+    let syncCalls = 0;
+    try {
+      expectCode(() => withWorkingDirectory(fixture.root, () => generateSupplyChainArtifacts({
+        root: fixture.root,
+        artifactDirectory: fixture.artifactDirectory,
+        createdAt: CREATED_AT,
+        runProcess: processState.runProcess,
+        temporaryParent: fixture.outer,
+        npmVersionsByRole: fixture.npmVersionsByRole,
+        syncGenerationLockDirectory: () => {
+          syncCalls += 1;
+          if (syncCalls === 1) throw new Error("synthetic lock-parent sync failure");
+        },
+      })), "SPDX_GENERATION_LOCK_ACQUIRE");
+      assert.equal(syncCalls, 5);
+      assert.equal(processState.workloadCount, 0);
+      assert.equal(existsSync(lockPath), false);
+    } finally {
+      rmSync(fixture.outer, { recursive: true, force: true });
+    }
+  });
+
+  await suite.test("does not unlink a generation lock replaced during publication", () => {
+    const fixture = createIntegrationFixture();
+    const artifactParent = resolve(fixture.artifactDirectory, "..");
+    const lockPath = join(artifactParent, ".supply-chain.generation.lock");
+    const processState = createNativeProcess([
+      nativeForRuntime("native-a.json", fixture.actualNpmVersion),
+      nativeForRuntime("native-b.json", fixture.actualNpmVersion),
+    ]);
+    try {
+      expectCode(() => withWorkingDirectory(fixture.root, () => generateSupplyChainArtifacts({
+        root: fixture.root,
+        artifactDirectory: fixture.artifactDirectory,
+        createdAt: CREATED_AT,
+        runProcess: processState.runProcess,
+        temporaryParent: fixture.outer,
+        npmVersionsByRole: fixture.npmVersionsByRole,
+        afterActivate: () => {
+          unlinkSync(lockPath);
+          writeFileSync(lockPath, "external lock owner\n", "utf8");
+        },
+      })), "SPDX_GENERATION_LOCK_CLEANUP");
+      assert.equal(processState.workloadCount, 2);
+      assert.equal(
+        readFileSync(lockPath, "utf8"),
+        "external lock owner\n",
+      );
+      assert.equal(
+        readdirSync(artifactParent).some((entry) => (
+          entry.startsWith("..supply-chain.generation.lock.cleanup-")
+        )),
+        false,
+      );
+      assert.equal(existsSync(fixture.artifactDirectory), true);
     } finally {
       rmSync(fixture.outer, { recursive: true, force: true });
     }

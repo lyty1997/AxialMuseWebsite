@@ -4,6 +4,7 @@ import { hasDirectPackageManagerCommand } from "./bypass.mjs";
 import {
   NPM_VERSIONS_BY_ROLE,
   PROJECT_NPM_CONFIG,
+  ROOT_DEPENDENCY_OVERRIDES,
   RUN_SCRIPT_ALLOWLIST,
   RUN_SCRIPT_COMMANDS,
 } from "./contracts.mjs";
@@ -20,7 +21,6 @@ const FORBIDDEN_DEPENDENCY_FIELDS = Object.freeze([
   "bundleDependencies",
   "bundledDependencies",
   "devEngines",
-  "overrides",
   "packageManager",
   "resolutions",
   "workspaces",
@@ -59,7 +59,7 @@ function assertInsideRoot(root, path, code) {
   fail(code, "关键输入路径逃逸仓库根目录。" );
 }
 
-export function readRegularProjectFile(root, relativePath, code) {
+function regularProjectFilePath(root, relativePath, code) {
   const path = resolve(root, relativePath);
   assertInsideRoot(root, path, code);
 
@@ -82,7 +82,15 @@ export function readRegularProjectFile(root, relativePath, code) {
     fail(code, `${relativePath} 的规范路径无法确认。`);
   }
   assertInsideRoot(canonicalRoot, resolve(canonicalParent, "."), code);
-  return readFileSync(path, "utf8");
+  return path;
+}
+
+export function readRegularProjectFile(root, relativePath, code) {
+  return readFileSync(regularProjectFilePath(root, relativePath, code), "utf8");
+}
+
+export function readRegularProjectFileBytes(root, relativePath, code) {
+  return readFileSync(regularProjectFilePath(root, relativePath, code));
 }
 
 export function parseProjectNpmrc(text) {
@@ -165,6 +173,23 @@ export function validateManifestObject(manifest) {
     if (Object.hasOwn(manifest, field)) {
       fail("NPM_MANIFEST_SOURCE_FIELD", `package.json#${field} 尚未获准进入 registry-only 清单。`);
     }
+  }
+  const requiresD082Overrides = manifest.name === "axial-muse-website"
+    || Object.hasOwn(manifest, "overrides");
+  if (
+    requiresD082Overrides
+    && (
+      manifest.overrides === null
+      || typeof manifest.overrides !== "object"
+      || Array.isArray(manifest.overrides)
+      || JSON.stringify(Object.fromEntries(Object.entries(manifest.overrides).sort()))
+        !== JSON.stringify(Object.fromEntries(Object.entries(ROOT_DEPENDENCY_OVERRIDES).sort()))
+    )
+  ) {
+    fail(
+      "NPM_MANIFEST_OVERRIDES",
+      "package.json#overrides 必须精确等于 D-082 的两个传递安全覆盖。",
+    );
   }
 
   const seen = new Map();
