@@ -1,0 +1,1105 @@
+{
+  "decisionId": "D-082",
+  "kind": "axial_muse_dependency_license_evidence",
+  "legalEvidence": {
+    "@algolia/autocomplete-core@1.19.2": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-mKv7RyuAzXvwmq+0XRK8HqZXt9iZ5Kkm2huLjgn5JoCPtDy+oh9yxUMfDDaVCw0oyzZ1isdJBc7l9nuCyyR7Nw==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/@algolia/autocomplete-core/-/autocomplete-core-1.19.2.tgz",
+      "source": {
+        "path": "LICENSE",
+        "rawSha256": "1e605499213e06118cc81abc00b32bbb33ead185d9b0e190f2662588e8806f02",
+        "repository": "https://github.com/algolia/autocomplete",
+        "revision": "de8a1955e67b8df9a7f29f8114e3c579de86bab1",
+        "text": "The MIT License (MIT)\n\nCopyright (c) 2015-present Algolia, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    "@algolia/autocomplete-core@1.19.9": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-4U2JKLMWlDu0CotYyUkWakDxr8AIav3QtIUXXRpfavYN29aVWfzlwJp9T0rPKEf/dO2QCPAUc0Kq1Tj1GJxo2A==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/@algolia/autocomplete-core/-/autocomplete-core-1.19.9.tgz",
+      "source": {
+        "path": "LICENSE",
+        "rawSha256": "1e605499213e06118cc81abc00b32bbb33ead185d9b0e190f2662588e8806f02",
+        "repository": "https://github.com/algolia/autocomplete",
+        "revision": "b91d7db0162aebcde77c5f4567d4b1bd44d9d939",
+        "text": "The MIT License (MIT)\n\nCopyright (c) 2015-present Algolia, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    "@algolia/autocomplete-plugin-algolia-insights@1.19.2": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-TjxbcC/r4vwmnZaPwrHtkXNeqvlpdyR+oR9Wi2XyfORkiGkLTVhX2j+O9SaCCINbKoDfc+c2PB8NjfOnz7+oKg==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/@algolia/autocomplete-plugin-algolia-insights/-/autocomplete-plugin-algolia-insights-1.19.2.tgz",
+      "source": {
+        "path": "LICENSE",
+        "rawSha256": "1e605499213e06118cc81abc00b32bbb33ead185d9b0e190f2662588e8806f02",
+        "repository": "https://github.com/algolia/autocomplete",
+        "revision": "de8a1955e67b8df9a7f29f8114e3c579de86bab1",
+        "text": "The MIT License (MIT)\n\nCopyright (c) 2015-present Algolia, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    "@algolia/autocomplete-plugin-algolia-insights@1.19.9": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-6mExC6X7762s2SV3eJy3QOkB8bdMmnUhQ2agvGVDuzwoGyr3PquGSY/0vPQXCfiAiCaXUz1rXn+lwghgSi0l0w==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/@algolia/autocomplete-plugin-algolia-insights/-/autocomplete-plugin-algolia-insights-1.19.9.tgz",
+      "source": {
+        "path": "LICENSE",
+        "rawSha256": "1e605499213e06118cc81abc00b32bbb33ead185d9b0e190f2662588e8806f02",
+        "repository": "https://github.com/algolia/autocomplete",
+        "revision": "b91d7db0162aebcde77c5f4567d4b1bd44d9d939",
+        "text": "The MIT License (MIT)\n\nCopyright (c) 2015-present Algolia, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    "@algolia/autocomplete-shared@1.19.2": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-jEazxZTVD2nLrC+wYlVHQgpBoBB5KPStrJxLzsIFl6Kqd1AlG9sIAGl39V5tECLpIQzB3Qa2T6ZPJ1ChkwMK/w==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/@algolia/autocomplete-shared/-/autocomplete-shared-1.19.2.tgz",
+      "source": {
+        "path": "LICENSE",
+        "rawSha256": "1e605499213e06118cc81abc00b32bbb33ead185d9b0e190f2662588e8806f02",
+        "repository": "https://github.com/algolia/autocomplete",
+        "revision": "de8a1955e67b8df9a7f29f8114e3c579de86bab1",
+        "text": "The MIT License (MIT)\n\nCopyright (c) 2015-present Algolia, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    "@algolia/autocomplete-shared@1.19.9": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-YosP9Uoek6y/Ur1r1qeogk4biMe/hzkyNcgMCciw0//3XpCM7VlYLSHnyt/vOnEOGhCCc0+3v+unEiH6zz+Z1A==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/@algolia/autocomplete-shared/-/autocomplete-shared-1.19.9.tgz",
+      "source": {
+        "path": "LICENSE",
+        "rawSha256": "1e605499213e06118cc81abc00b32bbb33ead185d9b0e190f2662588e8806f02",
+        "repository": "https://github.com/algolia/autocomplete",
+        "revision": "b91d7db0162aebcde77c5f4567d4b1bd44d9d939",
+        "text": "The MIT License (MIT)\n\nCopyright (c) 2015-present Algolia, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    "@docsearch/core@4.6.3": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-rUOujwIpxJRgD7+kicVsI3D5sqBvdiRTquzWBpTEXZs8ZXfGbfzpus5HqumaNYTppN2HvH8E2yNuRwYdHJeOlA==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/@docsearch/core/-/core-4.6.3.tgz",
+      "source": {
+        "path": "LICENSE",
+        "rawSha256": "1e605499213e06118cc81abc00b32bbb33ead185d9b0e190f2662588e8806f02",
+        "repository": "https://github.com/algolia/docsearch",
+        "revision": "e7633444f01abb6184a8d6fbb9df7189c802a728",
+        "text": "The MIT License (MIT)\n\nCopyright (c) 2015-present Algolia, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    "@docsearch/css@4.6.3": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-nlOwcXcsNAptQl4vlL4MA78qNJKO0Qlds5GuBjCoePgkebTXLSf8Qt1oyZ3YBshYupKXG9VRGEsk1zr23d+bzQ==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/@docsearch/css/-/css-4.6.3.tgz",
+      "source": {
+        "path": "LICENSE",
+        "rawSha256": "1e605499213e06118cc81abc00b32bbb33ead185d9b0e190f2662588e8806f02",
+        "repository": "https://github.com/algolia/docsearch",
+        "revision": "e7633444f01abb6184a8d6fbb9df7189c802a728",
+        "text": "The MIT License (MIT)\n\nCopyright (c) 2015-present Algolia, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    "@docsearch/react@4.6.3": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-Bg2wdDsoQVlNCcEKuEJAU04tvHCqgx8rIu+uIoM4pRtcx3TBKJuXutJik3LTA8LRc9YEyHkrYUrmcC0D7BYf+g==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/@docsearch/react/-/react-4.6.3.tgz",
+      "source": {
+        "path": "LICENSE",
+        "rawSha256": "1e605499213e06118cc81abc00b32bbb33ead185d9b0e190f2662588e8806f02",
+        "repository": "https://github.com/algolia/docsearch",
+        "revision": "e7633444f01abb6184a8d6fbb9df7189c802a728",
+        "text": "The MIT License (MIT)\n\nCopyright (c) 2015-present Algolia, Inc.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    "@jsonjoy.com/json-pointer@1.0.2": {
+      "decisionId": "D-082",
+      "evidenceType": "owner-exception",
+      "integrity": "sha512-Fsn6wM2zlDzY1U+v4Nc8bo3bVqgfNTGcn6dMgs6FjrEnt4ZCe60o6ByKRjOGlI2gow0aE/Q41QOigdTqkyK5fg==",
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "limitations": "The exact npm tarball does not contain an independent complete legal text; the SPDX conclusion follows package metadata plus the owner's exact exception. The standard SPDX reference must not be represented as upstream-carried evidence.",
+      "resolved": "https://registry.npmjs.org/@jsonjoy.com/json-pointer/-/json-pointer-1.0.2.tgz",
+      "source": {
+        "risk": "missing-independent-complete-legal-text"
+      }
+    },
+    "@napi-rs/wasm-runtime@1.0.7": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-SeDnOO0Tk7Okiq6DbXmmBODgOAb9dp9gjlphokTUxmt8U3liIP1ZsozBahH69j/RJv+Rfs6IwUKHTgQYJ/HBAw==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/@napi-rs/wasm-runtime/-/wasm-runtime-1.0.7.tgz",
+      "source": {
+        "path": "LICENSE",
+        "rawSha256": "3f1ce66533302df3a32edbfdfc0b78f0dd34659e4c1f5817162e5ea3c2297215",
+        "repository": "https://github.com/napi-rs/napi-rs",
+        "revision": "a0d55cc99c40efee162e9cf98aa9f6cc7d2ecc4b",
+        "text": "MIT License\n\nCopyright (c) 2020-present LongYinan\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n\nMIT License\n\nCopyright (c) 2018 GitHub\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    "@pnpm/config.env-replace@1.1.0": {
+      "decisionId": "D-082",
+      "evidenceType": "owner-exception",
+      "integrity": "sha512-htyl8TWnKL7K/ESFa1oW2UB5lVDxuF5DpM7tBi6Hu2LNL3mWkIzNLG6N4zoCUP1lCKNxWy/3iu8mS8MvToGd6w==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "The exact npm tarball does not contain an independent complete legal text; the SPDX conclusion follows package metadata plus the owner's exact exception. The standard SPDX reference must not be represented as upstream-carried evidence.",
+      "resolved": "https://registry.npmjs.org/@pnpm/config.env-replace/-/config.env-replace-1.1.0.tgz",
+      "source": {
+        "risk": "missing-independent-complete-legal-text"
+      }
+    },
+    "@pnpm/network.ca-file@1.0.2": {
+      "decisionId": "D-082",
+      "evidenceType": "owner-exception",
+      "integrity": "sha512-YcPQ8a0jwYU9bTdJDpXjMi7Brhkr1mXsXrUJvjqM2mQDgkRiz8jFaQGOdaLxgjtUfQgZhKy/O3cG/YwmgKaxLA==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "The exact npm tarball does not contain an independent complete legal text; the SPDX conclusion follows package metadata plus the owner's exact exception. The standard SPDX reference must not be represented as upstream-carried evidence.",
+      "resolved": "https://registry.npmjs.org/@pnpm/network.ca-file/-/network.ca-file-1.0.2.tgz",
+      "source": {
+        "risk": "missing-independent-complete-legal-text"
+      }
+    },
+    "@polka/url@1.0.0-next.29": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/@polka/url/-/url-1.0.0-next.29.tgz",
+      "source": {
+        "path": "license",
+        "rawSha256": "ba573393f24555ac0528612ad39665fab5bdcc80330a61096024bbf5f736526d",
+        "repository": "https://github.com/lukeed/polka",
+        "revision": "02cbdb529ddca0a9f3d225e2abb2931924219cc3",
+        "text": "The MIT License (MIT)\n\nCopyright (c) Luke Edwards <luke.edwards05@gmail.com> (https://lukeed.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.\n"
+      }
+    },
+    "@swc/counter@0.1.3": {
+      "decisionId": "D-082",
+      "evidenceType": "owner-exception",
+      "integrity": "sha512-e2BR4lsJkkRlKZ/qCHPw9ZaSxc0MVUd7gtbtaB7aMvHeJVYe8sOB8DBZkP2DtISHGSku9sCK6T6cnY0CtXrOCQ==",
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "limitations": "The exact npm tarball does not contain an independent complete legal text; the SPDX conclusion follows package metadata plus the owner's exact exception. The standard SPDX reference must not be represented as upstream-carried evidence.",
+      "resolved": "https://registry.npmjs.org/@swc/counter/-/counter-0.1.3.tgz",
+      "source": {
+        "risk": "missing-independent-complete-legal-text"
+      }
+    },
+    "@tybys/wasm-util@0.10.3": {
+      "decisionId": "D-082",
+      "evidenceType": "owner-exception",
+      "integrity": "sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "The exact npm tarball does not contain an independent complete legal text; the SPDX conclusion follows package metadata plus the owner's exact exception. The standard SPDX reference must not be represented as upstream-carried evidence.",
+      "resolved": "https://registry.npmjs.org/@tybys/wasm-util/-/wasm-util-0.10.3.tgz",
+      "source": {
+        "risk": "missing-independent-complete-legal-text"
+      }
+    },
+    "boolbase@1.0.0": {
+      "decisionId": "D-082",
+      "evidenceType": "owner-exception",
+      "integrity": "sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww==",
+      "licenseConcluded": "ISC",
+      "licenseDeclared": "ISC",
+      "limitations": "The exact npm tarball does not contain an independent complete legal text; the SPDX conclusion follows package metadata plus the owner's exact exception. The standard SPDX reference must not be represented as upstream-carried evidence.",
+      "resolved": "https://registry.npmjs.org/boolbase/-/boolbase-1.0.0.tgz",
+      "source": {
+        "risk": "missing-independent-complete-legal-text"
+      }
+    },
+    "cacheable-request@10.2.14": {
+      "decisionId": "D-082",
+      "evidenceType": "owner-exception",
+      "integrity": "sha512-zkDT5WAF4hSSoUgyfg5tFIxz8XQK+25W/TLVojJTMKBaxevLBBtLxgqguAuVQB8PVW79FVjHcU+GJ9tVbDZ9mQ==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "The exact npm tarball does not contain an independent complete legal text; the SPDX conclusion follows package metadata plus the owner's exact exception. The standard SPDX reference must not be represented as upstream-carried evidence.",
+      "resolved": "https://registry.npmjs.org/cacheable-request/-/cacheable-request-10.2.14.tgz",
+      "source": {
+        "risk": "missing-independent-complete-legal-text"
+      }
+    },
+    "cookie-signature@1.0.7": {
+      "decisionId": "D-082",
+      "evidenceType": "tarball-reviewed-section",
+      "integrity": "sha512-NXdYc3dLr47pBkpUCHtKSwIOQXLVn8dZEuywboCOJY/osA0wFSLlSawr3KN8qXJEyX66FcONTH8EIlVuK0yyFA==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is an exact byte section of another file in the integrity-bound npm tarball; the release lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/cookie-signature/-/cookie-signature-1.0.7.tgz",
+      "source": {
+        "endByte": 1490,
+        "fileRawSha256": "1621ed10d0b2f865eb8608e0474a356cf7a9737a384b6593b61b30a9f6e50366",
+        "path": "package/Readme.md",
+        "sectionRawSha256": "c0a936e4727a7503020745eaf063acffbb81291fcfd21a0cd8db4b4fce95d902",
+        "startByte": 379,
+        "text": "## License \n\n(The MIT License)\n\nCopyright (c) 2012 LearnBoost &lt;tj@learnboost.com&gt;\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
+      }
+    },
+    "cssesc@3.0.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/cssesc/-/cssesc-3.0.0.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/cssesc",
+        "revision": "cb894eb42f27c8d3cd793f16afe35b3ab38000a1",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "eastasianwidth@0.2.0": {
+      "decisionId": "D-082",
+      "evidenceType": "owner-exception",
+      "integrity": "sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "The exact npm tarball does not contain an independent complete legal text; the SPDX conclusion follows package metadata plus the owner's exact exception. The standard SPDX reference must not be represented as upstream-carried evidence.",
+      "resolved": "https://registry.npmjs.org/eastasianwidth/-/eastasianwidth-0.2.0.tgz",
+      "source": {
+        "risk": "missing-independent-complete-legal-text"
+      }
+    },
+    "emoji-regex@8.0.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-8.0.0.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/emoji-regex",
+        "revision": "a9f2e514523d4c0931974aff5059052da10c52c5",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "emoji-regex@9.2.2": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-L18DaJsXSUk2+42pv8mLs5jJT2hqFkFE4j21wOmgbUqsZ2hL72NsUU785g9RXgo3s0ZNgVl42TiHp3ZtOv/Vyg==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-9.2.2.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/emoji-regex",
+        "revision": "0ffa466d7ab65af304d03dddd3a92a2d8268e7ce",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "esrecurse@4.3.0": {
+      "decisionId": "D-082",
+      "evidenceType": "tarball-reviewed-section",
+      "integrity": "sha512-KmfKL3b6G+RXvP8N1vr3Tq1kL/oCFgn2NYXEtqP8/L3pKapUA4G8cFVaoF3SU323CD4XypR/ffioHmkti6/Tag==",
+      "licenseConcluded": "BSD-2-Clause",
+      "licenseDeclared": "BSD-2-Clause",
+      "limitations": "Complete legal text is an exact byte section of another file in the integrity-bound npm tarball; the release lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/esrecurse/-/esrecurse-4.3.0.tgz",
+      "source": {
+        "endByte": 5102,
+        "fileRawSha256": "a7007c78c9d9da690ef6cdb0e7a3427d05832edb00abd1f5a9882700d73be4ad",
+        "path": "package/README.md",
+        "sectionRawSha256": "cb1764d4708e870cc694de13d499af2e6ee98d2751026e3a3f79de608f4f4ea0",
+        "startByte": 3699,
+        "text": "### License\n\nCopyright (C) 2014 [Yusuke Suzuki](https://github.com/Constellation)\n (twitter: [@Constellation](https://twitter.com/Constellation)) and other contributors.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are met:\n\n  * Redistributions of source code must retain the above copyright\n    notice, this list of conditions and the following disclaimer.\n\n  * Redistributions in binary form must reproduce the above copyright\n    notice, this list of conditions and the following disclaimer in the\n    documentation and/or other materials provided with the distribution.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\"\nAND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE\nIMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE\nARE DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY\nDIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES\n(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;\nLOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND\nON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF\nTHIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n"
+      }
+    },
+    "format@0.2.2": {
+      "decisionId": "D-082",
+      "evidenceType": "owner-exception",
+      "integrity": "sha512-wzsgA6WOq+09wrU1tsJ09udeR/YZRaeArL9e1wPbFg3GG2yDnC2ldKpxs4xunpFF9DgqCqOIra3bc1HWrJ37Ww==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "The exact npm tarball and exact upstream commit do not contain an independent complete legal text; MIT is concluded from legacy licenses[].type plus the owner's exact exception. The SPDX conclusion must not be represented as upstream-carried evidence.",
+      "resolved": "https://registry.npmjs.org/format/-/format-0.2.2.tgz",
+      "source": {
+        "risk": "missing-independent-complete-legal-text"
+      }
+    },
+    "glob-to-regex.js@1.2.0": {
+      "decisionId": "D-082",
+      "evidenceType": "owner-exception",
+      "integrity": "sha512-QMwlOQKU/IzqMUOAZWubUOT8Qft+Y0KQWnX9nK3ch0CJg0tTp4TvGZsTfudYKv2NzoQSyPcnA6TYeIQ3jGichQ==",
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "limitations": "The exact npm tarball does not contain an independent complete legal text; the SPDX conclusion follows package metadata plus the owner's exact exception. The standard SPDX reference must not be represented as upstream-carried evidence.",
+      "resolved": "https://registry.npmjs.org/glob-to-regex.js/-/glob-to-regex.js-1.2.0.tgz",
+      "source": {
+        "risk": "missing-independent-complete-legal-text"
+      }
+    },
+    "handle-thing@2.0.1": {
+      "decisionId": "D-082",
+      "evidenceType": "tarball-reviewed-section",
+      "integrity": "sha512-9Qn4yBxelxoh2Ow62nP+Ka/kMnOXRi8BXnRaUwezLNhqelnN49xKz4F/dPP8OYLxLxq6JDtZb2i9XznUQbNPTg==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is an exact byte section of another file in the integrity-bound npm tarball; the release lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/handle-thing/-/handle-thing-2.0.1.tgz",
+      "source": {
+        "endByte": 1909,
+        "fileRawSha256": "5b69760438459b6e7411a2a99ee369c5d76e0fa82044124367d701d82e5d8428",
+        "path": "package/README.md",
+        "sectionRawSha256": "444326049d335af6eec2a4e04cca7326efecb155832ab51236699ef8f3480554",
+        "startByte": 792,
+        "text": "## LICENSE\n\nThis software is licensed under the MIT License.\n\nCopyright Fedor Indutny, 2015.\n\nPermission is hereby granted, free of charge, to any person obtaining a\ncopy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to permit\npersons to whom the Software is furnished to do so, subject to the\nfollowing conditions:\n\nThe above copyright notice and this permission notice shall be included\nin all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS\nOR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN\nNO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,\nDAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR\nOTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE\nUSE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "he@1.2.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/he/-/he-1.2.0.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/he",
+        "revision": "36afe179392226cf1b6ccdb16ebbb7a5a844d93a",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "hpack.js@2.1.6": {
+      "decisionId": "D-082",
+      "evidenceType": "tarball-reviewed-section",
+      "integrity": "sha512-zJxVehUdMGIKsRaNt7apO2Gqp0BdqW5yaiGHXXmbpvxgBYVZnAql+BJb4RO5ad2MgpbZKn5G6nMnegrH1FcNYQ==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is an exact byte section of another file in the integrity-bound npm tarball; the release lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/hpack.js/-/hpack.js-2.1.6.tgz",
+      "source": {
+        "endByte": 1860,
+        "fileRawSha256": "75feefabeda8181959649921b06976c8e047f50d31955fb6bebc66b39afcb2e6",
+        "path": "package/README.md",
+        "sectionRawSha256": "f84610a1938d25d85d2bb7c6309866da63c66d89bcebe7efcfb614577debf61d",
+        "startByte": 699,
+        "text": "#### LICENSE\n\nThis software is licensed under the MIT License.\n\nCopyright Fedor Indutny, 2015.\n\nPermission is hereby granted, free of charge, to any person obtaining a\ncopy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to permit\npersons to whom the Software is furnished to do so, subject to the\nfollowing conditions:\n\nThe above copyright notice and this permission notice shall be included\nin all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS\nOR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN\nNO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,\nDAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR\nOTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE\nUSE OR OTHER DEALINGS IN THE SOFTWARE.\n\n[0]: https://tools.ietf.org/html/rfc7541\n"
+      }
+    },
+    "http-deceiver@1.2.7": {
+      "decisionId": "D-082",
+      "evidenceType": "tarball-reviewed-section",
+      "integrity": "sha512-LmpOGxTfbpgtGVxJrj5k7asXHCgNZp5nLfp+hWc8QQRqtb7fUy6kRY3BO1h9ddF6yIPYUARgxGOwB42DnxIaNw==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is an exact byte section of another file in the integrity-bound npm tarball; the release lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/http-deceiver/-/http-deceiver-1.2.7.tgz",
+      "source": {
+        "endByte": 1363,
+        "fileRawSha256": "067cc44062be2274732fdc07f5ab41ad8ec5439410714da70a92521be0757ed7",
+        "path": "package/README.md",
+        "sectionRawSha256": "444326049d335af6eec2a4e04cca7326efecb155832ab51236699ef8f3480554",
+        "startByte": 246,
+        "text": "## LICENSE\n\nThis software is licensed under the MIT License.\n\nCopyright Fedor Indutny, 2015.\n\nPermission is hereby granted, free of charge, to any person obtaining a\ncopy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to permit\npersons to whom the Software is furnished to do so, subject to the\nfollowing conditions:\n\nThe above copyright notice and this permission notice shall be included\nin all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS\nOR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN\nNO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,\nDAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR\nOTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE\nUSE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "imurmurhash@0.1.4": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-JmXMZ6wuvDmLiHEml9ykzqO6lwFbof0GG4IkcGaENdCRDDmMVnny7s5HsIgHCbaq0w2MyPhDqkhTUgS2LU2PHA==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/imurmurhash/-/imurmurhash-0.1.4.tgz",
+      "source": {
+        "path": "LICENSE",
+        "rawSha256": "fa0943ddcaa857d901a9eb92254d89876297ecdfbc884d294a927df08ebcbbe8",
+        "repository": "https://github.com/jensyt/imurmurhash-js",
+        "revision": "9f40361c7e2835a9b7b8eaa1cbab2a9f94ee22a2",
+        "text": "The MIT License (MIT)\n\nCopyright (c) 2013 Gary Court, Jens Taylor\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of\nthis software and associated documentation files (the \"Software\"), to deal in\nthe Software without restriction, including without limitation the rights to\nuse, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of\nthe Software, and to permit persons to whom the Software is furnished to do so,\nsubject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS\nFOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR\nCOPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER\nIN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN\nCONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "infima@0.2.0-alpha.45": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-uyH0zfr1erU1OohLk0fT4Rrb94AOhguWNOcD9uGrSpRvNB+6gZXUoJX5J0NtvzBO10YZ9PgvA4NFgt+fYg8ojw==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/infima/-/infima-0.2.0-alpha.45.tgz",
+      "source": {
+        "path": "LICENSE",
+        "rawSha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+        "repository": "https://github.com/facebookincubator/infima",
+        "revision": "205b8aedc62496839991b75a8bc2922350766fe4",
+        "text": "MIT License\n\nCopyright (c) Facebook, Inc. and its affiliates.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    "is-regexp@1.0.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-7zjFAPO4/gwyQAAgRRmqeEeyIICSdmCqa3tsVHMdBzaXXRiqopZL4Cyghg/XulGWrtABTpbnYYzzIRffLkP4oA==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/is-regexp/-/is-regexp-1.0.0.tgz",
+      "source": {
+        "path": "license",
+        "rawSha256": "6fb9754611c20f6649f68805e8c990e83261f29316e29de9e6cedae607b8634c",
+        "repository": "https://github.com/sindresorhus/is-regexp",
+        "revision": "ccbe7faf479d3abc4c958df1cf94898f902c2dc4",
+        "text": "The MIT License (MIT)\n\nCopyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.\n"
+      }
+    },
+    "isarray@0.0.1": {
+      "decisionId": "D-082",
+      "evidenceType": "tarball-reviewed-section",
+      "integrity": "sha512-D2S+3GLxWH+uhrNEcoh/fnmYeP8E8/zHl644d/jdA0g2uyXvy3sb0qxotE+ne0LtccHknQzWwZEzhak7oJ0COQ==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is an exact byte section of another file in the integrity-bound npm tarball; the release lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/isarray/-/isarray-0.0.1.tgz",
+      "source": {
+        "endByte": 1557,
+        "fileRawSha256": "5601c343c9aa96449e18aca7a4562038b1d4062f4742a2c9c7f9039f1a303f72",
+        "path": "package/README.md",
+        "sectionRawSha256": "66aa9feab8bb39aceebd69f2a357015d57ceab486d3c7a19ff8d3d4110a6d101",
+        "startByte": 449,
+        "text": "## License\n\n(MIT)\n\nCopyright (c) 2013 Julian Gruber &lt;julian@juliangruber.com&gt;\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of\nthis software and associated documentation files (the \"Software\"), to deal in\nthe Software without restriction, including without limitation the rights to\nuse, copy, modify, merge, publish, distribute, sublicense, and/or sell copies\nof the Software, and to permit persons to whom the Software is furnished to do\nso, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    "isarray@1.0.0": {
+      "decisionId": "D-082",
+      "evidenceType": "tarball-reviewed-section",
+      "integrity": "sha512-VLghIWNM6ELQzo7zwmcg0NmTVyWKYjvIeM83yjp0wRDTmUnrM678fQbcKBo6n2CJEF0szoG//ytg+TKla89ALQ==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is an exact byte section of another file in the integrity-bound npm tarball; the release lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/isarray/-/isarray-1.0.0.tgz",
+      "source": {
+        "endByte": 1890,
+        "fileRawSha256": "ff138e683771b187f3629c383db72ee7d632009010a36d08e18e8d2a34222ec7",
+        "path": "package/README.md",
+        "sectionRawSha256": "66aa9feab8bb39aceebd69f2a357015d57ceab486d3c7a19ff8d3d4110a6d101",
+        "startByte": 782,
+        "text": "## License\n\n(MIT)\n\nCopyright (c) 2013 Julian Gruber &lt;julian@juliangruber.com&gt;\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of\nthis software and associated documentation files (the \"Software\"), to deal in\nthe Software without restriction, including without limitation the rights to\nuse, copy, modify, merge, publish, distribute, sublicense, and/or sell copies\nof the Software, and to permit persons to whom the Software is furnished to do\nso, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      }
+    },
+    "jsesc@3.1.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/jsesc/-/jsesc-3.1.0.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/jsesc",
+        "revision": "819f534875fd87c9033bb72148ab6a6ad1219ca0",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "keyv@4.5.4": {
+      "decisionId": "D-082",
+      "evidenceType": "owner-exception",
+      "integrity": "sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "The exact npm tarball does not contain an independent complete legal text; the SPDX conclusion follows package metadata plus the owner's exact exception. The standard SPDX reference must not be represented as upstream-carried evidence.",
+      "resolved": "https://registry.npmjs.org/keyv/-/keyv-4.5.4.tgz",
+      "source": {
+        "risk": "missing-independent-complete-legal-text"
+      }
+    },
+    "micromark-factory-space@1.1.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-cRzEj7c0OL4Mw2v6nwzttyOZe8XY/Z8G0rzmWQZTBi/jjwyw/U4uqKtUORXQrR5bAZZnbTI/feRV/R7hc4jQYQ==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/micromark-factory-space/-/micromark-factory-space-1.1.0.tgz",
+      "source": {
+        "path": "license",
+        "rawSha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61",
+        "repository": "https://github.com/micromark/micromark",
+        "revision": "94b7679646bc0221899bba034f52f4abb3700f81",
+        "text": "(The MIT License)\n\nCopyright (c) 2020 Titus Wormer <tituswormer@gmail.com>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "micromark-util-character@1.2.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-lXraTwcX3yH/vMDaFWCQJP1uIszLVebzUa3ZHdrgxr7KEU/9mL4mVgCpGbyhvNLNlauROiNUq7WN5u7ndbY6xg==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/micromark-util-character/-/micromark-util-character-1.2.0.tgz",
+      "source": {
+        "path": "license",
+        "rawSha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61",
+        "repository": "https://github.com/micromark/micromark",
+        "revision": "94b7679646bc0221899bba034f52f4abb3700f81",
+        "text": "(The MIT License)\n\nCopyright (c) 2020 Titus Wormer <tituswormer@gmail.com>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "micromark-util-symbol@1.1.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-uEjpEYY6KMs1g7QfJ2eX1SQEV+ZT4rUD3UcF6l57acZvLNK7PBZL+ty82Z1qhK1/yXIY4bdx04FKMgR0g4IAag==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/micromark-util-symbol/-/micromark-util-symbol-1.1.0.tgz",
+      "source": {
+        "path": "license",
+        "rawSha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61",
+        "repository": "https://github.com/micromark/micromark",
+        "revision": "94b7679646bc0221899bba034f52f4abb3700f81",
+        "text": "(The MIT License)\n\nCopyright (c) 2020 Titus Wormer <tituswormer@gmail.com>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "micromark-util-types@1.1.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-ukRBgie8TIAcacscVHSiddHjO4k/q3pnedmzMQ4iwDcK0FtFCohKOlFbaOL/mPgfnPsL3C1ZyxJa4sbWrBl3jg==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/micromark-util-types/-/micromark-util-types-1.1.0.tgz",
+      "source": {
+        "path": "license",
+        "rawSha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61",
+        "repository": "https://github.com/micromark/micromark",
+        "revision": "94b7679646bc0221899bba034f52f4abb3700f81",
+        "text": "(The MIT License)\n\nCopyright (c) 2020 Titus Wormer <tituswormer@gmail.com>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "punycode@2.3.1": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/punycode/-/punycode-2.3.1.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/punycode.js",
+        "revision": "9e1b2cda98d215d3a73fcbfe93c62e021f4ba768",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "regenerate-unicode-properties@10.2.2": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-m03P+zhBeQd1RGnYxrGyDAPpWX/epKirLrp8e3qevZdVkKtnCrjjWczIbYc8+xd6vcTStVlqfycTx1KR4LOr0g==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/regenerate-unicode-properties/-/regenerate-unicode-properties-10.2.2.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/regenerate-unicode-properties",
+        "revision": "c683577673b373700da8553ddf694852a8564ba8",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "regenerate@1.4.2": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-zrceR/XhGYU/d/opr2EKO7aRHUeiBI8qjtfHqADTwZd6Szfy16la6kqD0MIUs5z5hx6AaKa+PixpPrR289+I0A==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/regenerate/-/regenerate-1.4.2.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/regenerate",
+        "revision": "11567339f40fd262435934d544885bc047cb4220",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "regexpu-core@6.4.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-0ghuzq67LI9bLXpOX/ISfve/Mq33a4aFRzoQYhnnok1JOFpmE/A2TBGkNVenOGEeSBCjIiWcc6MVOG5HEQv0sA==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/regexpu-core/-/regexpu-core-6.4.0.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/regexpu-core",
+        "revision": "f7040c4b2f0b54732b888f08fe6080c4764d0455",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "regjsgen@0.8.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-RvwtGe3d7LvWiDQXeQw8p5asZUmfU1G/l6WbUXeHta7Y2PEIvBTwH6E2EfmYUK8pxcxEdEmaomqyp0vZZ7C+3Q==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/regjsgen/-/regjsgen-0.8.0.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "21edea5565f8e8d4a0e548fe741b16f7d642afd8dadafa9dbab4232115abe0ec",
+        "repository": "https://github.com/bnjmnt4n/regjsgen",
+        "revision": "fbb7ff03be5b72898c282a2376f78c95d07ec739",
+        "text": "The MIT License (MIT)\n\nCopyright 2014-2020 Benjamin Tan <https://ofcr.se/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "select-hose@2.0.0": {
+      "decisionId": "D-082",
+      "evidenceType": "tarball-reviewed-section",
+      "integrity": "sha512-mEugaLK+YfkijB4fx0e6kImuJdCIt2LxCRcbEYPqRGCs4F2ogyfZU5IAZRdjCP8JPq2AtdNoC/Dux63d9Kiryg==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is an exact byte section of another file in the integrity-bound npm tarball; the release lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/select-hose/-/select-hose-2.0.0.tgz",
+      "source": {
+        "endByte": 1373,
+        "fileRawSha256": "d8dc58b1fb145e5fbe619d2766be24379ff6554ced097bcc6428f0716d638fe2",
+        "path": "package/README.md",
+        "sectionRawSha256": "444326049d335af6eec2a4e04cca7326efecb155832ab51236699ef8f3480554",
+        "startByte": 256,
+        "text": "## LICENSE\n\nThis software is licensed under the MIT License.\n\nCopyright Fedor Indutny, 2015.\n\nPermission is hereby granted, free of charge, to any person obtaining a\ncopy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to permit\npersons to whom the Software is furnished to do so, subject to the\nfollowing conditions:\n\nThe above copyright notice and this permission notice shall be included\nin all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS\nOR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN\nNO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,\nDAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR\nOTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE\nUSE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "sirv@2.0.4": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-94Bdh3cC2PKrbgSOUqTiGPWVZeSiXfKOVZNJniWoqrWrRkB1CJzBU3NEbiTsPcYy1lDsANA/THzS+9WBiy5nfQ==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/sirv/-/sirv-2.0.4.tgz",
+      "source": {
+        "path": "license",
+        "rawSha256": "ba573393f24555ac0528612ad39665fab5bdcc80330a61096024bbf5f736526d",
+        "repository": "https://github.com/lukeed/sirv",
+        "revision": "50b1964b8a8342e14a711d47f793298c2a7aeeb7",
+        "text": "The MIT License (MIT)\n\nCopyright (c) Luke Edwards <luke.edwards05@gmail.com> (https://lukeed.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in\nall copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\nTHE SOFTWARE.\n"
+      }
+    },
+    "spdy-transport@3.0.0": {
+      "decisionId": "D-082",
+      "evidenceType": "tarball-reviewed-section",
+      "integrity": "sha512-hsLVFE5SjA6TCisWeJXFKniGGOpBgMLmerfO2aCyCU5s7nJ/rpAepqmFifv/GCbSbueEeAJJnmSQ2rKC/g8Fcw==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is an exact byte section of another file in the integrity-bound npm tarball; the release lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/spdy-transport/-/spdy-transport-3.0.0.tgz",
+      "source": {
+        "endByte": 2681,
+        "fileRawSha256": "2c755439e435c32a487c46b03c08d2bc56e357641bcee66135d3d0e769ac129c",
+        "path": "package/README.md",
+        "sectionRawSha256": "93336fedc9fd86a6e7bdd6eaf81c9cc213b4fb987f24cdec7b060b84b36707af",
+        "startByte": 1400,
+        "text": "## LICENSE\n\nThis software is licensed under the MIT License.\n\nCopyright Fedor Indutny, 2015.\n\nPermission is hereby granted, free of charge, to any person obtaining a\ncopy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to permit\npersons to whom the Software is furnished to do so, subject to the\nfollowing conditions:\n\nThe above copyright notice and this permission notice shall be included\nin all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS\nOR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN\nNO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,\nDAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR\nOTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE\nUSE OR OTHER DEALINGS IN THE SOFTWARE.\n\n[0]: http://json.org/\n[1]: http://github.com/indutny/bud-backend\n[2]: https://github.com/nodejs/io.js\n[3]: https://github.com/libuv/libuv\n[4]: http://openssl.org/\n"
+      }
+    },
+    "spdy@4.0.2": {
+      "decisionId": "D-082",
+      "evidenceType": "tarball-reviewed-section",
+      "integrity": "sha512-r46gZQZQV+Kl9oItvl1JZZqJKGr+oEkB08A6BzkiR7593/7IbtuncXHd2YoYeTsG4157ZssMu9KYvUHLcjcDoA==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is an exact byte section of another file in the integrity-bound npm tarball; the release lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/spdy/-/spdy-4.0.2.tgz",
+      "source": {
+        "endByte": 8517,
+        "fileRawSha256": "7f9908e43926bb78af94ff700f8536fa6a57a2c3a16f2885ba6cdbac5a8eb7d1",
+        "path": "package/README.md",
+        "sectionRawSha256": "3fefb71da28cefd244b242dc3ec3c0d1ed98d9c5abe43bdbb57aaa55beed0544",
+        "startByte": 7060,
+        "text": "#### LICENSE\n\nThis software is licensed under the MIT License.\n\nCopyright Fedor Indutny, 2015.\n\nPermission is hereby granted, free of charge, to any person obtaining a\ncopy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to permit\npersons to whom the Software is furnished to do so, subject to the\nfollowing conditions:\n\nThe above copyright notice and this permission notice shall be included\nin all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS\nOR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN\nNO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,\nDAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR\nOTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE\nUSE OR OTHER DEALINGS IN THE SOFTWARE.\n\n[0]: https://http2.github.io/\n[1]: http://www.chromium.org/spdy\n[2]: http://nodejs.org/docs/latest/api/tls.html#tls.createServer\n[3]: https://httpwg.github.io/specs/rfc7540.html#SETTINGS_MAX_CONCURRENT_STREAMS\n[4]: https://iojs.org/api/stream.html#stream_class_stream_duplex\n[5]: https://httpwg.github.io/specs/rfc7540.html#PUSH_PROMISE\n"
+      }
+    },
+    "svg-parser@2.0.4": {
+      "decisionId": "D-082",
+      "evidenceType": "owner-exception",
+      "integrity": "sha512-e4hG1hRwoOdRb37cIMSgzNsxyzKfayW6VOflrwvR+/bzrkyxY/31WkbgnQpgtrNp1SdpJvpUAGTa/ZoiPNDuRQ==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "The exact npm tarball does not contain an independent complete legal text; the SPDX conclusion follows package metadata plus the owner's exact exception. The standard SPDX reference must not be represented as upstream-carried evidence.",
+      "resolved": "https://registry.npmjs.org/svg-parser/-/svg-parser-2.0.4.tgz",
+      "source": {
+        "risk": "missing-independent-complete-legal-text"
+      }
+    },
+    "type-fest@2.19.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-RAH822pAdBgcNMAfWnCBU3CFZcfZ/i1eZjwFU/dsLKumyuuP3niueg2UAukXYF0E2AAoc82ZSSf9J0WQBinzHA==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "(MIT OR CC0-1.0)",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/type-fest/-/type-fest-2.19.0.tgz",
+      "source": {
+        "path": "license-mit",
+        "rawSha256": "5c932d88256b4ab958f64a856fa48e8bd1f55bc1d96b8149c65689e0c61789d3",
+        "repository": "https://github.com/sindresorhus/type-fest",
+        "revision": "d07df21f8b79e35ad8411cb9ceb8b5cb8f40f9d4",
+        "text": "MIT License\n\nCopyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "unicode-canonical-property-names-ecmascript@2.0.1": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-dA8WbNeb2a6oQzAQ55YlT5vQAWGV9WXOsi3SskE3bcCdM0P4SDd+24zS/OCacdRq5BkdsRj9q3Pg6YyQoxIGqg==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/unicode-canonical-property-names-ecmascript/-/unicode-canonical-property-names-ecmascript-2.0.1.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/unicode-canonical-property-names-ecmascript",
+        "revision": "cb0be99b57b853b5af127f159d6edf0b1caf1c65",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "unicode-emoji-modifier-base@1.0.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-yLSH4py7oFH3oG/9K+XWrz1pSi3dfUrWEnInbxMfArOfc1+33BlGPQtLsOYwvdMy11AwUBetYuaRxSPqgkq+8g==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/unicode-emoji-modifier-base/-/unicode-emoji-modifier-base-1.0.0.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/unicode-emoji-modifier-base",
+        "revision": "16333bdecc0e399f18bedd00b36995f3399ac5ec",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "unicode-match-property-ecmascript@2.0.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-5kaZCrbp5mmbz5ulBkDkbY0SsPOjKqVS35VpL9ulMPfSl0J0Xsm+9Evphv9CoIZFwre7aJoa94AY6seMKGVN5Q==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/unicode-match-property-ecmascript/-/unicode-match-property-ecmascript-2.0.0.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/unicode-match-property-ecmascript",
+        "revision": "53be375cfb78a107da07410a43bba52db8fae534",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "unicode-match-property-value-ecmascript@2.2.1": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-JQ84qTuMg4nVkx8ga4A16a1epI9H6uTXAknqxkGF/aFfRLw1xC/Bp24HNLaZhHSkWd3+84t8iXnp1J0kYcZHhg==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/unicode-match-property-value-ecmascript/-/unicode-match-property-value-ecmascript-2.2.1.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/unicode-match-property-value-ecmascript",
+        "revision": "48cc09496d4398f9b113c87bfb63f4750f6e47ea",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "unicode-property-aliases-ecmascript@2.2.0": {
+      "decisionId": "D-082",
+      "evidenceType": "upstream-immutable",
+      "integrity": "sha512-hpbDzxUY9BFwX+UeBnxv3Sh1q7HFxj48DTmXchNgRa46lO8uj3/1iEn3MiNUYTg1g9ctIqXCCERn8gYZhHC5lQ==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is sourced from the bound immutable upstream commit because the exact npm tarball lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/unicode-property-aliases-ecmascript/-/unicode-property-aliases-ecmascript-2.2.0.tgz",
+      "source": {
+        "path": "LICENSE-MIT.txt",
+        "rawSha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a",
+        "repository": "https://github.com/mathiasbynens/unicode-property-aliases-ecmascript",
+        "revision": "b2d62514fa3c6b57207a390c67c768d5e822565e",
+        "text": "Copyright Mathias Bynens <https://mathiasbynens.be/>\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\nNONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE\nLIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION\nWITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    },
+    "wbuf@1.7.3": {
+      "decisionId": "D-082",
+      "evidenceType": "tarball-reviewed-section",
+      "integrity": "sha512-O84QOnr0icsbFGLS0O3bI5FswxzRr8/gHwWkDlQFskhSPryQXvrTMxjxGP4+iWYoauLoBvfDpkrOauZ+0iZpDA==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "limitations": "Complete legal text is an exact byte section of another file in the integrity-bound npm tarball; the release lacks a standalone legal file.",
+      "resolved": "https://registry.npmjs.org/wbuf/-/wbuf-1.7.3.tgz",
+      "source": {
+        "endByte": 1127,
+        "fileRawSha256": "f9145947f3aa2a55daa1b3ccff7bfc0c7c8a4ec4899813821461e6db866f2a8e",
+        "path": "package/README.md",
+        "sectionRawSha256": "f6ea0899d4a65578f4be7e01b61fa2ffb08268ca06571f4f53d8a82025179982",
+        "startByte": 8,
+        "text": "#### LICENSE\n\nThis software is licensed under the MIT License.\n\nCopyright Fedor Indutny, 2014.\n\nPermission is hereby granted, free of charge, to any person obtaining a\ncopy of this software and associated documentation files (the\n\"Software\"), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to permit\npersons to whom the Software is furnished to do so, subject to the\nfollowing conditions:\n\nThe above copyright notice and this permission notice shall be included\nin all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS\nOR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN\nNO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,\nDAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR\nOTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE\nUSE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+      }
+    }
+  },
+  "licenseDecisions": {
+    "@swc/core-darwin-arm64@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-IsISIT22EfktVJrlvIpnAxG2u/A9aob9l99HMlx80x72WlFmFPk1V3UhkEzx86eJP8hw049KTFv/RISho2cq2Q==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/core-darwin-arm64/-/core-darwin-arm64-1.15.46.tgz"
+    },
+    "@swc/core-darwin-x64@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-4Tj4ppVIPCmUMpmGFiGtyEriwLyJ+yi/US4WfBrP/ok8COGddDZXLEzQETnKyK46mjvr1v0jevrS23zjoff7vA==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/core-darwin-x64/-/core-darwin-x64-1.15.46.tgz"
+    },
+    "@swc/core-linux-arm64-gnu@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-c0OnhqzdhfOvv6qhNCcByepB+sNYOGZyhtr2Qa6ZCHvAWTYhSRw4j/u92Stue9PbZ/6q74b9nHzi76+kVzqQHQ==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/core-linux-arm64-gnu/-/core-linux-arm64-gnu-1.15.46.tgz"
+    },
+    "@swc/core-linux-arm64-musl@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-imyRpNEcUzFQFV2LE4jL68ErvmKEuZCbvZru77iQREunJ+bR4i658cupTgtG1mLYM3F1Tzy3Sb9xYb02KghWTg==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/core-linux-arm64-musl/-/core-linux-arm64-musl-1.15.46.tgz"
+    },
+    "@swc/core-linux-ppc64-gnu@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-ctEfcl/HcUeomK33cbySiHZm98GEDIxTm1EkpBsYCiHxElYBzvTXVeuQT2YwbUXn9XCrjiw4ipyUNk33k26qRg==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/core-linux-ppc64-gnu/-/core-linux-ppc64-gnu-1.15.46.tgz"
+    },
+    "@swc/core-linux-s390x-gnu@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-DxlMdnt84TtRVTv7WL/thWyz9+QU8QZNNoAP9rrk0P68LziuhfePp8MjQ44zIprpTHTsEwyziIuGUUN5iSC1bQ==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/core-linux-s390x-gnu/-/core-linux-s390x-gnu-1.15.46.tgz"
+    },
+    "@swc/core-linux-x64-gnu@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-SKxI7J6t90XPl8hRUqtJi9NfGdunN/E/vZMc7Bc0figeRdOPDBT+Tm8g7cx9xM0T0mewh2l+8dewa3Am27/P+A==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/core-linux-x64-gnu/-/core-linux-x64-gnu-1.15.46.tgz"
+    },
+    "@swc/core-linux-x64-musl@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-qj9T6B7bosI0VEsrWOVXZN1OXxS8Tp63ywyrLxNdOycnUtLdkgYcoBsN5y8ImnDDsnwrEWZOy1e+J4xSe7mA3Q==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/core-linux-x64-musl/-/core-linux-x64-musl-1.15.46.tgz"
+    },
+    "@swc/core-win32-arm64-msvc@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-8p7l4c3LU+eA5g9Et1JPhNeMC1oQwXTGU+uah8DPIBX7YXzqswvaBtyKVmXefVGi/DJU1x3YJsc3mbAp9aWzSQ==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/core-win32-arm64-msvc/-/core-win32-arm64-msvc-1.15.46.tgz"
+    },
+    "@swc/core-win32-ia32-msvc@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-tUEnfr3Bn9u6FOjUb3PN9p+09qZC2j+wNDLKHzXXZn22rqGcUqR/ohCRSS+nG9B9+X+U+3FewNEHJkTmdIvMjQ==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/core-win32-ia32-msvc/-/core-win32-ia32-msvc-1.15.46.tgz"
+    },
+    "@swc/core-win32-x64-msvc@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-Vux7UDzBJYQggSuPfcl2w9iu+IJpgpRCxHzgCaVkELnAXAE4XZMOTX9HNcaNiwfeIDqdu2rkr69RuDm6wY8neA==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/core-win32-x64-msvc/-/core-win32-x64-msvc-1.15.46.tgz"
+    },
+    "@swc/html-darwin-arm64@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-ZsC+iFnLOHPt7DF0tBxGoctF4/L0cUcuGonDavnwHhISHJiDQuT8TuRD9dB2jS7Du12ZY2Vu3jTugSnOfaDWxg==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/html-darwin-arm64/-/html-darwin-arm64-1.15.46.tgz"
+    },
+    "@swc/html-darwin-x64@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-XBg/CK0sA+Fa0KUzShhnAM14MwhWoeMANY8NAAuSlDpJnv5A+ek4wd7eNvriTHwaS10hNzQeSFgVkkeS3I4x6A==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/html-darwin-x64/-/html-darwin-x64-1.15.46.tgz"
+    },
+    "@swc/html-linux-arm64-gnu@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-pBXrXBb3X5820lQQ+poQ/HcQxrtVfo+YJqHXLCFyAtkBxGG/c2XYFcMu4eBig1M5fvpquwtbb/qw6m67reM+kQ==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/html-linux-arm64-gnu/-/html-linux-arm64-gnu-1.15.46.tgz"
+    },
+    "@swc/html-linux-arm64-musl@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-vbbCIsKhZMooIZVG+v0NDVVmSKo22CyTVc6Qy/bijukj2/LDglxDjgMq68p0mnwhYyE4Y6URFtniMkIgY8CQuw==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/html-linux-arm64-musl/-/html-linux-arm64-musl-1.15.46.tgz"
+    },
+    "@swc/html-linux-ppc64-gnu@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-6bUllvm6IwF8vxhmD6gl2OFiHiCVMmnGqDywhmRSCB2mzSN6HAmNzNJk3wuRDHUILQa7R2bvA5Vpt00hLO71ww==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/html-linux-ppc64-gnu/-/html-linux-ppc64-gnu-1.15.46.tgz"
+    },
+    "@swc/html-linux-s390x-gnu@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-3kbCA/8Ij8xDbzgrTVyQ0OshcR2PvYiVOugIATQBV2qZ+RAyeozHPcodO+Fi+7X07p+D8hNfDfFik2rq4Vc45Q==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/html-linux-s390x-gnu/-/html-linux-s390x-gnu-1.15.46.tgz"
+    },
+    "@swc/html-linux-x64-gnu@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-n5L9LVBW0aE1tfMGk4b6koOzHog51G25wXgWbRmUDG2iqUO1Ss75DFurGEnjM7KoiKw6iqTJU0sXl/S92SAQ7w==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/html-linux-x64-gnu/-/html-linux-x64-gnu-1.15.46.tgz"
+    },
+    "@swc/html-linux-x64-musl@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-NHjUyt+SrjSZGqoltQcNztZn6SmM7XkCgcrJoMTlAbrcC4XY+xvVi0QTp31roNnmX4GtqsZAGdgHGY5r0Who/w==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/html-linux-x64-musl/-/html-linux-x64-musl-1.15.46.tgz"
+    },
+    "@swc/html-win32-arm64-msvc@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-x0/muLfBFN9O8omLqxm3GaJe8GZrYR4LTyWMw+o4Pjx3sxX6+MuLne5ebhT2jBVADkucCURGnDHCBm53WHz7EA==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/html-win32-arm64-msvc/-/html-win32-arm64-msvc-1.15.46.tgz"
+    },
+    "@swc/html-win32-ia32-msvc@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-vebE5ouxwl4saFYmtjUuSqP83fj3eMJQgyrXwEFky08J5aAqt07y1d2jmetGA2guFoSYwAMKJWTU8287Mpzf4g==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/html-win32-ia32-msvc/-/html-win32-ia32-msvc-1.15.46.tgz"
+    },
+    "@swc/html-win32-x64-msvc@1.15.46": {
+      "decisionId": "D-082",
+      "integrity": "sha512-WBYYs0O/LUNZrO5eA7Zlkokbqg5Np3gQ2lQtkHeFCSFEJDYk8XWaHIU/3Kg89dduVUPer3h4TR/tqCWdBAKMzw==",
+      "licenseConcluded": "Apache-2.0 AND MIT",
+      "licenseDeclared": "Apache-2.0 AND MIT",
+      "resolved": "https://registry.npmjs.org/@swc/html-win32-x64-msvc/-/html-win32-x64-msvc-1.15.46.tgz"
+    },
+    "argparse@2.0.1": {
+      "decisionId": "D-082",
+      "integrity": "sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==",
+      "licenseConcluded": "Python-2.0",
+      "licenseDeclared": "Python-2.0",
+      "resolved": "https://registry.npmjs.org/argparse/-/argparse-2.0.1.tgz"
+    },
+    "caniuse-lite@1.0.30001806": {
+      "decisionId": "D-082",
+      "integrity": "sha512-72Cuvd95zbSYPKq6Fhg8eDJRlzgWDf7/mtoZv6Qe/DYNCEBdNxoA3+rZAU2ZhGCpZlns3EssFavaZomckT5Uuw==",
+      "licenseConcluded": "CC-BY-4.0",
+      "licenseDeclared": "CC-BY-4.0",
+      "resolved": "https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001806.tgz"
+    },
+    "opener@1.5.2": {
+      "decisionId": "D-082",
+      "integrity": "sha512-ur5UIdyw5Y7yEj9wLzhqXiy6GZ3Mwx0yGI+5sMn2r0N0v3cKJvUmFH5yPP+WXh9e0xfyzyJX95D8l088DNFj7A==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "(WTFPL OR MIT)",
+      "resolved": "https://registry.npmjs.org/opener/-/opener-1.5.2.tgz"
+    },
+    "path-is-inside@1.0.2": {
+      "decisionId": "D-082",
+      "integrity": "sha512-DUWJr3+ULp4zXmol/SZkFf3JGsS9/SIv+Y3Rt93/UjPpDpklB5f1er4O3POIbUuUJ3FXgqte2Q7SrU6zAqwk8w==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "(WTFPL OR MIT)",
+      "resolved": "https://registry.npmjs.org/path-is-inside/-/path-is-inside-1.0.2.tgz"
+    },
+    "rc@1.2.8": {
+      "decisionId": "D-082",
+      "integrity": "sha512-y3bGgqKj3QBdxLbLkomlohkvsA8gdAiUQlSBJnBhfn+BPxg4bc62d8TcBW15wavDfgexCgccckhcZvywyQYPOw==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "(BSD-2-Clause OR MIT OR Apache-2.0)",
+      "resolved": "https://registry.npmjs.org/rc/-/rc-1.2.8.tgz"
+    },
+    "require-like@0.1.2": {
+      "decisionId": "D-082",
+      "integrity": "sha512-oyrU88skkMtDdauHDuKVrgR+zuItqr6/c//FXzvmxRGMexSDc6hNvJInGW3LL46n+8b50RykrvwSUIIQH2LQ5A==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "NOASSERTION",
+      "resolved": "https://registry.npmjs.org/require-like/-/require-like-0.1.2.tgz"
+    },
+    "type-fest@1.4.0": {
+      "decisionId": "D-082",
+      "integrity": "sha512-yGSza74xk0UG8k+pLh5oeoYirvIiWo5t0/o3zHHAO2tRDiZcxWP7fywNlXhqb6/r6sWvwi+RsyQMWhVLe4BVuA==",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "(MIT OR CC0-1.0)",
+      "resolved": "https://registry.npmjs.org/type-fest/-/type-fest-1.4.0.tgz"
+    }
+  },
+  "owner": "AxialMuseWebsite",
+  "status": "active",
+  "version": "0.1.0"
+}

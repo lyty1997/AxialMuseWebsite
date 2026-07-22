@@ -1,9 +1,9 @@
 # M0 主站实现 Spec
 
 状态：active
-最近更新：2026-07-18
+最近更新：2026-07-21
 适用范围：`https://www.axialmuse.com/` 的 Docusaurus 多页面静态主站
-实现前置：#5 至 #14 按已补齐设计实现；D-077 首次依赖解析与准入完成；真实公开素材通过事实、隐私和版权检查
+实现前置：#9 的 E-010 隔离与版本契约、#10 的 E-011 确定性 SPDX、#21 的 D-077 首次依赖解析与准入已完成；#5 至 #8、#11 至 #14 按依赖链继续实现；真实公开素材通过事实、隐私和版权检查
 
 ## 目的与授权边界
 
@@ -190,8 +190,8 @@ site-assets/                   # 原件目录，不直接交给 Docusaurus
 
 ## 实施顺序
 
-1. 先实现并以 fixture 验证 E-010/E-011 的隔离 npm 入口、官方 registry/lock 来源检查和确定性 SPDX 规范器，再依 D-077 完成首次 npm 解析、人工准入、冻结 lockfile 和供应链证据；联网步骤另行申请授权。
-2. 让 D-079 的 Node 类型候选与 E-013 的 Docusaurus 官方 frontmatter 解析候选随真实依赖图通过准入，再实现 Node 24、生产/测试 TypeScript 配置、E-012 临时 ESM 测试入口、Docusaurus 配置和 schema/注册表只读门禁。
+1. 消费已经验收的 E-010/E-011 与 #21 已准入的唯一 lock、正式供应链证据和双端点结果；后续依赖变化重新按 D-077 准入。
+2. 消费已随 #21 准入的 D-079 Node 类型与 E-013 Docusaurus 官方 frontmatter 解析依赖，实现 Node 24、生产/测试 TypeScript 配置、E-012 临时 ESM 测试入口、Docusaurus 配置和 schema/注册表只读门禁。
 3. 按 E-013 实现统一结构化 frontmatter 解码、HEAD 可达完整历史检查器、作者入口共享实现、临时 Git DAG fixture 和完整 CI checkout；浅克隆、partial/promisor/alternate object store、缺失对象、协议访问、并行 lineage 冲突或其他父历史冲突必须在内容迁移前失败关闭。
 4. 迁移项目结构化事实与正文，完成页面、侧栏、路由和 SEO 投影。
 5. 适配主题、响应式、素材和可访问性，不改变公开事实。
@@ -212,7 +212,7 @@ site-assets/                   # 原件目录，不直接交给 Docusaurus
 
 ### 工程
 
-- `npm run quality`、独立 `tsc --noEmit`、E-012 的临时编译 Node ESM 测试和 Docusaurus build 全部通过；主 Node 与最低 Node 端点执行同一测试入口和测试集合。
+- E-010 隔离入口的 `quality`、独立 `tsc --noEmit`、E-012 的临时编译 Node ESM 测试和 Docusaurus build 全部通过；主 Node 与最低 Node 端点执行同一测试入口和测试集合。
 - 测试只从 `tests/domain/` 与 `tests/build/` 进入，在系统临时目录生成并直接执行 ESM；空测试集、非法说明符或清理失败均阻断，源码、内容树、`build/` 与 `dist/` 不出现测试 emit、source map、声明文件或增量状态。
 - Node 版本与 `.nvmrc`、`engines.node` 一致；所有解析、安装、audit、SBOM 和 CI npm script 调用经 E-010 的隔离入口，双端点冻结安装和 D-077 供应链门禁通过。
 - 提交的 SPDX 2.3 SBOM 通过 E-011 的稳定化、两个空临时目录逐字节一致性、namespace 派生和 evidence 摘要交叉校验；CI 与构建不读取系统时间补齐 `createdAt`。
@@ -238,8 +238,8 @@ site-assets/                   # 原件目录，不直接交给 Docusaurus
 
 | 项目 | 状态 | 影响 |
 |---|---|---|
-| 本轮审查跟踪 | #5 至 #14 已形成单一设计结论并继续跟踪实现、fixture 与真实验收 | 不把设计完成误报为实现完成；实现偏离 E-006 至 E-015 时回到对应 Issue |
-| 首次 npm 解析与真实传递图准入 | 尚未执行 | 阻塞 Docusaurus 依赖安装和实现 |
+| 本轮审查跟踪 | #9 已完成 E-010、#10 已完成 E-011 实现与真实双端点验收；#5 至 #8、#11 至 #14 继续跟踪实现、fixture 与真实验收 | 不把单项完成误报为全站完成；实现偏离 E-006 至 E-015 时回到对应 Issue |
+| 首次 npm 解析与真实传递图准入 | #21 已完成 1,225 个 canonical identity 的真实 tarball/许可证/脚本准入、正式 SBOM/evidence/NOTICE、实际 audit 全零、D-082 最终决定和主/最低端点 composite receipt | 本项不再阻塞 #22；依赖图变化时重新执行准入，目标 CI 成功证据仍由后续任务补齐 |
 | 两个项目真实视觉证据 | 尚未准备 | 阻塞对应项目改为 `published`，不阻塞框架和空状态实现 |
 | DocRestore 演示视频 | 后续增量 | 不阻塞 M0 |
 | GitHub Actions、TAT 与凭证接线 | 尚未授权实施 | 阻塞自动部署，不阻塞本地构建 |

@@ -24,8 +24,38 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Materialize private Node runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          source_node="$(readlink -f "$(command -v node)")"
+          source_bin="${source_node%/*}"
+          source_prefix="${source_bin%/*}"
+          source_parent="${source_prefix%/*}"
+          source_root="${source_parent%/*}"
+          tool_cache="$(readlink -f "${RUNNER_TOOL_CACHE}")"
+          runner_temp="$(readlink -f "${RUNNER_TEMP}")"
+          target_prefix="${runner_temp}/axial-muse-node-runtime"
+          if [[ "${source_node}" != "${source_prefix}/bin/node" ]]; then
+            echo "Current Node executable is not rooted in its distribution prefix." >&2
+            exit 1
+          fi
+          if [[ "${source_root}" != "${tool_cache}/node" ]]; then
+            echo "Current Node distribution is outside RUNNER_TOOL_CACHE/node." >&2
+            exit 1
+          fi
+          if [[ -e "${target_prefix}" ]]; then
+            echo "Private Node runtime target already exists." >&2
+            exit 1
+          fi
+          mkdir --mode=700 -- "${target_prefix}"
+          cp -R -- "${source_prefix}/." "${target_prefix}/"
+          chmod -R go-w -- "${target_prefix}"
+          printf '%s\n' "${target_prefix}/bin" >> "${GITHUB_PATH}"
+
       - name: Quality gates
-        run: npm run quality
+        run: node scripts/quality/run-quality.mjs
 
   diagrams:
     name: Diagram compile check
@@ -56,6 +86,6 @@ jobs:
           echo "${PUML_SHA256}  plantuml.jar" | sha256sum -c -
 
       - name: Check diagrams compile
-        run: npm run check:diagrams
+        run: node scripts/quality/check-diagrams.mjs
         env:
           PUML_JAR: ${{ github.workspace }}/plantuml.jar

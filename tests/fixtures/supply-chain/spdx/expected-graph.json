@@ -1,0 +1,58 @@
+{
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Package-e011-fixture-1.0.0",
+      "checksums": [],
+      "downloadLocation": "NOASSERTION",
+      "name": "e011-fixture",
+      "packageFileName": "",
+      "purl": "pkg:npm/e011-fixture@1.0.0",
+      "versionInfo": "1.0.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-alpha-1.2.3",
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "downloadLocation": "https://registry.npmjs.org/alpha/-/alpha-1.2.3.tgz",
+      "name": "alpha",
+      "packageFileName": "node_modules/alpha",
+      "purl": "pkg:npm/alpha@1.2.3",
+      "versionInfo": "1.2.3"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-scope.beta-2.0.0",
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "downloadLocation": "https://registry.npmjs.org/@scope/beta/-/beta-2.0.0.tgz",
+      "name": "@scope/beta",
+      "packageFileName": "node_modules/@scope/beta",
+      "purl": "pkg:npm/%40scope/beta@2.0.0",
+      "versionInfo": "2.0.0"
+    }
+  ],
+  "relationships": [
+    {
+      "relatedSpdxElement": "SPDXRef-Package-e011-fixture-1.0.0",
+      "relationshipType": "DEPENDENCY_OF",
+      "spdxElementId": "SPDXRef-Package-alpha-1.2.3"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-e011-fixture-1.0.0",
+      "relationshipType": "DESCRIBES",
+      "spdxElementId": "SPDXRef-DOCUMENT"
+    },
+    {
+      "relatedSpdxElement": "SPDXRef-Package-e011-fixture-1.0.0",
+      "relationshipType": "DEV_DEPENDENCY_OF",
+      "spdxElementId": "SPDXRef-Package-scope.beta-2.0.0"
+    }
+  ]
+}

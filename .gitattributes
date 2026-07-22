@@ -10,6 +10,9 @@
 .githooks/pre-commit text eol=lf
 .githooks/commit-msg text eol=lf
 
+# 该生成制品按字节保留上游法律原文；原文中的行尾空格属于已审核证据。
+THIRD_PARTY_NOTICES text eol=lf -whitespace
+
 # Python 用 LF。
 *.py text eol=lf
 

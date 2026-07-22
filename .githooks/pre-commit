@@ -1,15 +1,138 @@
 #!/usr/bin/env bash
-# 本地提交前门禁：CI 的本地镜像，运行与 .github/workflows/ci.yml 相同的 npm run quality。
+# 本地提交前门禁：通过 E-010 隔离入口运行统一质量负载。
 # 启用方式（仓库首次克隆后执行一次）：git config core.hooksPath .githooks
 set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-if ! command -v npm >/dev/null 2>&1; then
-  echo "pre-commit: 未找到 npm，跳过质量门禁；请手动运行 'npm run quality' 后再提交。" >&2
+readonly required_nvm_version="0.40.6"
+
+if [[ -z "${HOME:-}" ]]; then
+  echo "pre-commit: HOME 必须是当前作者用户的绝对路径。" >&2
+  exit 1
+fi
+if [[ "${HOME:0:1}" != "/" ]]; then
+  echo "pre-commit: HOME 必须是当前作者用户的绝对路径。" >&2
   exit 1
 fi
 
-echo "pre-commit: 运行 npm run quality ..."
-npm run quality
+if [[ ! -f .nvmrc || -L .nvmrc ]]; then
+  echo "pre-commit: .nvmrc 必须是仓库根的普通文件。" >&2
+  exit 1
+fi
+
+node_version=""
+extra_line=""
+exec 3< .nvmrc
+if ! IFS= read -r node_version <&3; then
+  exec 3<&-
+  echo "pre-commit: .nvmrc 必须是单行且以换行结束的精确版本。" >&2
+  exit 1
+fi
+if IFS= read -r extra_line <&3; then
+  exec 3<&-
+  echo "pre-commit: .nvmrc 只能包含一个精确版本。" >&2
+  exit 1
+fi
+if [[ -n "$extra_line" ]]; then
+  exec 3<&-
+  echo "pre-commit: .nvmrc 只能包含一个精确版本。" >&2
+  exit 1
+fi
+exec 3<&-
+if ! printf '%s\n' "$node_version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+  echo "pre-commit: .nvmrc 不是精确三段式版本。" >&2
+  exit 1
+fi
+
+nvm_dir="${HOME}/.nvm"
+nvm_script="${nvm_dir}/nvm.sh"
+if [[ ! -d "$nvm_dir" || -L "$nvm_dir" || ! -f "$nvm_script" || -L "$nvm_script" ]]; then
+  echo "pre-commit: 缺少固定用户目录中的 nvm，不能运行质量门禁。" >&2
+  exit 1
+fi
+
+current_uid="$(id -u)"
+nvm_dir_owner="$(stat -c '%u' "$nvm_dir")"
+nvm_script_owner="$(stat -c '%u' "$nvm_script")"
+nvm_unsafe_path="$(find "$nvm_dir" "$nvm_script" -maxdepth 0 -perm /022 -print -quit)"
+if [[ "$nvm_dir_owner" != "$current_uid" ]]; then
+  echo "pre-commit: nvm 目录与入口必须属于当前作者用户。" >&2
+  exit 1
+fi
+if [[ "$nvm_script_owner" != "$current_uid" ]]; then
+  echo "pre-commit: nvm 目录与入口必须属于当前作者用户。" >&2
+  exit 1
+fi
+if [[ -n "$nvm_unsafe_path" ]]; then
+  echo "pre-commit: nvm 目录与入口不能被组或其他用户写入。" >&2
+  exit 1
+fi
+
+export NVM_DIR="$nvm_dir"
+# shellcheck source=/dev/null
+. "$nvm_script" --no-use
+
+actual_nvm_version="$(nvm --version)"
+if [[ "$actual_nvm_version" != "$required_nvm_version" ]]; then
+  echo "pre-commit: nvm 版本必须精确为 ${required_nvm_version}，实际为 ${actual_nvm_version}。" >&2
+  exit 1
+fi
+
+installed_node="$(nvm version "$node_version")"
+if [[ "$installed_node" != "v${node_version}" ]]; then
+  echo "pre-commit: 尚未安装 .nvmrc 指定的 Node ${node_version}；hook 不会自动联网安装。" >&2
+  exit 1
+fi
+
+expected_node="${nvm_dir}/versions/node/v${node_version}/bin/node"
+selected_node="$(nvm which "$node_version")"
+if [[ "$selected_node" != "$expected_node" ]]; then
+  echo "pre-commit: nvm 返回的 Node 路径不属于固定版本目录。" >&2
+  exit 1
+fi
+if [[ ! -f "$selected_node" || -L "$selected_node" || ! -x "$selected_node" ]]; then
+  echo "pre-commit: nvm 返回的 Node 必须是可执行普通文件。" >&2
+  exit 1
+fi
+
+node_version_dir="${nvm_dir}/versions/node/v${node_version}"
+node_bin_dir="${node_version_dir}/bin"
+node_version_dir_owner="$(stat -c '%u' "$node_version_dir")"
+node_bin_dir_owner="$(stat -c '%u' "$node_bin_dir")"
+node_owner="$(stat -c '%u' "$selected_node")"
+node_unsafe_path="$(find "$node_version_dir" "$node_bin_dir" "$selected_node" -maxdepth 0 -perm /022 -print -quit)"
+if [[ "$node_version_dir_owner" != "$current_uid" ]]; then
+  echo "pre-commit: Node 版本目录与入口必须属于当前作者用户且不能被组或其他用户写入。" >&2
+  exit 1
+fi
+if [[ "$node_bin_dir_owner" != "$current_uid" ]]; then
+  echo "pre-commit: Node 版本目录与入口必须属于当前作者用户且不能被组或其他用户写入。" >&2
+  exit 1
+fi
+if [[ "$node_owner" != "$current_uid" ]]; then
+  echo "pre-commit: Node 版本目录与入口必须属于当前作者用户且不能被组或其他用户写入。" >&2
+  exit 1
+fi
+if [[ -n "$node_unsafe_path" ]]; then
+  echo "pre-commit: Node 版本目录与入口必须属于当前作者用户且不能被组或其他用户写入。" >&2
+  exit 1
+fi
+
+export NVM_BIN="$node_bin_dir"
+export PATH="${NVM_BIN}:${PATH}"
+hash -r
+if [[ "$(node --version)" != "v${node_version}" ]]; then
+  echo "pre-commit: 未选中 .nvmrc 指定的 Node ${node_version}。" >&2
+  exit 1
+fi
+actual_node="$(readlink -f "$(command -v node)")"
+canonical_expected_node="$(readlink -f "$expected_node")"
+if [[ "$actual_node" != "$canonical_expected_node" ]]; then
+  echo "pre-commit: 当前 Node 不属于 nvm 选中的发行前缀。" >&2
+  exit 1
+fi
+
+echo "pre-commit: 使用 nvm ${actual_nvm_version} / Node ${node_version} 运行隔离质量入口 ..."
+node scripts/quality/run-isolated-npm.mjs run-script quality

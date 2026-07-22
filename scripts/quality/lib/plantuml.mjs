@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { listFiles, readText } from "./files.mjs";
+import { buildQualityChildEnvironment } from "./process-environment.mjs";
 
 // 提取一个 markdown 文件里所有 ```plantuml 代码块，以及紧跟其后（允许中间隔一个空行）
 // 的第一个 markdown 图片引用 ![alt](target)，作为该图表渲染产物的落地路径。
@@ -68,6 +69,7 @@ export function compilePlantumlToSvg(jar, source) {
   const result = spawnSync("java", ["-jar", jar, "-failfast2", "-pipe", "-tsvg"], {
     input: source,
     encoding: "utf8",
+    env: buildQualityChildEnvironment(),
     maxBuffer: 1024 * 1024 * 32
   });
 

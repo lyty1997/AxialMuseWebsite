@@ -1,0 +1,12 @@
+{
+  "kind": "axial_muse_dependency_evidence",
+  "owner": "AxialMuseWebsite",
+  "sbom": {
+    "createdAt": "2026-07-20T16:42:17Z",
+    "fileSha256": "94f406c74a52108e7a4731257cdb9049f66a1d4ae3b1886a2b74c89e024c738b",
+    "normalizerVersion": "axial-muse-supply-chain-1.0.0",
+    "semanticSha256": "1c113e508900a62d7a0e7cd8084c9d7da2c8075bb7baf99713761088db76ae15"
+  },
+  "status": "active",
+  "version": "0.1.0"
+}

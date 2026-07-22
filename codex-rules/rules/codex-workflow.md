@@ -11,7 +11,7 @@
    - 部署、框架、依赖策略、CMS、后端服务或数据库。
 4. 新模块、跨层契约或复杂任务先按 [Issue 编写与拆解](issue-task-rules.md) 固定主要不变量、依赖顺序和独立验收证据，再进入批量实现。
 5. 小步完成最小可验证闭环。不为交付速度引入无依据的复杂度或掩盖失败的多余兜底；暴露真实错误并处理根因。
-6. 运行项目已有且与改动匹配的格式化、lint、typecheck、测试或 `npm run quality`；UI 改动还须实际渲染或截图。无法验证时说明原因与风险。
+6. 运行项目已有且与改动匹配的格式化、lint、typecheck、测试或 `node scripts/quality/run-isolated-npm.mjs run-script quality`；UI 改动还须实际渲染或截图。无法验证时说明原因与风险。
 
 ## 决策说明
 
