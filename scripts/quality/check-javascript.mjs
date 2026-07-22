@@ -35,6 +35,8 @@ const FILES = [
   "scripts/quality/lib/supply-chain/strict-json.mjs",
   "scripts/quality/lib/supply-chain/tarball-download.mjs",
   "scripts/quality/lib/supply-chain/tarball.mjs",
+  "scripts/content/frontmatter.mjs",
+  "scripts/content/json.mjs",
   "scripts/quality/check-javascript.mjs",
   "scripts/quality/check-npm-isolation.mjs",
   "scripts/quality/check-markdown.mjs",
@@ -70,6 +72,7 @@ const FILES = [
   "tests/build/supply-chain-review-report.test.mjs",
   "tests/build/supply-chain-tarball.test.mjs",
   "tests/build/module-boundaries.test.mjs",
+  "tests/build/content-decoders.test.mjs",
   "tests/build/build-site.test.mjs",
 ].map((path) => resolve(ROOT, path));
 const CHILD_ENVIRONMENT = buildQualityChildEnvironment();

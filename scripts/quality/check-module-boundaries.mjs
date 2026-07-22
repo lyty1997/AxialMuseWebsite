@@ -101,6 +101,12 @@ const TEST_SOURCE_ROOTS = Object.freeze([
   "tests/domain",
   "tests/build",
 ]);
+const CONTENT_DECODER_TYPE_IMPORTS = Object.freeze({
+  "tests/build/content-decoders-types.test.ts": Object.freeze({
+    "../../scripts/content/frontmatter.mjs": "scripts/content/frontmatter.d.mts",
+    "../../scripts/content/json.mjs": "scripts/content/json.d.mts",
+  }),
+});
 
 function toPosix(path) {
   return path.split(sep).join("/");
@@ -682,17 +688,22 @@ function extractModuleReferences(source, relativePath, issues) {
           "动态 import 的模块说明符必须是单个静态字符串。",
         );
       } else {
-        specifiers.push(tokens[index + 2].value);
+        specifiers.push({specifier: tokens[index + 2].value, typeOnly: false});
       }
       continue;
     }
     if (token.depth !== 0) continue;
     if (next?.type === "string") {
-      specifiers.push(next.value);
+      specifiers.push({specifier: next.value, typeOnly: false});
       continue;
     }
     const specifier = findStatementSpecifier(tokens, index + 1);
-    if (specifier !== null) specifiers.push(specifier);
+    if (specifier !== null) {
+      specifiers.push({
+        specifier,
+        typeOnly: next?.type === "identifier" && next.value === "type",
+      });
+    }
   }
 
   for (let index = 0; index < tokens.length; index += 1) {
@@ -717,7 +728,7 @@ function extractModuleReferences(source, relativePath, issues) {
       defaultExport = true;
     }
     const specifier = findStatementSpecifier(tokens, index + 1);
-    if (specifier !== null) specifiers.push(specifier);
+    if (specifier !== null) specifiers.push({specifier, typeOnly: false});
   }
   return {defaultExport, specifiers};
 }
@@ -869,6 +880,7 @@ function validateSpecifier({
   importerPath,
   relativePath,
   specifier,
+  typeOnly,
   packageNames,
   issues,
 }) {
@@ -898,6 +910,30 @@ function validateSpecifier({
       packageNames,
       issues,
     });
+    return;
+  }
+  const approvedDecoderDeclaration = CONTENT_DECODER_TYPE_IMPORTS[relativePath]?.[specifier];
+  if (approvedDecoderDeclaration !== undefined) {
+    if (!typeOnly) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_TEST_SPECIFIER",
+        relativePath,
+        "内容解码器的 .mjs 边界只能由固定 E-012 fixture 通过 import type 消费。",
+      );
+      return;
+    }
+    try {
+      const metadata = lstatSync(resolve(root, approvedDecoderDeclaration));
+      if (!metadata.isFile() || metadata.isSymbolicLink()) throw new TypeError("not regular");
+    } catch {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_UNRESOLVED_IMPORT",
+        relativePath,
+        `内容解码器类型声明缺失或不是普通文件：${approvedDecoderDeclaration}。`,
+      );
+    }
     return;
   }
   if (
@@ -1001,12 +1037,13 @@ export function checkModuleBoundaries({root = ROOT} = {}) {
         "内部可复用模块不得使用默认导出。",
       );
     }
-    for (const specifier of specifiers) {
+    for (const reference of specifiers) {
       validateSpecifier({
         root,
         importerPath: path,
         relativePath,
-        specifier,
+        specifier: reference.specifier,
+        typeOnly: reference.typeOnly,
         packageNames,
         issues,
       });

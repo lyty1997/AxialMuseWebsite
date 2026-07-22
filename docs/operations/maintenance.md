@@ -309,7 +309,7 @@ GitHub 计划任务可能延迟，不作为分钟级监控。M0 不注入浏览�
 - 最终 artifact 的 source build 可追溯到同一 `production-artifact` job 的完整主端点质量、build tree 摘要和封装校验；`website-quality` 的 job-local build 不具有部署身份。
 - 每个生产版本的 payload、运行重定向清单、Nginx exact-location 配置和活动绝对 root/include 绑定同一 SHA；不存在只切页面或只切规则的成功状态。
 - 任何发布必需的质量、供应链、图表或发布后冒烟门禁失败时，release 不得标记成功，上一已验证版本保持可用。
-- 已确认的是门禁能力类别、D-074 明确指定的独立 `tsc --noEmit` 与 Docusaurus build、D-075 的模块边界检查目标、D-076/D-079/E-013 的直接依赖、生产/测试 `tsconfig` 基线、E-012 的临时编译 Node ESM 测试、E-013 的统一结构化解码、完整 Git 历史与稳定 ID lineage 状态机、E-014 的同版本服务端 301、E-015 的 production job 字节所有权，以及 D-077 的首次供应链准入工具组合、格式、阈值、外发边界与失败关闭协议。E-010/E-011 与 #21 的真实图准入、正式三制品、audit 全零和双端点 composite receipt 已完成本地验收。目标 CI、E-012 的配置/runner/fixture、E-013 的解码适配、检查器、完整 checkout 与 Git DAG fixture、E-014 的生成器、派生配置、Nginx 冒烟和回滚兼容检查，以及 E-015 的 workflow、树摘要和上传/deploy fixture 均未完成；不能把 #21 本地闭环误报为远端 CI、提交、发布或后续链路已经完成。
+- 已确认的是门禁能力类别、D-074 明确指定的独立 `tsc --noEmit` 与 Docusaurus build、D-075 的模块边界检查目标、D-076/D-079/E-013 的直接依赖、生产/测试 `tsconfig` 基线、E-012 的临时编译 Node ESM 测试、E-013 的统一结构化解码、完整 Git 历史与稳定 ID lineage 状态机、E-014 的同版本服务端 301、E-015 的 production job 字节所有权，以及 D-077 的首次供应链准入工具组合、格式、阈值、外发边界与失败关闭协议。E-010/E-011 与 #21 的真实图准入、正式三制品、audit 全零和双端点 composite receipt 已完成本地验收；#22/#11 已完成本地站点基线与 E-012 runner 并远端闭环，#23 已完成 E-013 共用解码适配和内容领域核心的本地验收。目标 Node 24 CI、完整 Git 历史检查器/checkout 与 Git DAG fixture、E-014 的生成器/派生配置/Nginx 冒烟/回滚兼容检查，以及 E-015 的 workflow、树摘要和上传/deploy fixture 均未完成；不能把局部闭环误报为完整远端 CI、发布或生产链路已经完成。
 - 自动部署不需要公网部署 SSH；生产服务器不保存主站源码、不安装 Node/npm，也不能执行任意仓库脚本或构建。
 - DNS、备案、TLS、服务器和内容都有检查、告警与回滚路径。
 - 访问日志默认关闭，保留的技术日志有用途、权限和删除周期。

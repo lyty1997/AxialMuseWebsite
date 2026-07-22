@@ -120,7 +120,7 @@ export function assertBaselineInputs(root = ROOT) {
   ) {
     fail(
       "BUILD_PIPELINE_INCOMPLETE",
-      "内容校验由 #23 接管前不得构建真实 Markdown/MDX 或其他内容成员。",
+      "真实内容扫描与投影由 #26 原子接管前不得构建 Markdown/MDX 或其他内容成员。",
     );
   }
   if (files.some((path) => [".md", ".mdx"].includes(extname(path)))) {

@@ -123,6 +123,21 @@ function createFixture() {
     "tests/build/example.test.ts",
     "import assert from \"node:assert/strict\";\nimport test from \"node:test\";\nimport {exampleRule} from \"../../src/domain/example/index.js\";\ntest(\"E-012 fixture\", () => assert.equal(exampleRule, \"ok\"));\n",
   );
+  writeFixture(
+    root,
+    "scripts/content/frontmatter.d.mts",
+    "export interface FrontMatterResult { readonly content: string; }\n",
+  );
+  writeFixture(
+    root,
+    "scripts/content/json.d.mts",
+    "export interface JsonResult { readonly value: Readonly<Record<string, unknown>>; }\n",
+  );
+  writeFixture(
+    root,
+    "tests/build/content-decoders-types.test.ts",
+    "import type {FrontMatterResult} from \"../../scripts/content/frontmatter.mjs\";\nimport type {JsonResult} from \"../../scripts/content/json.mjs\";\nconst frontMatter: FrontMatterResult = {content: \"ok\"};\nconst json: JsonResult = {value: {ok: true}};\nvoid frontMatter;\nvoid json;\n",
+  );
   return root;
 }
 
@@ -143,7 +158,7 @@ test("D-075 合法公共入口、框架默认导出与官方展示别名通过",
   withFixture((root) => {
     const result = checkModuleBoundaries({root});
     assert.deepEqual(result.issues, []);
-    assert.equal(result.files.length, 8);
+    assert.equal(result.files.length, 9);
   });
 });
 
@@ -307,5 +322,30 @@ test("E-012 拒绝潜在 Node 执行生产图中的无扩展名导入", () => {
       "import {exampleRule} from \"../../domain/example/index\";\nexport const buildValue = exampleRule;\n",
     );
     assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_NODE_SPECIFIER"));
+  });
+});
+
+test("I-06 仅允许固定 fixture 以 import type 消费解码器声明", () => {
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "tests/build/content-decoders-types.test.ts",
+      "import {type FrontMatterResult} from \"../../scripts/content/frontmatter.mjs\";\nvoid (0 as unknown as FrontMatterResult);\n",
+    );
+    assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_TEST_SPECIFIER"));
+  });
+
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "tests/build/content-decoders-types.test.ts",
+      "import type {FrontMatterResult} from \"../../scripts/content/other.mjs\";\nvoid (0 as unknown as FrontMatterResult);\n",
+    );
+    assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_TEST_SPECIFIER"));
+  });
+
+  withFixture((root) => {
+    rmSync(resolve(root, "scripts/content/frontmatter.d.mts"));
+    assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_UNRESOLVED_IMPORT"));
   });
 });
