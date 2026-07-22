@@ -61,7 +61,7 @@
 下列是 2026-07-22 可从工作区查证的迁移事实，不代表目标工程已经就绪或已经提交到远端：
 
 - `package.json` 已写入 D-073/D-076/D-079/E-013 的首轮直接依赖，并故意不声明根 `type`，避免改变 Docusaurus 3.10.2 生成 `.js` 的 CommonJS 解释边界；现有质量与供应链脚本通过显式 `.mjs` 保持 ESM。唯一真实 `package-lock.json`、1,225 项 admissions 与正式三制品已经形成；仓库根没有 `node_modules/`。
-- `public/` 仍是迁移前手写静态入口；#22 已创建 `site-content/` 空分区、根 TypeScript/Docusaurus 配置、最小 `/` 页面、模块检查器与受控 production build，#11 已实现独立 NodeNext/ES2024 测试 program。#23 只建立不读取文件系统的内容 schema/路径核心与共用结构化解码适配；当前内容根尚无真实 Markdown/MDX，而 Docusaurus `3.10.2` 已实证拒绝零文档实例，因此不得在 #23 用占位文档或第二内容根移除 `docs: false`。唯一 docs 实例、真实文件扫描、frontmatter 投影与路由装配由已明确拥有该范围且 blocked-by #5/#7 的 #26 在真实项目正文存在后原子接管。
+- `public/` 仍是迁移前手写静态入口；#22 已创建 `site-content/` 分区、根 TypeScript/Docusaurus 配置、最小 `/` 页面、模块检查器与受控 production build，#11 已实现独立 NodeNext/ES2024 测试 program，#23 已建立不读取文件系统的内容 schema/路径核心与共用结构化解码适配。#5 已在 `site-content/projects/` 创建两份真实项目正文；在 #26 接管前，I-04 构建入口必须继续以 `BUILD_PIPELINE_INCOMPLETE` 拒绝这些 Markdown，而不能静默忽略或提前发布。唯一 docs 实例、真实文件扫描、frontmatter 投影与路由装配仍由 blocked-by #5/#7 的 #26 原子接管；不得用第二内容根、占位文档或条件 fallback 绕过。
 - `node scripts/quality/check-javascript.mjs` 只对当前仓库内明列范围执行语法检查，不是全仓 lint。
 - `node scripts/quality/check-markdown.mjs` 检查 Markdown 内链和 `docs/README.md` 索引；`check-contracts.mjs` 检查现有契约词规则；`check-secrets.mjs` 是有限扩展名与有限模式的启发式扫描，不等于全仓 Secret 证明。
 - `check:site` 只验证迁移前 `site-checks.json` 与手写入口；配置或入口缺失时当前会成功跳过，它尚不识别 Docusaurus 输入。

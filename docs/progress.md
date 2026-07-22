@@ -4,6 +4,15 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-22 — #23 远端闭环与 #5 本地验收闭环
+
+- **#23 关闭证据**：I-06 精确提交 `49a97bf55e69119b31b03e309fe117c04b767f31` 已 push 到 `origin/dev`；该 SHA 的 GitHub Actions run `29925256721` 于 2026-07-22T13:44:57Z 完成，`Website quality gates` 与 `Diagram compile check` 均为 `success`。逐条脱敏验收和下游接口已写入 GitHub #23，Issue 于 2026-07-22T13:47:53Z 以 `completed` 关闭；关闭顺序经再次核对为 CI 成功、验收评论、Issue 关闭。
+- **语义压缩与依赖链**：#5 只继承 #23 的结构化解码、路径分类、`validateProjectCatalog`、稳定 `ContentIssue` 和全有或全无结果，不继承其临时安装诊断。#5 与 #6 在依赖图上可并行，但按 D-092 保持逐 Issue 串行；当前链为 `#5 + (#6 -> #7) -> #26`。#26 仍原子拥有唯一 docs 实例、真实扫描、只读投影、侧栏、路由与构建装配；其远端闭环并语义压缩后，启动 #27 前必须按 D-091 提醒切换到 Codex Desktop。
+- **I-10 唯一正文迁移**：创建 `site-content/projects/docrestore/index.md` 与 `site-content/projects/vibecoding-project-scaffold/index.md`，正文从 H2 开始且不含 frontmatter、H1、项目 ID、摘要、状态、日期、仓库或路由字段，只拥有问题、能力与架构、关键取舍、当前限制、证据说明和复盘。DocRestore 的处理链、源码优先和素材未完成边界完整迁移；VibeCoding Project Scaffold 的初始化、文档/Agent 规则、零第三方依赖质量基线、CI 与 Git hooks、框架中立取舍和 Apache License 2.0 事实完整迁移，未补写未经确认的许可证动机。两个原设计文档的过渡叙事已在同一变更中替换为正文相对链接，产品体验与 M0 实现 Spec 也同步改为迁移完成状态；`projects.json`、四份注册表、项目状态、日期和素材字段均未改变。
+- **定向正常路径与反例**：新增 I-10 仓库级测试，以当前四份注册表和精确两份正文调用 #23 公共领域入口，得到唯一 `projectId`/路径映射；迁移事实锚点与两个链接所有权章节逐项通过。恢复 `problem`、`decisions` 或 `evidence` 会逐字段命中 `CONTENT_PROJECT_FIELD_UNKNOWN` 且不返回 `value`；frontmatter、H1、孤儿正文和 `.md`/`.mdx` 双入口分别稳定失败。主、最低 Node 的统一 `npm test` 均为 6 个 TypeScript source、35/35 subtests，其中 I-10 定向 4/4；真实冻结 `@docusaurus/utils@3.10.2` 解析探针在两端都得到 `registries=4 projectSources=2`。
+- **双端点与 fail-loud 构建验收**：任务私有候选按唯一 lock 通过 E-010 从官方 npm registry 冻结安装 1,298 个包，未执行 lifecycle script。Node `24.18.0` 与最低 Node `24.16.0` / npm `11.13.0` 均通过同一 `test`、严格 `typecheck` 和完整 `quality`；统一门禁关键计数为 E-010 58/58、E-011 41/41、E-012 runner 10/10、module boundary 16/16、decoder 14/14。最低 Node 归档从仓库固定的 Node.js 官方 HTTPS URL 直连下载并显式绕过作者环境代理，大小 `31,428,548` 字节、SHA-256 `d804845d34eddc21dc1092b519d643ef40b1f58ec5dec5c22b1f4bd8fabde6c9`，再由仓库加固入口复核摘要、归档布局、运行时树和身份。两端 production build 都以 `BUILD_PIPELINE_INCOMPLETE` 退出 1，这是 #5 的预期通过条件：真实正文在 #26 接线前不得被静默忽略或提前发布。
+- **完整性与遗留**：验收前后 `package.json`、lockfile、admissions、license evidence、`THIRD_PARTY_NOTICES` 和 SBOM SHA-256 精确一致；仓库根没有 `node_modules`、顶层 build、dist 或测试 emit，候选也未产生 build/dist。未新增依赖、第三方运行时服务、浏览器请求或用户数据处理。内容事实/所有权审计与契约/测试综合审计均无 blocker；#5 当前尚待单一提交、仅 `origin/dev` 推送、精确 SHA CI 成功、脱敏回填与关闭，在此之前不启动 #6。
+
 ## 2026-07-22 — #11 远端闭环与 #23 本地验收闭环
 
 - **#11 关闭证据**：I-05 精确提交 `ca10de5318543b89dd829db24ed2a646c6535a12` 已 push 到 `origin/dev`；该 SHA 的 GitHub Actions run `29913247834` 为 `completed/success`，脱敏验收与 #23 交接已写入 GitHub #11，Issue 以 `completed` 关闭。关闭后本地 `dev` 与 `origin/dev` 一致，工作树干净；进入 #23 前已完成语义压缩。

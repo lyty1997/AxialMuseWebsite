@@ -28,7 +28,7 @@ AxialMuseWebsite 的首版目标是建立一个可维护的个人技术分享网
 | 发布 | GitHub Actions `production-artifact` 在 prerequisite 成功后对 `main` 精确 SHA fresh rebuild + full quality，将同一 `build/` 与派生 301 配置封装为不可变 `payload/` + `metadata/` artifact -> main HEAD 新鲜度检查 -> CAM -> TAT 固定命令 -> 整版 release | 不跨 job 传递 build；最终 artifact 绑定 repository/run/ID/SHA、外层 `artifactDigest`、artifact 外 `releaseContentSha256`、build tree、payload、运行清单、Nginx 配置与逐文件 SHA-256；服务器安装同 SHA payload/config，不安装 Node、不拉源码、不执行仓库脚本 |
 | 数据与隐私 | 无应用数据层、无 Cookie、无第三方运行时请求 | M0 没有已确认的数据收集需求 |
 
-当前有效的选择、取舍和实施门禁见[主站目标架构](main-site-target-architecture.md)。[M0 主站实现 Spec](../product/m0-main-site-spec.md)已按 D-078 与 E-001 至 E-015 收敛为 Docusaurus 多页面实现基线；内部实现细节不再逐项请求用户选择。#9、#10、#21、#22 与 #11 已闭环各自实现和远端验收，#23 已完成内容领域核心的本地验收并等待远端闭环；#5 至 #8、#12 至 #14 与 #26 仍按依赖链推进。Git 提交、push、远端 CI 与 Issue 状态必须以 GitHub 实际记录单独验收，不能由本地闭环推导；基础设施、公开事实、数据与未来动态能力仍执行原门禁，后续依赖变化也必须重新准入。
+当前有效的选择、取舍和实施门禁见[主站目标架构](main-site-target-architecture.md)。[M0 主站实现 Spec](../product/m0-main-site-spec.md)已按 D-078 与 E-001 至 E-015 收敛为 Docusaurus 多页面实现基线；内部实现细节不再逐项请求用户选择。#9、#10、#21、#22、#11 与 #23 已闭环各自实现和远端验收；#5 至 #8、#12 至 #14 与 #26 仍按依赖链推进。Git 提交、push、远端 CI 与 Issue 状态必须以 GitHub 实际记录单独验收，不能由本地闭环推导；基础设施、公开事实、数据与未来动态能力仍执行原门禁，后续依赖变化也必须重新准入。
 
 ## 当前实现
 
