@@ -64,6 +64,7 @@ import { canonicalJsonBytes } from "../../scripts/quality/lib/supply-chain/spdx.
 import {
   findShellPackageManagerCommands,
   findWorkflowPackageManagerCommands,
+  hasDirectPackageManagerCommand,
 } from "../../scripts/quality/lib/supply-chain/bypass.mjs";
 
 const NODE_VERSION = process.versions.node;
@@ -1055,12 +1056,40 @@ test("E-010 npm isolation contract", async (t) => {
     assert.equal(actualPackage.packageFileName, "node_modules/compat-name");
     assert.equal(actualPackage.purl, "pkg:npm/%40scope/actual@2.3.4");
 
-    const duplicatedAliasPlacement = structuredClone(aliasLock);
-    duplicatedAliasPlacement.packages["node_modules/alias-parent/node_modules/compat-name"] =
-      structuredClone(duplicatedAliasPlacement.packages["node_modules/compat-name"]);
+    const unboundDuplicateAliasPlacement = structuredClone(aliasLock);
+    unboundDuplicateAliasPlacement.packages["node_modules/alias-parent/node_modules/compat-name"] =
+      structuredClone(unboundDuplicateAliasPlacement.packages["node_modules/compat-name"]);
+    expectCode(
+      () => validateLockfileObject(unboundDuplicateAliasPlacement, aliasManifest),
+      "NPM_LOCK_PACKAGE_NAME",
+    );
+
+    const twoPathAliasManifest = structuredClone(aliasManifest);
+    twoPathAliasManifest.dependencies["regular-parent"] = "1.0.0";
+    const twoPathAliasLock = structuredClone(aliasLock);
+    twoPathAliasLock.packages[""].dependencies =
+      structuredClone(twoPathAliasManifest.dependencies);
+    twoPathAliasLock.packages["node_modules/regular-parent"] = {
+      version: "1.0.0",
+      resolved: "https://registry.npmjs.org/regular-parent/-/regular-parent-1.0.0.tgz",
+      integrity,
+      dependencies: {
+        "compat-name": "npm:@scope/actual@2.3.4",
+      },
+    };
+    twoPathAliasLock.packages["node_modules/regular-parent/node_modules/compat-name"] =
+      structuredClone(twoPathAliasLock.packages["node_modules/compat-name"]);
     assert.equal(
-      validateLockfileObject(duplicatedAliasPlacement, aliasManifest).lockfileVersion,
+      validateLockfileObject(twoPathAliasLock, twoPathAliasManifest).lockfileVersion,
       3,
+    );
+
+    const crossPathAliasReuse = structuredClone(twoPathAliasLock);
+    crossPathAliasReuse.packages["node_modules/regular-parent"].dependencies["compat-name"] =
+      "2.3.4";
+    expectCode(
+      () => validateLockfileObject(crossPathAliasReuse, twoPathAliasManifest),
+      "NPM_LOCK_PACKAGE_NAME",
     );
 
     const rangeAlias = structuredClone(aliasLock);
@@ -1208,14 +1237,110 @@ test("E-010 npm isolation contract", async (t) => {
       "$(printf npm) ci",
       "shopt -s expand_aliases; alias pm=npm; pm ci",
       "builtin alias pm='npm ci'; pm",
+      "printf 'npm ci' | sh",
+      "printf 'npm ci' | env bash -s",
+      "printf 'npm ci' | env --split-string=sh",
+      "printf 'npm ci' | env --s=sh",
+      "printf 'npm ci' | env -Ssh",
+      "printf 'npm ci' | env -vSsh",
+      "printf 'npm ci' | nice sh",
+      "printf 'npm ci' | nohup sh",
+      "printf 'npm ci' | setsid sh",
+      "printf 'npm ci' | timeout 1 sh",
+      "printf 'npm ci' | sudo sh",
+      "printf 'npm ci' | sudo -s",
+      "printf 'npm ci' | sudo -i",
+      "printf 'npm ci' | (sh)",
+      "printf 'npm ci' | { sh; }",
+      "printf 'npm ci' | /bin/s[h]",
+      "FD=0; printf 'npm ci' | sh \"/dev/fd/$FD\"",
+      "printf 'npm ci' | sh /dev/fd/${FD:-0}",
+      "printf 'npm ci' | sh /dev/fd/?",
+      "printf 'npm ci' | sh -c '. /dev/stdin'",
+      "printf 'npm ci' | bash -c 'source /dev/stdin'",
+      "printf 'npm ci' | BASH_ENV=/dev/stdin bash scripts/quality/helper.sh",
+      "export BASH_ENV=/dev/stdin; printf 'npm ci' | bash scripts/quality/helper.sh",
+      "printf 'npm ci' | bash --rcfile /dev/stdin -i scripts/quality/helper.sh",
+      "printf 'npm ci' | ENV=/dev/stdin sh -i scripts/quality/helper.sh",
+      "printf 'npm ci' | sh /dev/fd/3 3<&0",
+      "printf 'npm ci' | 3<&0 sh /proc/self/fd/3",
+      "X=c; printf 'npm ci' | 4<&0 . \"/pro$X/self/fd/4\"",
+      "X=v; printf 'npm ci' | 4<&0 . \"/de$X/fd/4\"",
+      "sh <(printf 'npm ci')",
+      "printf 'npm ci' | cat <(sh)",
+      "printf 'npm ci' | tee >(sh)",
+      "printf 'npm ci' | echo \"`sh`\"",
+      "printf 'npm ci' | BASH_ENV=<(cat) bash scripts/quality/helper.sh",
+      "declare -x BASH_ENV=/dev/stdin; printf 'npm ci' | bash scripts/quality/helper.sh",
+      "typeset -x BASH_ENV=/dev/stdin; printf 'npm ci' | bash scripts/quality/helper.sh",
+      "BASH_ENV=/dev/stdin; unset -f BASH_ENV; printf 'npm ci' | bash scripts/quality/helper.sh",
+      "export BASH_ENV=/dev; BASH_ENV+=/stdin; printf 'npm ci' | bash scripts/quality/helper.sh",
+      "BASH_ENV=/dev BASH_ENV+=/stdin bash scripts/quality/helper.sh",
+      "printf 'npm ci' | xargs -I{} sh -c '{}'",
+      "printf 'npm ci' | find . -maxdepth 0 -exec sh \\;",
+      "printf 'npm ci' | busybox sh",
+      "printf 'npm ci' | busybox ash",
+      "printf 'npm ci' | rbash",
+      "printf 'npm ci' | while IFS= read -r cmd; do eval \"$cmd\"; done",
+      "printf 'npm ci' | while IFS= read -r cmd; do sh -c \"$cmd\"; done",
+      "printf 'npm ci' | if read -r cmd; then eval \"$cmd\"; fi",
+      "printf 'npm ci' | if true; then sh; fi",
+      "printf 'npm ci' | while true; do sh; break; done",
+      "printf 'npm ci' | case x in x) sh;; esac",
+      "sh < generated-commands.sh",
+      "sh<<<'npm ci'",
+      "< generated-commands.sh sh",
+      "sh 'literal$fixed.sh'",
       "npx tool",
       "corepack yarn test",
     ]) {
+      assert.equal(hasDirectPackageManagerCommand(command), true);
       assert.equal(findShellPackageManagerCommands(`#!/bin/sh\n${command}\n`).length, 1);
       assert.equal(findWorkflowPackageManagerCommands(`steps:\n  - run: ${command}\n`).length, 1);
     }
-    assert.deepEqual(findShellPackageManagerCommands("node scripts/quality/run-quality.mjs\n"), []);
-    assert.deepEqual(findShellPackageManagerCommands("echo \"npm ci is forbidden\"\n"), []);
+    for (const command of [
+      "node scripts/quality/run-quality.mjs",
+      "echo \"npm ci is forbidden\"",
+      "false || sh scripts/quality/helper.sh",
+      "printf data | sh scripts/quality/helper.sh",
+      "sh scripts/quality/helper.sh < data.txt",
+      "sh 3< data.txt scripts/quality/helper.sh",
+      "printf data | sh -c 'cat >/dev/null'",
+      "sh -c '. scripts/quality/helper.sh'",
+      "BASH_ENV=scripts/quality/env.sh bash scripts/quality/helper.sh",
+      "BASH_ENV=/dev/stdin; unset BASH_ENV; bash scripts/quality/helper.sh",
+      "BASH_ENV=/dev/stdin; unset -v BASH_ENV; bash scripts/quality/helper.sh",
+      "nvm_dir=\"${HOME}/.nvm\"; nvm_script=\"${nvm_dir}/nvm.sh\"; . \"$nvm_script\" --no-use",
+      "bash --rcfile scripts/quality/bashrc -i scripts/quality/helper.sh",
+      "bash --version",
+      "bash --help",
+      "command -v sh",
+      "command -V sh",
+      "# note: `sh`\nnode scripts/quality/run-quality.mjs",
+      "# example: cat <(sh)\nnode scripts/quality/run-quality.mjs",
+      "echo '<('",
+      "echo '`literal`'",
+      "if read -r value; then printf '%s' \"$value\"; fi",
+    ]) {
+      assert.equal(hasDirectPackageManagerCommand(command), false);
+      assert.deepEqual(findShellPackageManagerCommands(`${command}\n`), []);
+      assert.deepEqual(findWorkflowPackageManagerCommands(`steps:\n  - run: ${command}\n`), []);
+    }
+    assert.equal(
+      findShellPackageManagerCommands("printf 'npm ci' |\n  sh\n").length,
+      1,
+    );
+    for (const continuation of [
+      "printf 'npm ci' | \\\n sh",
+      "printf 'npm ci' | s\\\nh",
+    ]) {
+      assert.equal(hasDirectPackageManagerCommand(continuation), true);
+      assert.equal(findShellPackageManagerCommands(`${continuation}\n`).length, 1);
+      assert.equal(
+        findWorkflowPackageManagerCommands(`steps:\n  - run: |\n      ${continuation.replaceAll("\n", "\n      ")}\n`).length,
+        1,
+      );
+    }
     assert.equal(
       findOperationalPackageManagerCommands("提交前运行 `npm run quality`。\n").length,
       1,
@@ -1281,6 +1406,48 @@ test("E-010 npm isolation contract", async (t) => {
     assert.equal(findShellPackageManagerCommands("PM=npm\n\"$PM\" ci\n").length, 1);
     assert.deepEqual(
       findWorkflowPackageManagerCommands("steps:\n  - run: |\n      node scripts/quality/run-quality.mjs\n"),
+      [],
+    );
+    for (const startupEnvironment of [
+      "BASH_ENV: /dev/stdin",
+      "BASH_ENV: /dev/stdin # shell startup source",
+      "'ENV': /dev/fd/4",
+      '"BASH_ENV": "${{ matrix.startup_source }}"',
+      "BASH_ENV: |",
+    ]) {
+      assert.equal(
+        findWorkflowPackageManagerCommands(
+          `steps:\n  - env:\n      ${startupEnvironment}\n    run: printf 'npm ci' | bash scripts/quality/helper.sh\n`,
+        ).length,
+        1,
+      );
+    }
+    for (const workflow of [
+      "steps:\n  - env:\n      ? BASH_ENV\n      : /dev/stdin\n    run: printf 'npm ci' | bash scripts/quality/helper.sh\n",
+      "steps:\n  - env: &startup { BASH_ENV: /dev/stdin }\n    run: printf 'npm ci' | bash scripts/quality/helper.sh\n",
+      "defaults: &startup\n  BASH_ENV: /dev/stdin\nsteps:\n  - env:\n      <<: *startup\n    run: printf 'npm ci' | bash scripts/quality/helper.sh\n",
+      "steps:\n  - env:\n      !!str BASH_ENV: /dev/stdin\n    run: printf 'npm ci' | bash scripts/quality/helper.sh\n",
+      "steps:\n  - ? env\n    :\n      BASH_ENV: /dev/stdin\n    run: printf 'npm ci' | bash scripts/quality/helper.sh\n",
+      "steps:\n  - &env-key env:\n      BASH_ENV: /dev/stdin\n    run: printf 'npm ci' | bash scripts/quality/helper.sh\n",
+    ]) {
+      assert.equal(findWorkflowPackageManagerCommands(workflow).length, 1);
+    }
+    assert.deepEqual(
+      findWorkflowPackageManagerCommands(
+        "steps:\n  - env:\n      BASH_ENV: scripts/quality/env.sh\n    run: printf 'npm ci' | bash scripts/quality/helper.sh\n",
+      ),
+      [],
+    );
+    assert.deepEqual(
+      findWorkflowPackageManagerCommands(
+        "steps:\n  - uses: action@sha\n    with:\n      env: production\n      ENV: /dev/stdin\n      BASH_ENV: /dev/fd/4\n    run: printf 'npm ci' | bash scripts/quality/helper.sh\n",
+      ),
+      [],
+    );
+    assert.deepEqual(
+      findWorkflowPackageManagerCommands(
+        "steps:\n  - env:\n      MESSAGE: BASH_ENV\n      KIND: ENV\n    run: printf 'npm ci' | bash scripts/quality/helper.sh\n",
+      ),
       [],
     );
     assert.deepEqual(findWorkflowPackageManagerCommands("# run: npm ci\n"), []);
@@ -2164,6 +2331,24 @@ test("E-010 npm isolation contract", async (t) => {
       "  - run:\n      npm ci\n",
       "  - {run: npm ci}\n",
       "  - run: >\n      env -u\n      HOME npm ci\n",
+      "  - run: printf 'npm ci' | sh\n",
+      "  - run: printf 'npm ci' | /bin/s[h]\n",
+      "  - run: printf 'npm ci' | nohup sh\n",
+      "  - run: printf 'npm ci' | sudo -s\n",
+      "  - run: printf 'npm ci' | sh -c '. /dev/stdin'\n",
+      "  - run: printf 'npm ci' | BASH_ENV=/dev/stdin bash scripts/quality/helper.sh\n",
+      "  - run: printf 'npm ci' | sh /dev/fd/3 3<&0\n",
+      "  - run: printf 'npm ci' | cat <(sh)\n",
+      "  - run: declare -x BASH_ENV=/dev/stdin; printf 'npm ci' | bash scripts/quality/helper.sh\n",
+      "  - run: BASH_ENV=/dev/stdin; unset -f BASH_ENV; printf 'npm ci' | bash scripts/quality/helper.sh\n",
+      "  - run: printf 'npm ci' | xargs -I{} sh -c '{}'\n",
+      "  - run: printf 'npm ci' | env --split-string=sh\n",
+      "  - run: printf 'npm ci' | busybox sh\n",
+      "  - run: printf 'npm ci' | while IFS= read -r cmd; do eval \"$cmd\"; done\n",
+      "  - run: printf 'npm ci' | case x in x) sh;; esac\n",
+      "  - run: < generated-commands.sh sh\n",
+      "  - run: |\n      printf 'npm ci' | \\\n       sh\n",
+      "  - env:\n      BASH_ENV: /dev/stdin\n    run: printf 'npm ci' | bash scripts/quality/helper.sh\n",
     ]) {
       const workflowFixture = createFixture();
       try {
@@ -2176,6 +2361,39 @@ test("E-010 npm isolation contract", async (t) => {
         );
       } finally {
         destroyFixture(workflowFixture);
+      }
+    }
+
+    for (const command of [
+      "printf 'npm ci' | sh",
+      "printf 'npm ci' | /bin/s[h]",
+      "printf 'npm ci' | nohup sh",
+      "printf 'npm ci' | sudo -s",
+      "printf 'npm ci' | sh -c '. /dev/stdin'",
+      "printf 'npm ci' | BASH_ENV=/dev/stdin bash scripts/quality/helper.sh",
+      "printf 'npm ci' | sh /dev/fd/3 3<&0",
+      "printf 'npm ci' | cat <(sh)",
+      "declare -x BASH_ENV=/dev/stdin; printf 'npm ci' | bash scripts/quality/helper.sh",
+      "BASH_ENV=/dev/stdin; unset -f BASH_ENV; printf 'npm ci' | bash scripts/quality/helper.sh",
+      "printf 'npm ci' | xargs -I{} sh -c '{}'",
+      "printf 'npm ci' | env --split-string=sh",
+      "printf 'npm ci' | busybox sh",
+      "printf 'npm ci' | while IFS= read -r cmd; do eval \"$cmd\"; done",
+      "printf 'npm ci' | case x in x) sh;; esac",
+      "< generated-commands.sh sh",
+      "printf 'npm ci' | s\\\nh",
+    ]) {
+      const hookFixture = createFixture();
+      try {
+        writeControlledQualityPaths(hookFixture, {
+          hook: `#!/bin/sh\nnode scripts/quality/run-quality.mjs\n${command}\n`,
+        });
+        assert.throws(
+          () => checkNpmIsolation(hookFixture.root),
+          /受控质量路径直接调用包管理器/,
+        );
+      } finally {
+        destroyFixture(hookFixture);
       }
     }
 

@@ -209,6 +209,37 @@ test("D-077 npm audit v2 parser", async (suite) => {
       () => parseReport(auditReport({ direct: mismatched })),
       "SUPPLY_CHAIN_AUDIT_SEVERITY",
     );
+
+    const overstated = clone(direct);
+    overstated.severity = "critical";
+    expectCode(
+      () => parseReport(auditReport({ direct: overstated })),
+      "SUPPLY_CHAIN_AUDIT_SEVERITY",
+    );
+  });
+
+  await suite.test("uses direct advisory severity as a lower bound for mixed via", () => {
+    const cause = vulnerability("cause", "low", { effects: ["mixed"] });
+    const mixed = vulnerability("mixed", "low", {
+      via: ["cause", advisory("mixed", "critical", 2002)],
+    });
+    expectCode(
+      () => assertNpmAuditResultAllowed({
+        result: processResult(auditReport({ cause, mixed }), 0),
+        policy: clone(EXPECTED_DEPENDENCY_POLICY),
+      }),
+      "SUPPLY_CHAIN_AUDIT_SEVERITY",
+    );
+
+    const severeCause = vulnerability("cause", "critical", { effects: ["mixed"] });
+    const compatibleMixed = vulnerability("mixed", "high", {
+      via: ["cause", advisory("mixed", "low", 2002)],
+    });
+    const parsed = parseReport(auditReport({ cause: severeCause, mixed: compatibleMixed }));
+    assert.deepEqual(parsed.vulnerabilities.map(({ name, severity }) => ({ name, severity })), [
+      { name: "cause", severity: "critical" },
+      { name: "mixed", severity: "high" },
+    ]);
   });
 
   await suite.test("requires every metavulnerability chain to terminate at an advisory", () => {

@@ -235,10 +235,6 @@ function resolveDependencyPath(packages, sourcePath, dependencyName) {
   }
 }
 
-function aliasContractIdentity(dependencyName, packageName, version) {
-  return `${dependencyName}\u0000${packageName}\u0000${version}`;
-}
-
 export function validateLockfileObject(lockfile, manifest, { allowOverrideDrift = false } = {}) {
   if (typeof allowOverrideDrift !== "boolean") {
     fail("NPM_LOCK_OPTIONS", "package-lock.json 校验选项不合法。");
@@ -271,7 +267,6 @@ export function validateLockfileObject(lockfile, manifest, { allowOverrideDrift 
   }
   const dependencyDeclarations = validateEntryDependencySources(rootPackage, "");
   const aliasedPackagePaths = new Set();
-  const activeAliasContracts = new Set();
   const enforceRootOverrides = manifest.overrides !== undefined;
   const overrideCounts = Object.fromEntries(
     Object.keys(ROOT_DEPENDENCY_OVERRIDES).map((name) => [name, 0]),
@@ -324,11 +319,6 @@ export function validateLockfileObject(lockfile, manifest, { allowOverrideDrift 
         `package-lock.json#packages.${targetPath} 与精确 registry alias 目标不一致。`,
       );
     }
-    activeAliasContracts.add(aliasContractIdentity(
-      declaration.dependencyName,
-      targetName,
-      targetEntry.version,
-    ));
     aliasedPackagePaths.add(targetPath);
   }
 
@@ -343,11 +333,7 @@ export function validateLockfileObject(lockfile, manifest, { allowOverrideDrift 
     const targetName = lockedPackageName(targetPath, targetEntry);
     if (
       targetName !== declaration.dependencyName
-      && !activeAliasContracts.has(aliasContractIdentity(
-        declaration.dependencyName,
-        targetName,
-        targetEntry.version,
-      ))
+      && !aliasedPackagePaths.has(targetPath)
     ) {
       fail(
         "NPM_LOCK_PACKAGE_NAME",
@@ -361,16 +347,10 @@ export function validateLockfileObject(lockfile, manifest, { allowOverrideDrift 
     const locationName = packageNameFromPath(packagePath);
     const packageName = lockedPackageName(packagePath, entry);
     if (packageName === locationName || aliasedPackagePaths.has(packagePath)) continue;
-    if (!activeAliasContracts.has(aliasContractIdentity(
-      locationName,
-      packageName,
-      entry.version,
-    ))) {
-      fail(
-        "NPM_LOCK_PACKAGE_NAME",
-        `package-lock.json#packages.${packagePath}.name 未由精确 registry alias 引用。`,
-      );
-    }
+    fail(
+      "NPM_LOCK_PACKAGE_NAME",
+      `package-lock.json#packages.${packagePath}.name 未由精确 registry alias 引用。`,
+    );
   }
   return lockfile;
 }

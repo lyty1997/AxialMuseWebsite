@@ -328,13 +328,16 @@ function validateVulnerabilityReferences(vulnerabilities) {
       }
       effectEdges.add(`${effect}\0${vulnerability.name}`);
     }
-    if (!hasMetavulnerabilityReference) {
-      const maximum = directAdvisorySeverities.reduce((current, severity) => (
-        SEVERITY_RANK.get(severity) > SEVERITY_RANK.get(current) ? severity : current
-      ));
-      if (vulnerability.severity !== maximum) {
-        fail("SUPPLY_CHAIN_AUDIT_SEVERITY", `${vulnerability.name}.severity 与直接 advisory 最大 severity 不一致。`);
+    if (directAdvisorySeverities.length === 0) continue;
+    const maximum = directAdvisorySeverities.reduce((current, severity) => (
+      SEVERITY_RANK.get(severity) > SEVERITY_RANK.get(current) ? severity : current
+    ));
+    if (hasMetavulnerabilityReference) {
+      if (SEVERITY_RANK.get(vulnerability.severity) < SEVERITY_RANK.get(maximum)) {
+        fail("SUPPLY_CHAIN_AUDIT_SEVERITY", `${vulnerability.name}.severity 低于直接 advisory 最大 severity。`);
       }
+    } else if (vulnerability.severity !== maximum) {
+      fail("SUPPLY_CHAIN_AUDIT_SEVERITY", `${vulnerability.name}.severity 与直接 advisory 最大 severity 不一致。`);
     }
   }
   if ([...effectEdges].some((edge) => !viaEdges.has(edge))) {
