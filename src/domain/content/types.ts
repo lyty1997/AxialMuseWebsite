@@ -75,6 +75,23 @@ export interface PreviewImage {
   readonly alt: string;
 }
 
+export interface ProjectMediaSourceInput {
+  readonly sourcePath: string;
+  readonly isSymbolicLink: boolean;
+  readonly isRealPathWithinRoot: boolean;
+  readonly isRegularFile: boolean;
+  readonly bytes?: Uint8Array;
+}
+
+export interface ProjectPreviewAsset {
+  readonly projectId: string;
+  readonly sourcePath: string;
+  readonly publicUrl: string;
+  readonly width: 1600;
+  readonly height: 1000;
+  readonly alt: string;
+}
+
 export interface Project {
   readonly id: string;
   readonly title: string;
@@ -130,6 +147,11 @@ export interface ProjectCatalogInput {
   readonly topics: RegistryDocumentInput;
   readonly experiences: RegistryDocumentInput;
   readonly projectSources: readonly ProjectSourceInput[];
+}
+
+export interface ProjectMediaValidationInput {
+  readonly catalog: ProjectCatalog;
+  readonly sources: readonly ProjectMediaSourceInput[];
 }
 
 export interface ArticleClassification {

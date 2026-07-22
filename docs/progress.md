@@ -4,6 +4,16 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-23 — #5 远端闭环与 #6 本地验收闭环
+
+- **#5 关闭证据**：I-10 精确提交 `d4a92ad9b6a024fdf42f5cd35efec5847a15fadb` 已 push 到 `origin/dev`；该 SHA 的 GitHub Actions run `29931912784` 于 2026-07-22 完成，`Website quality gates` 与 `Diagram compile check` 均为 `success`。逐条脱敏验收和下游交接已写入 GitHub #5，Issue 于 2026-07-22T15:13:55Z 以 `completed` 关闭。
+- **语义压缩与依赖链**：#6 只继承 #23 的已验证 `ProjectCatalog`、主预览登记字段、稳定 issue 和全有或全无结果，以及 #5 当前两个 `planned` 项目无预览/无素材的真实基线；不继承两项任务的临时安装诊断。活动依赖链收敛为 `#6 -> #7 -> #26`。#7 必须消费已验证 catalog、媒体投影和扫描适配同次安全读取后独占的私有字节快照，不得在校验成功后按路径重读；#26 继续原子拥有唯一 docs 实例、真实扫描、投影、侧栏、路由和构建装配。
+- **I-11 公共契约与实现**：新增纯领域 `validateProjectMedia({catalog,sources})`、`ProjectMediaSourceInput`、`ProjectMediaValidationInput` 和稳定深冻结 `ProjectPreviewAsset[]`。完整乱序清单逐项闭合登记路径、缺失、孤儿、重复候选、重复登记、跨项目、路径逃逸、大小写、符号链接、realpath 和普通文件事实；成功结果只投影项目 ID、登记路径、`/assets/<sourcePath>`、1600 x 1000 和 alt，不读文件系统、不回写注册表，也不实现 #7 白名单或 #26 Docusaurus 装配。
+- **metadata-first 与字节边界**：扫描输入先提交路径和三项文件事实；只有已证明非符号链接、真实路径在素材根内且为普通文件时才要求同次读取的真实 `Uint8Array`，危险候选必须省略字节，意外携带会失败。属性先通过一次 descriptor 快照拒绝 accessor、非枚举、未知/symbol 和 Proxy trap；TypedArray 使用内建 tag/长度支持跨 realm 真值，300,000 bytes 上限在分配复制前执行，DataView 伪造、revoked Proxy 和超限输入均失败关闭。
+- **WebP 与逐条反例**：零依赖解析验证精确 RIFF/WEBP 长度、完整 chunk 遍历、零 padding、唯一静态 VP8/VP8L bitstream、VP8X 首位/保留位/画布、动画标志与 `ANIM`/`ANMF`，并要求非空压缩数据、VP8X 与内部 bitstream 尺寸一致、实际尺寸等于登记值。真实 VP8、VP8L、VP8X 正常路径和当前真实空素材基线通过；header-only、截断、非法长度、重复 bitstream、动画、尺寸冲突、300,001 bytes、危险 symlink 和失败无部分结果均有定向 fixture，完整输出六字段逐项等值且深冻结。
+- **双端点验收**：任务私有候选通过 E-010 从官方 npm registry 冻结安装 1,298 个包且未执行 lifecycle script。Node `24.18.0` 与最低 Node `24.16.0` / npm `11.13.0` 对最终同一字节均通过 7 个 TypeScript source、46/46 subtests、严格 `typecheck` 和完整 `quality`；模块边界覆盖 19 个 TypeScript 文件。最低 Node 官方归档为 `31,428,548` bytes，SHA-256 精确为 `d804845d34eddc21dc1092b519d643ef40b1f58ec5dec5c22b1f4bd8fabde6c9`，单顶层、完整运行时树和精确 Node/npm 身份均由仓库检查器复核。两端 production build 都精确以 `BUILD_PIPELINE_INCOMPLETE` 退出 1，证明 #6 未越界吞掉真实正文或提前接管 #26。
+- **审计、完整性与遗留**：媒体解析/输入对抗审计和下游范围/TOCTOU 审计复审后均无 P0/P1/P2 或 blocker；当前两个真实项目仍为 `planned`，未新增预览登记或真实素材。工作区与候选的 `package.json`、lockfile、dependency policy/admissions/license evidence、SBOM/evidence 和 `THIRD_PARTY_NOTICES` 摘要逐项一致；仓库根无 `node_modules`/build/dist，候选无 build/dist。未新增、升级或删除依赖，未引入第三方运行时服务、浏览器请求或用户数据处理。#6 当前尚待单一提交、仅 `origin/dev` 推送、精确 SHA CI 成功、脱敏回填与关闭；完成语义压缩前不启动 #7。
+
 ## 2026-07-22 — #23 远端闭环与 #5 本地验收闭环
 
 - **#23 关闭证据**：I-06 精确提交 `49a97bf55e69119b31b03e309fe117c04b767f31` 已 push 到 `origin/dev`；该 SHA 的 GitHub Actions run `29925256721` 于 2026-07-22T13:44:57Z 完成，`Website quality gates` 与 `Diagram compile check` 均为 `success`。逐条脱敏验收和下游接口已写入 GitHub #23，Issue 于 2026-07-22T13:47:53Z 以 `completed` 关闭；关闭顺序经再次核对为 CI 成功、验收评论、Issue 关闭。

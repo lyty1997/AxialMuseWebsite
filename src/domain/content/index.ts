@@ -1,6 +1,7 @@
 export {classifyContentPath, normalizeContentPath} from "./content-path.js";
 export {validateArticleSource} from "./article-source.js";
 export {validateProjectCatalog} from "./project-catalog.js";
+export {validateProjectMedia} from "./project-media.js";
 export type {
   Article,
   ArticleClassification,
@@ -20,6 +21,9 @@ export type {
   ProjectCatalog,
   ProjectCatalogInput,
   ProjectExperience,
+  ProjectMediaSourceInput,
+  ProjectMediaValidationInput,
+  ProjectPreviewAsset,
   ProjectSource,
   ProjectSourceInput,
   RegistryDocumentInput,
