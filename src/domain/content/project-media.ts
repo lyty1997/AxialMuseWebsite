@@ -240,6 +240,7 @@ function inspectWebP(bytes: Uint8Array): WebPInspection {
 }
 
 function snapshotBytes(value: unknown): ByteSnapshot {
+  let snapshot: Uint8Array | undefined;
   try {
     if (
       typeof TYPED_ARRAY_BYTE_LENGTH !== "function"
@@ -252,10 +253,13 @@ function snapshotBytes(value: unknown): ByteSnapshot {
       return {kind: "invalid"};
     }
     if ((byteLength as number) > MAX_PREVIEW_BYTES) return {kind: "oversized"};
-    const snapshot = new Uint8Array(byteLength as number);
+    snapshot = new Uint8Array(byteLength as number);
     Uint8Array.prototype.set.call(snapshot, value as Uint8Array);
-    return {kind: "valid", bytes: snapshot};
+    const result: ByteSnapshot = {kind: "valid", bytes: snapshot};
+    snapshot = undefined;
+    return result;
   } catch {
+    snapshot?.fill(0);
     return {kind: "invalid"};
   }
 }
@@ -417,13 +421,17 @@ function validateSource(
         collector.add("CONTENT_PROJECT_MEDIA_SIZE", sourcePath, `${field}.bytes`, "项目主预览不得超过 300,000 bytes。");
         usable = false;
       } else {
-        inspection = inspectWebP(bytes.bytes);
-        if (inspection.kind === "invalid") {
-          collector.add("CONTENT_PROJECT_MEDIA_SIGNATURE", sourcePath, `${field}.bytes`, "媒体不是结构完整且可读取尺寸的静态 WebP。");
-          usable = false;
-        } else if (inspection.kind === "animated") {
-          collector.add("CONTENT_PROJECT_MEDIA_ANIMATED", sourcePath, `${field}.bytes`, "项目主预览不得是动画 WebP。");
-          usable = false;
+        try {
+          inspection = inspectWebP(bytes.bytes);
+          if (inspection.kind === "invalid") {
+            collector.add("CONTENT_PROJECT_MEDIA_SIGNATURE", sourcePath, `${field}.bytes`, "媒体不是结构完整且可读取尺寸的静态 WebP。");
+            usable = false;
+          } else if (inspection.kind === "animated") {
+            collector.add("CONTENT_PROJECT_MEDIA_ANIMATED", sourcePath, `${field}.bytes`, "项目主预览不得是动画 WebP。");
+            usable = false;
+          }
+        } finally {
+          bytes.bytes.fill(0);
         }
       }
     }

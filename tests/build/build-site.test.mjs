@@ -5,6 +5,7 @@ import {dirname, join, resolve} from "node:path";
 import test from "node:test";
 import {
   assertBaselineInputs,
+  assertBuildModeAvailable,
   assertSupportedNodeVersion,
   BuildSiteError,
   parseBuildArguments,
@@ -29,12 +30,11 @@ function createBaselineRoot() {
   return root;
 }
 
-test("I-04 构建参数只接受 production 封闭入口", () => {
+test("I-12 构建参数封闭解析 production/preview 且 preview 执行仍由 #8 失败关闭", () => {
   assert.deepEqual(parseBuildArguments(["--mode", "production"]), {mode: "production"});
-  assert.throws(
-    () => parseBuildArguments(["--mode", "preview"]),
-    hasBuildCode("BUILD_MODE_UNAVAILABLE"),
-  );
+  assert.deepEqual(parseBuildArguments(["--mode", "preview"]), {mode: "preview"});
+  assert.doesNotThrow(() => assertBuildModeAvailable("production"));
+  assert.throws(() => assertBuildModeAvailable("preview"), hasBuildCode("BUILD_MODE_UNAVAILABLE"));
   assert.throws(() => parseBuildArguments([]), hasBuildCode("BUILD_ARGUMENTS"));
   assert.throws(
     () => parseBuildArguments(["--mode", "other"]),
@@ -71,7 +71,7 @@ test("I-04 空内容基线通过且真实内容失败关闭", () => {
   }
 });
 
-test("I-04 不会静默忽略后续静态素材源", () => {
+test("I-12 在 #26 原子接线前不会静默忽略真实静态素材源", () => {
   const root = createBaselineRoot();
   try {
     mkdirSync(resolve(root, "static-public"));

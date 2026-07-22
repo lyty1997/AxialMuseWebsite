@@ -62,6 +62,7 @@ const RESERVED_SUBDOMAINS = [
 const DEMO_STATUSES = ["asset-pending", "review-pending", "approved"] as const;
 const DNS_STATUSES = ["disabled", "pending", "active", "removed"] as const;
 const EXPERIENCE_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
+const VALIDATED_PROJECT_CATALOGS = new WeakSet<object>();
 
 type ProjectStatus = Project["status"];
 type PublicationStatus = Project["publicationStatus"];
@@ -1282,11 +1283,23 @@ export function validateProjectCatalog(
     collector.add("CONTENT_PROJECT_SOURCE_INVALID", PROJECTS_PATH, "projectSources", "项目正文候选必须是数组。");
   }
   if (collector.hasIssues()) return failure(collector);
-  return success({
+  const result = success({
     projects: projects.values,
     authors,
     topics,
     experiences: experiences.values,
     projectSources,
   });
+  if (result.ok) VALIDATED_PROJECT_CATALOGS.add(result.value);
+  return result;
+}
+
+export function isValidatedProjectCatalog(value: unknown): value is ProjectCatalog {
+  try {
+    return value !== null
+      && typeof value === "object"
+      && VALIDATED_PROJECT_CATALOGS.has(value);
+  } catch {
+    return false;
+  }
 }

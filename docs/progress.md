@@ -4,6 +4,15 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-23 — #6 远端闭环与 #7 本地验收闭环
+
+- **#6 关闭证据**：I-11 精确提交 `8d926ea43e92b4cd49e4a1d541f52105075acf1a` 已只 push 到 `origin/dev`；该 SHA 唯一 push CI run `29939606613` 为 `completed/success`，`Website quality gates` 与 `Diagram compile check` 全部成功。双 Node、46/46 子测试、类型与质量证据及 #7 的同次私有字节快照交接已写入 GitHub #6，Issue 于 2026-07-22T16:51:59Z 以 `completed` 关闭；任务临时安装、运行时、WebP 样本与评论草稿随后已清理。
+- **#7 依赖与边界**：语义压缩后只继承已验证 `ProjectCatalog`、`validateProjectMedia` 六字段投影和扫描适配同次读取的私有字节快照；活动链为 `#6 -> #7 -> #26`。#7 拥有 production/preview 白名单计划、私有临时树与目的限定的 production 素材泄漏判定；#26 拥有共享双模式内容扫描/投影 API、唯一 docs 实例基础装配和 production Docusaurus 接线，#8 消费这些共享结果完成 preview Docusaurus、持久候选与原子切换，#33 独占 release 封装与整树摘要。
+- **I-12 工程决定**：原设计无法仅从任意新字节的视觉语义自动判断 `static-public/` 是否误放项目素材。为使“显式登记”可证伪，新增空的 `docs/contracts/static-public-assets.json`，目录文件与登记必须一一对应，角色封闭为 `brand|operational`；再以保留 namespace 和项目/未发布正文素材同字节反查捕获可机械证明的误放。该机制不批准真实素材，也不替代入 Git 前的真实性、凭证、隐私和版权审核。
+- **I-12 实现与定向验收**：新增受版本约束的始终公开素材登记、production/preview 不可复用的 `BuildContext`、一次性静态素材计划、私有 byte snapshot、受控物化，以及只产出逐文件路径/长度/SHA-256、未发布泄漏和 SSR 引用证据的 production 素材检查。两个静态素材定向测试文件 70/70 证明 production 只含公开项目、preview 含全部登记预览且输出目录隔离；已执行反例覆盖输入 Proxy/accessor/sparse 漂移、源路径 symlink/realpath/非普通文件/hardlink/大小写、`static-public` 登记闭合与保留 namespace、浏览器丢弃的伪图片 token，以及 production 素材缺失、多余、改字节、未发布 path、跨 64 KiB 分块的改名同字节和通用 draft 文章素材。工作树中的登记当前为空，且未批准任何真实素材；这项仓库事实不冒充带真实素材的正常路径验收。
+- **双端点验收**：任务私有候选通过 E-010 从官方 npm registry 冻结安装 1,298 个包且未执行 lifecycle script。Node `24.18.0` / npm `11.16.0` 与最低 Node `24.16.0` / npm `11.13.0` 对最终同一代码均通过 9 个 TypeScript source、118/118 子测试、严格 `typecheck` 和完整 `quality`，模块边界覆盖 29 个 TypeScript 文件。两端 production `build` 都精确以 `BUILD_PIPELINE_INCOMPLETE` 退出 1，证明 #26 接线前没有静默忽略正文或提前发布素材。
+- **完整性与遗留**：未修改依赖、lockfile、workflow、发布封装或真实内容；未引入第三方运行时服务、浏览器请求或用户数据处理。依赖边界、代码缺口与 SSR/私有字节对抗三路最终只读审计均无 blocker；#7 已完成修复后的双端点最终验收，当前只待单一提交、仅 `origin/dev` 推送、精确 SHA CI 成功、脱敏验收回填与关闭；在远端闭环并语义压缩前不启动 #26。
+
 ## 2026-07-23 — #5 远端闭环与 #6 本地验收闭环
 
 - **#5 关闭证据**：I-10 精确提交 `d4a92ad9b6a024fdf42f5cd35efec5847a15fadb` 已 push 到 `origin/dev`；该 SHA 的 GitHub Actions run `29931912784` 于 2026-07-22 完成，`Website quality gates` 与 `Diagram compile check` 均为 `success`。逐条脱敏验收和下游交接已写入 GitHub #5，Issue 于 2026-07-22T15:13:55Z 以 `completed` 关闭。

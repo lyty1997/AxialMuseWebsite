@@ -56,13 +56,22 @@ export function parseBuildArguments(arguments_) {
   ) {
     fail("BUILD_ARGUMENTS", "构建入口只接受 --mode <mode>。");
   }
-  if (arguments_[1] === "preview") {
-    fail("BUILD_MODE_UNAVAILABLE", "preview 构建由 #8 接管前保持失败关闭。");
-  }
-  if (arguments_[1] !== "production") {
+  if (arguments_[1] !== "production" && arguments_[1] !== "preview") {
     fail("BUILD_MODE", "未知构建模式。");
   }
-  return Object.freeze({mode: "production"});
+  return Object.freeze({mode: arguments_[1]});
+}
+
+export function assertBuildModeAvailable(mode) {
+  if (mode === "preview") {
+    fail(
+      "BUILD_MODE_UNAVAILABLE",
+      "preview 的 Docusaurus --dev、noindex 与候选激活仍由 #8 接管。",
+    );
+  }
+  if (mode !== "production") {
+    fail("BUILD_MODE", "未知构建模式。");
+  }
 }
 
 export function assertSupportedNodeVersion({
@@ -109,7 +118,7 @@ export function assertBaselineInputs(root = ROOT) {
     if (existsSync(resolve(root, path))) {
       fail(
         "BUILD_PIPELINE_INCOMPLETE",
-        "发布素材管线由 #7 接管前不得静默忽略静态源目录。",
+        "真实素材扫描、I-12 计划物化与 Docusaurus 装配由 #26 原子接线前不得静默忽略静态源目录。",
       );
     }
   }
@@ -154,7 +163,7 @@ function resolveDocusaurusCli(root) {
   return realCliPath;
 }
 
-function createBuildContext() {
+function createBuildContext(mode) {
   const temporaryRoot = realpathSync(tmpdir());
   const buildRoot = mkdtempSync(join(temporaryRoot, "axial-muse-build-"));
   chmodSync(buildRoot, 0o700);
@@ -163,16 +172,20 @@ function createBuildContext() {
   chmodSync(staticDirectory, 0o700);
   const owner = randomBytes(32).toString("hex");
   const ownerPath = resolve(buildRoot, OWNER_FILE_NAME);
-  writeFileSync(ownerPath, `${owner}\n`, {encoding: "utf8", flag: "wx", mode: 0o600});
+  writeFileSync(ownerPath, `${mode}:${owner}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  });
   chmodSync(ownerPath, 0o600);
-  return {buildRoot, owner};
+  return {buildRoot, mode, owner};
 }
 
 export function runProductionBuild({root = ROOT} = {}) {
   assertSupportedNodeVersion({root});
   assertBaselineInputs(root);
   const cliPath = resolveDocusaurusCli(root);
-  const context = createBuildContext();
+  const context = createBuildContext("production");
   let result;
   let cleanupError;
   try {
@@ -182,7 +195,7 @@ export function runProductionBuild({root = ROOT} = {}) {
         ...buildQualityChildEnvironment(),
         NODE_ENV: "production",
         DOCUSAURUS_NO_PERSISTENT_CACHE: "1",
-        AXIAL_MUSE_BUILD_MODE: "production",
+        AXIAL_MUSE_BUILD_MODE: context.mode,
         AXIAL_MUSE_BUILD_ROOT: context.buildRoot,
         AXIAL_MUSE_BUILD_OWNER: context.owner,
       },
@@ -207,7 +220,8 @@ export function runProductionBuild({root = ROOT} = {}) {
 
 function runCli() {
   try {
-    parseBuildArguments(process.argv.slice(2));
+    const {mode} = parseBuildArguments(process.argv.slice(2));
+    assertBuildModeAvailable(mode);
     runProductionBuild();
   } catch (error) {
     console.error(formatBuildSiteError(error));

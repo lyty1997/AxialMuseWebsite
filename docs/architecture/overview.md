@@ -28,7 +28,7 @@ AxialMuseWebsite 的首版目标是建立一个可维护的个人技术分享网
 | 发布 | GitHub Actions `production-artifact` 在 prerequisite 成功后对 `main` 精确 SHA fresh rebuild + full quality，将同一 `build/` 与派生 301 配置封装为不可变 `payload/` + `metadata/` artifact -> main HEAD 新鲜度检查 -> CAM -> TAT 固定命令 -> 整版 release | 不跨 job 传递 build；最终 artifact 绑定 repository/run/ID/SHA、外层 `artifactDigest`、artifact 外 `releaseContentSha256`、build tree、payload、运行清单、Nginx 配置与逐文件 SHA-256；服务器安装同 SHA payload/config，不安装 Node、不拉源码、不执行仓库脚本 |
 | 数据与隐私 | 无应用数据层、无 Cookie、无第三方运行时请求 | M0 没有已确认的数据收集需求 |
 
-当前有效的选择、取舍和实施门禁见[主站目标架构](main-site-target-architecture.md)。[M0 主站实现 Spec](../product/m0-main-site-spec.md)已按 D-078 与 E-001 至 E-015 收敛为 Docusaurus 多页面实现基线；内部实现细节不再逐项请求用户选择。#9、#10、#21、#22、#11、#23 与 #5 已闭环各自实现和远端验收；#6 已完成本地媒体门禁验收，#7/#8、#12 至 #14 与 #26 仍按依赖链推进。Git 提交、push、远端 CI 与 Issue 状态必须以 GitHub 实际记录单独验收，不能由本地闭环推导；基础设施、公开事实、数据与未来动态能力仍执行原门禁，后续依赖变化也必须重新准入。
+当前有效的选择、取舍和实施门禁见[主站目标架构](main-site-target-architecture.md)。[M0 主站实现 Spec](../product/m0-main-site-spec.md)已按 D-078 与 E-001 至 E-015 收敛为 Docusaurus 多页面实现基线；内部实现细节不再逐项请求用户选择。#9、#10、#21、#22、#11、#23、#5 与 #6 已闭环各自实现和远端验收；#7 正在接续媒体门禁实现临时静态白名单与生产泄漏判定，#8、#12 至 #14 与 #26 仍按依赖链推进。Git 提交、push、远端 CI 与 Issue 状态必须以 GitHub 实际记录单独验收，不能由本地闭环推导；基础设施、公开事实、数据与未来动态能力仍执行原门禁，后续依赖变化也必须重新准入。
 
 ## 当前实现
 
@@ -170,7 +170,7 @@ Acme --> Nginx : HTTP-01 与证书续期
 - `site-content/projects/<project-id>/`：E-001 的项目长文正文；项目结构化事实继续由 `docs/contracts/projects.json` 拥有。
 - `site-content/writing/<source-name>/`：D-060 至 D-064 的技术文章源码与文章局部 `assets/`。
 - `site-assets/projects/<project-id>/`：E-007 的项目主预览原件；不直接进入 Docusaurus 静态目录，公开路径由注册表字段和受控构建入口派生。
-- `static-public/`：E-008 的始终公开品牌与根级静态文件；禁止项目、文章和待审核素材，并与获准项目预览一起投影到临时白名单树。
+- `static-public/`：E-008 的始终公开品牌与根级静态文件；每个文件由 `docs/contracts/static-public-assets.json` 显式登记角色，禁止项目、文章和待审核素材，并与获准项目预览一起投影到临时白名单树。
 - `src/domain/` 与 `src/build/`：领域核心与构建期适配源码；#22 已创建 `src/build/site-config/`，#23 已创建 `src/domain/content/`。`src/build/` 是源码目录，不是静态构建产物目录。
 - `src/components/`、`src/pages/` 与 `src/theme/`：通用展示组件、E-004 文件路由页面与最小主题适配；#22 只创建了严格 TypeScript 的最小 `src/pages/index.tsx`，组件和主题实现尚未创建。
 - `scripts/author/`：作者显式 Node.js 工具目录；具体接口由 D-078 授权的编码 Spec 固定，当前尚未创建。
@@ -197,7 +197,7 @@ Acme --> Nginx : HTTP-01 与证书续期
 ## 架构验收
 
 - 当前 `public/` 是迁移前静态骨架；目标 release 来自 GitHub Actions 对 `main` 精确 SHA 生成的 `payload/` + `metadata/` artifact，其中 `payload/` 是 Docusaurus 默认 `build/` 的逐文件复制，运行清单和 Nginx 配置从同一 payload 与源注册表确定派生。服务器校验两层摘要后安装同 SHA payload/config，只有 payload 进入 Web Root；生产请求不依赖 Node.js、数据库或第三方 API。
-- D-078/D-079/E-001 至 E-015 已关闭项目内容职责、路由闭包、注册表、主题响应式、输出目录、制品交付、主预览、发布态素材白名单、草稿预览、npm 隔离、确定性 SPDX、Node ESM 测试、完整 Git 历史、同版本服务端 301 和 production artifact 字节所有权设计；#9/#10/#22/#11/#23/#5 已实现并远端关闭各自基础能力，#6 已完成媒体纯领域门禁的本地验收，#7/#8 与 #12 至 #14/#26 继续跟踪其余实现和 fixture。
+- D-078/D-079/E-001 至 E-015 已关闭项目内容职责、路由闭包、注册表、主题响应式、输出目录、制品交付、主预览、发布态素材白名单、草稿预览、npm 隔离、确定性 SPDX、Node ESM 测试、完整 Git 历史、同版本服务端 301 和 production artifact 字节所有权设计；#9/#10/#22/#11/#23/#5/#6 已实现并远端关闭各自基础能力，#7 正在建立双模式静态素材计划与生产泄漏判定，#8、#12 至 #14 和 #26 继续跟踪其余实现和 fixture。
 - 首次候选 lockfile、真实传递图最终准入与主/最低端点临时冻结安装已由 #21 闭环；#22 又在任务临时副本完成站点冻结安装与最小 build，仓库根仍不保存 `node_modules`。后续依赖变更、Action 与凭证配置、服务器和云资源操作仍受各自门禁。D-080 只改变本地作者 hook 的 Node 24 子进程，系统默认与现有 CI 仍为 Node 22；尚未迁移的 workflow 不能表述为目标能力已经部署。
 - 项目列表、项目侧栏和项目详情元数据从 `projects.json` 同一结构化事实投影；项目长文、文章、作者、主题、模块和重定向没有并行可编辑副本。
 - 从 contract 变更到页面、门禁、PR、`main` SHA、TAT invocation 和 release 的链路可追溯。

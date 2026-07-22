@@ -6,6 +6,9 @@ import type {
 import {readBuildContext} from "./src/build/site-config/index.js";
 
 const buildContext = readBuildContext();
+if (buildContext.mode === "preview") {
+  throw new Error("[BUILD_MODE_UNAVAILABLE] preview 的 Docusaurus --dev、noindex 与候选激活仍由 #8 接管。");
+}
 
 const config: Config = {
   title: "Axial Muse",

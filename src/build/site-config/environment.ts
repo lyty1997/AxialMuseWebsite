@@ -11,11 +11,13 @@ const BUILD_ROOT_PREFIX = "axial-muse-build-";
 const OWNER_FILE_NAME = ".axial-muse-build-owner";
 const OWNER_PATTERN = /^[0-9a-f]{64}$/u;
 
-export type BuildMode = "production";
+export type BuildMode = "production" | "preview";
 
 export interface BuildContext {
   readonly mode: BuildMode;
+  readonly buildRoot: string;
   readonly staticDirectory: string;
+  readonly owner: string;
 }
 
 class BuildContextError extends Error {
@@ -55,18 +57,46 @@ function assertPrivateEntry(
 export function readBuildContext(
   environment: NodeJS.ProcessEnv = process.env,
 ): BuildContext {
-  if (environment.AXIAL_MUSE_BUILD_MODE !== "production") {
-    fail("BUILD_CONTEXT_MODE", "只接受受控 production 构建上下文。");
-  }
+  const mode = environment.AXIAL_MUSE_BUILD_MODE;
   const buildRootInput = environment.AXIAL_MUSE_BUILD_ROOT;
   const owner = environment.AXIAL_MUSE_BUILD_OWNER;
   if (
-    typeof buildRootInput !== "string"
+    (mode !== "production" && mode !== "preview")
+    || typeof buildRootInput !== "string"
     || !isAbsolute(buildRootInput)
     || typeof owner !== "string"
     || !OWNER_PATTERN.test(owner)
   ) {
+    if (mode !== "production" && mode !== "preview") {
+      fail("BUILD_CONTEXT_MODE", "只接受受控 production 或 preview 构建上下文。");
+    }
     fail("BUILD_CONTEXT_ENV", "构建上下文环境不完整或格式不合法。");
+  }
+  return validateBuildContext({
+    mode,
+    buildRoot: buildRootInput,
+    staticDirectory: resolve(buildRootInput, "static"),
+    owner,
+  });
+}
+
+function validateBuildContext(context: BuildContext): BuildContext {
+  const {
+    mode,
+    buildRoot: buildRootInput,
+    staticDirectory: staticDirectoryInput,
+    owner,
+  } = context;
+  if (
+    (mode !== "production" && mode !== "preview")
+    || typeof buildRootInput !== "string"
+    || !isAbsolute(buildRootInput)
+    || typeof staticDirectoryInput !== "string"
+    || !isAbsolute(staticDirectoryInput)
+    || typeof owner !== "string"
+    || !OWNER_PATTERN.test(owner)
+  ) {
+    fail("BUILD_CONTEXT_VALUE", "构建上下文值不完整或格式不合法。");
   }
 
   assertPrivateEntry(buildRootInput, "directory", 0o700);
@@ -86,14 +116,35 @@ export function readBuildContext(
 
   const ownerPath = resolve(buildRoot, OWNER_FILE_NAME);
   const staticDirectory = resolve(buildRoot, "static");
+  if (staticDirectoryInput !== staticDirectory) {
+    fail("BUILD_CONTEXT_STATIC_PATH", "静态目录不是构建根的精确 static 成员。");
+  }
   assertPrivateEntry(ownerPath, "file", 0o600);
   assertPrivateEntry(staticDirectory, "directory", 0o700);
-  if (readFileSync(ownerPath, "utf8") !== `${owner}\n`) {
-    fail("BUILD_CONTEXT_MARKER", "构建上下文所有权标记不匹配。");
+  if (readFileSync(ownerPath, "utf8") !== `${mode}:${owner}\n`) {
+    fail("BUILD_CONTEXT_MARKER", "构建上下文模式与所有权标记不匹配。");
   }
 
   return Object.freeze({
-    mode: "production",
+    mode,
+    buildRoot,
     staticDirectory,
+    owner,
   });
+}
+
+export function revalidateBuildContext(context: BuildContext): BuildContext {
+  if (
+    context === null
+    || typeof context !== "object"
+    || Object.keys(context).sort().join("\n") !== [
+      "buildRoot",
+      "mode",
+      "owner",
+      "staticDirectory",
+    ].join("\n")
+  ) {
+    fail("BUILD_CONTEXT_VALUE", "构建上下文对象字段不合法。");
+  }
+  return validateBuildContext(context);
 }
