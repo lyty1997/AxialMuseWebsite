@@ -1,7 +1,7 @@
 # 主站编码规范 Spec
 
 状态：active
-完整度：M0-design-closed（#9 的 E-010、#10 的 E-011 与 #21 首次真实依赖图本地准入已闭环；#5 至 #8、#11 至 #14 继续跟踪）
+完整度：M0-design-closed（#9 的 E-010、#10 的 E-011、#21 首次真实依赖图与 #22 的 I-04 本地工程基线已闭环；#5 至 #8、#11 至 #14 继续跟踪）
 最近更新：2026-07-22
 适用范围：本站仓库内的主站页面与组件、Docusaurus 构建期适配、作者工具、质量脚本，以及这些代码之间的依赖边界
 
@@ -9,7 +9,7 @@
 
 本文是从上层设计进入实现的工程入口。它只拥有“代码如何组织、依赖和验证”的规则，不复制内容字段、页面结果、基础设施或发布流程的完整语义。
 
-2026-07-18 审查确认的实施契约矛盾由 GitHub Issues #5 至 #14 跟踪。E-006 至 E-015 已补齐内容所有权、主预览、发布态素材、草稿预览、npm 隔离、SPDX 确定化、Node ESM 测试、完整 Git 历史门禁、同版本服务端 301 和 production job 字节所有权；#9 已完成 E-010 实现、fixture 与真实双端点验收，#10 已完成 E-011 实现、真实 npm shape 与双端点全量验收，#21 已完成 D-077 的真实图闭环：唯一 lock、1,225 项精确 admissions、正式 SBOM/evidence/NOTICE、实际 audit 全零、D-082 最终决定与 Node 24 主/最低端点 composite receipt 均已通过本地验收。#5 至 #8、#11 至 #14 继续跟踪其余实现，不再代表活动设计缺口。D-078 的委托和已确认上层方向继续有效；目标 CI、其余实现与验证不能由 #21 本地结果替代。
+2026-07-18 审查确认的实施契约矛盾由 GitHub Issues #5 至 #14 跟踪。E-006 至 E-015 已补齐内容所有权、主预览、发布态素材、草稿预览、npm 隔离、SPDX 确定化、Node ESM 测试、完整 Git 历史门禁、同版本服务端 301 和 production job 字节所有权；#9 已完成 E-010 实现、fixture 与真实双端点验收，#10 已完成 E-011 实现、真实 npm shape 与双端点全量验收，#21 已完成 D-077 的真实图闭环，#22 已在不改变依赖图的前提下完成 Docusaurus/严格 TypeScript scaffold、模块边界、受控 production build 和真实本地安装验收。#5 至 #8、#11 至 #14 继续跟踪其余实现，不再代表活动设计缺口。D-078 的委托和已确认上层方向继续有效；目标 CI、内容与测试实现不能由 #21/#22 的本地结果替代。
 
 业务与架构行为仍直接引用原真相源及其 D-xxx 决策编号：
 
@@ -40,14 +40,14 @@
 
 | 上层来源 | 本站代码责任 | 验证层 | 当前状态 |
 |---|---|---|---|
-| D-027、D-028、D-051、D-053、D-073 | 静态构建边界、框架与冻结安装基线、主站与动态服务隔离、生产制品不依赖 Node.js 请求服务 | 依赖、构建制品与发布冒烟 | 框架基线已确认，迁移与构建契约尚未完成 |
-| D-074 | Docusaurus 目标源码使用严格 TypeScript，类型检查与静态构建相互独立 | `tsc --noEmit` 与 Docusaurus build | 目标已确认，依赖、配置与 CI 接线尚未实现 |
-| D-075 | 标准入口目录、跨层公共入口、导出与首版路径别名边界 | 源码结构、导入图与模块契约检查 | 目标已确认，目录与自动检查尚未实现 |
-| D-076、D-079 | 首轮 React/MDX/TypeScript、Node 测试类型直接依赖、官方根 `tsconfig` 继承和本站收紧规则 | 依赖清单、锁文件、生产/测试 TypeScript program 与配置漂移检查 | 首轮依赖图已由 #21 准入；生产/测试配置、runner 和目标 CI 尚未实现 |
+| D-027、D-028、D-051、D-053、D-073 | 静态构建边界、框架与冻结安装基线、主站与动态服务隔离、生产制品不依赖 Node.js 请求服务 | 依赖、构建制品与发布冒烟 | #22 已完成框架 scaffold 与最小 production build；内容、release 和生产构建契约尚未完成 |
+| D-074 | Docusaurus 目标源码使用严格 TypeScript，类型检查与静态构建相互独立 | `tsc --noEmit` 与 Docusaurus build | #22 已实现生产 TypeScript program、独立 typecheck 与最小 build；目标 CI 尚未接线 |
+| D-075 | 标准入口目录、跨层公共入口、导出与首版路径别名边界 | 源码结构、导入图与模块契约检查 | #22 已创建首轮目录、公共入口和确定性检查器；后续真实模块继续受同一边界约束 |
+| D-076、D-079 | 首轮 React/MDX/TypeScript、Node 测试类型直接依赖、官方根 `tsconfig` 继承和本站收紧规则 | 依赖清单、锁文件、生产/测试 TypeScript program 与配置漂移检查 | 首轮依赖图与生产配置已由 #21/#22 完成；测试 program、runner 和目标 CI 由 #11 接管 |
 | D-077、E-010、E-011 | 官方 registry-only、启动前 npm 隔离、无脚本 tarball 证据、许可证与脚本处置、确定性 SPDX/NOTICE、漏洞阈值、双端点冻结安装和依赖事实防漂移 | 候选解析、隔离配置、供应链证据、人工准入、派生制品、显式审计与双端点检查 | E-010/E-011 与 #21 首次真实依赖图已完成本地闭环；1,225 项 admissions、正式三制品、audit 全零、D-082 决定及两个 Node 24 端点均已验证，目标 CI 尚未接线 |
 | D-030 至 D-034、D-058、E-002、E-004、E-014 | 路由配置、文档站布局、主题与响应式适配、同版本服务端 301 | 路由制品、Nginx 派生配置、发布冒烟与真实浏览器 | M0 路由与 301 契约已固定，实现与浏览器 fit-gap 尚未完成 |
 | D-035 至 D-050、D-078、E-001、E-003、E-006、E-007 | 领域 schema、注册表、作者与分类引用、项目主预览、日期、可见性和 SEO 页面适配 | 领域契约、媒体字节、构建制品与浏览器 head | 项目叙事和媒体 schema 已收口；注册表、媒体校验和元数据组件尚未实现 |
-| D-053、E-008 | 按构建模式生成临时静态白名单树，并从生产制品排除未发布素材 | 源路径、白名单、制品字节和泄漏 fixture | 发布态素材隔离已收口；受控构建入口和检查尚未实现 |
+| D-053、E-008 | 按构建模式生成临时静态白名单树，并从生产制品排除未发布素材 | 源路径、白名单、制品字节和泄漏 fixture | #22 已实现空静态树的受控 production 基线；#7 继续负责真实素材白名单与泄漏检查 |
 | D-072、E-009 | 在 Linux 对精确远端提交构建含 draft/noindex 的静态候选，并原子切换局域网预览 | Docusaurus 3.10.2 fixture、候选制品、失败保留与真实浏览器 | 预览设计已收口；当前脚本仍直接服务 `public/`，尚未实现 |
 | D-054 至 D-060、D-078、D-079、E-006、E-012 | 单一 docs 实例、唯一判型、校验先行、只读内存投影与公共 API | 临时编译后的 Node ESM 纯逻辑测试和 Docusaurus 集成测试 | Node ESM 测试契约与所需依赖已收口；runner、fixture 与集成测试尚未实现 |
 | D-061 至 D-064、D-078、E-013 | 内容根、源码布局、稳定身份、路径、源码相对链接、日期索引、侧栏与 HEAD 可达历史 | 路径、身份、历史 DAG、链接、索引和侧栏契约测试 | 完整 Git 历史边界已收口；检查器、作者集成、fixture 与 CI checkout 尚未实现 |
@@ -58,10 +58,10 @@
 
 ## 当前实现画像
 
-下列是 2026-07-21 可从仓库查证的迁移事实，不代表目标工程已经就绪：
+下列是 2026-07-22 可从工作区查证的迁移事实，不代表目标工程已经就绪或已经提交到远端：
 
-- `package.json` 声明 ESM，并已写入 D-073/D-076/D-079/E-013 的首轮直接依赖；现有质量与供应链脚本仍是只使用 Node.js 内置能力的 `.mjs`。唯一真实 `package-lock.json`、1,225 项 admissions 与正式三制品已经形成，Node 24 主/最低端点在私有临时 workspace 中完成冻结安装；仓库根没有 `node_modules/`。
-- `public/` 仍是迁移前手写静态入口；`site-content/` 和 Docusaurus 配置尚不存在。`.nvmrc`、封闭 `engines.node`、E-010/E-011 与 #21 首次真实依赖图闭环已经建立；目标 TypeScript/Docusaurus 配置、内容迁移、构建与远端 CI 仍未实现。
+- `package.json` 已写入 D-073/D-076/D-079/E-013 的首轮直接依赖，并故意不声明根 `type`，避免改变 Docusaurus 3.10.2 生成 `.js` 的 CommonJS 解释边界；现有质量与供应链脚本通过显式 `.mjs` 保持 ESM。唯一真实 `package-lock.json`、1,225 项 admissions 与正式三制品已经形成；仓库根没有 `node_modules/`。
+- `public/` 仍是迁移前手写静态入口；#22 已创建 `site-content/` 空分区、根 TypeScript/Docusaurus 配置、最小 `/` 页面、模块检查器与受控 production build。真实 docs 内容、页面迁移、测试 program、目标 CI 与发布构建仍未实现，当前 `docs: false` 必须由 #23 在内容门禁完成时移除。
 - `node scripts/quality/check-javascript.mjs` 只对当前仓库内明列范围执行语法检查，不是全仓 lint。
 - `node scripts/quality/check-markdown.mjs` 检查 Markdown 内链和 `docs/README.md` 索引；`check-contracts.mjs` 检查现有契约词规则；`check-secrets.mjs` 是有限扩展名与有限模式的启发式扫描，不等于全仓 Secret 证明。
 - `check:site` 只验证迁移前 `site-checks.json` 与手写入口；配置或入口缺失时当前会成功跳过，它尚不识别 Docusaurus 输入。
@@ -123,7 +123,7 @@
 ### CODE-005 Node.js 与模块边界
 
 - 修改现有 Node.js 质量脚本时保持 ESM，使用 `import`/`export`；Node 内置模块使用 `node:` 前缀，不混入 CommonJS。
-- 当前脚本继续遵守 `package.json` 的 `type: module`；目标 Node 精确版本只由获批后的 `.nvmrc` 提供，不在代码或本文复制 patch 值。
+- 当前 Node 脚本通过显式 `.mjs` 保持 ESM，不依赖根 `package.json#type`；根 manifest 不声明 `type`，以保留 Docusaurus 3.10.2 生成 `.js` 的 CommonJS 解释边界。目标 Node 精确版本只由 `.nvmrc` 提供，不在代码或本文复制 patch 值。
 - 目标依赖解析、lockfile 写入权限和最低端点只读边界直接遵守 D-073、D-077 与 E-010。只有主端点能通过隔离 `resolve-lock` profile 生成候选 lockfile；所有正常安装统一通过隔离 `ci` profile，代码不得通过直接调用 npm、安装时 fallback、第二种 lockfile、浮动包管理器、隐式 audit、共享 cache 或生命周期脚本绕过该契约。
 - Docusaurus 管理的目标源码统一使用严格 TypeScript：站点配置为 `docusaurus.config.ts`，侧栏、生成器、本地插件、构建期适配和无 JSX 模块使用 `.ts`，包含 JSX 的页面、主题覆盖和 React 组件使用 `.tsx`；目标 `tsconfig.json` 必须显式设置 `strict: true`。
 - 上述目标范围不得新增 `.js` 或 `.jsx`，除非先按用户决策门禁批准例外。现有和新增的零依赖作者/质量/发布 CLI 使用 `.mjs`，不进入 Docusaurus TypeScript program；React、领域和构建源码不得借此回退为 JavaScript。
@@ -139,6 +139,8 @@
 - Docusaurus 装配使用 `src/build/content/`，其唯一跨层入口为 `src/build/content/index.ts`，只导出 `loadValidatedContent`、`createParseFrontMatter`、`createSidebarItemsGenerator` 和 `createContentDataPlugin`。文件读取和框架对象转换留在该层；领域入口不得反向导入它。
 - 非 React `.ts` 文件使用 lowercase kebab-case；React 组件、组件文件和目录使用 PascalCase；hook 使用 `useXxx.ts`；类型使用 PascalCase，函数和变量使用 lowerCamelCase，布尔值使用 `is`/`has`/`can`/`should` 前缀，只有真正跨调用恒定的值使用 `UPPER_SNAKE_CASE`。测试文件使用与被测模块同名的 `.test.ts`，fixture case 目录使用 lowercase kebab-case。
 - 模块边界由零第三方依赖的 `scripts/quality/check-module-boundaries.mjs` 检查，并纳入共享 `quality` 入口与 Ubuntu required check；它至少拒绝跨层深层导入、`export *`、自定义路径别名、浏览器层导入 Node 内置模块及领域层导入 React/Docusaurus。CI 接线是实施任务，不再重新选择这些规则。
+- I-04 的模块检查器是零参数、只读、确定性 CLI；它扫描根 `docusaurus.config.ts`、`sidebars.ts` 与 `src/**/*.{ts,tsx}`，拒绝这些目标旁出现 `.js`/`.jsx`、符号链接、未知 `src/` TypeScript 物理层或无法静态证明的模块说明符。诊断固定为按仓库相对 POSIX 路径、稳定 `MODULE_BOUNDARY_*` code 和字段排序的小结果包；不存在通用 ignore、路径参数或环境变量旁路。检查器同时拒绝根 `package.json#type`，把根 `tsconfig.json` 约束为 D-076 的精确 `extends`、四个显式 compiler options 与四个 include，不允许额外 `paths`、重复声明官方基线选项或扩大生产 program，并从 E-010 的单一脚本契约验证 `typecheck`/`build` 命令，避免配置和执行入口各自漂移。
+- I-04 的物理依赖图固定为：领域层只能依赖领域层；构建层可以依赖构建层和领域层；展示层只能依赖展示层。跨物理层的仓库内导入必须解析到被依赖模块真实存在的 `index.ts`/`index.tsx` 公共入口，`@site/*` 映射后适用同一规则；`@theme/*` 与 `@generated/*` 只作为展示层的精确框架别名。领域层拒绝全部框架/UI 包和 Node 内置模块，展示层拒绝 Node 内置模块，根配置与侧栏拒绝 React/MDX UI 包；未知裸说明符、CommonJS、非字符串动态 import 与内部模块默认导出均失败关闭。fixture 必须分别证明合法公共入口、根框架默认导出和官方展示别名可以通过，并让配置漂移、跨层深导入、`export *`、自定义别名、浏览器 Node 内置依赖及领域框架依赖各自变红。
 
 来源：D-066、D-067、D-072 至 D-077；当前 `package.json` 和 `scripts/quality/`。
 
@@ -168,6 +170,8 @@
 - 内容正文同目录资源使用 `site-content/<type>/<entry>/assets/`；项目主预览原件使用 `site-assets/projects/<project-id>/`；始终允许进入所有构建的品牌和根级静态资源使用 `static-public/`，其中禁止项目、文章或待审核素材。三类资源不得互相复制，文件名使用 lowercase kebab-case 并保留有意义扩展名；正文资源由 Markdown 显式引用，项目预览由 `projects.json.previewImage` 显式引用，孤儿资源使质量门禁失败。
 - `previewImage` 只包含 `sourcePath`、`width`、`height`、`alt`；不得加入可派生公开路径、主图布尔值、顺序、审核状态或哈希。校验器必须核对项目状态、固定路径、文件签名、非动画 WebP、精确 1600 x 1000、最多 300,000 bytes、登记尺寸、替代文本以及一对一引用；未知字段失败关闭。
 - `scripts/build/build-site.mjs` 是 Docusaurus production/preview 的唯一受控入口。它接受封闭枚举模式，在进程创建的全新系统临时目录生成静态白名单树，并只把规范化绝对路径通过专用环境变量传给 `docusaurus.config.ts`；配置在模式、目录、所有权标记或路径边界缺失时抛错，不回退到仓库 `static/`。入口退出时清理临时树，preview 的持久候选制品由 #8 另行拥有。
+- I-04 只启用上述入口的 `production` 基线：入口验证当前 Node 是 `.nvmrc` 主端点或 `engines.node` 下界，经本地已冻结的 Docusaurus CLI 构建默认 `build/`，并创建任务私有、同用户、非宽写的临时根、空 `static/` 与随机所有权标记；`src/build/site-config/index.ts` 是根配置读取和验证该上下文的唯一公共入口。直接调用 Docusaurus、缺少或伪造环境、非临时路径、标记或 inode/权限漂移均不得回退。`preview` 在 #8 接管前以稳定 `BUILD_MODE_UNAVAILABLE` 失败；`static-public/`、`site-assets/` 或真实 Markdown/MDX 内容在 #7/#23 接管前出现时以 `BUILD_PIPELINE_INCOMPLETE` 失败，防止基线构建静默漏发素材或绕过内容校验。该阶段只允许两个内容分区的 `.gitkeep` 维持物理根，不把空站点或默认 404 表述为 M0 页面完成。
+- I-04 的根配置固定消费上述构建上下文，使用 canonical `url`/`baseUrl`、`trailingSlash: true`、`onBrokenLinks`/`onBrokenAnchors`/`onDuplicateRoutes: 'throw'`、`future.v4: true` 与稳定的 `future.faster: true`；显式 `blog: false`，保留 classic theme 与 sitemap，不配置搜索、分析、外部脚本或远程资源。Docusaurus 3.10.2 的 docs 插件拒绝零文档实例，而 I-04 又不得伪造公开内容或建立第二棵临时内容树，因此本阶段在 classic preset 中显式使用 `docs: false`；根 `sidebars.ts` 仍纳入严格 TypeScript 与模块边界检查，但在 #23 接管内容 schema 前不参与构建。#23 必须移除该临时禁用项，启用唯一 docs 实例，把 `path` 指向仓库根 `site-content/`、`routeBasePath` 设为 `/` 并使用根 `sidebars.ts`，不得以占位 Markdown、隐式默认或并行内容根绕过。固定版本会在 `.docusaurus/client-modules.js` 生成有序 CommonJS `require()` 以加载 CSS，因此根 `package.json` 不声明会把该 `.js` 改判为 ESM 的 `type` 字段；仓库 Node 入口继续通过显式 `.mjs` 保持 ESM，未来 E-012 测试 emit 继续使用独立临时 ESM 边界。构建子进程显式禁用 Docusaurus persistent cache，不能复用 `node_modules/.cache`。`src/pages/index.tsx` 在本阶段只提供包含已确认站点名的最小 `/` 路由，使严格断链检查可以验证真实 build；它不承载首页叙事、导航、页脚或视觉完成度，也不得被表述为 M0 页面完成。语言上下文固定输出 `lang="zh-CN"`；页面、导航、页脚、视觉令牌和内容投影仍由后续 Issue 实现。
 - production 白名单由完整 `static-public/` 和 `published`/`archived` 项目的登记预览组成；preview 白名单由完整 `static-public/` 和所有状态中已登记的预览组成。映射固定为 `site-assets/<sourcePath>` 到临时 `assets/<sourcePath>`，最终为 `/assets/<sourcePath>`；`static/`、`public/`、`site-assets/` 原目录都不得出现在目标 `staticDirectories`。
 - 本地资源必须使用可由构建和质量门禁解析的路径；运行时第三方字体、图片、脚本、播放器或远程资源必须先完成依赖、许可、隐私和网络请求决策。
 - UI 代码必须满足产品文档中的语义 HTML、键盘、文本缩放、动效和无重叠要求；验收值直接引用产品文档，不在本文复制。
@@ -364,19 +368,19 @@
 
 ## 实施前置清单
 
-下列内容影响目标源码结构，必须在依赖代码创建前完成事实查证并写入对应设计。#9 已完成 E-010，#10 已完成 E-011，#21 已完成首次真实依赖图本地准入，#5 至 #8、#11 至 #14 继续跟踪其余实现。D-078 委托范围内的工程细节由 Agent 形成可验证决定，不再逐项请求用户确认；D-078 排除的后续外部操作或依赖变更、数据与基础设施事项仍执行用户门禁：
+下列内容影响目标源码结构，必须在依赖代码创建前完成事实查证并写入对应设计。#9 已完成 E-010，#10 已完成 E-011，#21 已完成首次真实依赖图本地准入，#22 已完成 I-04 本地工程基线，#5 至 #8、#11 至 #14 继续跟踪其余实现。D-078 委托范围内的工程细节由 Agent 形成可验证决定，不再逐项请求用户确认；D-078 排除的后续外部操作或依赖变更、数据与基础设施事项仍执行用户门禁：
 
 Roadmap 的实现所有权固定为：I-01 / #9 在隔离入口同一任务中创建 D-067 的 `.nvmrc`、`engines.node` 兼容边界，并以 D-073 主/最低随附 npm 完成离线真实 CLI 验收；I-03 / #21 消费该版本契约完成真实依赖准入；I-04 / #22 不再创建或选择版本文件，只在已验收版本与依赖图上建立 Docusaurus scaffold、严格 TypeScript、模块边界、typecheck 与 build。该调整只消除任务产物倒置，不改变上层版本治理或外部操作授权。
 
-1. **已完成**：消费 E-010/E-011，在 D-081/D-082 边界内完成真实 lock、1,225 项 admissions、正式 SBOM/NOTICE/evidence、audit 全零、最终决定与双端点 composite receipt。制品网络检查和浏览器 allowlist 仍随 #22 的真实 Docusaurus build 接线。
-2. 按 CODE-002 至 CODE-005 创建并机器校验实际 `tsconfig`、公共入口、命名和模块边界脚本；这些是实现任务，不再重新选择目录和 API 契约。
-3. 按 D-079/E-012 接入独立 `tsc --noEmit`、临时编译后的 Node ESM 测试与 Docusaurus build；`@types/node` 已随 #21 通过 D-077，接下来创建测试配置、runner 和 fixture。formatter、lint、真实浏览器与可访问性工具继续依据 D-078 选择；新增第三方包或 Action 必须先通过 D-077，不因工具选择已委托而跳过实际准入。
+1. **已完成**：消费 E-010/E-011，在 D-081/D-082 边界内完成真实 lock、1,225 项 admissions、正式 SBOM/NOTICE/evidence、audit 全零、最终决定与双端点 composite receipt。
+2. **已完成**：按 CODE-002 至 CODE-005 创建并机器校验生产 `tsconfig`、首轮公共入口、命名和模块边界脚本；真实 `typecheck` 与最小 production build 在全新冻结安装上通过，制品未发现远程资源、分析或 Cookie。
+3. 按 D-079/E-012 接入临时编译后的 Node ESM 测试 program、runner 和 fixture；独立 `tsc --noEmit` 与 Docusaurus build 已由 #22 建立，#11 只消费并扩展，不得重写生产配置或模块边界。formatter、lint、真实浏览器与可访问性工具继续依据 D-078 选择；新增第三方包或 Action 必须先通过 D-077，不因工具选择已委托而跳过实际准入。
 4. 按 E-007 至 E-009、CODE-008 和 CODE-017 实现主预览 schema、临时静态白名单树、草稿候选、失败保留旧预览和泄漏 fixture；再按 E-004 和 CODE-006 至 CODE-008 实现 React、Infima、CSS Modules 与令牌。只有浏览器 fit-gap 证据允许最小主题包装。
 5. 按 E-006/E-007、产品字段表和 CODE-003/CODE-004 实现项目内容、媒体 schema、注册表、路径、错误和迁移；再按 E-013/CODE-018 实现完整历史 ledger、CI checkout 和 fixture，完成后才按 CODE-014 接线作者命令。公开业务事实和素材仍须由用户提供或确认。
 6. 按 CODE-013 实现日期索引、侧栏、列表模型和 SEO 标签合并；按 E-014/CODE-019 实现服务端 301 规则、确定性派生文件、release 摘要和 fixture，再按 E-015/CODE-020 实现 production job 自包含重建、字节摘要和最终 artifact 身份；不授权实际发布或基础设施操作。
 7. 按 E-013/E-015 接线 Ubuntu nvm 与 Action 固定、Node 24 两个版本入口、共享负载、required check、完整历史、production artifact 和迁移顺序。
 
-#21 已解除依赖前置阻塞；完成本轮审核后，#22 可在已准入图上创建 Docusaurus 工程骨架。其余事项未完成时，不得对外宣称目标内容、构建、CI、发布或生产门禁已经实现。
+#22 的本地验收已解除 #11 的代码前置阻塞；Git 提交、远端 CI 与 Issue 关闭仍受独立授权和证据门禁约束。其余事项未完成时，不得对外宣称目标内容、完整构建、CI、发布或生产门禁已经实现。
 
 ## 可执行覆盖矩阵
 
@@ -393,15 +397,15 @@ Roadmap 的实现所有权固定为：I-01 / #9 在隔离入口同一任务中�
 | PlantUML 源码可编译 | Ubuntu `diagrams` job 或本地 `check:diagrams` | 已自动化 |
 | PlantUML SVG 已刷新 | `gen:diagrams` 后人工 diff | 尚无稳定门禁 |
 | 通用文件卫生 | `.editorconfig`、`.gitattributes` | 仅配置约定，尚无 CI 检查 |
-| 严格 TypeScript 与独立类型检查/构建 | D-074 设计契约 | 目标已确认，当前未实现 |
-| 模块目录、公共入口、导出与别名边界 | D-075 设计契约 | 目标已确认，目录和自动检查均未实现 |
-| 首轮直接依赖与生产/测试 `tsconfig` 基线 | D-076、D-079、E-012 设计契约 | 首轮依赖与 lock 已准入；配置、runner 和目标 CI 尚未实现 |
+| 严格 TypeScript 与独立类型检查/构建 | `tsconfig.json`、`typecheck`、受控 `build` 与真实冻结安装验收 | #22 已自动化生产基线并真实通过；目标 CI 尚未接线 |
+| 模块目录、公共入口、导出与别名边界 | `check-module-boundaries.mjs` 与 `module-boundaries.test.mjs` | #22 已自动化，11 个正常/反例测试通过；后续源码继续纳入同一检查器 |
+| 首轮直接依赖与生产/测试 `tsconfig` 基线 | D-076、D-079、E-012 设计契约 | 首轮依赖、lock 与生产 `tsconfig` 已完成；测试配置、runner 和目标 CI 由 #11 接管 |
 | 首次依赖解析与供应链准入 | D-077、CODE-015 与 #21 | 1,345 个物理依赖/1,225 个 canonical identity、正式三制品、audit 全零、最终决定和双端点 composite receipt 已完成本地闭环；远端 CI 成功证据尚未形成 |
 | Node ESM TypeScript 测试 | D-079、E-012、CODE-005/CODE-011/CODE-016 | 设计与依赖准入已完成，runner、fixture 与 CI 尚未实现 |
 | HEAD 可达完整 Git 历史与稳定 ID | E-013、CODE-018 | 设计已确认，检查器、临时 Git DAG fixture、作者集成与 CI checkout 均未实现 |
 | 服务端 301 与同版本 release | E-014、CODE-015/CODE-019 | 设计已确认，生成器、派生配置、摘要、Nginx 冒烟和回滚兼容检查均未实现 |
 | Production build 与最终 artifact | E-015、CODE-015/CODE-016/CODE-020 | 设计已确认，自包含重建、树摘要、workflow 门禁、上传和 deploy 输出校验均未实现 |
-| Docusaurus/React/内容/制品/浏览器契约 | D-078、E-001 至 E-015、CODE-003 至 CODE-020 | E-010/E-011 与 #21 真实依赖闭环已完成；其余目标实现尚未完成 |
+| Docusaurus/React/内容/制品/浏览器契约 | D-078、E-001 至 E-015、CODE-003 至 CODE-020 | #22 已完成无真实内容/素材的 Docusaurus build 基线；内容、主题、完整制品与浏览器验收仍待后续 Issue |
 | Node 24 精确与最低端点 | `.nvmrc`、`engines.node`、E-010 双端点离线 CLI | 本地契约与真实 CLI 已验收；目标 Ubuntu jobs 由后续任务接线 |
 
 ## 本 Spec 验收

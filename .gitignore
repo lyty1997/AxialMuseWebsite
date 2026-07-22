@@ -8,10 +8,9 @@ node_modules/
 .pnpm-store/
 
 # Build outputs
-dist/
-build/
-!tests/build/
-!tests/build/**
+/dist/
+/build/
+/.docusaurus/
 .next/
 out/
 coverage/

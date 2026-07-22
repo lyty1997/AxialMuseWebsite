@@ -1,0 +1,863 @@
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  readdirSync,
+} from "node:fs";
+import {builtinModules} from "node:module";
+import {
+  dirname,
+  extname,
+  isAbsolute,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
+import {pathToFileURL} from "node:url";
+import {projectRoot} from "./lib/files.mjs";
+import {RUN_SCRIPT_COMMANDS} from "./lib/supply-chain/contracts.mjs";
+import {
+  readAndValidateManifest,
+  readAndValidateRuntimeContract,
+} from "./lib/supply-chain/config.mjs";
+
+const ROOT = projectRoot();
+const ROOT_TYPESCRIPT_FILES = Object.freeze([
+  "docusaurus.config.ts",
+  "sidebars.ts",
+]);
+const FORBIDDEN_ROOT_JAVASCRIPT = Object.freeze([
+  "docusaurus.config.js",
+  "docusaurus.config.jsx",
+  "sidebars.js",
+  "sidebars.jsx",
+]);
+const TYPESCRIPT_EXTENSIONS = new Set([".ts", ".tsx"]);
+const JAVASCRIPT_EXTENSIONS = new Set([".js", ".jsx"]);
+const SOURCE_ROOTS = new Set([
+  "build",
+  "components",
+  "domain",
+  "pages",
+  "theme",
+]);
+const PRESENTATION_ROOTS = new Set(["components", "pages", "theme"]);
+const OFFICIAL_PRESENTATION_ALIASES = Object.freeze(["@generated/", "@theme/"]);
+const APPROVED_FRAMEWORK_TYPE_IMPORTS = new Set([
+  "@docusaurus/plugin-content-docs",
+]);
+const BUILTIN_MODULES = new Set(
+  builtinModules.flatMap((name) => name.startsWith("node:") ? [name] : [name, `node:${name}`]),
+);
+const EXPECTED_TSCONFIG = Object.freeze({
+  extends: "@docusaurus/tsconfig",
+  compilerOptions: Object.freeze({
+    baseUrl: ".",
+    ignoreDeprecations: "6.0",
+    strict: true,
+    allowJs: false,
+  }),
+  include: Object.freeze([
+    "docusaurus.config.ts",
+    "sidebars.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+  ]),
+});
+
+function toPosix(path) {
+  return path.split(sep).join("/");
+}
+
+function sourcePath(root, path) {
+  return toPosix(relative(root, path));
+}
+
+function addIssue(issues, code, path, message) {
+  issues.push({code, sourcePath: path, message});
+}
+
+function sortIssues(issues) {
+  return issues.sort((left, right) => (
+    left.sourcePath.localeCompare(right.sourcePath, "en")
+    || left.code.localeCompare(right.code, "en")
+    || left.message.localeCompare(right.message, "zh-CN")
+  ));
+}
+
+function readJsonFile(root, relativePath, issues) {
+  const path = resolve(root, relativePath);
+  try {
+    const metadata = lstatSync(path);
+    if (metadata.isSymbolicLink() || !metadata.isFile()) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_CONFIG_FILE",
+        relativePath,
+        "配置必须是仓库内普通文件且不能是符号链接。",
+      );
+      return null;
+    }
+    const value = JSON.parse(readFileSync(path, "utf8"));
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      throw new TypeError("root must be object");
+    }
+    return value;
+  } catch {
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_CONFIG_JSON",
+      relativePath,
+      "配置不是合法 JSON object。",
+    );
+    return null;
+  }
+}
+
+function hasExactKeys(value, expected) {
+  return Object.keys(value).sort().join("\n") === [...expected].sort().join("\n");
+}
+
+function validateRootContracts(root, issues) {
+  const tsconfig = readJsonFile(root, "tsconfig.json", issues);
+  if (tsconfig !== null) {
+    if (!hasExactKeys(tsconfig, ["extends", "compilerOptions", "include"])) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_TSCONFIG_ROOT",
+        "tsconfig.json",
+        "根 tsconfig 只能声明 extends、compilerOptions 与 include。",
+      );
+    }
+    if (tsconfig.extends !== EXPECTED_TSCONFIG.extends) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_TSCONFIG_EXTENDS",
+        "tsconfig.json",
+        "根 tsconfig 必须继承精确官方 Docusaurus 基线。",
+      );
+    }
+    const compilerOptions = tsconfig.compilerOptions;
+    if (
+      compilerOptions === null
+      || typeof compilerOptions !== "object"
+      || Array.isArray(compilerOptions)
+      || !hasExactKeys(compilerOptions, Object.keys(EXPECTED_TSCONFIG.compilerOptions))
+      || Object.entries(EXPECTED_TSCONFIG.compilerOptions)
+        .some(([key, value]) => compilerOptions[key] !== value)
+    ) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_TSCONFIG_OPTIONS",
+        "tsconfig.json",
+        "compilerOptions 必须精确等于 D-076 的四项显式收紧配置。",
+      );
+    }
+    if (
+      !Array.isArray(tsconfig.include)
+      || tsconfig.include.length !== EXPECTED_TSCONFIG.include.length
+      || tsconfig.include.some((value, index) => value !== EXPECTED_TSCONFIG.include[index])
+    ) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_TSCONFIG_INCLUDE",
+        "tsconfig.json",
+        "生产 TypeScript program 的 include 集合或顺序发生漂移。",
+      );
+    }
+  }
+
+  const packageJson = readJsonFile(root, "package.json", issues);
+  if (packageJson !== null) {
+    if (Object.hasOwn(packageJson, "type")) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_PACKAGE_TYPE",
+        "package.json",
+        "根 package.json 不得改变 Docusaurus 生成 .js 文件的 CommonJS 解释边界。",
+      );
+    }
+    for (const scriptName of ["typecheck", "build"]) {
+      const allowed = RUN_SCRIPT_COMMANDS[scriptName];
+      if (!allowed.includes(packageJson.scripts?.[scriptName])) {
+        addIssue(
+          issues,
+          "MODULE_BOUNDARY_SCRIPT_CONTRACT",
+          "package.json",
+          `${scriptName} 没有消费 E-010 的精确受控命令。`,
+        );
+      }
+    }
+  }
+
+  try {
+    const manifest = readAndValidateManifest(root);
+    readAndValidateRuntimeContract({root, manifest});
+  } catch (error) {
+    const upstreamCode = typeof error?.code === "string" ? error.code : "UNKNOWN";
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_RUNTIME_CONTRACT",
+      ".nvmrc",
+      `Node 版本契约未通过既有 E-010 校验（${upstreamCode}）。`,
+    );
+  }
+}
+
+function collectTargetFiles(root, issues) {
+  const files = [];
+  for (const relativePath of ROOT_TYPESCRIPT_FILES) {
+    const path = resolve(root, relativePath);
+    try {
+      const metadata = lstatSync(path);
+      if (metadata.isSymbolicLink() || !metadata.isFile()) {
+        throw new TypeError("not a regular file");
+      }
+      files.push(path);
+    } catch {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_FRAMEWORK_ENTRY",
+        relativePath,
+        "Docusaurus 框架入口必须是普通 TypeScript 文件。",
+      );
+    }
+  }
+  for (const relativePath of FORBIDDEN_ROOT_JAVASCRIPT) {
+    if (existsSync(resolve(root, relativePath))) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_SOURCE_EXTENSION",
+        relativePath,
+        "Docusaurus 目标入口不得使用 JavaScript/JSX。",
+      );
+    }
+  }
+
+  const srcRoot = resolve(root, "src");
+  if (!existsSync(srcRoot)) {
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_SOURCE_ROOT",
+      "src",
+      "Docusaurus 标准 src 物理根缺失。",
+    );
+    return files.sort();
+  }
+
+  const walk = (directory) => {
+    for (const entry of readdirSync(directory, {withFileTypes: true})) {
+      const path = resolve(directory, entry.name);
+      const relativePath = sourcePath(root, path);
+      if (entry.isSymbolicLink()) {
+        addIssue(
+          issues,
+          "MODULE_BOUNDARY_SOURCE_LINK",
+          relativePath,
+          "目标源码树不得包含符号链接。",
+        );
+        continue;
+      }
+      if (entry.isDirectory()) {
+        walk(path);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const extension = extname(entry.name);
+      if (JAVASCRIPT_EXTENSIONS.has(extension)) {
+        addIssue(
+          issues,
+          "MODULE_BOUNDARY_SOURCE_EXTENSION",
+          relativePath,
+          "Docusaurus 目标源码不得使用 JavaScript/JSX。",
+        );
+        continue;
+      }
+      if (!TYPESCRIPT_EXTENSIONS.has(extension)) continue;
+      const rootName = relativePath.split("/")[1];
+      if (!SOURCE_ROOTS.has(rootName)) {
+        addIssue(
+          issues,
+          "MODULE_BOUNDARY_SOURCE_LAYER",
+          relativePath,
+          "TypeScript 源码不属于 D-075 的任一物理层。",
+        );
+        continue;
+      }
+      files.push(path);
+    }
+  };
+  walk(srcRoot);
+  return files.sort();
+}
+
+function decodeStringLiteral(raw) {
+  const quote = raw[0];
+  let result = "";
+  for (let index = 1; index < raw.length - 1; index += 1) {
+    const character = raw[index];
+    if (character !== "\\") {
+      result += character;
+      continue;
+    }
+    index += 1;
+    const escaped = raw[index];
+    const simple = {
+      "'": "'",
+      "\"": "\"",
+      "\\": "\\",
+      b: "\b",
+      f: "\f",
+      n: "\n",
+      r: "\r",
+      t: "\t",
+      v: "\v",
+      0: "\0",
+    };
+    if (Object.hasOwn(simple, escaped)) {
+      result += simple[escaped];
+      continue;
+    }
+    if (escaped === "x") {
+      const digits = raw.slice(index + 1, index + 3);
+      if (!/^[0-9a-fA-F]{2}$/u.test(digits)) throw new SyntaxError("bad hex escape");
+      result += String.fromCodePoint(Number.parseInt(digits, 16));
+      index += 2;
+      continue;
+    }
+    if (escaped === "u") {
+      if (raw[index + 1] === "{") {
+        const end = raw.indexOf("}", index + 2);
+        const digits = raw.slice(index + 2, end);
+        if (end === -1 || !/^[0-9a-fA-F]{1,6}$/u.test(digits)) {
+          throw new SyntaxError("bad unicode escape");
+        }
+        result += String.fromCodePoint(Number.parseInt(digits, 16));
+        index = end;
+        continue;
+      }
+      const digits = raw.slice(index + 1, index + 5);
+      if (!/^[0-9a-fA-F]{4}$/u.test(digits)) throw new SyntaxError("bad unicode escape");
+      result += String.fromCodePoint(Number.parseInt(digits, 16));
+      index += 4;
+      continue;
+    }
+    throw new SyntaxError(`unsupported escape in ${quote} string`);
+  }
+  return result;
+}
+
+function tokenizeModuleSyntax(source) {
+  const tokens = [];
+  let index = 0;
+  let braceDepth = 0;
+
+  const scanString = (quote) => {
+    const start = index;
+    index += 1;
+    while (index < source.length) {
+      if (source[index] === "\\") {
+        index += 2;
+        continue;
+      }
+      if (source[index] === quote) {
+        index += 1;
+        const raw = source.slice(start, index);
+        tokens.push({type: "string", value: decodeStringLiteral(raw), depth: braceDepth});
+        return;
+      }
+      if (source[index] === "\n" || source[index] === "\r") {
+        throw new SyntaxError("unterminated string");
+      }
+      index += 1;
+    }
+    throw new SyntaxError("unterminated string");
+  };
+
+  const scanCode = (templateStopDepth = null) => {
+    while (index < source.length) {
+      const character = source[index];
+      const next = source[index + 1];
+      if (templateStopDepth !== null && character === "}" && braceDepth === templateStopDepth + 1) {
+        tokens.push({type: "punctuator", value: "}", depth: braceDepth});
+        braceDepth -= 1;
+        index += 1;
+        return;
+      }
+      if (/\s/u.test(character)) {
+        index += 1;
+        continue;
+      }
+      if (character === "/" && next === "/") {
+        index += 2;
+        while (index < source.length && source[index] !== "\n") index += 1;
+        continue;
+      }
+      if (character === "/" && next === "*") {
+        const end = source.indexOf("*/", index + 2);
+        if (end === -1) throw new SyntaxError("unterminated comment");
+        index = end + 2;
+        continue;
+      }
+      if (character === "'" || character === "\"") {
+        scanString(character);
+        continue;
+      }
+      if (character === "`") {
+        index += 1;
+        let closed = false;
+        while (index < source.length) {
+          if (source[index] === "\\") {
+            index += 2;
+            continue;
+          }
+          if (source[index] === "`") {
+            index += 1;
+            closed = true;
+            break;
+          }
+          if (source[index] === "$" && source[index + 1] === "{") {
+            index += 2;
+            const stopDepth = braceDepth;
+            braceDepth += 1;
+            scanCode(stopDepth);
+            continue;
+          }
+          index += 1;
+        }
+        if (!closed) throw new SyntaxError("unterminated template");
+        continue;
+      }
+      if (/[A-Za-z_$]/u.test(character)) {
+        const start = index;
+        index += 1;
+        while (/[A-Za-z0-9_$]/u.test(source[index] ?? "")) index += 1;
+        tokens.push({
+          type: "identifier",
+          value: source.slice(start, index),
+          depth: braceDepth,
+        });
+        continue;
+      }
+      if (character === "{") {
+        tokens.push({type: "punctuator", value: character, depth: braceDepth});
+        braceDepth += 1;
+        index += 1;
+        continue;
+      }
+      if (character === "}") {
+        braceDepth = Math.max(0, braceDepth - 1);
+        tokens.push({type: "punctuator", value: character, depth: braceDepth});
+        index += 1;
+        continue;
+      }
+      tokens.push({type: "punctuator", value: character, depth: braceDepth});
+      index += 1;
+    }
+    if (templateStopDepth !== null) throw new SyntaxError("unterminated template expression");
+  };
+
+  scanCode();
+  return tokens;
+}
+
+function findStatementSpecifier(tokens, startIndex) {
+  for (let index = startIndex; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.depth !== 0) continue;
+    if (token.value === ";") return null;
+    if (token.type === "identifier" && token.value === "from") {
+      return tokens[index + 1]?.type === "string" ? tokens[index + 1].value : null;
+    }
+    if (
+      index > startIndex
+      && token.type === "identifier"
+      && ["export", "import"].includes(token.value)
+    ) {
+      return null;
+    }
+  }
+  return null;
+}
+
+function extractModuleReferences(source, relativePath, issues) {
+  let tokens;
+  try {
+    tokens = tokenizeModuleSyntax(source);
+  } catch {
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_PARSE",
+      relativePath,
+      "零依赖模块扫描器无法确定性解析源码。",
+    );
+    return {defaultExport: false, specifiers: []};
+  }
+  const specifiers = [];
+  let defaultExport = false;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    const next = tokens[index + 1];
+    if (token.type === "identifier" && token.value === "require" && next?.value === "(") {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_COMMONJS",
+        relativePath,
+        "Docusaurus TypeScript 源码不得使用 require()。",
+      );
+    }
+    if (
+      token.type === "identifier"
+      && token.value === "module"
+      && next?.value === "."
+      && tokens[index + 2]?.value === "exports"
+    ) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_COMMONJS",
+        relativePath,
+        "Docusaurus TypeScript 源码不得使用 module.exports。",
+      );
+    }
+    if (token.type !== "identifier" || token.value !== "import") continue;
+    if (next?.value === ".") continue;
+    if (next?.value === "(") {
+      if (tokens[index + 2]?.type !== "string" || tokens[index + 3]?.value !== ")") {
+        addIssue(
+          issues,
+          "MODULE_BOUNDARY_DYNAMIC_IMPORT",
+          relativePath,
+          "动态 import 的模块说明符必须是单个静态字符串。",
+        );
+      } else {
+        specifiers.push(tokens[index + 2].value);
+      }
+      continue;
+    }
+    if (token.depth !== 0) continue;
+    if (next?.type === "string") {
+      specifiers.push(next.value);
+      continue;
+    }
+    const specifier = findStatementSpecifier(tokens, index + 1);
+    if (specifier !== null) specifiers.push(specifier);
+  }
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (
+      token.type !== "identifier"
+      || token.value !== "export"
+      || token.depth !== 0
+    ) {
+      continue;
+    }
+    const next = tokens[index + 1];
+    if (next?.value === "*") {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_EXPORT_STAR",
+        relativePath,
+        "公共入口和内部模块都不得使用 export *。",
+      );
+    }
+    if (next?.type === "identifier" && next.value === "default") {
+      defaultExport = true;
+    }
+    const specifier = findStatementSpecifier(tokens, index + 1);
+    if (specifier !== null) specifiers.push(specifier);
+  }
+  return {defaultExport, specifiers};
+}
+
+function logicalLayer(relativePath) {
+  if (ROOT_TYPESCRIPT_FILES.includes(relativePath)) return "build";
+  const rootName = relativePath.split("/")[1];
+  if (rootName === "domain" || rootName === "build") return rootName;
+  if (PRESENTATION_ROOTS.has(rootName)) return "presentation";
+  return null;
+}
+
+function packageNameFromSpecifier(specifier) {
+  if (specifier.startsWith("@")) return specifier.split("/").slice(0, 2).join("/");
+  return specifier.split("/")[0];
+}
+
+function resolveLocalTarget(root, importerPath, specifier) {
+  let unresolved;
+  if (specifier.startsWith("@site/")) {
+    unresolved = resolve(root, specifier.slice("@site/".length));
+  } else {
+    unresolved = resolve(dirname(importerPath), specifier);
+  }
+  const relativeTarget = relative(root, unresolved);
+  if (
+    relativeTarget === ""
+    || relativeTarget.startsWith("..")
+    || isAbsolute(relativeTarget)
+  ) {
+    return {escaped: true, path: null};
+  }
+  const extension = extname(unresolved);
+  const candidates = [];
+  if (extension === ".js") {
+    candidates.push(unresolved.slice(0, -3) + ".ts", unresolved.slice(0, -3) + ".tsx");
+  } else if (TYPESCRIPT_EXTENSIONS.has(extension)) {
+    candidates.push(unresolved);
+  } else if (extension === "") {
+    candidates.push(
+      `${unresolved}.ts`,
+      `${unresolved}.tsx`,
+      resolve(unresolved, "index.ts"),
+      resolve(unresolved, "index.tsx"),
+    );
+  }
+  return {
+    escaped: false,
+    path: candidates.find((path) => {
+      try {
+        const metadata = lstatSync(path);
+        return metadata.isFile() && !metadata.isSymbolicLink();
+      } catch {
+        return false;
+      }
+    }) ?? null,
+  };
+}
+
+function isAllowedDefaultExport(relativePath) {
+  if (ROOT_TYPESCRIPT_FILES.includes(relativePath)) return true;
+  if (relativePath.startsWith("src/pages/")) return true;
+  if (relativePath.startsWith("src/theme/") && /\/index\.tsx?$/u.test(relativePath)) return true;
+  return /^src\/build\/plugins\/[^/]+\/index\.ts$/u.test(relativePath);
+}
+
+function validatePackageImport({
+  importerLayer,
+  relativePath,
+  specifier,
+  packageNames,
+  issues,
+}) {
+  if (BUILTIN_MODULES.has(specifier)) {
+    if (importerLayer === "domain" || importerLayer === "presentation") {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_NODE_BUILTIN",
+        relativePath,
+        `${importerLayer} 层不得导入 Node 内置模块。`,
+      );
+    }
+    return;
+  }
+  if (OFFICIAL_PRESENTATION_ALIASES.some((prefix) => specifier.startsWith(prefix))) {
+    if (importerLayer !== "presentation") {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_OFFICIAL_ALIAS",
+        relativePath,
+        "Docusaurus 展示别名只能在展示层使用。",
+      );
+    }
+    return;
+  }
+  const packageName = packageNameFromSpecifier(specifier);
+  if (
+    !packageNames.has(packageName)
+    && !APPROVED_FRAMEWORK_TYPE_IMPORTS.has(packageName)
+  ) {
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_CUSTOM_ALIAS",
+      relativePath,
+      `未知裸说明符或自定义路径别名：${specifier}。`,
+    );
+    return;
+  }
+  if (importerLayer === "domain") {
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_DOMAIN_EXTERNAL",
+      relativePath,
+      "领域层不得依赖框架、UI 或其他第三方包。",
+    );
+    return;
+  }
+  if (
+    importerLayer === "build"
+    && ["react", "react-dom", "@mdx-js/react"].includes(packageName)
+  ) {
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_BUILD_UI",
+      relativePath,
+      "根配置、侧栏与构建层不得导入 React/MDX UI 包。",
+    );
+  }
+}
+
+function validateSpecifier({
+  root,
+  importerPath,
+  relativePath,
+  specifier,
+  packageNames,
+  issues,
+}) {
+  const importerLayer = logicalLayer(relativePath);
+  if (
+    specifier.length === 0
+    || specifier.includes("\\")
+    || specifier.includes("\0")
+    || specifier.includes("?")
+    || specifier.includes("#")
+    || specifier.startsWith("/")
+  ) {
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_SPECIFIER",
+      relativePath,
+      "模块说明符包含不受支持的路径或 URL 语义。",
+    );
+    return;
+  }
+  const isLocal = specifier.startsWith(".") || specifier.startsWith("@site/");
+  if (!isLocal) {
+    validatePackageImport({
+      importerLayer,
+      relativePath,
+      specifier,
+      packageNames,
+      issues,
+    });
+    return;
+  }
+  const target = resolveLocalTarget(root, importerPath, specifier);
+  if (target.escaped) {
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_IMPORT_ESCAPE",
+      relativePath,
+      "仓库内模块导入逃逸项目根。",
+    );
+    return;
+  }
+  if (target.path === null) {
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_UNRESOLVED_IMPORT",
+      relativePath,
+      `无法解析仓库内模块说明符：${specifier}。`,
+    );
+    return;
+  }
+  const targetRelativePath = sourcePath(root, target.path);
+  const targetLayer = logicalLayer(targetRelativePath);
+  if (targetLayer === null) {
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_IMPORT_TARGET",
+      relativePath,
+      "仓库内 TypeScript 导入目标不属于 D-075 物理层。",
+    );
+    return;
+  }
+  const allowedLayers = {
+    domain: new Set(["domain"]),
+    build: new Set(["build", "domain"]),
+    presentation: new Set(["presentation"]),
+  };
+  if (!allowedLayers[importerLayer]?.has(targetLayer)) {
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_LAYER_DIRECTION",
+      relativePath,
+      `${importerLayer} 层不得依赖 ${targetLayer} 层。`,
+    );
+    return;
+  }
+  if (
+    importerLayer !== targetLayer
+    && !/\/index\.tsx?$/u.test(targetRelativePath)
+  ) {
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_DEEP_IMPORT",
+      relativePath,
+      "跨层导入必须指向被依赖模块的显式 index 公共入口。",
+    );
+  }
+}
+
+export function checkModuleBoundaries({root = ROOT} = {}) {
+  const issues = [];
+  validateRootContracts(root, issues);
+  const files = collectTargetFiles(root, issues);
+  const packageJson = readJsonFile(root, "package.json", []);
+  const packageNames = new Set([
+    ...Object.keys(packageJson?.dependencies ?? {}),
+    ...Object.keys(packageJson?.devDependencies ?? {}),
+  ]);
+
+  for (const path of files) {
+    const relativePath = sourcePath(root, path);
+    const {defaultExport, specifiers} = extractModuleReferences(
+      readFileSync(path, "utf8"),
+      relativePath,
+      issues,
+    );
+    if (defaultExport && !isAllowedDefaultExport(relativePath)) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_DEFAULT_EXPORT",
+        relativePath,
+        "内部可复用模块不得使用默认导出。",
+      );
+    }
+    for (const specifier of specifiers) {
+      validateSpecifier({
+        root,
+        importerPath: path,
+        relativePath,
+        specifier,
+        packageNames,
+        issues,
+      });
+    }
+  }
+
+  return Object.freeze({
+    files: Object.freeze(files.map((path) => sourcePath(root, path))),
+    issues: Object.freeze(sortIssues(issues)),
+  });
+}
+
+export function writeModuleBoundaryResult(result, {
+  standardError = process.stderr,
+  standardOutput = process.stdout,
+} = {}) {
+  if (result.issues.length > 0) {
+    standardError.write("Module boundary checks failed:\n");
+    for (const issue of result.issues) {
+      standardError.write(`- [${issue.code}] ${issue.sourcePath}: ${issue.message}\n`);
+    }
+    return 1;
+  }
+  standardOutput.write(
+    `Module boundary checks passed: ${result.files.length} TypeScript files.\n`,
+  );
+  return 0;
+}
+
+function runCli() {
+  if (process.argv.length !== 2) {
+    console.error("[MODULE_BOUNDARY_ARGUMENTS] 模块边界检查器不接受参数。");
+    process.exitCode = 1;
+    return;
+  }
+  process.exitCode = writeModuleBoundaryResult(checkModuleBoundaries());
+}
+
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  runCli();
+}

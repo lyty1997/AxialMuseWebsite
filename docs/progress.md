@@ -4,6 +4,22 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-22 — #22 Docusaurus 与严格 TypeScript 本地验收闭环
+
+- **主题与依赖边界**：按 Roadmap 的 `#9 + #21 -> #22 -> #11` 链执行 I-04，只消费既有 `.nvmrc`、`engines.node`、唯一 lock 与 #21 准入图；没有新增、升级或删除依赖，没有修改 `package-lock.json` 或供应链制品。D-085 授权只在任务专用临时副本中通过 E-010 联系官方 npm registry 做全新冻结安装和真实构建，不在仓库根创建 `node_modules/`。
+- **完成内容**：创建继承官方基线且显式收紧的 `tsconfig.json`、类型化 `docusaurus.config.ts`/`sidebars.ts`、`site-content/projects|writing` 空物理分区、`src/build/site-config/` 公共入口和仅含已确认站点名的最小 `src/pages/index.tsx`；新增受控 production build、`typecheck`/`build`/模块边界 scripts，并把确定性零依赖检查器及 fixture 接入统一质量入口。构建上下文使用同用户私有临时根、随机标记和空静态树，拒绝直接 Docusaurus 绕过、错误 Node、preview、真实内容与静态素材提前进入；Docusaurus persistent cache 显式关闭。
+- **真实兼容收口**：实际 build 先暴露三项不能由 mock 发现的问题并按根因修复：正常 Linux 目录的 `nlink` 不能固定为 `1`，文件仍保持单链接检查；固定 docs 插件拒绝零文档，因此 I-04 使用 `docs: false` 而不伪造内容，#23 必须启用唯一 `site-content/` docs 实例；根 `package.json#type=module` 会把固定版本生成的 `.docusaurus/client-modules.js` 改判为 ESM，使 CSS `require()` 逃逸到 SSG，因而移除该旧声明并用 `.mjs` 保持仓库 Node 脚本 ESM，检查器用 `MODULE_BOUNDARY_PACKAGE_TYPE` 防漂移。完整 `future.v4: true` 与 `future.faster: true` 保持启用。
+- **正向证据**：最终候选在全新 HOME/config/cache 下执行 `npm ci --ignore-scripts --audit=false`，从官方源安装 1,298 个包并退出 0；安装前后 `package.json` SHA-256 均为 `72e44f92feb6796c2dba26dd9cad3001d8ab6ba1189756e0351d4a0377585621`，`package-lock.json` 均为 `fae564f5a83ceaf4f5d57118192779a2679f5380403d0a79d33f409d75dc01aa`。同一全新安装上的隔离 `typecheck` 与 production `build` 均通过；产物只包含 `/`、404、sitemap 与本地 JS/CSS，根 HTML 为 `lang=zh-CN` 且标题为 `Axial Muse`，未检出远程资源标签、分析标识或 Cookie，也未产生 `node_modules/.cache`。
+- **反例与回归**：模块边界 11 项 fixture 覆盖合法公共入口以及 `paths`、根 module type、JS/JSX、深导入、`export *`、自定义别名、展示层 Node 内置模块、领域层框架依赖、版本漂移和非静态 dynamic import；构建 4 项 fixture 覆盖参数、主/最低 Node、真实内容和静态素材前置失败。直接 Docusaurus 以 `BUILD_CONTEXT_MODE`、preview 以 `BUILD_MODE_UNAVAILABLE`、系统 Node 22 以 `BUILD_RUNTIME_NODE`、检查器参数以 `MODULE_BOUNDARY_ARGUMENTS` 失败。最终 pre-commit 在 nvm `0.40.6` / Node `24.18.0` 下退出 0，文档、契约、Secret、静态站、1,225 项供应链闭包与全部既有测试均通过。
+- **下游与遗留**：#11 只能消费当前生产 `tsconfig`、显式 `.mjs` ESM 边界、目录层图、公共入口、稳定错误码和现有 quality 接线，新增独立测试 program、临时 emit runner 与 fixture；不得改变依赖图、重新启用根 package module type、启用 docs/真实内容、素材白名单、preview 或目标 workflow。D-086 已授权把本项作为完整提交 push 到 `origin/dev` 并跟踪该 SHA 的现有 CI；远端结果不得在运行完成前预先宣告，最终 SHA、run 与结论写入 GitHub #22 的脱敏验收评论。#22 在相关 run 全部成功前保持开放；未引入第三方运行时服务、浏览器请求或用户数据处理。
+
+## 2026-07-22 — 确认 Roadmap Issue 验收写回委托
+
+- **主题**：用户确认从 #21 起，允许 Agent 在每个已拆解 Roadmap Issue 真正通过独立验收后，把脱敏关闭证据与直接下游交接摘要写回对应 GitHub Issue，并以 `completed` 关闭；该委托用于支持按依赖链连续推进和每项之间的语义压缩。
+- **授权范围与验证**：每项必须先证明主要不变量、正常路径、至少一个有效反例、相关回归和该项要求的远端证据；关闭后先持久化紧凑交接摘要，再只定向重载直接上游接口、当前设计、源码、测试和工作区差异。证据不全或失败时保持 Issue 开放并停止依赖它的下游。
+- **排除项**：不授权创建或改写 Issue 范围，也不授权 commit、push、PR、merge、分支与历史操作、Action/凭证、服务器、TAT、DNS、证书、云资源或生产操作；这些仍按各自门禁单独确认。验收评论不得包含凭证、隐私、受限原始报告或其他敏感内容。
+- **当前应用**：#21 已在 Node 24 固定入口完成现态回归，并核对同 SHA 的远端 push/PR CI 成功；授权记录验证通过后先写回并关闭 #21，再以其交接摘要定向进入 #22。
+
 ## 2026-07-21 — #21 真实依赖图本地准入闭环
 
 - **主题**：用户批准 D-082 的两项精确传递 override、35 项 immutable upstream 正文、11 项同 tarball 文件区段和 12 项 exact owner exception 后，继续执行 #21 直到真实图满足完整本地验收。本条只宣告仓库实现与真实依赖图本地准入闭环；Git 提交、push、远端 CI、Issue 状态和 Action 修改均须按各自授权与实际记录独立验收，不能由本条推导。

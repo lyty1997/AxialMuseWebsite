@@ -44,6 +44,8 @@ const FILES = [
   "scripts/quality/check-static-site.mjs",
   "scripts/quality/check-diagrams.mjs",
   "scripts/quality/render-diagrams.mjs",
+  "scripts/quality/check-module-boundaries.mjs",
+  "scripts/build/build-site.mjs",
   "scripts/quality/generate-supply-chain-artifacts.mjs",
   "scripts/quality/review-supply-chain-candidates.mjs",
   "scripts/quality/run-dual-endpoint-ci-worker.mjs",
@@ -67,6 +69,8 @@ const FILES = [
   "tests/build/supply-chain-policy.test.mjs",
   "tests/build/supply-chain-review-report.test.mjs",
   "tests/build/supply-chain-tarball.test.mjs",
+  "tests/build/module-boundaries.test.mjs",
+  "tests/build/build-site.test.mjs",
 ].map((path) => resolve(ROOT, path));
 const CHILD_ENVIRONMENT = buildQualityChildEnvironment();
 

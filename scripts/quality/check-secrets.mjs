@@ -16,6 +16,8 @@ const TEXT_EXTENSIONS = new Set([
   ".json",
   ".md",
   ".mjs",
+  ".ts",
+  ".tsx",
   ".txt",
   ".yaml",
   ".yml"
@@ -52,4 +54,3 @@ if (errors.length > 0) {
 }
 
 console.log("Secret scan passed.");
-

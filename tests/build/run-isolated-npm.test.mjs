@@ -630,6 +630,7 @@ test("E-010 npm isolation contract", async (t) => {
   await t.test("keeps the npm isolation checker and tests in every quality entry", () => {
     assert.deepEqual(QUALITY_COMMANDS, [
       ["scripts/quality/check-javascript.mjs"],
+      ["scripts/quality/check-module-boundaries.mjs"],
       ["scripts/quality/check-npm-isolation.mjs"],
       ["scripts/quality/check-markdown.mjs"],
       ["scripts/quality/check-contracts.mjs"],
@@ -650,6 +651,8 @@ test("E-010 npm isolation contract", async (t) => {
       ["--test", "tests/build/supply-chain-policy.test.mjs"],
       ["--test", "tests/build/supply-chain-review-report.test.mjs"],
       ["--test", "tests/build/supply-chain-tarball.test.mjs"],
+      ["--test", "tests/build/module-boundaries.test.mjs"],
+      ["--test", "tests/build/build-site.test.mjs"],
     ]);
 
     const valid = createFixture();
