@@ -90,7 +90,7 @@ function baseManifest() {
     scripts: {
       quality: "node scripts/quality/run-quality.mjs",
       typecheck: "tsc --noEmit",
-      test: "node --test tests/build/run-isolated-npm.test.mjs tests/build/deterministic-spdx.test.mjs tests/build/supply-chain-audit-report.test.mjs tests/build/supply-chain-audit.test.mjs tests/build/supply-chain-candidate-review.test.mjs tests/build/supply-chain-download.test.mjs tests/build/supply-chain-dual-endpoint-ci.test.mjs tests/build/supply-chain-final-admission.test.mjs tests/build/supply-chain-final-admission-runner.test.mjs tests/build/supply-chain-generation.test.mjs tests/build/supply-chain-notices.test.mjs tests/build/supply-chain-policy.test.mjs tests/build/supply-chain-review-report.test.mjs tests/build/supply-chain-tarball.test.mjs",
+      test: "node scripts/quality/run-tests.mjs",
       build: "node scripts/build/build-site.mjs --mode production",
       "check:artifact": "node scripts/quality/check-artifact.mjs",
     },
@@ -651,6 +651,7 @@ test("E-010 npm isolation contract", async (t) => {
       ["--test", "tests/build/supply-chain-policy.test.mjs"],
       ["--test", "tests/build/supply-chain-review-report.test.mjs"],
       ["--test", "tests/build/supply-chain-tarball.test.mjs"],
+      ["--test", "tests/build/run-tests.test.mjs"],
       ["--test", "tests/build/module-boundaries.test.mjs"],
       ["--test", "tests/build/build-site.test.mjs"],
     ]);

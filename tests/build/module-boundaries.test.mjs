@@ -20,6 +20,32 @@ const TSCONFIG = {
     "src/**/*.tsx",
   ],
 };
+const TEST_TSCONFIG = {
+  extends: "../tsconfig.json",
+  compilerOptions: {
+    module: "NodeNext",
+    moduleResolution: "NodeNext",
+    target: "ES2024",
+    lib: ["ES2024"],
+    types: ["node"],
+    noEmit: false,
+    noEmitOnError: true,
+    rootDir: "..",
+    declaration: false,
+    sourceMap: false,
+    incremental: false,
+    composite: false,
+    verbatimModuleSyntax: true,
+  },
+  include: [
+    "domain/**/*.test.ts",
+    "build/**/*.test.ts",
+  ],
+};
+const SOURCE_PACKAGE = {
+  type: "module",
+  private: true,
+};
 
 function writeFixture(root, relativePath, contents) {
   const path = resolve(root, relativePath);
@@ -35,6 +61,7 @@ function createFixture() {
     private: true,
     scripts: {
       typecheck: "tsc --noEmit",
+      test: "node scripts/quality/run-tests.mjs",
       build: "node scripts/build/build-site.mjs --mode production",
     },
     dependencies: {
@@ -44,12 +71,18 @@ function createFixture() {
     devDependencies: {
       "@docusaurus/tsconfig": "3.10.2",
       "@docusaurus/types": "3.10.2",
+      "@types/node": "^24.0.0",
+      typescript: "~6.0.2",
     },
     engines: {
       node: ">=24.16.0 <25",
     },
   }, null, 2)}\n`);
   writeFixture(root, "tsconfig.json", `${JSON.stringify(TSCONFIG, null, 2)}\n`);
+  writeFixture(root, "src/package.json", `${JSON.stringify(SOURCE_PACKAGE, null, 2)}\n`);
+  writeFixture(root, "tests/package.json", `${JSON.stringify(SOURCE_PACKAGE, null, 2)}\n`);
+  writeFixture(root, "tests/tsconfig.json", `${JSON.stringify(TEST_TSCONFIG, null, 2)}\n`);
+  writeFixture(root, "tests/domain/.gitkeep", "fixture\n");
   writeFixture(
     root,
     "docusaurus.config.ts",
@@ -85,6 +118,11 @@ function createFixture() {
     "src/pages/Home.tsx",
     "import Layout from \"@theme/Layout\";\nimport {Card} from \"@site/src/components/Card/index.js\";\nexport default function Home() { return <Layout><Card /></Layout>; }\n",
   );
+  writeFixture(
+    root,
+    "tests/build/example.test.ts",
+    "import assert from \"node:assert/strict\";\nimport test from \"node:test\";\nimport {exampleRule} from \"../../src/domain/example/index.js\";\ntest(\"E-012 fixture\", () => assert.equal(exampleRule, \"ok\"));\n",
+  );
   return root;
 }
 
@@ -105,7 +143,7 @@ test("D-075 合法公共入口、框架默认导出与官方展示别名通过",
   withFixture((root) => {
     const result = checkModuleBoundaries({root});
     assert.deepEqual(result.issues, []);
-    assert.equal(result.files.length, 7);
+    assert.equal(result.files.length, 8);
   });
 });
 
@@ -207,5 +245,67 @@ test("CODE-005 拒绝无法静态证明的动态 import", () => {
       "const target = \"../../domain/example/index.js\";\nexport async function load() { return import(target); }\n",
     );
     assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_DYNAMIC_IMPORT"));
+  });
+});
+
+test("E-012 拒绝测试 tsconfig 与局部 ESM package 边界漂移", () => {
+  withFixture((root) => {
+    writeFixture(root, "tests/tsconfig.json", `${JSON.stringify({
+      ...TEST_TSCONFIG,
+      compilerOptions: {
+        ...TEST_TSCONFIG.compilerOptions,
+        sourceMap: true,
+      },
+    }, null, 2)}\n`);
+    writeFixture(root, "src/package.json", `${JSON.stringify({
+      ...SOURCE_PACKAGE,
+      name: "forbidden-source-package",
+    }, null, 2)}\n`);
+    const codes = issueCodes(root);
+    assert.ok(codes.includes("MODULE_BOUNDARY_TEST_TSCONFIG_OPTIONS"));
+    assert.ok(codes.includes("MODULE_BOUNDARY_SOURCE_PACKAGE"));
+  });
+});
+
+test("E-012 拒绝无扩展名、.ts 与目录猜测说明符", () => {
+  for (const specifier of [
+    "../../src/domain/example/index",
+    "../../src/domain/example/index.ts",
+    "../../src/domain/example",
+  ]) {
+    withFixture((root) => {
+      writeFixture(
+        root,
+        "tests/build/example.test.ts",
+        `import {exampleRule} from "${specifier}";\nvoid exampleRule;\n`,
+      );
+      assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_TEST_SPECIFIER"));
+    });
+  }
+});
+
+test("E-012 拒绝测试别名、第三方运行时与非 .test.ts 源码", () => {
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "tests/build/example.test.ts",
+      "import {exampleRule} from \"@tests/example\";\nimport React from \"react\";\nvoid exampleRule;\nvoid React;\n",
+    );
+    writeFixture(root, "tests/build/legacy.test.tsx", "export const legacy = true;\n");
+    const codes = issueCodes(root);
+    assert.ok(codes.includes("MODULE_BOUNDARY_CUSTOM_ALIAS"));
+    assert.ok(codes.includes("MODULE_BOUNDARY_TEST_EXTERNAL"));
+    assert.ok(codes.includes("MODULE_BOUNDARY_TEST_SOURCE_EXTENSION"));
+  });
+});
+
+test("E-012 拒绝潜在 Node 执行生产图中的无扩展名导入", () => {
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "src/build/example/use-domain.ts",
+      "import {exampleRule} from \"../../domain/example/index\";\nexport const buildValue = exampleRule;\n",
+    );
+    assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_NODE_SPECIFIER"));
   });
 });

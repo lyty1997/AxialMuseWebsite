@@ -1,0 +1,22 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2024",
+    "lib": ["ES2024"],
+    "types": ["node"],
+    "noEmit": false,
+    "noEmitOnError": true,
+    "rootDir": "..",
+    "declaration": false,
+    "sourceMap": false,
+    "incremental": false,
+    "composite": false,
+    "verbatimModuleSyntax": true
+  },
+  "include": [
+    "domain/**/*.test.ts",
+    "build/**/*.test.ts"
+  ]
+}

@@ -4,6 +4,18 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-22 — #22 远端闭环与 #11 本地验收闭环
+
+- **#22 关闭证据**：I-04 精确提交 `7cb529c1a68bd1979d8a9b9b6ba8731dc2fe49100` 已 push 到 `origin/dev`；该 SHA 唯一相关的 GitHub Actions push run `29907159529` 为 `completed/success`，`Website quality gates` 与 `Diagram compile check` 的全部步骤均成功。脱敏验收与 #11 交接已写入 GitHub #22，Issue 以 `completed` 关闭；本地 `dev`、`origin/dev` 和工作区在关闭后均一致且干净。
+- **语义压缩**：#11 只继承 #22 的生产 `tsconfig`、显式 `.mjs` ESM 边界、目录层图、公共入口、稳定错误码和 quality 接线；#22 的 npm 安装诊断、Docusaurus 兼容排查及临时构建过程不再作为活动上下文。依赖链固定为 `#22 -> #11 -> #23`，#23 在本项闭环前保持阻塞。
+- **I-05 开工决定**：TypeScript 官方 NodeNext 语义要求普通 `.ts`/`.tsx` 从最近祖先 `package.json#type` 判定 module format；根 manifest 又必须为 I-04 保持无 `type`。因此 E-012 使用精确的 `src/package.json` 与 `tests/package.json` 局部 ESM 源码边界，临时 emit 根另写同样的两键 package；不恢复根 module type，不改变 manifest 依赖、lockfile、Docusaurus 生成目录或浏览器边界。
+- **I-05 验收授权**：D-087 允许在任务专用临时副本中通过 E-010 联系官方 npm registry 做冻结安装，并从 Node.js 官方源下载、校验仓库固定摘要的最低端点 Node `24.16.0`。授权只覆盖主/最低端点同负载、约定反例、`typecheck`、production `build` 与清理验收；不包含 Git、CI 或 Issue 写操作。
+- **I-05 实现**：新增独立 `tests/tsconfig.json`、局部 ESM package 边界、`tests/domain|build` TypeScript 测试物理层、`scripts/quality/run-tests.mjs` 与唯一 `npm test` 入口；runner 只解析 lock 冻结且未逃逸 `node_modules/typescript` 的 CLI，稳定枚举测试、输出到系统私有临时目录、写入独立 ESM package 后以当前 Node `--test` 显式直跑，并在所有路径清理。模块边界与 quality 接线同步拒绝无扩展名、`.ts`、alias、目录猜测、第三方测试运行时、错误源码扩展与生产层 Node ESM 说明符漂移。真实 npm 安装暴露作者机 `umask 0002` 会合法产生 `typescript/bin/tsc` 的 `0775`；runner 因而接受组模式，仍拒绝 symlink、hardlink、world-writable 与 lock 版本漂移，避免把真实冻结安装误判为非法。
+- **双端点正向验收**：任务私有候选通过 E-010 官方 registry 冻结安装 1,298 个包且未执行 lifecycle script；固定归档 `node-v24.16.0-linux-x64.tar.xz` 经仓库加固入口核对 SHA-256 `d804845d34eddc21dc1092b519d643ef40b1f58ec5dec5c22b1f4bd8fabde6c9`、单顶层布局、运行时树与精确 Node `24.16.0` / npm `11.13.0`。同一候选、同一 `npm test` 和同一 `tests/build/site-config.test.ts` 分别在 Node `24.18.0` 与 `24.16.0` 直接执行成功，明确报告 `primary` 与 `minimum`；合法 `.js` 公共入口通过 NodeNext 编译和原生 Node ESM 运行。
+- **逐条反例验收**：可恢复临时 mutation 共 9 项全部命中预期：无扩展名、`.ts`、目录猜测与 `@site` alias 均为 `TEST_PROGRAM`；直接 NodeNext 编译分别产生 `TS2835` 与 `TS5097`；空测试集为 `TEST_EMPTY`，真实类型错误为 `TEST_COMPILE`，真实失败测试为 `TEST_EXECUTION`。失败输出保留 `tests/build/site-config.test.ts` 与测试名，不包含任务临时根或 `axial-muse-tests-*`；提交内 15 项模块 fixture 与 10 项 runner fixture 共 25/25 通过，覆盖编译、emit、执行、清理、临时创建及部分创建失败，其中清理失败以 `TEST_CLEANUP` 覆盖原状态。
+- **回归与完整性**：同一全新安装上的隔离 `typecheck` 与 production `build` 均成功；最终工作树 pre-commit 在固定 nvm `0.40.6` / Node `24.18.0` 下完整通过，包含文档、Secret、6 个 TypeScript 文件的模块边界、1,225 项供应链静态闭包、E-010 58 项、E-011 41 项、runner 10 项、模块边界 15 项和全部既有回归。安装、双端点、mutation 前后 `package.json` SHA-256 均为 `7b089fd3df1b14f8c7117fa4608d895f5fb7327528281f20274df2e068ccf82c`，`package-lock.json` 仍为 `fae564f5a83ceaf4f5d57118192779a2679f5380403d0a79d33f409d75dc01aa`，NOTICE/evidence/SBOM/admissions 摘要同 #21；候选源码与主工作树摘要一致，仓库根始终没有 `node_modules`、测试 emit、build 或 dist。本项未新增第三方服务、浏览器请求或用户数据处理。
+- **Git 与远端授权**：D-088 已授权把当前 I-05 完整变更 commit 并且只 push 到 `origin/dev`，锁定精确 SHA 跟踪现有 CI；失败修复不得越出 #11，CI 成功后按 D-084 评论并关闭 #11。`main`、PR/merge、历史改写、workflow/凭证和生产操作均不在授权内；#23 在远端闭环、可恢复摘要和语义压缩完成前继续保持阻塞。
+
 ## 2026-07-22 — #22 Docusaurus 与严格 TypeScript 本地验收闭环
 
 - **主题与依赖边界**：按 Roadmap 的 `#9 + #21 -> #22 -> #11` 链执行 I-04，只消费既有 `.nvmrc`、`engines.node`、唯一 lock 与 #21 准入图；没有新增、升级或删除依赖，没有修改 `package-lock.json` 或供应链制品。D-085 授权只在任务专用临时副本中通过 E-010 联系官方 npm registry 做全新冻结安装和真实构建，不在仓库根创建 `node_modules/`。

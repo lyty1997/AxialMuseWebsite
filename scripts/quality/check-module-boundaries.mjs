@@ -42,12 +42,19 @@ const SOURCE_ROOTS = new Set([
   "theme",
 ]);
 const PRESENTATION_ROOTS = new Set(["components", "pages", "theme"]);
+const NODE_ESM_LAYERS = new Set(["build", "domain", "test-build", "test-domain"]);
 const OFFICIAL_PRESENTATION_ALIASES = Object.freeze(["@generated/", "@theme/"]);
 const APPROVED_FRAMEWORK_TYPE_IMPORTS = new Set([
   "@docusaurus/plugin-content-docs",
 ]);
 const BUILTIN_MODULES = new Set(
-  builtinModules.flatMap((name) => name.startsWith("node:") ? [name] : [name, `node:${name}`]),
+  [
+    ...builtinModules.flatMap((name) => (
+      name.startsWith("node:") ? [name] : [name, `node:${name}`]
+    )),
+    "node:test",
+    "node:test/reporters",
+  ],
 );
 const EXPECTED_TSCONFIG = Object.freeze({
   extends: "@docusaurus/tsconfig",
@@ -64,6 +71,36 @@ const EXPECTED_TSCONFIG = Object.freeze({
     "src/**/*.tsx",
   ]),
 });
+const EXPECTED_TEST_TSCONFIG = Object.freeze({
+  extends: "../tsconfig.json",
+  compilerOptions: Object.freeze({
+    module: "NodeNext",
+    moduleResolution: "NodeNext",
+    target: "ES2024",
+    lib: Object.freeze(["ES2024"]),
+    types: Object.freeze(["node"]),
+    noEmit: false,
+    noEmitOnError: true,
+    rootDir: "..",
+    declaration: false,
+    sourceMap: false,
+    incremental: false,
+    composite: false,
+    verbatimModuleSyntax: true,
+  }),
+  include: Object.freeze([
+    "domain/**/*.test.ts",
+    "build/**/*.test.ts",
+  ]),
+});
+const EXPECTED_SOURCE_PACKAGE = Object.freeze({
+  type: "module",
+  private: true,
+});
+const TEST_SOURCE_ROOTS = Object.freeze([
+  "tests/domain",
+  "tests/build",
+]);
 
 function toPosix(path) {
   return path.split(sep).join("/");
@@ -118,6 +155,10 @@ function hasExactKeys(value, expected) {
   return Object.keys(value).sort().join("\n") === [...expected].sort().join("\n");
 }
 
+function hasExactJsonValue(actual, expected) {
+  return JSON.stringify(actual) === JSON.stringify(expected);
+}
+
 function validateRootContracts(root, issues) {
   const tsconfig = readJsonFile(root, "tsconfig.json", issues);
   if (tsconfig !== null) {
@@ -167,6 +208,69 @@ function validateRootContracts(root, issues) {
     }
   }
 
+  const testTsconfig = readJsonFile(root, "tests/tsconfig.json", issues);
+  if (testTsconfig !== null) {
+    if (!hasExactKeys(testTsconfig, ["extends", "compilerOptions", "include"])) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_TEST_TSCONFIG_ROOT",
+        "tests/tsconfig.json",
+        "测试 tsconfig 只能声明 extends、compilerOptions 与 include。",
+      );
+    }
+    if (testTsconfig.extends !== EXPECTED_TEST_TSCONFIG.extends) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_TEST_TSCONFIG_EXTENDS",
+        "tests/tsconfig.json",
+        "测试 tsconfig 必须只继承根生产配置。",
+      );
+    }
+    const compilerOptions = testTsconfig.compilerOptions;
+    if (
+      compilerOptions === null
+      || typeof compilerOptions !== "object"
+      || Array.isArray(compilerOptions)
+      || !hasExactKeys(compilerOptions, Object.keys(EXPECTED_TEST_TSCONFIG.compilerOptions))
+      || Object.entries(EXPECTED_TEST_TSCONFIG.compilerOptions)
+        .some(([key, value]) => !hasExactJsonValue(compilerOptions[key], value))
+    ) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_TEST_TSCONFIG_OPTIONS",
+        "tests/tsconfig.json",
+        "测试 compilerOptions 必须精确等于 E-012 NodeNext/ES2024 emit 契约。",
+      );
+    }
+    if (!hasExactJsonValue(testTsconfig.include, EXPECTED_TEST_TSCONFIG.include)) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_TEST_TSCONFIG_INCLUDE",
+        "tests/tsconfig.json",
+        "测试 TypeScript program 的 include 集合或顺序发生漂移。",
+      );
+    }
+  }
+
+  for (const relativePath of ["src/package.json", "tests/package.json"]) {
+    const packageBoundary = readJsonFile(root, relativePath, issues);
+    if (
+      packageBoundary !== null
+      && (
+        !hasExactKeys(packageBoundary, Object.keys(EXPECTED_SOURCE_PACKAGE))
+        || Object.entries(EXPECTED_SOURCE_PACKAGE)
+          .some(([key, value]) => packageBoundary[key] !== value)
+      )
+    ) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_SOURCE_PACKAGE",
+        relativePath,
+        "局部源码 package 必须精确只声明 type=module 与 private=true。",
+      );
+    }
+  }
+
   const packageJson = readJsonFile(root, "package.json", issues);
   if (packageJson !== null) {
     if (Object.hasOwn(packageJson, "type")) {
@@ -177,7 +281,7 @@ function validateRootContracts(root, issues) {
         "根 package.json 不得改变 Docusaurus 生成 .js 文件的 CommonJS 解释边界。",
       );
     }
-    for (const scriptName of ["typecheck", "build"]) {
+    for (const scriptName of ["typecheck", "test", "build"]) {
       const allowed = RUN_SCRIPT_COMMANDS[scriptName];
       if (!allowed.includes(packageJson.scripts?.[scriptName])) {
         addIssue(
@@ -288,6 +392,54 @@ function collectTargetFiles(root, issues) {
     }
   };
   walk(srcRoot);
+
+  const walkTests = (directory) => {
+    for (const entry of readdirSync(directory, {withFileTypes: true})) {
+      const path = resolve(directory, entry.name);
+      const relativePath = sourcePath(root, path);
+      if (entry.isSymbolicLink()) {
+        addIssue(
+          issues,
+          "MODULE_BOUNDARY_TEST_SOURCE_LINK",
+          relativePath,
+          "测试源码树不得包含符号链接。",
+        );
+        continue;
+      }
+      if (entry.isDirectory()) {
+        walkTests(path);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (/\.test\.(?:js|jsx|tsx)$/u.test(entry.name)) {
+        addIssue(
+          issues,
+          "MODULE_BOUNDARY_TEST_SOURCE_EXTENSION",
+          relativePath,
+          "领域与构建测试必须使用 .test.ts。",
+        );
+        continue;
+      }
+      if (entry.name.endsWith(".ts")) files.push(path);
+    }
+  };
+  for (const relativeRoot of TEST_SOURCE_ROOTS) {
+    const testRoot = resolve(root, relativeRoot);
+    try {
+      const metadata = lstatSync(testRoot);
+      if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+        throw new TypeError("not a regular directory");
+      }
+      walkTests(testRoot);
+    } catch {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_TEST_SOURCE_ROOT",
+        relativeRoot,
+        "E-012 测试物理层必须是仓库内普通目录。",
+      );
+    }
+  }
   return files.sort();
 }
 
@@ -572,7 +724,14 @@ function extractModuleReferences(source, relativePath, issues) {
 
 function logicalLayer(relativePath) {
   if (ROOT_TYPESCRIPT_FILES.includes(relativePath)) return "build";
-  const rootName = relativePath.split("/")[1];
+  const segments = relativePath.split("/");
+  if (
+    segments[0] === "tests"
+    && ["domain", "build"].includes(segments[1])
+  ) {
+    return `test-${segments[1]}`;
+  }
+  const rootName = segments[1];
   if (rootName === "domain" || rootName === "build") return rootName;
   if (PRESENTATION_ROOTS.has(rootName)) return "presentation";
   return null;
@@ -674,6 +833,15 @@ function validatePackageImport({
     );
     return;
   }
+  if (importerLayer?.startsWith("test-")) {
+    addIssue(
+      issues,
+      "MODULE_BOUNDARY_TEST_EXTERNAL",
+      relativePath,
+      "领域与构建纯逻辑测试不得依赖第三方运行时包。",
+    );
+    return;
+  }
   if (importerLayer === "domain") {
     addIssue(
       issues,
@@ -732,6 +900,23 @@ function validateSpecifier({
     });
     return;
   }
+  if (
+    NODE_ESM_LAYERS.has(importerLayer)
+    && (
+      specifier.startsWith("@site/")
+      || (specifier.startsWith(".") && !specifier.endsWith(".js"))
+    )
+  ) {
+    addIssue(
+      issues,
+      importerLayer.startsWith("test-")
+        ? "MODULE_BOUNDARY_TEST_SPECIFIER"
+        : "MODULE_BOUNDARY_NODE_SPECIFIER",
+      relativePath,
+      "Node ESM 图中的仓库相对说明符必须显式使用运行时 .js 扩展名。",
+    );
+    return;
+  }
   const target = resolveLocalTarget(root, importerPath, specifier);
   if (target.escaped) {
     addIssue(
@@ -766,6 +951,8 @@ function validateSpecifier({
     domain: new Set(["domain"]),
     build: new Set(["build", "domain"]),
     presentation: new Set(["presentation"]),
+    "test-domain": new Set(["test-domain", "domain"]),
+    "test-build": new Set(["test-build", "build", "domain"]),
   };
   if (!allowedLayers[importerLayer]?.has(targetLayer)) {
     addIssue(

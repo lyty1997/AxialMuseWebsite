@@ -124,6 +124,7 @@
 
 - 修改现有 Node.js 质量脚本时保持 ESM，使用 `import`/`export`；Node 内置模块使用 `node:` 前缀，不混入 CommonJS。
 - 当前 Node 脚本通过显式 `.mjs` 保持 ESM，不依赖根 `package.json#type`；根 manifest 不声明 `type`，以保留 Docusaurus 3.10.2 生成 `.js` 的 CommonJS 解释边界。目标 Node 精确版本只由 `.nvmrc` 提供，不在代码或本文复制 patch 值。
+- E-012 的 NodeNext 源码边界由 `src/package.json` 与 `tests/package.json` 精确声明；两者都只允许 `type: "module"` 与 `private: true`，不拥有依赖、脚本、exports/imports 或发布身份。它们只影响对应源码树中普通 `.ts`/`.tsx` 的 ESM 判型，不覆盖根或 `.docusaurus/`，也不能替代临时 emit 根的最小 `package.json`。模块边界门禁必须拒绝缺失、附加键和值漂移。
 - 目标依赖解析、lockfile 写入权限和最低端点只读边界直接遵守 D-073、D-077 与 E-010。只有主端点能通过隔离 `resolve-lock` profile 生成候选 lockfile；所有正常安装统一通过隔离 `ci` profile，代码不得通过直接调用 npm、安装时 fallback、第二种 lockfile、浮动包管理器、隐式 audit、共享 cache 或生命周期脚本绕过该契约。
 - Docusaurus 管理的目标源码统一使用严格 TypeScript：站点配置为 `docusaurus.config.ts`，侧栏、生成器、本地插件、构建期适配和无 JSX 模块使用 `.ts`，包含 JSX 的页面、主题覆盖和 React 组件使用 `.tsx`；目标 `tsconfig.json` 必须显式设置 `strict: true`。
 - 上述目标范围不得新增 `.js` 或 `.jsx`，除非先按用户决策门禁批准例外。现有和新增的零依赖作者/质量/发布 CLI 使用 `.mjs`，不进入 Docusaurus TypeScript program；React、领域和构建源码不得借此回退为 JavaScript。
@@ -141,6 +142,7 @@
 - 模块边界由零第三方依赖的 `scripts/quality/check-module-boundaries.mjs` 检查，并纳入共享 `quality` 入口与 Ubuntu required check；它至少拒绝跨层深层导入、`export *`、自定义路径别名、浏览器层导入 Node 内置模块及领域层导入 React/Docusaurus。CI 接线是实施任务，不再重新选择这些规则。
 - I-04 的模块检查器是零参数、只读、确定性 CLI；它扫描根 `docusaurus.config.ts`、`sidebars.ts` 与 `src/**/*.{ts,tsx}`，拒绝这些目标旁出现 `.js`/`.jsx`、符号链接、未知 `src/` TypeScript 物理层或无法静态证明的模块说明符。诊断固定为按仓库相对 POSIX 路径、稳定 `MODULE_BOUNDARY_*` code 和字段排序的小结果包；不存在通用 ignore、路径参数或环境变量旁路。检查器同时拒绝根 `package.json#type`，把根 `tsconfig.json` 约束为 D-076 的精确 `extends`、四个显式 compiler options 与四个 include，不允许额外 `paths`、重复声明官方基线选项或扩大生产 program，并从 E-010 的单一脚本契约验证 `typecheck`/`build` 命令，避免配置和执行入口各自漂移。
 - I-04 的物理依赖图固定为：领域层只能依赖领域层；构建层可以依赖构建层和领域层；展示层只能依赖展示层。跨物理层的仓库内导入必须解析到被依赖模块真实存在的 `index.ts`/`index.tsx` 公共入口，`@site/*` 映射后适用同一规则；`@theme/*` 与 `@generated/*` 只作为展示层的精确框架别名。领域层拒绝全部框架/UI 包和 Node 内置模块，展示层拒绝 Node 内置模块，根配置与侧栏拒绝 React/MDX UI 包；未知裸说明符、CommonJS、非字符串动态 import 与内部模块默认导出均失败关闭。fixture 必须分别证明合法公共入口、根框架默认导出和官方展示别名可以通过，并让配置漂移、跨层深导入、`export *`、自定义别名、浏览器 Node 内置依赖及领域框架依赖各自变红。
+- I-05 在同一检查器上增加测试 program 契约，不另建可漂移的解析器：`tests/tsconfig.json`、`src/package.json`、`tests/package.json` 和根 `package.json#scripts.test` 必须逐字段等于 E-012；扫描 `tests/domain/`、`tests/build/` 下的 TypeScript 源码，拒绝测试 `.js`/`.jsx`/`.tsx`、符号链接、非静态 import 以及无扩展名或 `.ts` 运行时说明符。测试领域层只能依赖自身与生产领域公共入口；测试构建层可以依赖自身、生产构建公共入口和生产领域公共入口；生产层不得反向导入测试。进入 Node 图的根配置、领域、构建与测试相对说明符统一显式写 `.js`，展示层仍保持其 Docusaurus bundler 边界。
 
 来源：D-066、D-067、D-072 至 D-077；当前 `package.json` 和 `scripts/quality/`。
 
@@ -228,7 +230,7 @@
 - 领域和构建测试不得写入真实 `site-content/`。内容 fixture 固定放在 `tests/fixtures/content/<case-name>/`，每个 case 使用自含的 `site-content/` 与 `docs/contracts/` 最小树；临时输出只能写入测试进程创建的系统临时目录，并在结束时清理。
 - fixture 只使用 `example.test`、固定的合法 UUIDv7、固定日期和明确虚构文本，不包含本机绝对路径、真实账户或凭证。预期结果使用小型结构化 `expected.json` 或字段断言；禁止把整页 HTML、整棵 Docusaurus 数据或大 snapshot 当作主要契约。
 - 错误 fixture 以稳定 `ContentIssue.code`、相对路径和字段路径断言，不锁定整段中文 message；排序 fixture 必须故意打乱文件系统输入顺序，证明结果仍确定。
-- E-012 的 `scripts/quality/run-tests.mjs` 是领域与构建 TypeScript 测试的唯一入口：用当前 Node 执行本地冻结的 TypeScript CLI，把独立测试 program 输出到本次系统临时目录，再稳定排序并显式传递编译后的 `*.test.js` 给当前 Node `--test`。测试为零、编译失败、执行失败或清理失败均失败关闭；禁止 `npx`、shell、loader、实验性说明符解析、联网 fallback 或仓库内输出。
+- E-012 的 `scripts/quality/run-tests.mjs` 是领域与构建 TypeScript 测试的唯一入口：零参数调用同一模块边界检查后，用当前主/最低 Node 执行本地冻结且未逃逸仓库 `node_modules/typescript` 的 CLI，把独立测试 program 输出到本次系统临时目录，再按仓库相对源码路径稳定排序并显式传递一一对应的 `*.test.js` 给当前 Node `--test`。入口捕获子进程输出，把临时测试路径映射回对应 `*.test.ts` 后再传播，确保 `sourceMap: false` 时仍能定位源码测试和测试名；测试为零、编译失败、emit 集合漂移、执行失败或清理失败均以稳定 `TEST_*` code 失败关闭。禁止 `npx`、shell、loader、实验性说明符解析、联网 fallback 或仓库内输出。
 - 进入测试 Node ESM 图的相对静态 import/export 与动态 import 统一写 `.js` 说明符，目录入口写 `index.js`；Node 内置模块统一写 `node:`，类型专用导入使用 `import type`。无扩展名、`.ts` 运行时说明符、路径别名或依赖目录猜测必须由编译 fixture 拒绝。
 - E-012 fixture 至少覆盖合法 `.js` 说明符编译并直接运行、无扩展名编译失败、空测试集失败、编译失败与测试失败后清理、清理失败传播，以及源码、内容树、`build/`、`dist/` 不产生测试文件。主 Node 与最低 Node 端点必须调用同一入口和同一测试集合。
 - E-007 媒体 fixture 至少覆盖：公开项目缺预览、未发布项目省略预览、未知媒体字段、跨项目或逃逸路径、重复引用、孤儿文件、符号链接、错误签名、动画 WebP、尺寸或登记值不符、超过字节上限、空白/多行/过长/复述标题的 `alt`。成功 fixture 必须从登记字段得到唯一公开 URL，不允许文件名猜测。
