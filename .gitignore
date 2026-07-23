@@ -10,6 +10,10 @@ node_modules/
 # Build outputs
 /dist/
 /build/
+/.axial-muse-build.lock
+/.axial-muse-build-retired/
+/.axial-muse-build-candidate-*/
+/.axial-muse-build-backup-*/
 /.docusaurus/
 .next/
 out/

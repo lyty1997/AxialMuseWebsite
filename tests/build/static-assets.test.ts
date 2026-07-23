@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   symlinkSync,
   truncateSync,
@@ -26,6 +27,14 @@ import {
   prepareStaticAssetPlan,
   StaticAssetError,
 } from "../../src/build/static-assets/index.js";
+import {
+  assertStaticAssetPlanInputsCurrent,
+  getStaticAssetPlanInputDigest,
+} from "../../src/build/static-assets/plan.js";
+import {
+  combineContentBuildInputDigests,
+  createContentBuildSealController,
+} from "../../src/build/content/build-seal.js";
 import type {
   PrepareStaticAssetPlanInput,
   StaticAssetMode,
@@ -72,6 +81,14 @@ function staticVp8l(seed: number): Uint8Array {
   bytes.set(Buffer.from("VP8L"), 12);
   writeUint32LittleEndian(bytes, 16, payload.byteLength);
   bytes.set(payload, 20);
+  return bytes;
+}
+
+function privateInlineAssetBytes(length = 9_999): Uint8Array {
+  const bytes = new Uint8Array(length);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = (index * 31 + 17) % 251;
+  }
   return bytes;
 }
 
@@ -300,6 +317,55 @@ function publicPreviewUrls(plan: StaticAssetPlan): string[] {
   ));
 }
 
+function inputDigest(input: PrepareStaticAssetPlanInput): string {
+  const plan = prepareStaticAssetPlan(input);
+  try {
+    return getStaticAssetPlanInputDigest(plan);
+  } finally {
+    plan.dispose();
+  }
+}
+
+function hasContentBuildCode(code: string): (error: unknown) => boolean {
+  return (error) => (
+    error instanceof Error
+    && "code" in error
+    && error.code === code
+  );
+}
+
+function createSealControlFixture(
+  repositoryRoot: string,
+  owner: string,
+): Readonly<{
+  transactionRoot: string;
+  environment: NodeJS.ProcessEnv;
+}> {
+  const transactionRoot = mkdtempSync(join(
+    tmpdir(),
+    "axial-muse-build-transaction-",
+  ));
+  chmodSync(transactionRoot, 0o700);
+  writeFileSync(resolve(repositoryRoot, ".axial-muse-build.lock"), `${owner}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  chmodSync(resolve(repositoryRoot, ".axial-muse-build.lock"), 0o600);
+  writeFileSync(
+    resolve(transactionRoot, ".axial-muse-build-transaction-owner"),
+    `production:${owner}\n`,
+    {encoding: "utf8", mode: 0o600},
+  );
+  chmodSync(
+    resolve(transactionRoot, ".axial-muse-build-transaction-owner"),
+    0o600,
+  );
+  return Object.freeze({
+    transactionRoot,
+    environment: {AXIAL_MUSE_BUILD_TRANSACTION_ROOT: transactionRoot},
+  });
+}
+
 function writeSsrHtml(buildRoot: string, urls: readonly string[]): void {
   writeFixture(
     buildRoot,
@@ -308,12 +374,15 @@ function writeSsrHtml(buildRoot: string, urls: readonly string[]): void {
   );
 }
 
-function materializedProduction(root: string): Readonly<{
+function materializedProduction(
+  root: string,
+  input: PrepareStaticAssetPlanInput = planInput(root, "production"),
+): Readonly<{
   plan: StaticAssetPlan;
   contextRoot: string;
   staticRoot: string;
 }> {
-  const plan = prepareStaticAssetPlan(planInput(root, "production"));
+  const plan = prepareStaticAssetPlan(input);
   const buildContext = createBuildContext("production");
   plan.materialize(buildContext.context);
   return {
@@ -322,6 +391,254 @@ function materializedProduction(root: string): Readonly<{
     staticRoot: buildContext.context.staticDirectory,
   };
 }
+
+test("I-12 静态输入摘要双模式确定并绑定字节、路径与可见性处置", () => {
+  const repositoryRoot = createRepositoryFixture();
+  try {
+    const productionDigest = inputDigest(planInput(repositoryRoot, "production"));
+    const repeatedProductionDigest = inputDigest(planInput(repositoryRoot, "production"));
+    const previewDigest = inputDigest(planInput(repositoryRoot, "preview"));
+    assert.match(productionDigest, /^[0-9a-f]{64}$/u);
+    assert.equal(repeatedProductionDigest, productionDigest);
+    assert.notEqual(previewDigest, productionDigest);
+
+    const plannedPath = resolve(
+      repositoryRoot,
+      "site-assets/projects/planned-project/planned-project.webp",
+    );
+    writeFileSync(plannedPath, staticVp8l(0x72));
+    const changedBytesDigest = inputDigest(planInput(repositoryRoot, "production"));
+    assert.notEqual(changedBytesDigest, productionDigest);
+    writeFileSync(plannedPath, staticVp8l(0x22));
+    assert.equal(inputDigest(planInput(repositoryRoot, "production")), productionDigest);
+
+    const visibilityProjects = PROJECT_CASES.map(([
+      id,
+      publicationStatus,
+    ], index) => project(
+      id,
+      id === "planned-project" ? "published" : publicationStatus,
+      index + 1,
+    ));
+    const visibilityDigest = inputDigest({
+      ...planInput(repositoryRoot, "production"),
+      catalog: createCatalog(visibilityProjects),
+    });
+    assert.notEqual(visibilityDigest, productionDigest);
+
+    renameSync(
+      resolve(repositoryRoot, "static-public/assets/brand/logo.svg"),
+      resolve(repositoryRoot, "static-public/assets/brand/mark.svg"),
+    );
+    const changedPathDigest = inputDigest(planInput(
+      repositoryRoot,
+      "production",
+      registryDocument([
+        {sourcePath: "assets/brand/mark.svg", role: "brand"},
+        {sourcePath: "robots.txt", role: "operational"},
+      ]),
+    ));
+    assert.notEqual(changedPathDigest, productionDigest);
+
+    const publicPlan = prepareStaticAssetPlan(planInput(repositoryRoot, "production", registryDocument([
+      {sourcePath: "assets/brand/mark.svg", role: "brand"},
+      {sourcePath: "robots.txt", role: "operational"},
+    ])));
+    try {
+      assert.equal(Object.hasOwn(publicPlan, "inputDigest"), false);
+    } finally {
+      publicPlan.dispose();
+    }
+    assert.throws(
+      () => getStaticAssetPlanInputDigest(Object.freeze({}) as StaticAssetPlan),
+      hasStaticAssetCode("STATIC_ASSET_PLAN_PROVENANCE"),
+    );
+  } finally {
+    rmSync(repositoryRoot, {recursive: true, force: true});
+  }
+});
+
+test("E-016 build/check 间未发布预览 A→B 时旧 A 候选被 seal 拒绝且旧 build 不变", () => {
+  const repositoryRoot = createRepositoryFixture();
+  const buildContext = createBuildContext("production");
+  const checkContext = createBuildContext("production");
+  const owner = "9".repeat(64);
+  const contentDigest = "8".repeat(64);
+  const control = createSealControlFixture(repositoryRoot, owner);
+  let buildPlan: StaticAssetPlan | undefined;
+  let checkPlan: StaticAssetPlan | undefined;
+  try {
+    writeFixture(repositoryRoot, "build/identity.txt", "old-build\n");
+    const plannedSource = resolve(
+      repositoryRoot,
+      "site-assets/projects/planned-project/planned-project.webp",
+    );
+    const oldPreviewBytes = readFileSync(plannedSource);
+    buildPlan = prepareStaticAssetPlan(planInput(repositoryRoot, "production"));
+    const buildStaticDigest = getStaticAssetPlanInputDigest(buildPlan);
+    buildPlan.materialize(buildContext.context);
+
+    const candidate = resolve(repositoryRoot, "candidate-artifact");
+    copyTreeBytes(buildContext.context.staticDirectory, candidate);
+    writeSsrHtml(candidate, publicPreviewUrls(buildPlan));
+    writeFixture(candidate, "leaked-old-planned-preview.bin", oldPreviewBytes);
+    createContentBuildSealController({
+      repositoryRoot,
+      mode: "production",
+      owner,
+      phase: "build",
+      inputDigest: combineContentBuildInputDigests(
+        contentDigest,
+        buildStaticDigest,
+      ),
+      environment: control.environment,
+      assertInputsCurrent() {},
+    }).write();
+
+    writeFileSync(plannedSource, staticVp8l(0x73));
+    const preparedCheckPlan = prepareStaticAssetPlan(planInput(
+      repositoryRoot,
+      "production",
+    ));
+    checkPlan = preparedCheckPlan;
+    const checkStaticDigest = getStaticAssetPlanInputDigest(preparedCheckPlan);
+    assert.notEqual(checkStaticDigest, buildStaticDigest);
+    preparedCheckPlan.materialize(checkContext.context);
+
+    assert.doesNotThrow(() => preparedCheckPlan.assertProductionBuild(candidate));
+    const checker = createContentBuildSealController({
+      repositoryRoot,
+      mode: "production",
+      owner,
+      phase: "check",
+      inputDigest: combineContentBuildInputDigests(
+        contentDigest,
+        checkStaticDigest,
+      ),
+      environment: control.environment,
+      assertInputsCurrent() {},
+    });
+    assert.throws(
+      () => checker.assert(),
+      hasContentBuildCode("CONTENT_INPUT_SEAL"),
+    );
+    assert.equal(
+      readFileSync(resolve(repositoryRoot, "build/identity.txt"), "utf8"),
+      "old-build\n",
+    );
+    assert.deepEqual(
+      readFileSync(resolve(candidate, "leaked-old-planned-preview.bin")),
+      oldPreviewBytes,
+    );
+  } finally {
+    buildPlan?.dispose();
+    checkPlan?.dispose();
+    rmSync(buildContext.root, {recursive: true, force: true});
+    rmSync(checkContext.root, {recursive: true, force: true});
+    rmSync(control.transactionRoot, {recursive: true, force: true});
+    rmSync(repositoryRoot, {recursive: true, force: true});
+  }
+});
+
+test("E-016 final verify 建 plan 后物理静态树增删改均由同次 seal 断言失败关闭", () => {
+  const scenarios = [
+    ["改字节", (repositoryRoot: string) => {
+      writeFileSync(
+        resolve(repositoryRoot, "static-public/robots.txt"),
+        "User-agent: *\nDisallow: /changed\n",
+      );
+    }],
+    ["增成员", (repositoryRoot: string) => {
+      writeFixture(repositoryRoot, "static-public/unregistered.txt", "unexpected\n");
+    }],
+    ["删成员", (repositoryRoot: string) => {
+      unlinkSync(resolve(repositoryRoot, "static-public/assets/brand/logo.svg"));
+    }],
+  ] as const;
+
+  for (const [label, mutate] of scenarios) {
+    const repositoryRoot = createRepositoryFixture();
+    const buildContext = createBuildContext("production");
+    const verifyContext = createBuildContext("production");
+    const owner = "7".repeat(64);
+    const contentDigest = "6".repeat(64);
+    const control = createSealControlFixture(repositoryRoot, owner);
+    let buildPlan: StaticAssetPlan | undefined;
+    let verifyPlan: StaticAssetPlan | undefined;
+    try {
+      writeFixture(repositoryRoot, "build/identity.txt", "old-build\n");
+      const oldBuildPath = resolve(repositoryRoot, "build/identity.txt");
+      const oldBuildInode = lstatSync(oldBuildPath).ino;
+      const preparedBuildPlan = prepareStaticAssetPlan(planInput(
+        repositoryRoot,
+        "production",
+      ));
+      buildPlan = preparedBuildPlan;
+      const buildStaticDigest = getStaticAssetPlanInputDigest(preparedBuildPlan);
+      preparedBuildPlan.materialize(buildContext.context);
+      createContentBuildSealController({
+        repositoryRoot,
+        mode: "production",
+        owner,
+        phase: "build",
+        inputDigest: combineContentBuildInputDigests(
+          contentDigest,
+          buildStaticDigest,
+        ),
+        environment: control.environment,
+        assertInputsCurrent() {
+          assertStaticAssetPlanInputsCurrent(preparedBuildPlan);
+        },
+      }).write();
+
+      const preparedVerifyPlan = prepareStaticAssetPlan(planInput(
+        repositoryRoot,
+        "production",
+      ));
+      verifyPlan = preparedVerifyPlan;
+      const verifyStaticDigest = getStaticAssetPlanInputDigest(preparedVerifyPlan);
+      assert.equal(verifyStaticDigest, buildStaticDigest, label);
+      preparedVerifyPlan.materialize(verifyContext.context);
+      let contentCurrentnessChecks = 0;
+      const checker = createContentBuildSealController({
+        repositoryRoot,
+        mode: "production",
+        owner,
+        phase: "verify",
+        inputDigest: combineContentBuildInputDigests(
+          contentDigest,
+          verifyStaticDigest,
+        ),
+        environment: control.environment,
+        assertInputsCurrent() {
+          contentCurrentnessChecks += 1;
+          assertStaticAssetPlanInputsCurrent(preparedVerifyPlan);
+        },
+      });
+
+      mutate(repositoryRoot);
+      assert.throws(
+        () => checker.assert(),
+        hasStaticAssetCode("STATIC_ASSET_SOURCE_DRIFT"),
+        label,
+      );
+      assert.equal(contentCurrentnessChecks, 1, label);
+      assert.equal(
+        readFileSync(oldBuildPath, "utf8"),
+        "old-build\n",
+        label,
+      );
+      assert.equal(lstatSync(oldBuildPath).ino, oldBuildInode, label);
+    } finally {
+      buildPlan?.dispose();
+      verifyPlan?.dispose();
+      rmSync(buildContext.root, {recursive: true, force: true});
+      rmSync(verifyContext.root, {recursive: true, force: true});
+      rmSync(control.transactionRoot, {recursive: true, force: true});
+      rmSync(repositoryRoot, {recursive: true, force: true});
+    }
+  }
+});
 
 test("I-12 production/preview 从同一非空源生成隔离且按 publicationStatus 选择的确定白名单", () => {
   const repositoryRoot = createRepositoryFixture();
@@ -843,6 +1160,104 @@ test("I-12 production 素材泄漏检查正常路径通过", () => {
   }
 });
 
+test("I-12 同名未发布素材的相同 path/content token 稳定去重", () => {
+  const repositoryRoot = createRepositoryFixture();
+  const sharedBytes = privateInlineAssetBytes();
+  const unpublishedAssets = Array.from({length: 24}, (_, index) => ({
+    sourcePath: `site-content/writing/duplicate-${String(index).padStart(2, "0")}/assets/shared-image.png`,
+    publicPath: "/assets/images/shared-image-",
+    bytes: sharedBytes,
+  }));
+  const materialized = materializedProduction(repositoryRoot, {
+    ...planInput(repositoryRoot, "production"),
+    unpublishedAssets,
+  });
+  const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+  chmodSync(buildRoot, 0o700);
+  try {
+    const excludedContent = materialized.plan.manifest.excludedFiles.filter((file) => (
+      file.kind === "content-asset"
+    ));
+    assert.equal(excludedContent.length, unpublishedAssets.length);
+    assert.ok(excludedContent.every((file) => (
+      file.kind === "content-asset"
+      && file.publicUrl === "/assets/images/shared-image-"
+    )));
+    copyTreeBytes(materialized.staticRoot, buildRoot);
+    writeSsrHtml(buildRoot, publicPreviewUrls(materialized.plan));
+    assert.doesNotThrow(() => materialized.plan.assertProductionBuild(buildRoot));
+  } finally {
+    materialized.plan.dispose();
+    rmSync(repositoryRoot, {recursive: true, force: true});
+    rmSync(materialized.contextRoot, {recursive: true, force: true});
+    rmSync(buildRoot, {recursive: true, force: true});
+  }
+});
+
+test("I-12 内容寻址 URL 未知时不以同 basename 前缀误报公开资源", () => {
+  const repositoryRoot = createRepositoryFixture();
+  const materialized = materializedProduction(repositoryRoot, {
+    ...planInput(repositoryRoot, "production"),
+    unpublishedAssets: [{
+      sourcePath: "site-content/writing/private/assets/shared-image.png",
+      publicPath: null,
+      bytes: Uint8Array.from([0x10, 0x20, 0x30, 0x40]),
+    }],
+  });
+  const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+  chmodSync(buildRoot, 0o700);
+  try {
+    copyTreeBytes(materialized.staticRoot, buildRoot);
+    writeSsrHtml(buildRoot, publicPreviewUrls(materialized.plan));
+    writeFixture(
+      buildRoot,
+      "assets/images/shared-image-public-content-hash.png",
+      Uint8Array.from([0x50, 0x60, 0x70, 0x80]),
+    );
+    assert.equal(
+      materialized.plan.manifest.excludedFiles.find((file) => (
+        file.kind === "content-asset"
+      ))?.publicUrl,
+      null,
+    );
+    assert.doesNotThrow(() => materialized.plan.assertProductionBuild(buildRoot));
+  } finally {
+    materialized.plan.dispose();
+    rmSync(repositoryRoot, {recursive: true, force: true});
+    rmSync(materialized.contextRoot, {recursive: true, force: true});
+    rmSync(buildRoot, {recursive: true, force: true});
+  }
+});
+
+test("I-12 内容寻址 URL 未知时仍拒绝未发布素材源码路径泄漏", () => {
+  const repositoryRoot = createRepositoryFixture();
+  const sourcePath = "site-content/writing/private/assets/shared-image.png";
+  const materialized = materializedProduction(repositoryRoot, {
+    ...planInput(repositoryRoot, "production"),
+    unpublishedAssets: [{
+      sourcePath,
+      publicPath: null,
+      bytes: Uint8Array.from([0x10, 0x20, 0x30, 0x40]),
+    }],
+  });
+  const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+  chmodSync(buildRoot, 0o700);
+  try {
+    copyTreeBytes(materialized.staticRoot, buildRoot);
+    writeSsrHtml(buildRoot, publicPreviewUrls(materialized.plan));
+    writeFixture(buildRoot, "assets/source-map.js", `export const source=${JSON.stringify(sourcePath)};\n`);
+    assert.throws(
+      () => materialized.plan.assertProductionBuild(buildRoot),
+      hasStaticAssetCode("STATIC_ASSET_UNPUBLISHED_PATH_LEAK"),
+    );
+  } finally {
+    materialized.plan.dispose();
+    rmSync(repositoryRoot, {recursive: true, force: true});
+    rmSync(materialized.contextRoot, {recursive: true, force: true});
+    rmSync(buildRoot, {recursive: true, force: true});
+  }
+});
+
 test("I-12 仅浏览器有效的 img 候选构成 SSR 图片引用", async (t) => {
   const runHtml = (html: (urls: readonly string[]) => string, shouldPass: boolean): void => {
     const repositoryRoot = createRepositoryFixture();
@@ -999,9 +1414,167 @@ test("I-12 production checker 对集合、字节、SSR、未发布 path/hash 与
     );
   }, "STATIC_ASSET_UNPUBLISHED_PATH_LEAK"));
 
+  await t.test("未发布原始字节跨 chunk 嵌入更大制品", () => runMutation((buildRoot) => {
+    writeFixture(
+      buildRoot,
+      "assets/raw-content-leak.bin",
+      Buffer.concat([
+        Buffer.alloc(65_534, 0x61),
+        Buffer.from(DRAFT_ARTICLE_BYTES),
+        Buffer.from("tail", "ascii"),
+      ]),
+    );
+  }, "STATIC_ASSET_UNPUBLISHED_BYTE_LEAK"));
+
+  await t.test("小型 planned 项目素材的标准 Base64 跨 chunk 泄漏", () => {
+    const repositoryRoot = createRepositoryFixture();
+    const bytes = privateInlineAssetBytes();
+    const materialized = materializedProduction(repositoryRoot, {
+      ...planInput(repositoryRoot, "production"),
+      unpublishedAssets: [{
+        sourcePath: "site-content/projects/planned-project/assets/private-state.png",
+        publicPath: "/projects/planned-project/assets/private-state.png",
+        bytes,
+      }],
+    });
+    const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+    chmodSync(buildRoot, 0o700);
+    try {
+      copyTreeBytes(materialized.staticRoot, buildRoot);
+      writeSsrHtml(buildRoot, publicPreviewUrls(materialized.plan));
+      const dataUrlHeader = Buffer.from("data:image/png;base64,", "ascii");
+      const base64 = Buffer.from(Buffer.from(bytes).toString("base64"), "ascii");
+      const base64Start = 65_530;
+      writeFixture(
+        buildRoot,
+        "assets/inline-data-url.js",
+        Buffer.concat([
+          Buffer.alloc(base64Start - dataUrlHeader.byteLength, 0x61),
+          dataUrlHeader,
+          base64,
+        ]),
+      );
+      assert.throws(
+        () => materialized.plan.assertProductionBuild(buildRoot),
+        hasStaticAssetCode("STATIC_ASSET_UNPUBLISHED_BYTE_LEAK"),
+      );
+    } finally {
+      materialized.plan.dispose();
+      rmSync(repositoryRoot, {recursive: true, force: true});
+      rmSync(materialized.contextRoot, {recursive: true, force: true});
+      rmSync(buildRoot, {recursive: true, force: true});
+    }
+  });
+
+  await t.test("超过 token 上限的未发布素材仍拒绝 Base64 内联", () => {
+    const repositoryRoot = createRepositoryFixture();
+    const bytes = Uint8Array.from(
+      {length: 20 * 1024},
+      (_, index) => (index * 31 + 17) % 251,
+    );
+    const materialized = materializedProduction(repositoryRoot, {
+      ...planInput(repositoryRoot, "production"),
+      unpublishedAssets: [{
+        sourcePath: "site-content/writing/large-draft/assets/private-inline.bin",
+        publicPath: null,
+        bytes,
+      }],
+    });
+    const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+    chmodSync(buildRoot, 0o700);
+    try {
+      copyTreeBytes(materialized.staticRoot, buildRoot);
+      writeSsrHtml(buildRoot, publicPreviewUrls(materialized.plan));
+      writeFixture(
+        buildRoot,
+        "assets/large-inline.js",
+        `export const payload="${Buffer.from(bytes).toString("base64")}";\n`,
+      );
+      assert.throws(
+        () => materialized.plan.assertProductionBuild(buildRoot),
+        hasStaticAssetCode("STATIC_ASSET_UNPUBLISHED_BYTE_LEAK"),
+      );
+    } finally {
+      materialized.plan.dispose();
+      rmSync(repositoryRoot, {recursive: true, force: true});
+      rmSync(materialized.contextRoot, {recursive: true, force: true});
+      rmSync(buildRoot, {recursive: true, force: true});
+    }
+  });
+
+  await t.test("超过 token 上限的未发布素材仍拒绝原始字节窗口", () => {
+    const repositoryRoot = createRepositoryFixture();
+    const bytes = Uint8Array.from(
+      {length: 20 * 1024},
+      (_, index) => (index * 17 + 29) % 251,
+    );
+    const materialized = materializedProduction(repositoryRoot, {
+      ...planInput(repositoryRoot, "production"),
+      unpublishedAssets: [{
+        sourcePath: "site-content/writing/large-draft/assets/private-window.bin",
+        publicPath: null,
+        bytes,
+      }],
+    });
+    const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+    chmodSync(buildRoot, 0o700);
+    try {
+      copyTreeBytes(materialized.staticRoot, buildRoot);
+      writeSsrHtml(buildRoot, publicPreviewUrls(materialized.plan));
+      writeFixture(
+        buildRoot,
+        "assets/raw-window.bin",
+        Buffer.concat([
+          Buffer.from("carrier-prefix", "ascii"),
+          Buffer.from(bytes.subarray(0, 16 * 1024)),
+          Buffer.from("carrier-suffix", "ascii"),
+        ]),
+      );
+      assert.throws(
+        () => materialized.plan.assertProductionBuild(buildRoot),
+        hasStaticAssetCode("STATIC_ASSET_UNPUBLISHED_BYTE_LEAK"),
+      );
+    } finally {
+      materialized.plan.dispose();
+      rmSync(repositoryRoot, {recursive: true, force: true});
+      rmSync(materialized.contextRoot, {recursive: true, force: true});
+      rmSync(buildRoot, {recursive: true, force: true});
+    }
+  });
+
   await t.test("未发布正文素材改名同字节", () => runMutation((buildRoot) => {
     writeFixture(buildRoot, "assets/renamed.bin", DRAFT_ARTICLE_BYTES);
   }, "STATIC_ASSET_UNPUBLISHED_BYTE_LEAK"));
+
+  await t.test("10 MiB 未发布素材由整文件摘要与窗口 token 共同兜底", () => {
+    const repositoryRoot = createRepositoryFixture();
+    const bytes = new Uint8Array(10 * 1024 * 1024);
+    bytes.fill(0x5a);
+    const materialized = materializedProduction(repositoryRoot, {
+      ...planInput(repositoryRoot, "production"),
+      unpublishedAssets: [{
+        sourcePath: "site-content/writing/large-draft/assets/private-archive.bin",
+        publicPath: "/writing/large-draft/assets/private-archive.bin",
+        bytes,
+      }],
+    });
+    const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+    chmodSync(buildRoot, 0o700);
+    try {
+      copyTreeBytes(materialized.staticRoot, buildRoot);
+      writeSsrHtml(buildRoot, publicPreviewUrls(materialized.plan));
+      writeFixture(buildRoot, "assets/renamed-large.bin", bytes);
+      assert.throws(
+        () => materialized.plan.assertProductionBuild(buildRoot),
+        hasStaticAssetCode("STATIC_ASSET_UNPUBLISHED_BYTE_LEAK"),
+      );
+    } finally {
+      materialized.plan.dispose();
+      rmSync(repositoryRoot, {recursive: true, force: true});
+      rmSync(materialized.contextRoot, {recursive: true, force: true});
+      rmSync(buildRoot, {recursive: true, force: true});
+    }
+  });
 
   await t.test("preview 计划不能进入 production 判定", () => {
     const repositoryRoot = createRepositoryFixture();

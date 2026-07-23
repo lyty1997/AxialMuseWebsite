@@ -1,24 +1,39 @@
 export {classifyContentPath, normalizeContentPath} from "./content-path.js";
 export {validateArticleSource} from "./article-source.js";
 export {
+  buildArticleDateIndex,
+  buildProjectNavigation,
+  buildWritingNavigation,
+} from "./navigation.js";
+export {
   isValidatedProjectCatalog,
   validateProjectCatalog,
 } from "./project-catalog.js";
 export {validateProjectMedia} from "./project-media.js";
 export type {
   Article,
+  ArticleAuthorNavigationItem,
+  ArticleDateIndexEntry,
+  ArticleDateIndexInput,
   ArticleClassification,
   ArticleRecommendation,
   ArticleReferenceSource,
   ArticleRelations,
   ArticleRevision,
   ArticleSeo,
+  ArticleSeoNavigationInput,
   ArticleSourceInput,
+  ArticleTopicNavigationItem,
   ArticleValidationInput,
   Author,
+  ContentBuildMode,
   ContentIssue,
   ContentPathClassification,
   ContentPathInput,
+  DraftArticleNavigationItem,
+  DraftWritingGroup,
+  GeneralWritingGroup,
+  ModuleWritingGroup,
   PreviewImage,
   Project,
   ProjectCatalog,
@@ -26,11 +41,18 @@ export type {
   ProjectExperience,
   ProjectMediaSourceInput,
   ProjectMediaValidationInput,
+  ProjectNavigationInput,
+  ProjectNavigationItem,
+  ProjectNavigationPreviewImage,
   ProjectPreviewAsset,
   ProjectSource,
   ProjectSourceInput,
   RegistryDocumentInput,
+  ProjectWritingGroup,
+  PublicArticleNavigationItem,
   Topic,
   ValidationResult,
+  WritingNavigationGroup,
+  WritingNavigationInput,
   WritingModule,
 } from "./types.js";

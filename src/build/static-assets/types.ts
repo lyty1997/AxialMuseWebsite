@@ -9,7 +9,7 @@ export type StaticPublicAssetRole = "brand" | "operational";
 
 export interface UnpublishedAssetSnapshotInput {
   readonly sourcePath: string;
-  readonly publicPath: string;
+  readonly publicPath: string | null;
   readonly bytes: Uint8Array;
 }
 
@@ -36,9 +36,9 @@ export type StaticAssetManifestFile = Readonly<{
 }>;
 
 export interface StaticAssetExcludedFile {
-  readonly kind: "project-preview" | "article-asset";
+  readonly kind: "project-preview" | "content-asset";
   readonly sourcePath: string;
-  readonly publicUrl: string;
+  readonly publicUrl: string | null;
 }
 
 export interface StaticAssetManifest {

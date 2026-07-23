@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {validateArticleSource} from "../../src/domain/content/index.js";
+import {
+  validateArticleSource,
+  validateProjectCatalog,
+} from "../../src/domain/content/index.js";
 import type {
   Article,
   ArticleSourceInput,
   ProjectCatalog,
+  ProjectCatalogInput,
   ValidationResult,
 } from "../../src/domain/content/index.js";
 
@@ -12,59 +16,150 @@ const ARTICLE_A_ID = "018f0000-0000-7000-8000-000000000001";
 const ARTICLE_B_ID = "018f0000-0000-7000-8000-000000000002";
 const ARTICLE_C_ID = "018f0000-0000-7000-8000-000000000003";
 
-function makeCatalog(relatedWriting: readonly string[] = []): ProjectCatalog {
-  return {
-    projects: [
-      {
-        id: "project-one",
-        title: "Project One",
-        slug: "project-one",
-        navigationOrder: 10,
-        summary: "这是一个用于验证文章领域关系的完整项目摘要。",
+function makeCatalog(
+  relatedWriting: readonly string[] = [],
+  publicationStatuses: readonly ["planned" | "published", "planned" | "published"] = [
+    "planned",
+    "planned",
+  ],
+): ProjectCatalog {
+  const projects = [
+    {
+      id: "project-one",
+      title: "Project One",
+      slug: "project-one",
+      navigationOrder: 10,
+      summary: "这是一个用于验证文章领域关系的完整项目摘要。",
+      status: "active",
+      publicationStatus: publicationStatuses[0],
+      startedAt: "2026-01",
+      updatedAt: "2026-07-18",
+      repositoryUrl: "https://example.test/project-one",
+      productionBranch: "main",
+      showcaseMode: "repository",
+      ...(publicationStatuses[0] === "published" ? {
+        previewImage: {
+          sourcePath: "projects/project-one/overview.webp",
+          width: 1600,
+          height: 1000,
+          alt: "Project One 可复核主预览",
+        },
+      } : {}),
+      ...(relatedWriting.length === 0 ? {} : {relatedWriting}),
+      writingModules: [
+        {
+          id: "module-one",
+          displayName: "模块一",
+          navigationOrder: 10,
+          status: "active",
+        },
+      ],
+      source: ["docs/projects/project-one.md"],
+    },
+    {
+      id: "project-two",
+      title: "Project Two",
+      slug: "project-two",
+      navigationOrder: 20,
+      summary: "这是另一个用于验证跨项目关系的完整项目摘要。",
+      status: "active",
+      publicationStatus: publicationStatuses[1],
+      startedAt: "2026-02",
+      updatedAt: "2026-07-18",
+      repositoryUrl: "https://example.test/project-two",
+      productionBranch: "main",
+      showcaseMode: "repository",
+      ...(publicationStatuses[1] === "published" ? {
+        previewImage: {
+          sourcePath: "projects/project-two/overview.webp",
+          width: 1600,
+          height: 1000,
+          alt: "Project Two 可复核主预览",
+        },
+      } : {}),
+      writingModules: [],
+      source: ["docs/projects/project-two.md"],
+    },
+  ];
+  const input: ProjectCatalogInput = {
+    projects: {
+      sourcePath: "docs/contracts/projects.json",
+      value: {
+        version: "0.3.0",
+        kind: "axial_muse_projects",
         status: "active",
-        publicationStatus: "planned",
-        startedAt: "2026-01",
-        updatedAt: "2026-07-18",
-        repositoryUrl: "https://example.test/project-one",
-        productionBranch: "main",
-        showcaseMode: "repository",
-        relatedWriting,
-        writingModules: [
-          {
-            id: "module-one",
-            displayName: "模块一",
+        owner: "AxialMuseWebsite",
+        lifecycleStatusValues: ["active", "paused", "completed", "archived"],
+        publicationStatusValues: ["draft", "planned", "published", "archived"],
+        showcaseModes: ["repository", "repository-and-video"],
+        projects,
+      },
+    },
+    authors: {
+      sourcePath: "docs/contracts/authors.json",
+      value: {
+        version: "0.1.0",
+        kind: "axial_muse_authors",
+        status: "active",
+        owner: "AxialMuseWebsite",
+        authors: {"author-one": {displayName: "作者一"}},
+      },
+    },
+    topics: {
+      sourcePath: "docs/contracts/topics.json",
+      value: {
+        version: "0.1.0",
+        kind: "axial_muse_topics",
+        status: "active",
+        owner: "AxialMuseWebsite",
+        topics: {
+          "topic-one": {
+            displayName: "主题一",
             navigationOrder: 10,
             status: "active",
           },
-        ],
-        source: ["docs/projects/project-one.md"],
+          "topic-archived": {
+            displayName: "旧主题",
+            navigationOrder: 20,
+            status: "archived",
+          },
+        },
       },
-      {
-        id: "project-two",
-        title: "Project Two",
-        slug: "project-two",
-        navigationOrder: 20,
-        summary: "这是另一个用于验证跨项目关系的完整项目摘要。",
+    },
+    experiences: {
+      sourcePath: "docs/contracts/project-experiences.json",
+      value: {
+        version: "0.1.0",
+        kind: "axial_muse_project_experiences",
         status: "active",
-        publicationStatus: "planned",
-        startedAt: "2026-02",
-        updatedAt: "2026-07-18",
-        repositoryUrl: "https://example.test/project-two",
-        productionBranch: "main",
-        showcaseMode: "repository",
-        relatedWriting: [],
-        writingModules: [],
-        source: ["docs/projects/project-two.md"],
+        owner: "AxialMuseWebsite",
+        canonicalDomain: "axialmuse.com",
+        defaultDeliveryMode: "static",
+        defaultIndexing: "noindex",
+        statusValues: ["planned", "provisioning", "live", "paused", "retired"],
+        deliveryModes: ["static"],
+        reservedSubdomains: [
+          "www", "api", "admin", "auth", "account", "assets", "cdn", "dev",
+          "docs", "mail", "preview", "staging", "static", "status", "support",
+        ],
+        experiences: [],
       },
-    ],
-    authors: [{id: "author-one", displayName: "作者一"}],
-    topics: [
-      {id: "topic-one", displayName: "主题一", navigationOrder: 10, status: "active"},
-      {id: "topic-archived", displayName: "旧主题", navigationOrder: 20, status: "archived"},
-    ],
-    experiences: [],
-    projectSources: [],
+    },
+    projectSources: projects
+      .filter((project) => project.publicationStatus === "published")
+      .map((project) => ({
+        sourcePath: `site-content/projects/${project.id}/index.md`,
+        isSymbolicLink: false,
+        isRealPathWithinRoot: true,
+        frontMatter: {},
+        content: "## 可复核说明\n\n项目正文提供稳定的文章关系验收证据。\n",
+      })),
   };
+  const result = validateProjectCatalog(input);
+  if (!result.ok) {
+    assert.fail(`项目目录 fixture 无效：${result.issues.map((issue) => issue.code).join(", ")}`);
+  }
+  return result.value;
 }
 
 function makeFrontMatter(
@@ -131,7 +226,7 @@ test("I-06 通用草稿、项目文章与完整公开文章形成确定且深冻
         module: "module-one",
         topics: ["topic-one", "topic-archived"],
       },
-      relations: {projects: ["project-two"], articles: [ARTICLE_A_ID]},
+      relations: {projects: ["project-two"]},
       seo: {
         description: "以稳定错误与模块图证明工程边界能够自动执行并持续复核。",
         socialDescription: "一份面向分享场景的模块边界实践摘要，保留可追溯的验收证据。",
@@ -153,8 +248,14 @@ test("I-06 通用草稿、项目文章与完整公开文章形成确定且深冻
     ".mdx",
   );
 
-  const first = validateArticleSource({catalog: makeCatalog(), sources: [published, draft]});
-  const second = validateArticleSource({catalog: makeCatalog(), sources: [draft, published]});
+  const first = validateArticleSource({
+    catalog: makeCatalog([], ["published", "published"]),
+    sources: [published, draft],
+  });
+  const second = validateArticleSource({
+    catalog: makeCatalog([], ["published", "published"]),
+    sources: [draft, published],
+  });
   assert.deepEqual(first, second);
   const articles = expectSuccess(first);
   assert.deepEqual(articles.map((article) => article.articleId), [ARTICLE_A_ID, ARTICLE_B_ID]);
@@ -232,6 +333,80 @@ test("I-06 重复入口、身份、slug 与推荐顺序冲突稳定失败", () =
   }
 });
 
+test("E-016 重复 articleId 的状态不参与可见性级联且不受输入顺序影响", () => {
+  const draftTarget = makeSource("duplicate-draft");
+  const publishedTarget = makeSource("duplicate-published", makeFrontMatter({
+    title: "重复公开目标",
+    slug: "/writing/duplicate-published",
+    publicationStatus: "published",
+    publishedAt: "2026-07-10",
+    updatedAt: "2026-07-18",
+  }));
+  const publicReference = makeSource("public-reference", makeFrontMatter({
+    articleId: ARTICLE_B_ID,
+    title: "公开引用目标",
+    slug: "/writing/public-reference",
+    publicationStatus: "published",
+    publishedAt: "2026-07-11",
+    updatedAt: "2026-07-18",
+    relations: {articles: [ARTICLE_A_ID]},
+  }));
+  const catalog = makeCatalog([], ["published", "published"]);
+  const forward = validateArticleSource({
+    catalog,
+    sources: [draftTarget, publishedTarget, publicReference],
+  });
+  const reverse = validateArticleSource({
+    catalog,
+    sources: [publishedTarget, draftTarget, publicReference],
+  });
+  expectFailure(forward, ["CONTENT_ARTICLE_ID_DUPLICATE"]);
+  expectFailure(reverse, ["CONTENT_ARTICLE_ID_DUPLICATE"]);
+  if (!forward.ok && !reverse.ok) {
+    const identity = (result: typeof forward) => result.ok ? [] : result.issues.map((issue) => (
+      [issue.sourcePath, issue.fieldPath, issue.code]
+    ));
+    assert.deepEqual(identity(forward), identity(reverse));
+    assert.equal(forward.issues.some((issue) => issue.code.endsWith("_UNPUBLISHED")), false);
+  }
+});
+
+test("E-016 重复 articleId 含非法状态时不得制造可见性伪级联", () => {
+  const draftTarget = makeSource("duplicate-draft");
+  const invalidTarget = makeSource("duplicate-invalid", makeFrontMatter({
+    title: "重复非法目标",
+    slug: "/writing/duplicate-invalid",
+    publicationStatus: "planned",
+  }));
+  const publicReference = makeSource("public-reference", makeFrontMatter({
+    articleId: ARTICLE_B_ID,
+    title: "公开引用目标",
+    slug: "/writing/public-reference",
+    publicationStatus: "published",
+    publishedAt: "2026-07-11",
+    updatedAt: "2026-07-18",
+    relations: {articles: [ARTICLE_A_ID]},
+  }));
+  const catalog = makeCatalog([ARTICLE_A_ID], ["published", "published"]);
+  const forward = validateArticleSource({
+    catalog,
+    sources: [draftTarget, invalidTarget, publicReference],
+  });
+  const reverse = validateArticleSource({
+    catalog,
+    sources: [invalidTarget, draftTarget, publicReference],
+  });
+  expectFailure(forward, ["CONTENT_ARTICLE_ID_DUPLICATE", "CONTENT_ARTICLE_STATE_INVALID"]);
+  expectFailure(reverse, ["CONTENT_ARTICLE_ID_DUPLICATE", "CONTENT_ARTICLE_STATE_INVALID"]);
+  if (!forward.ok && !reverse.ok) {
+    const identity = (result: typeof forward) => result.ok ? [] : result.issues.map((issue) => (
+      [issue.sourcePath, issue.fieldPath, issue.code]
+    ));
+    assert.deepEqual(identity(forward), identity(reverse));
+    assert.equal(forward.issues.some((issue) => issue.code.endsWith("_UNPUBLISHED")), false);
+  }
+});
+
 test("I-06 文章关系拒绝自身与悬空引用，项目 relatedWriting 也必须闭合", () => {
   const self = makeSource("self-reference", makeFrontMatter({
     relations: {articles: [ARTICLE_A_ID, ARTICLE_B_ID]},
@@ -253,6 +428,42 @@ test("I-06 文章关系拒绝自身与悬空引用，项目 relatedWriting 也�
     validateArticleSource({catalog: makeCatalog(), sources: [unknown]}),
     ["CONTENT_ARTICLE_RELATION_UNKNOWN"],
   );
+});
+
+test("E-016 公开文章与项目不得把未发布关系带入 production 模型", () => {
+  const draft = makeSource("dependency-inversion");
+  const published = makeSource("public-reference", makeFrontMatter({
+    articleId: ARTICLE_B_ID,
+    title: "公开关系可见性校验",
+    slug: "/writing/public-reference",
+    publicationStatus: "published",
+    publishedAt: "2026-07-10",
+    updatedAt: "2026-07-18",
+    classification: {project: "project-one", topics: ["topic-one"]},
+    relations: {
+      projects: ["project-two"],
+      articles: [ARTICLE_A_ID],
+    },
+  }));
+  const unpublishedOwner = makeSource("unpublished-owner", makeFrontMatter({
+    articleId: ARTICLE_C_ID,
+    title: "未发布归属可见性校验",
+    slug: "/writing/unpublished-owner",
+    publicationStatus: "published",
+    publishedAt: "2026-07-11",
+    updatedAt: "2026-07-18",
+    classification: {project: "project-two", topics: ["topic-one"]},
+  }));
+  const result = validateArticleSource({
+    catalog: makeCatalog([ARTICLE_A_ID], ["published", "planned"]),
+    sources: [draft, published, unpublishedOwner],
+  });
+  expectFailure(result, [
+    "CONTENT_ARTICLE_PROJECT_UNPUBLISHED",
+    "CONTENT_ARTICLE_RELATED_PROJECT_UNPUBLISHED",
+    "CONTENT_ARTICLE_RELATION_UNPUBLISHED",
+    "CONTENT_PROJECT_WRITING_UNPUBLISHED",
+  ]);
 });
 
 test("I-06 日期、SEO、推荐、修订与来源的边界错误都失败关闭", () => {
@@ -416,4 +627,20 @@ test("I-06 畸形 catalog 与缺少 project 的 module 返回稳定 issue 而不
     validateArticleSource({catalog: makeCatalog(), sources: [moduleWithoutProject]}),
     ["CONTENT_ARTICLE_MODULE_WITHOUT_PROJECT"],
   );
+});
+
+test("E-016 文章批次只接受同次 validateProjectCatalog 返回对象的 provenance", () => {
+  const catalog = makeCatalog();
+  for (const [label, forged] of [
+    ["深克隆", structuredClone(catalog)],
+    ["浅克隆", {...catalog}],
+  ] as const) {
+    expectFailure(
+      validateArticleSource({
+        catalog: forged as ProjectCatalog,
+        sources: [makeSource(`forged-${label === "深克隆" ? "deep" : "shallow"}`)],
+      }),
+      ["CONTENT_ARTICLE_CATALOG_INVALID"],
+    );
+  }
 });

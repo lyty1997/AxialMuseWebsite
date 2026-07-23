@@ -16,6 +16,7 @@ const config: Config = {
   url: "https://www.axialmuse.com",
   baseUrl: "/",
   trailingSlash: true,
+  noIndex: false,
   onBrokenLinks: "throw",
   onBrokenAnchors: "throw",
   onDuplicateRoutes: "throw",
@@ -36,13 +37,12 @@ const config: Config = {
   staticDirectories: [buildContext.staticDirectory],
   presets: [
     [
-      "classic",
+      "./src/build/content/docusaurus-preset.ts",
       {
-        docs: false,
         blog: false,
         theme: {},
         sitemap: {},
-      } satisfies ClassicPresetOptions,
+      } satisfies Omit<ClassicPresetOptions, "docs">,
     ],
   ],
   themeConfig: {

@@ -405,6 +405,78 @@ test("I-12 unpublishedAssets 拒绝 sparse/accessor/额外字段与 Proxy trap",
   ));
 });
 
+test("I-12 unpublishedAssets 只接受项目或文章 entry 下的精确素材路径", async (t) => {
+  await t.test("项目与文章正文素材统一进入 content-asset 排除集合", () => (
+    withRepository((repositoryRoot) => {
+      const projectAsset: UnpublishedAssetSnapshotInput = {
+        sourcePath: "site-content/projects/input-boundary/assets/diagrams/private-state.png",
+        publicPath: "/projects/input-boundary/assets/private-state.png",
+        bytes: Uint8Array.from([0x04, 0x05, 0x06]),
+      };
+      const plan = prepareStaticAssetPlan(validInput(repositoryRoot, [
+        validUnpublishedEntry(),
+        projectAsset,
+      ]));
+      try {
+        assert.deepEqual(plan.manifest.excludedFiles, [
+          {
+            kind: "content-asset",
+            sourcePath: projectAsset.sourcePath,
+            publicUrl: projectAsset.publicPath,
+          },
+          {
+            kind: "content-asset",
+            sourcePath: validUnpublishedEntry().sourcePath,
+            publicUrl: validUnpublishedEntry().publicPath,
+          },
+        ]);
+      } finally {
+        plan.dispose();
+      }
+    })
+  ));
+
+  const invalidSourcePaths = [
+    "site-content/project/input-boundary/assets/private.bin",
+    "site-content/projects/input-boundary/asset/private.bin",
+    "site-content/projects/input-boundary/assets",
+    "site-content/projects/input-boundary/index/assets/private.bin",
+    "site-content/projects/input-boundary/assets/private.bin/extra",
+    "site-content/projects/Input-Boundary/assets/private.bin",
+    "site-content/writing/input-boundary/assets/private",
+  ];
+  for (const [index, sourcePath] of invalidSourcePaths.entries()) {
+    await t.test(`非法 sourcePath #${index + 1}`, () => (
+      withRepository((repositoryRoot) => {
+        expectStaticAssetFailure(
+          () => prepareStaticAssetPlan(validInput(repositoryRoot, [{
+            ...validUnpublishedEntry(),
+            sourcePath,
+          }])),
+          "STATIC_ASSET_UNPUBLISHED_INPUT",
+        );
+      })
+    ));
+  }
+
+  await t.test("重复 sourcePath 仍失败关闭", () => (
+    withRepository((repositoryRoot) => {
+      const entry = validUnpublishedEntry();
+      expectStaticAssetFailure(
+        () => prepareStaticAssetPlan(validInput(repositoryRoot, [
+          entry,
+          {
+            ...entry,
+            publicPath: "/assets/images/another-private-",
+            bytes: Uint8Array.from([0x04, 0x05, 0x06]),
+          },
+        ])),
+        "STATIC_ASSET_UNPUBLISHED_DUPLICATE",
+      );
+    })
+  ));
+});
+
 test("I-12 prepareStaticAssetPlan 保留已有 StaticAssetError", () => (
   withRepository((repositoryRoot) => {
     const error = expectStaticAssetFailure(

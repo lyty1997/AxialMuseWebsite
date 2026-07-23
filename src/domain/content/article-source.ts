@@ -1,4 +1,5 @@
 import {classifyContentPath} from "./content-path.js";
+import {isValidatedProjectCatalog} from "./project-catalog.js";
 import type {
   Article,
   ArticleClassification,
@@ -58,6 +59,7 @@ const REQUIRED_ARTICLE_FIELDS = [
   "authors",
   "classification",
 ] as const;
+const VALIDATED_ARTICLE_COLLECTIONS = new WeakMap<object, ProjectCatalog>();
 
 type PublicationStatus = Article["publicationStatus"];
 
@@ -65,6 +67,9 @@ interface ArticleProbe {
   readonly sourcePath: string;
   readonly articleId?: string;
   readonly slug?: string;
+  readonly publicationStatus?: PublicationStatus;
+  readonly projectId?: string;
+  readonly relatedProjectIds: readonly string[];
   readonly relatedArticleIds: readonly string[];
   readonly recommendation?: ArticleRecommendation;
 }
@@ -546,7 +551,9 @@ function buildArticleProbe(
   frontMatter: unknown,
   sourcePath: string,
 ): ArticleProbe {
-  if (!isRecord(frontMatter)) return {sourcePath, relatedArticleIds: []};
+  if (!isRecord(frontMatter)) {
+    return {sourcePath, relatedProjectIds: [], relatedArticleIds: []};
+  }
   const articleId = isUuidV7(frontMatter.articleId)
     ? frontMatter.articleId
     : undefined;
@@ -558,6 +565,19 @@ function buildArticleProbe(
     && isUniqueStringArray(frontMatter.relations.articles, 1, 10, isUuidV7)
       ? [...frontMatter.relations.articles]
       : [];
+  const relatedProjectIds = isRecord(frontMatter.relations)
+    && isUniqueStringArray(frontMatter.relations.projects, 1, 5, isKebabId)
+      ? [...frontMatter.relations.projects]
+      : [];
+  const projectId = isRecord(frontMatter.classification)
+    && isKebabId(frontMatter.classification.project)
+      ? frontMatter.classification.project
+      : undefined;
+  const publicationStatus = PUBLICATION_STATUSES.includes(
+    frontMatter.publicationStatus as PublicationStatus,
+  )
+    ? frontMatter.publicationStatus as PublicationStatus
+    : undefined;
   const recommendation = isRecord(frontMatter.recommendation)
     && Array.isArray(frontMatter.recommendation.surfaces)
     && frontMatter.recommendation.surfaces.length >= 1
@@ -576,6 +596,9 @@ function buildArticleProbe(
     sourcePath,
     ...(articleId === undefined ? {} : {articleId}),
     ...(slug === undefined ? {} : {slug}),
+    ...(publicationStatus === undefined ? {} : {publicationStatus}),
+    ...(projectId === undefined ? {} : {projectId}),
+    relatedProjectIds,
     relatedArticleIds,
     ...(recommendation === undefined ? {} : {recommendation}),
   };
@@ -680,6 +703,79 @@ function validateArticleRelations(
   }
 }
 
+function validatePublicVisibilityReferences(
+  catalog: ProjectCatalog,
+  probes: readonly ArticleProbe[],
+  collector: IssueCollector,
+): void {
+  const articleStatusGroups = new Map<string, ArticleProbe[]>();
+  for (const probe of probes) {
+    if (probe.articleId === undefined) continue;
+    const group = articleStatusGroups.get(probe.articleId) ?? [];
+    group.push(probe);
+    articleStatusGroups.set(probe.articleId, group);
+  }
+  const articleStatusById = new Map([...articleStatusGroups].flatMap(([articleId, group]) => (
+    group.length === 1 && group[0]?.publicationStatus !== undefined
+      ? [[articleId, group[0].publicationStatus] as const]
+      : []
+  )));
+  const projectStatusById = new Map(catalog.projects.map((project) => (
+    [project.id, project.publicationStatus] as const
+  )));
+  const isPublic = (status: string | undefined): boolean => (
+    status === "published" || status === "archived"
+  );
+  for (const probe of probes) {
+    if (!isPublic(probe.publicationStatus)) continue;
+    if (
+      probe.projectId !== undefined
+      && projectStatusById.has(probe.projectId)
+      && !isPublic(projectStatusById.get(probe.projectId))
+    ) {
+      collector.add(
+        "CONTENT_ARTICLE_PROJECT_UNPUBLISHED",
+        probe.sourcePath,
+        "classification.project",
+        "公开文章不得归属未发布项目。",
+      );
+    }
+    for (const [index, projectId] of probe.relatedProjectIds.entries()) {
+      if (projectStatusById.has(projectId) && !isPublic(projectStatusById.get(projectId))) {
+        collector.add(
+          "CONTENT_ARTICLE_RELATED_PROJECT_UNPUBLISHED",
+          probe.sourcePath,
+          `relations.projects.${index}`,
+          "公开文章不得引用未发布相关项目。",
+        );
+      }
+    }
+    for (const [index, articleId] of probe.relatedArticleIds.entries()) {
+      if (articleStatusById.has(articleId) && !isPublic(articleStatusById.get(articleId))) {
+        collector.add(
+          "CONTENT_ARTICLE_RELATION_UNPUBLISHED",
+          probe.sourcePath,
+          `relations.articles.${index}`,
+          "公开文章不得引用未发布相关文章。",
+        );
+      }
+    }
+  }
+  for (const project of catalog.projects) {
+    if (!isPublic(project.publicationStatus)) continue;
+    for (const [index, articleId] of project.relatedWriting.entries()) {
+      if (articleStatusById.has(articleId) && !isPublic(articleStatusById.get(articleId))) {
+        collector.add(
+          "CONTENT_PROJECT_WRITING_UNPUBLISHED",
+          PROJECTS_PATH,
+          `projectsById.${project.id}.relatedWriting.${index}`,
+          "公开项目不得引用未发布技术文章。",
+        );
+      }
+    }
+  }
+}
+
 function validateProjectWritingReferences(
   catalog: ProjectCatalog,
   probes: readonly ArticleProbe[],
@@ -729,25 +825,6 @@ function validateRecommendationConflicts(
   }
 }
 
-function hasCatalogShape(value: unknown): value is ProjectCatalog {
-  return isRecord(value)
-    && Array.isArray(value.projects)
-    && value.projects.every((project) => (
-      isRecord(project)
-      && typeof project.id === "string"
-      && Array.isArray(project.relatedWriting)
-      && project.relatedWriting.every((articleId) => typeof articleId === "string")
-      && Array.isArray(project.writingModules)
-      && project.writingModules.every((module) => isRecord(module) && typeof module.id === "string")
-    ))
-    && Array.isArray(value.authors)
-    && value.authors.every((author) => isRecord(author) && typeof author.id === "string")
-    && Array.isArray(value.topics)
-    && value.topics.every((topic) => isRecord(topic) && typeof topic.id === "string")
-    && Array.isArray(value.experiences)
-    && Array.isArray(value.projectSources);
-}
-
 function isArticleSourceInput(value: unknown): value is ArticleSourceInput {
   return isRecord(value)
     && typeof value.sourcePath === "string"
@@ -761,7 +838,7 @@ export function validateArticleSource(
   input: ArticleValidationInput,
 ): ValidationResult<readonly Article[]> {
   const collector = new IssueCollector();
-  if (!isRecord(input) || !hasCatalogShape(input.catalog)) {
+  if (!isRecord(input) || !isValidatedProjectCatalog(input.catalog)) {
     collector.add("CONTENT_ARTICLE_CATALOG_INVALID", WRITING_ROOT, undefined, "文章校验需要完整且已验证的项目目录。");
     return failure(collector);
   }
@@ -814,8 +891,27 @@ export function validateArticleSource(
   addDuplicateIssues(probes, "slug", "CONTENT_ARTICLE_SLUG_DUPLICATE", collector);
   validateArticleRelations(probes, collector);
   validateProjectWritingReferences(input.catalog, probes, collector);
+  validatePublicVisibilityReferences(input.catalog, probes, collector);
   validateRecommendationConflicts(probes, collector);
 
   if (collector.hasIssues()) return failure(collector);
-  return success([...articles].sort((left, right) => compareCodePoints(left.articleId, right.articleId)));
+  const result = success(
+    [...articles].sort((left, right) => compareCodePoints(left.articleId, right.articleId)),
+  );
+  if (result.ok) VALIDATED_ARTICLE_COLLECTIONS.set(result.value, input.catalog);
+  return result;
+}
+
+export function isValidatedArticleCollection(
+  value: unknown,
+  catalog?: ProjectCatalog,
+): value is readonly Article[] {
+  try {
+    if (value === null || typeof value !== "object") return false;
+    const validatedCatalog = VALIDATED_ARTICLE_COLLECTIONS.get(value);
+    return validatedCatalog !== undefined
+      && (catalog === undefined || validatedCatalog === catalog);
+  } catch {
+    return false;
+  }
 }

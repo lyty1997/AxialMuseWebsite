@@ -4,14 +4,24 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
-## 2026-07-23 — #6 远端闭环与 #7 本地验收闭环
+## 2026-07-23 — #7 远端闭环与 #26 本地实现/验收中
+
+- **#7 关闭证据**：I-12 精确提交 `7f2115d9f1dc5396ca0c81fc9960223644d79725` 已只 push 到 `origin/dev`；该 SHA 的 GitHub Actions run `29950131762` 为 `completed/success`。逐条脱敏验收已写入 [GitHub #7 评论](https://github.com/lyty1997/AxialMuseWebsite/issues/7#issuecomment-5050422648)，Issue 随后以 `completed` 关闭。
+- **语义压缩与依赖链**：#26 只继承 #7 已验证的 production/preview 静态素材计划、受控构建上下文、未发布正文素材私有快照接口和目的限定的 production 泄漏判定；#26 原子拥有单一 docs 实例、真实内容扫描、frontmatter 投影、侧栏、日期索引、global data 与 production Docusaurus 装配。#8 继续独占 preview `build --dev`、全站 noindex、无 sitemap 和持久候选激活，#33 独占 release 身份、整树摘要与封装。
+- **E-016 current-only 实例**：#26 本地实现以 `site-content/` 为唯一 docs 物理根、`routeBasePath: "/"`，选项精确为 `includeCurrentVersion: true`、`onlyIncludeVersions: ["current"]`、`tags: false`。不得使用 `disableVersioning: true`；Docusaurus 3.10.2 在没有版本清单时会拒绝该组合。扫描器同时拒绝 version roots、localized 第二内容根和 category metadata，不能用条件 `docs:false`、占位文档、额外实例或框架默认推断绕过。
+- **公共装配契约**：`src/build/content/index.ts` 只公开 `loadValidatedContent`、`createParseFrontMatter`、`createSidebarItemsGenerator` 与 `createContentDataPlugin`；根侧栏稳定名称为 `projectsSidebar`、`writingSidebar`，安全 global data 键为 `projectNavigation`、`writingNavigation`。日期索引只在 browser bundle 完成后的本地插件 `postBuild` 中，以私有临时普通文件写入并原子 rename 到本次 `generatedFilesDir/axial-muse/article-date-index.json`；独立 checker 再按 fresh session 的同一投影逐字节核对。它不能进入最终 `build/`、global data、公开 route 或浏览器 bundle。
+- **三阶段 production build**：受控入口在仓库级独占锁内依次完成“候选 Docusaurus build → 候选路径 fresh checker → 可回滚切换并在最终 `build/` 路径再次 fresh verify”。两次 checker 都创建全新 session、重新扫描并核对同一输入摘要；该摘要域分隔合并内容批次与全部公开/未发布静态计划语义、长度和字节摘要，不会在非公开预览换字节后放行旧字节候选。切换不是 POSIX 单 syscall 目录交换。commit point 前任一步失败都恢复调用前的有效 `build/` 或原先不存在状态，并把失败候选移入唯一 retired/quarantine 隔离路径；retired 只能在下一次取得锁后、任何新改动前回收。该流程不生成 #33 的 release 身份、摘要或封装。
+- **当前本地验收**：Node `24.18.0` / npm `11.16.0` 与最低 Node `24.16.0` / npm `11.13.0` 已对最终同一快照通过严格 `typecheck`、13 个 TypeScript 测试 source、203/203 个逻辑子测试、完整 `quality`、49 个 TypeScript 文件的模块边界和真实 Docusaurus production build。当前两个 `planned` 项目正文可在不伪造公开 doc、路由或 sitemap 项的前提下完成装配。独立全新 fixture 再以两个公开项目、两篇公开文章和一篇 draft 文章证明 4 条唯一详情路由、两组精确侧栏、4 个 canonical、首页加 4 个详情的 5 项 sitemap、每项目唯一且属性精确的 SSR `<img>`、公开 WebP 源/制品哈希一致、browser global data 只有公开 docs 且 `draftIds: []`、五类 draft token 零泄漏，以及权限 `0600` 且未进入 `build/` 的私有日期索引；最终 fixture build 整树 SHA-256 为 `d240e69ba15e16b3c5a2bb8ad76601339242fb5e43a7ad64a39236acf4d82b75`。重复文章 slug 与缺失公开项目预览均失败关闭并保持旧 build 的摘要和 inode；final verify 建 plan 后对物理静态树改字节、增成员、删成员的确定性 seam 也全部以 `STATIC_ASSET_SOURCE_DRIFT` 拒绝并保留旧 build。PlantUML 3 个源码块编译通过，三份 SVG 重新渲染逐字节无需更新。本节不宣称 #26 已提交、push、取得远端 CI 成功或关闭 Issue。
+- **完整性与遗留**：#26 未新增依赖、第三方运行时服务、浏览器外部请求或用户数据处理；最终独立只读审查无 P0/P1/P2。精确提交、`origin/dev` push、精确 SHA CI、验收评论与 Issue 状态仍须在真实发生后完成。
+
+## 2026-07-23 — #6 远端闭环与 #7 本地验收历史快照（后续已远端闭环）
 
 - **#6 关闭证据**：I-11 精确提交 `8d926ea43e92b4cd49e4a1d541f52105075acf1a` 已只 push 到 `origin/dev`；该 SHA 唯一 push CI run `29939606613` 为 `completed/success`，`Website quality gates` 与 `Diagram compile check` 全部成功。双 Node、46/46 子测试、类型与质量证据及 #7 的同次私有字节快照交接已写入 GitHub #6，Issue 于 2026-07-22T16:51:59Z 以 `completed` 关闭；任务临时安装、运行时、WebP 样本与评论草稿随后已清理。
-- **#7 依赖与边界**：语义压缩后只继承已验证 `ProjectCatalog`、`validateProjectMedia` 六字段投影和扫描适配同次读取的私有字节快照；活动链为 `#6 -> #7 -> #26`。#7 拥有 production/preview 白名单计划、私有临时树与目的限定的 production 素材泄漏判定；#26 拥有共享双模式内容扫描/投影 API、唯一 docs 实例基础装配和 production Docusaurus 接线，#8 消费这些共享结果完成 preview Docusaurus、持久候选与原子切换，#33 独占 release 封装与整树摘要。
+- **#7 当时的依赖与边界**：语义压缩后只继承已验证 `ProjectCatalog`、`validateProjectMedia` 六字段投影和扫描适配同次读取的私有字节快照；当时活动链为 `#6 -> #7 -> #26`。#7 拥有 production/preview 白名单计划、私有临时树与目的限定的 production 素材泄漏判定；#26 拥有共享双模式内容扫描/投影 API、唯一 docs 实例基础装配和 production Docusaurus 接线，#8 消费这些共享结果完成 preview Docusaurus、持久候选与原子切换，#33 独占 release 封装与整树摘要。
 - **I-12 工程决定**：原设计无法仅从任意新字节的视觉语义自动判断 `static-public/` 是否误放项目素材。为使“显式登记”可证伪，新增空的 `docs/contracts/static-public-assets.json`，目录文件与登记必须一一对应，角色封闭为 `brand|operational`；再以保留 namespace 和项目/未发布正文素材同字节反查捕获可机械证明的误放。该机制不批准真实素材，也不替代入 Git 前的真实性、凭证、隐私和版权审核。
 - **I-12 实现与定向验收**：新增受版本约束的始终公开素材登记、production/preview 不可复用的 `BuildContext`、一次性静态素材计划、私有 byte snapshot、受控物化，以及只产出逐文件路径/长度/SHA-256、未发布泄漏和 SSR 引用证据的 production 素材检查。两个静态素材定向测试文件 70/70 证明 production 只含公开项目、preview 含全部登记预览且输出目录隔离；已执行反例覆盖输入 Proxy/accessor/sparse 漂移、源路径 symlink/realpath/非普通文件/hardlink/大小写、`static-public` 登记闭合与保留 namespace、浏览器丢弃的伪图片 token，以及 production 素材缺失、多余、改字节、未发布 path、跨 64 KiB 分块的改名同字节和通用 draft 文章素材。工作树中的登记当前为空，且未批准任何真实素材；这项仓库事实不冒充带真实素材的正常路径验收。
-- **双端点验收**：任务私有候选通过 E-010 从官方 npm registry 冻结安装 1,298 个包且未执行 lifecycle script。Node `24.18.0` / npm `11.16.0` 与最低 Node `24.16.0` / npm `11.13.0` 对最终同一代码均通过 9 个 TypeScript source、118/118 子测试、严格 `typecheck` 和完整 `quality`，模块边界覆盖 29 个 TypeScript 文件。两端 production `build` 都精确以 `BUILD_PIPELINE_INCOMPLETE` 退出 1，证明 #26 接线前没有静默忽略正文或提前发布素材。
-- **完整性与遗留**：未修改依赖、lockfile、workflow、发布封装或真实内容；未引入第三方运行时服务、浏览器请求或用户数据处理。依赖边界、代码缺口与 SSR/私有字节对抗三路最终只读审计均无 blocker；#7 已完成修复后的双端点最终验收，当前只待单一提交、仅 `origin/dev` 推送、精确 SHA CI 成功、脱敏验收回填与关闭；在远端闭环并语义压缩前不启动 #26。
+- **当时的双端点验收**：任务私有候选通过 E-010 从官方 npm registry 冻结安装 1,298 个包且未执行 lifecycle script。Node `24.18.0` / npm `11.16.0` 与最低 Node `24.16.0` / npm `11.13.0` 对当时最终同一代码均通过 9 个 TypeScript source、118/118 子测试、严格 `typecheck` 和完整 `quality`，模块边界覆盖 29 个 TypeScript 文件。两端 production `build` 当时都精确以 `BUILD_PIPELINE_INCOMPLETE` 退出 1，证明 #26 接线前没有静默忽略正文或提前发布素材；该失败码不是 #26 当前本地实现状态。
+- **完整性与后续状态**：当时未修改依赖、lockfile、workflow、发布封装或真实内容，也未引入第三方运行时服务、浏览器请求或用户数据处理。依赖边界、代码缺口与 SSR/私有字节对抗三路最终只读审计均无 blocker；#7 后续已按本文件顶部证据完成提交、`origin/dev` push、精确 SHA CI、脱敏验收回填与关闭，#26 已在语义压缩后启动。
 
 ## 2026-07-23 — #5 远端闭环与 #6 本地验收闭环
 

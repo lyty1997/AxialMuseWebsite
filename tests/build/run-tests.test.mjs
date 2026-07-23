@@ -35,12 +35,13 @@ function fakeCompilerSource(behavior) {
 import {mkdirSync, writeFileSync} from "node:fs";
 import {resolve} from "node:path";
 
+const behavior = ${JSON.stringify(behavior)};
 const outputIndex = process.argv.indexOf("--outDir");
 if (outputIndex === -1 || outputIndex + 1 >= process.argv.length) {
   process.stderr.write("missing outDir\\n");
   process.exit(9);
 }
-if (${JSON.stringify(behavior)} === "compile-failure") {
+if (behavior === "compile-failure") {
   process.stderr.write("tests/build/example.test.ts(1,1): error TS9999: synthetic compile failure\\n");
   process.exitCode = 2;
 } else {
@@ -48,11 +49,26 @@ if (${JSON.stringify(behavior)} === "compile-failure") {
   const buildRoot = resolve(outputRoot, "tests/build");
   mkdirSync(buildRoot, {recursive: true});
   writeFileSync(resolve(buildRoot, "support.js"), "export const fixtureValue = 42;\\n", "utf8");
-  const testBody = ${JSON.stringify(behavior)} === "test-failure"
-    ? 'import test from "node:test";\\ntest("E-012 synthetic failing test", () => { throw new Error("synthetic execution failure"); });\\n'
-    : 'import assert from "node:assert/strict";\\nimport {readFileSync} from "node:fs";\\nimport test from "node:test";\\nimport {fixtureValue} from "./support.js";\\ntest("E-012 fake legal .js import", () => { assert.equal(fixtureValue, 42); assert.deepEqual(JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")), {type: "module", private: true}); });\\n';
+  let testBody;
+  if (behavior === "test-failure") {
+    testBody = 'import test from "node:test";\\ntest("E-012 synthetic failing test", () => { throw new Error("synthetic execution failure"); });\\n';
+  } else if (behavior === "decoder-runtime") {
+    testBody = 'import assert from "node:assert/strict";\\nimport {readFileSync, readdirSync} from "node:fs";\\nimport test from "node:test";\\nimport {frontMatterDecoderFixture} from "../../scripts/content/frontmatter.mjs";\\nimport {jsonDecoderFixture} from "../../scripts/content/json.mjs";\\ntest("E-012 copied decoder runtime", () => { const runtimeRoot = new URL("../../scripts/content/", import.meta.url); assert.equal(frontMatterDecoderFixture, "frontmatter-runtime"); assert.equal(jsonDecoderFixture, "json-runtime"); assert.deepEqual(readdirSync(runtimeRoot).sort(), ["frontmatter.d.mts", "frontmatter.mjs", "json.d.mts", "json.mjs"]); assert.equal(readFileSync(new URL("frontmatter.d.mts", runtimeRoot), "utf8"), "export declare const frontMatterDecoderFixture: string;\\\\n"); assert.equal(readFileSync(new URL("json.d.mts", runtimeRoot), "utf8"), "export declare const jsonDecoderFixture: string;\\\\n"); });\\n';
+  } else if (behavior === "decoder-near-match") {
+    testBody = 'import assert from "node:assert/strict";\\nimport {existsSync} from "node:fs";\\nimport test from "node:test";\\ntest("E-012 near-match does not copy decoder runtime", () => { assert.equal(existsSync(new URL("../../scripts/content/", import.meta.url)), false); });\\n';
+  } else {
+    testBody = 'import assert from "node:assert/strict";\\nimport {readFileSync} from "node:fs";\\nimport test from "node:test";\\nimport {fixtureValue} from "./support.js";\\ntest("E-012 fake legal .js import", () => { assert.equal(fixtureValue, 42); assert.deepEqual(JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")), {type: "module", private: true}); });\\n';
+  }
   writeFileSync(resolve(buildRoot, "example.test.js"), testBody, "utf8");
-  if (${JSON.stringify(behavior)} === "extra-emit") {
+  if (behavior === "decoder-runtime" || behavior === "decoder-near-match") {
+    const adapterRoot = resolve(outputRoot, "src/build/content");
+    mkdirSync(adapterRoot, {recursive: true});
+    const adapterName = behavior === "decoder-runtime"
+      ? "content-decoders.js"
+      : "content-decoders-copy.js";
+    writeFileSync(resolve(adapterRoot, adapterName), "export const emittedAdapter = true;\\n", "utf8");
+  }
+  if (behavior === "extra-emit") {
     const domainRoot = resolve(outputRoot, "tests/domain");
     mkdirSync(domainRoot, {recursive: true});
     writeFileSync(resolve(domainRoot, "extra.test.js"), 'import test from "node:test";\\ntest("extra", () => {});\\n', "utf8");
@@ -76,6 +92,26 @@ function createFixture({behavior = "success", withSource = true} = {}) {
       "import {fixtureValue} from \"./support.js\";\nvoid fixtureValue;\n",
     );
   }
+  writeFixture(
+    root,
+    "scripts/content/frontmatter.mjs",
+    'export const frontMatterDecoderFixture = "frontmatter-runtime";\n',
+  );
+  writeFixture(
+    root,
+    "scripts/content/frontmatter.d.mts",
+    "export declare const frontMatterDecoderFixture: string;\n",
+  );
+  writeFixture(
+    root,
+    "scripts/content/json.mjs",
+    'export const jsonDecoderFixture = "json-runtime";\n',
+  );
+  writeFixture(
+    root,
+    "scripts/content/json.d.mts",
+    "export declare const jsonDecoderFixture: string;\n",
+  );
   const compilerPath = resolve(outer, "fake-tsc.mjs");
   writeFileSync(compilerPath, fakeCompilerSource(behavior), "utf8");
   return {outer, root, temporaryParent, compilerPath};
@@ -195,7 +231,7 @@ test("E-012 临时 emit 后以当前 Node 直接执行合法 .js 跨模块测试
   const fixture = createFixture();
   try {
     const captured = captureRun(fixture);
-    assert.equal(captured.error, undefined);
+    assert.equal(captured.error, undefined, `${captured.stdout}\n${captured.stderr}`);
     assert.deepEqual(captured.result, {
       runtimeRole: "primary",
       sourceFiles: ["tests/build/example.test.ts"],
@@ -221,6 +257,47 @@ test("E-012 临时 emit 后以当前 Node 直接执行合法 .js 跨模块测试
     assert.equal(existsSync(resolve(fixture.root, "tests/build/example.test.js")), false);
     assert.equal(existsSync(resolve(fixture.root, "build")), false);
     assert.equal(existsSync(resolve(fixture.root, "dist")), false);
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-012 精确 emitted decoder importer 触发固定四文件复制与字节复核", () => {
+  const fixture = createFixture({behavior: "decoder-runtime"});
+  try {
+    const captured = captureRun(fixture);
+    assert.equal(captured.error, undefined, `${captured.stdout}\n${captured.stderr}`);
+    assert.equal(captured.calls.length, 2);
+    assert.match(captured.stdout, /E-012 copied decoder runtime/u);
+    assert.equal(captured.stderr, "");
+    assertTemporaryParentEmpty(fixture);
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-012 decoder importer 近似路径不得触发运行时复制", () => {
+  const fixture = createFixture({behavior: "decoder-near-match"});
+  try {
+    const captured = captureRun(fixture);
+    assert.equal(captured.error, undefined);
+    assert.equal(captured.calls.length, 2);
+    assert.match(captured.stdout, /E-012 near-match does not copy decoder runtime/u);
+    assert.equal(captured.stderr, "");
+    assertTemporaryParentEmpty(fixture);
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-012 精确 decoder importer 缺少任一固定运行时文件即失败关闭", () => {
+  const fixture = createFixture({behavior: "decoder-runtime"});
+  try {
+    rmSync(resolve(fixture.root, "scripts/content/json.d.mts"));
+    const captured = captureRun(fixture);
+    assert.ok(hasTestCode("TEST_DECODER_RUNTIME")(captured.error));
+    assert.equal(captured.calls.length, 1);
+    assertTemporaryParentEmpty(fixture);
   } finally {
     destroyFixture(fixture);
   }

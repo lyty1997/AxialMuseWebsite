@@ -316,7 +316,7 @@ test("I-06 四份注册表封套与未知字段分别失败关闭", () => {
   }
 });
 
-test("I-06 项目重复 ID 与同级 navigationOrder 双向定位", () => {
+test("I-06 项目重复 ID、slug 与同级 navigationOrder 双向定位", () => {
   const duplicateIdInput = createValidInput();
   const duplicate = structuredClone(project(duplicateIdInput, "alpha-lab"));
   duplicate.slug = "alpha-copy";
@@ -328,6 +328,17 @@ test("I-06 项目重复 ID 与同级 navigationOrder 双向定位", () => {
   );
   assert.equal(
     duplicateIdIssues.filter((issue) => issue.code === "CONTENT_PROJECT_ID_DUPLICATE").length,
+    2,
+  );
+
+  const duplicateSlugInput = createValidInput();
+  project(duplicateSlugInput, "beta-site").slug = "alpha-lab";
+  const duplicateSlugIssues = expectFailure(
+    validateProjectCatalog(duplicateSlugInput),
+    ["CONTENT_PROJECT_SLUG_DUPLICATE"],
+  );
+  assert.equal(
+    duplicateSlugIssues.filter((issue) => issue.code === "CONTENT_PROJECT_SLUG_DUPLICATE").length,
     2,
   );
 

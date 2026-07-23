@@ -1,19 +1,26 @@
 import {
   chmodSync,
-  existsSync,
+  closeSync,
+  constants,
+  fstatSync,
+  fsyncSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
+  readFileSync,
   readdirSync,
+  renameSync,
   realpathSync,
   rmSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import {createRequire} from "node:module";
 import {tmpdir} from "node:os";
-import {extname, join, relative, resolve} from "node:path";
+import {basename, dirname, join, relative, resolve} from "node:path";
 import {pathToFileURL} from "node:url";
-import {randomBytes} from "node:crypto";
+import {createHash, randomBytes} from "node:crypto";
 import {spawnSync} from "node:child_process";
 import {projectRoot} from "../quality/lib/files.mjs";
 import {buildQualityChildEnvironment} from "../quality/lib/process-environment.mjs";
@@ -24,10 +31,13 @@ import {
 
 const ROOT = projectRoot();
 const OWNER_FILE_NAME = ".axial-muse-build-owner";
-const ALLOWED_BASELINE_FILES = new Set([
-  "projects/.gitkeep",
-  "writing/.gitkeep",
-]);
+const OWNER_PATTERN = /^[0-9a-f]{64}$/u;
+const TRANSACTION_ROOT_PREFIX = "axial-muse-build-transaction-";
+const TRANSACTION_OWNER_FILE = ".axial-muse-build-transaction-owner";
+const INPUT_SEAL_FILE = ".axial-muse-content-input-seal";
+const BUILD_LOCK_FILE = ".axial-muse-build.lock";
+const RETIRED_BUILD_NAME = ".axial-muse-build-retired";
+const transactionStates = new WeakMap();
 
 export class BuildSiteError extends Error {
   constructor(code, message, options) {
@@ -88,55 +98,6 @@ export function assertSupportedNodeVersion({
   return role;
 }
 
-function listBaselineContentFiles(root) {
-  const contentRoot = resolve(root, "site-content");
-  if (!existsSync(contentRoot) || !lstatSync(contentRoot).isDirectory()) {
-    fail("BUILD_CONTENT_ROOT", "site-content 物理内容根缺失。");
-  }
-  const files = [];
-  const walk = (directory) => {
-    for (const entry of readdirSync(directory, {withFileTypes: true})) {
-      const path = resolve(directory, entry.name);
-      if (entry.isSymbolicLink()) {
-        fail("BUILD_CONTENT_LINK", "I-04 内容根不得包含符号链接。");
-      }
-      if (entry.isDirectory()) {
-        walk(path);
-      } else if (entry.isFile()) {
-        files.push(relative(contentRoot, path).replaceAll("\\", "/"));
-      } else {
-        fail("BUILD_CONTENT_ENTRY", "I-04 内容根包含不受支持的文件类型。");
-      }
-    }
-  };
-  walk(contentRoot);
-  return files.sort();
-}
-
-export function assertBaselineInputs(root = ROOT) {
-  for (const path of ["static", "static-public", "site-assets"]) {
-    if (existsSync(resolve(root, path))) {
-      fail(
-        "BUILD_PIPELINE_INCOMPLETE",
-        "真实素材扫描、I-12 计划物化与 Docusaurus 装配由 #26 原子接线前不得静默忽略静态源目录。",
-      );
-    }
-  }
-  const files = listBaselineContentFiles(root);
-  if (
-    files.length !== ALLOWED_BASELINE_FILES.size
-    || files.some((path) => !ALLOWED_BASELINE_FILES.has(path))
-  ) {
-    fail(
-      "BUILD_PIPELINE_INCOMPLETE",
-      "真实内容扫描与投影由 #26 原子接管前不得构建 Markdown/MDX 或其他内容成员。",
-    );
-  }
-  if (files.some((path) => [".md", ".mdx"].includes(extname(path)))) {
-    fail("BUILD_PIPELINE_INCOMPLETE", "I-04 基线不得发布真实内容。");
-  }
-}
-
 function resolveDocusaurusCli(root) {
   const require = createRequire(import.meta.url);
   let cliPath;
@@ -163,14 +124,96 @@ function resolveDocusaurusCli(root) {
   return realCliPath;
 }
 
-function createBuildContext(mode) {
+function assertOwner(owner) {
+  if (typeof owner !== "string" || !OWNER_PATTERN.test(owner)) {
+    fail("BUILD_OWNER", "构建所有权标识不合法。");
+  }
+}
+
+function assertCanonicalRoot(root) {
+  try {
+    if (resolve(root) !== root || realpathSync(root) !== root) {
+      throw new TypeError("non-canonical root");
+    }
+    const metadata = lstatSync(root);
+    if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+      throw new TypeError("invalid root");
+    }
+  } catch (error) {
+    fail("BUILD_ROOT", "仓库根不是规范真实目录。", {cause: error});
+  }
+}
+
+export function candidateOutputPath(root, owner) {
+  assertCanonicalRoot(root);
+  assertOwner(owner);
+  return resolve(root, `.axial-muse-build-candidate-${owner}`);
+}
+
+function backupOutputPath(root, owner) {
+  assertCanonicalRoot(root);
+  assertOwner(owner);
+  return resolve(root, `.axial-muse-build-backup-${owner}`);
+}
+
+function entryExists(path) {
+  try {
+    lstatSync(path);
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function retiredOutputPath(root) {
+  assertCanonicalRoot(root);
+  return resolve(root, RETIRED_BUILD_NAME);
+}
+
+function lockOutputPath(root) {
+  assertCanonicalRoot(root);
+  return resolve(root, BUILD_LOCK_FILE);
+}
+
+function assertDirectChild(path, root, expectedName, code) {
+  if (
+    dirname(path) !== root
+    || basename(path) !== expectedName
+    || resolve(root, expectedName) !== path
+  ) {
+    fail(code, "构建事务路径不属于仓库根的精确受控成员。");
+  }
+}
+
+function assertOwnedDirectory(path, code, message) {
+  try {
+    const metadata = lstatSync(path);
+    if (
+      metadata.isSymbolicLink()
+      || !metadata.isDirectory()
+      || (typeof process.getuid === "function" && metadata.uid !== process.getuid())
+    ) throw new TypeError("invalid owned directory");
+  } catch (error) {
+    fail(code, message, {cause: error});
+  }
+}
+
+function removeManagedDirectory(path, root, expectedName) {
+  assertDirectChild(path, root, expectedName, "BUILD_CLEANUP_TARGET");
+  if (!entryExists(path)) return;
+  assertOwnedDirectory(path, "BUILD_CLEANUP_TARGET", "待清理构建路径不是自有普通目录。");
+  rmSync(path, {recursive: true, force: false});
+}
+
+function createBuildContext(mode, owner) {
+  assertOwner(owner);
   const temporaryRoot = realpathSync(tmpdir());
   const buildRoot = mkdtempSync(join(temporaryRoot, "axial-muse-build-"));
   chmodSync(buildRoot, 0o700);
   const staticDirectory = resolve(buildRoot, "static");
   mkdirSync(staticDirectory, {mode: 0o700});
   chmodSync(staticDirectory, 0o700);
-  const owner = randomBytes(32).toString("hex");
   const ownerPath = resolve(buildRoot, OWNER_FILE_NAME);
   writeFileSync(ownerPath, `${mode}:${owner}\n`, {
     encoding: "utf8",
@@ -181,15 +224,57 @@ function createBuildContext(mode) {
   return {buildRoot, mode, owner};
 }
 
-export function runProductionBuild({root = ROOT} = {}) {
-  assertSupportedNodeVersion({root});
-  assertBaselineInputs(root);
-  const cliPath = resolveDocusaurusCli(root);
-  const context = createBuildContext("production");
-  let result;
-  let cleanupError;
+function cleanupBuildContext(context) {
   try {
-    result = spawnSync(process.execPath, [cliPath, "build"], {
+    rmSync(context.buildRoot, {recursive: true, force: false});
+  } catch (error) {
+    fail("BUILD_CLEANUP", "临时构建上下文清理失败。", {cause: error});
+  }
+}
+
+function createTransactionRoot(mode, owner) {
+  const temporaryRoot = realpathSync(tmpdir());
+  let transactionRoot;
+  try {
+    transactionRoot = mkdtempSync(join(temporaryRoot, TRANSACTION_ROOT_PREFIX));
+    chmodSync(transactionRoot, 0o700);
+    const markerPath = resolve(transactionRoot, TRANSACTION_OWNER_FILE);
+    writeFileSync(markerPath, `${mode}:${owner}\n`, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    });
+    chmodSync(markerPath, 0o600);
+    return transactionRoot;
+  } catch (error) {
+    if (transactionRoot !== undefined) {
+      try {
+        rmSync(transactionRoot, {recursive: true, force: false});
+      } catch {
+        // 原始创建失败优先；随机私有根不会被当作仓库发布目标。
+      }
+    }
+    fail("BUILD_TRANSACTION_ROOT", "无法创建 owner 绑定的私有 transaction 根。", {
+      cause: error,
+    });
+  }
+}
+
+function runDocusaurusPhase({
+  root,
+  cliPath,
+  context,
+  transactionRoot,
+  outputPath,
+  phase,
+  arguments: arguments_,
+  failureCode,
+  failureMessage,
+}) {
+  let result;
+  let phaseError;
+  try {
+    result = spawnSync(process.execPath, [cliPath, ...arguments_], {
       cwd: root,
       env: {
         ...buildQualityChildEnvironment(),
@@ -198,23 +283,745 @@ export function runProductionBuild({root = ROOT} = {}) {
         AXIAL_MUSE_BUILD_MODE: context.mode,
         AXIAL_MUSE_BUILD_ROOT: context.buildRoot,
         AXIAL_MUSE_BUILD_OWNER: context.owner,
+        AXIAL_MUSE_BUILD_PHASE: phase,
+        AXIAL_MUSE_BUILD_OUTPUT: outputPath,
+        AXIAL_MUSE_BUILD_TRANSACTION_ROOT: transactionRoot,
       },
       stdio: "inherit",
     });
+    if (result.error || result.signal || result.status !== 0) {
+      phaseError = new BuildSiteError(failureCode, failureMessage, {
+        cause: result.error,
+      });
+    }
+  } catch (error) {
+    phaseError = new BuildSiteError(failureCode, failureMessage, {cause: error});
   } finally {
     try {
-      rmSync(context.buildRoot, {recursive: true, force: false});
+      cleanupBuildContext(context);
     } catch (error) {
-      cleanupError = error;
+      phaseError = phaseError === undefined
+        ? error
+        : new BuildSiteError(
+            "BUILD_PHASE_CLEANUP",
+            "Docusaurus phase 与其私有构建上下文清理同时失败。",
+            {cause: new AggregateError([phaseError, error])},
+          );
     }
   }
-  if (cleanupError !== undefined) {
-    fail("BUILD_CLEANUP", "临时构建上下文清理失败。", {cause: cleanupError});
+  if (phaseError !== undefined) throw phaseError;
+}
+
+function fileIdentity(metadata) {
+  return Object.freeze({
+    device: metadata.dev,
+    inode: metadata.ino,
+    mode: metadata.mode,
+    linkCount: metadata.nlink,
+    owner: metadata.uid,
+    group: metadata.gid,
+    size: metadata.size,
+    modifiedAtNanoseconds: metadata.mtimeNs,
+    changedAtNanoseconds: metadata.ctimeNs,
+  });
+}
+
+function sameFileIdentity(left, right) {
+  return (
+    left.device === right.device
+    && left.inode === right.inode
+    && left.mode === right.mode
+    && left.linkCount === right.linkCount
+    && left.owner === right.owner
+    && left.group === right.group
+    && left.size === right.size
+    && left.modifiedAtNanoseconds === right.modifiedAtNanoseconds
+    && left.changedAtNanoseconds === right.changedAtNanoseconds
+  );
+}
+
+function assertPrivateFileMetadata(metadata) {
+  if (
+    metadata.isSymbolicLink()
+    || !metadata.isFile()
+    || (metadata.mode & 0o777n) !== 0o600n
+    || metadata.nlink !== 1n
+    || (
+      typeof process.getuid === "function"
+      && metadata.uid !== BigInt(process.getuid())
+    )
+  ) throw new TypeError("private file identity mismatch");
+}
+
+function readStablePrivateFile(path) {
+  const descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const descriptorBefore = fstatSync(descriptor, {bigint: true});
+    const pathBefore = lstatSync(path, {bigint: true});
+    assertPrivateFileMetadata(descriptorBefore);
+    assertPrivateFileMetadata(pathBefore);
+    const identity = fileIdentity(descriptorBefore);
+    if (!sameFileIdentity(identity, fileIdentity(pathBefore))) {
+      throw new TypeError("private file path identity mismatch");
+    }
+    const bytes = readFileSync(descriptor);
+    const descriptorAfter = fstatSync(descriptor, {bigint: true});
+    const pathAfter = lstatSync(path, {bigint: true});
+    if (
+      !sameFileIdentity(identity, fileIdentity(descriptorAfter))
+      || !sameFileIdentity(identity, fileIdentity(pathAfter))
+      || BigInt(bytes.byteLength) !== identity.size
+    ) throw new TypeError("private file changed while reading");
+    return {bytes, identity};
+  } finally {
+    closeSync(descriptor);
   }
-  if (result?.error || result?.signal || result?.status !== 0) {
-    fail("BUILD_DOCUSARUS", "Docusaurus production build 失败。", {
-      cause: result?.error,
+}
+
+function acquireBuildLock(root, owner) {
+  const path = lockOutputPath(root);
+  let descriptor;
+  try {
+    descriptor = openSync(
+      path,
+      constants.O_RDWR
+        | constants.O_CREAT
+        | constants.O_EXCL
+        | constants.O_NOFOLLOW,
+      0o600,
+    );
+  } catch (error) {
+    if (error?.code === "EEXIST") {
+      fail("BUILD_LOCKED", "已有排他构建事务持有发布锁。", {cause: error});
+    }
+    fail("BUILD_LOCK", "无法唯一获取排他构建事务锁。", {cause: error});
+  }
+  try {
+    chmodSync(path, 0o600);
+    writeFileSync(descriptor, `${owner}\n`, {encoding: "utf8"});
+    fsyncSync(descriptor);
+    const metadata = fstatSync(descriptor, {bigint: true});
+    assertPrivateFileMetadata(metadata);
+    return {path, descriptor, identity: fileIdentity(metadata)};
+  } catch (error) {
+    try {
+      closeSync(descriptor);
+    } catch {
+      // 后续仍按精确 lock path 回收。
+    }
+    try {
+      unlinkSync(path);
+    } catch {
+      // 创建阶段失败会以 BUILD_LOCK 失败关闭。
+    }
+    fail("BUILD_LOCK", "排他构建事务锁身份初始化失败。", {cause: error});
+  }
+}
+
+function assertBuildLock(state) {
+  try {
+    const current = readStablePrivateFile(state.lock.path);
+    if (
+      current.bytes.toString("utf8") !== `${state.owner}\n`
+      || !sameFileIdentity(current.identity, state.lock.identity)
+    ) throw new TypeError("build lock identity mismatch");
+  } catch (error) {
+    fail("BUILD_LOCK_IDENTITY", "排他构建事务锁在提交前发生变化。", {cause: error});
+  }
+}
+
+function releaseBuildLock(state) {
+  assertBuildLock(state);
+  if (state.lock.descriptor !== undefined) {
+    closeSync(state.lock.descriptor);
+    state.lock.descriptor = undefined;
+  }
+  try {
+    unlinkSync(state.lock.path);
+  } catch (error) {
+    fail("BUILD_LOCK_RELEASE", "排他构建事务锁未能释放。", {cause: error});
+  }
+}
+
+function validateTestHooks(value) {
+  if (value === undefined) return Object.freeze({});
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    fail("BUILD_TEST_HOOKS", "构建事务测试钩子结构不合法。");
+  }
+  const allowed = new Set([
+    "afterCandidateActivation",
+    "beforeCandidateActivation",
+    "beforeLockRelease",
+    "beforeRetiredReclaim",
+  ]);
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key) || typeof value[key] !== "function") {
+      fail("BUILD_TEST_HOOKS", "构建事务测试钩子字段不合法。");
+    }
+  }
+  return Object.freeze({...value});
+}
+
+function transactionState(transaction) {
+  const state = transactionStates.get(transaction);
+  if (state === undefined) {
+    fail("BUILD_TRANSACTION_IDENTITY", "构建事务对象不具有本进程来源。");
+  }
+  return state;
+}
+
+function assertActiveTransaction(transaction) {
+  const state = transactionState(transaction);
+  if (state.status !== "active") {
+    fail("BUILD_TRANSACTION_STATE", "构建事务已结束或尚未激活。");
+  }
+  assertBuildLock(state);
+  return state;
+}
+
+function validateTransactionRoot(state) {
+  const transactionRoot = state.transactionRoot;
+  if (transactionRoot === undefined) return;
+  try {
+    const rootMetadata = lstatSync(transactionRoot);
+    const temporaryRoot = realpathSync(tmpdir());
+    if (
+      rootMetadata.isSymbolicLink()
+      || !rootMetadata.isDirectory()
+      || (rootMetadata.mode & 0o777) !== 0o700
+      || (typeof process.getuid === "function" && rootMetadata.uid !== process.getuid())
+      || realpathSync(transactionRoot) !== transactionRoot
+      || dirname(transactionRoot) !== temporaryRoot
+      || !basename(transactionRoot).startsWith(TRANSACTION_ROOT_PREFIX)
+    ) throw new TypeError("transaction root identity mismatch");
+    const entries = readdirSync(transactionRoot).sort();
+    const allowedEntries = [TRANSACTION_OWNER_FILE];
+    if (entries.includes(INPUT_SEAL_FILE)) allowedEntries.push(INPUT_SEAL_FILE);
+    if (entries.join("\n") !== allowedEntries.sort().join("\n")) {
+      throw new TypeError("transaction root member mismatch");
+    }
+    const marker = readStablePrivateFile(resolve(transactionRoot, TRANSACTION_OWNER_FILE));
+    if (marker.bytes.toString("utf8") !== `production:${state.owner}\n`) {
+      throw new TypeError("transaction owner marker mismatch");
+    }
+    if (entries.includes(INPUT_SEAL_FILE)) {
+      readStablePrivateFile(resolve(transactionRoot, INPUT_SEAL_FILE));
+    }
+  } catch (error) {
+    fail("BUILD_TRANSACTION_ROOT_IDENTITY", "私有 transaction 根在提交前发生变化。", {
+      cause: error,
     });
+  }
+}
+
+function cleanupTransactionRoot(state) {
+  if (state.transactionRoot === undefined) return;
+  validateTransactionRoot(state);
+  try {
+    rmSync(state.transactionRoot, {recursive: true, force: false});
+    state.transactionRoot = undefined;
+  } catch (error) {
+    fail("BUILD_TRANSACTION_ROOT_CLEANUP", "私有 transaction 根清理失败。", {
+      cause: error,
+    });
+  }
+}
+
+export function beginBuildTransaction({root, owner, testHooks} = {}) {
+  assertCanonicalRoot(root);
+  assertOwner(owner);
+  const hooks = validateTestHooks(testHooks);
+  const lock = acquireBuildLock(root, owner);
+  const state = {
+    root,
+    owner,
+    hooks,
+    lock,
+    status: "starting",
+    transactionRoot: undefined,
+  };
+  try {
+    const retiredPath = retiredOutputPath(root);
+    if (entryExists(retiredPath)) {
+      try {
+        hooks.beforeRetiredReclaim?.();
+        removeManagedDirectory(retiredPath, root, RETIRED_BUILD_NAME);
+      } catch (error) {
+        fail("BUILD_RETIRED_RECLAIM", "上次 retired 构建未能在本次改动前回收。", {
+          cause: error,
+        });
+      }
+    }
+    const candidatePath = candidateOutputPath(root, owner);
+    const backupPath = backupOutputPath(root, owner);
+    if (entryExists(candidatePath)) {
+      fail("BUILD_CANDIDATE_EXISTS", "本次候选制品路径在事务开始前已存在。");
+    }
+    if (entryExists(backupPath)) {
+      fail("BUILD_BACKUP_EXISTS", "本次备份路径在事务开始前已存在。");
+    }
+    state.transactionRoot = createTransactionRoot("production", owner);
+    state.status = "active";
+    const transaction = Object.freeze({
+      root,
+      owner,
+      candidatePath,
+      transactionRoot: state.transactionRoot,
+    });
+    transactionStates.set(transaction, state);
+    return transaction;
+  } catch (error) {
+    let rollbackError;
+    try {
+      cleanupTransactionRoot(state);
+      releaseBuildLock(state);
+    } catch (candidateRollbackError) {
+      rollbackError = candidateRollbackError;
+    }
+    if (rollbackError !== undefined) {
+      fail("BUILD_TRANSACTION_BEGIN_ROLLBACK", "事务开始失败且锁或私有根回收失败。", {
+        cause: rollbackError,
+      });
+    }
+    throw error;
+  }
+}
+
+function hashFrame(hash, label, value) {
+  const bytes = Buffer.isBuffer(value) ? value : Buffer.from(String(value), "utf8");
+  hash.update(`${label}:${bytes.byteLength}:`, "utf8");
+  hash.update(bytes);
+}
+
+function assertTreeEntry(metadata, expectedType) {
+  const matches = expectedType === "directory"
+    ? metadata.isDirectory()
+    : metadata.isFile();
+  if (
+    metadata.isSymbolicLink()
+    || !matches
+    || (expectedType === "file" && metadata.nlink !== 1n)
+    || (
+      typeof process.getuid === "function"
+      && metadata.uid !== BigInt(process.getuid())
+    )
+  ) throw new TypeError("build tree entry identity mismatch");
+}
+
+function identityFrame(identity, includeMutableRootFields = true) {
+  const stable = [
+    identity.device,
+    identity.inode,
+    identity.mode,
+    identity.linkCount,
+    identity.owner,
+    identity.group,
+  ];
+  if (includeMutableRootFields) {
+    stable.push(
+      identity.size,
+      identity.modifiedAtNanoseconds,
+      identity.changedAtNanoseconds,
+    );
+  }
+  return stable.map(String).join(":");
+}
+
+function captureBuildTree(path, root, expectedName) {
+  assertDirectChild(path, root, expectedName, "BUILD_TREE_PATH");
+  const hash = createHash("sha256");
+  hashFrame(hash, "version", "axial-muse-build-tree-v1");
+  let entryCount = 0;
+
+  const walk = (directory, relativePath, isRoot) => {
+    const beforeMetadata = lstatSync(directory, {bigint: true});
+    assertTreeEntry(beforeMetadata, "directory");
+    const beforeIdentity = fileIdentity(beforeMetadata);
+    const names = readdirSync(directory).sort();
+    hashFrame(hash, "directory-path", relativePath);
+    hashFrame(hash, "directory-identity", identityFrame(beforeIdentity, !isRoot));
+    hashFrame(hash, "directory-members", names.join("\n"));
+    entryCount += 1;
+    for (const name of names) {
+      const childPath = resolve(directory, name);
+      const childRelativePath = relativePath === "" ? name : `${relativePath}/${name}`;
+      const childMetadata = lstatSync(childPath, {bigint: true});
+      if (childMetadata.isDirectory() && !childMetadata.isSymbolicLink()) {
+        walk(childPath, childRelativePath, false);
+        continue;
+      }
+      assertTreeEntry(childMetadata, "file");
+      const descriptor = openSync(
+        childPath,
+        constants.O_RDONLY | constants.O_NOFOLLOW,
+      );
+      try {
+        const descriptorBefore = fstatSync(descriptor, {bigint: true});
+        assertTreeEntry(descriptorBefore, "file");
+        const identity = fileIdentity(descriptorBefore);
+        if (!sameFileIdentity(identity, fileIdentity(childMetadata))) {
+          throw new TypeError("build file path identity changed before read");
+        }
+        const bytes = readFileSync(descriptor);
+        const descriptorAfter = fstatSync(descriptor, {bigint: true});
+        const pathAfter = lstatSync(childPath, {bigint: true});
+        if (
+          !sameFileIdentity(identity, fileIdentity(descriptorAfter))
+          || !sameFileIdentity(identity, fileIdentity(pathAfter))
+          || BigInt(bytes.byteLength) !== identity.size
+        ) throw new TypeError("build file changed while read");
+        hashFrame(hash, "file-path", childRelativePath);
+        hashFrame(hash, "file-identity", identityFrame(identity));
+        hashFrame(hash, "file-bytes", bytes);
+        entryCount += 1;
+      } finally {
+        closeSync(descriptor);
+      }
+    }
+    const afterNames = readdirSync(directory).sort();
+    const afterIdentity = fileIdentity(lstatSync(directory, {bigint: true}));
+    if (
+      names.join("\n") !== afterNames.join("\n")
+      || !sameFileIdentity(beforeIdentity, afterIdentity)
+    ) throw new TypeError("build directory changed while captured");
+  };
+
+  walk(path, "", true);
+  const rootIdentity = fileIdentity(lstatSync(path, {bigint: true}));
+  return Object.freeze({
+    device: rootIdentity.device,
+    inode: rootIdentity.inode,
+    digest: hash.digest("hex"),
+    entryCount,
+  });
+}
+
+function captureManagedBuildTree(path, root, expectedName, code, message) {
+  try {
+    return captureBuildTree(path, root, expectedName);
+  } catch (error) {
+    fail(code, message, {cause: error});
+  }
+}
+
+function sameBuildTreeEvidence(left, right) {
+  return (
+    left !== null
+    && right !== null
+    && typeof left === "object"
+    && typeof right === "object"
+    && left.device === right.device
+    && left.inode === right.inode
+    && left.digest === right.digest
+    && left.entryCount === right.entryCount
+  );
+}
+
+function assertBuildTreeEvidence(path, root, expectedName, expected, code) {
+  const current = captureManagedBuildTree(
+    path,
+    root,
+    expectedName,
+    code,
+    "构建制品树无法形成稳定证据。",
+  );
+  if (!sameBuildTreeEvidence(current, expected)) {
+    fail(code, "构建制品树与上一验收阶段的身份或完整 bytes 不一致。");
+  }
+}
+
+export function captureCandidateBuildEvidence(transaction) {
+  const state = assertActiveTransaction(transaction);
+  return captureManagedBuildTree(
+    transaction.candidatePath,
+    state.root,
+    basename(transaction.candidatePath),
+    "BUILD_CANDIDATE",
+    "候选制品目录无法形成稳定证据。",
+  );
+}
+
+function quarantineCandidatePath(state, path) {
+  if (!entryExists(path)) return;
+  const retiredPath = retiredOutputPath(state.root);
+  if (entryExists(retiredPath)) {
+    fail("BUILD_QUARANTINE_CONFLICT", "失败候选无法进入唯一 retired 隔离路径。");
+  }
+  renameSync(path, retiredPath);
+}
+
+function finalizeAbortedTransaction(state) {
+  let finalizationError;
+  try {
+    cleanupTransactionRoot(state);
+  } catch (error) {
+    finalizationError = error;
+  }
+  try {
+    releaseBuildLock(state);
+  } catch (error) {
+    if (finalizationError === undefined) finalizationError = error;
+  }
+  if (finalizationError !== undefined) throw finalizationError;
+  state.status = "aborted";
+}
+
+export function abortBuildTransaction(transaction) {
+  const state = assertActiveTransaction(transaction);
+  const backupPath = backupOutputPath(state.root, state.owner);
+  if (entryExists(backupPath)) {
+    fail("BUILD_ABORT_STATE", "发布前事务出现不应存在的 backup，拒绝猜测恢复。");
+  }
+  try {
+    quarantineCandidatePath(state, transaction.candidatePath);
+    finalizeAbortedTransaction(state);
+  } catch (error) {
+    fail("BUILD_ABORT_ROLLBACK", "失败事务未能完整隔离候选并释放私有状态。", {
+      cause: error,
+    });
+  }
+}
+
+function rollbackPublishedCandidate(state, locations, oldEvidence) {
+  const buildPath = resolve(state.root, "build");
+  const candidatePath = candidateOutputPath(state.root, state.owner);
+  const backupPath = backupOutputPath(state.root, state.owner);
+  const retiredPath = retiredOutputPath(state.root);
+
+  if (locations.old === "retired") {
+    renameSync(retiredPath, backupPath);
+    locations.old = "backup";
+  }
+  if (locations.new === "build") {
+    if (entryExists(buildPath)) {
+      renameSync(buildPath, candidatePath);
+      locations.new = "candidate";
+    } else {
+      locations.new = "missing";
+    }
+  }
+  if (locations.old === "backup") {
+    renameSync(backupPath, buildPath);
+    locations.old = "build";
+  }
+  if (oldEvidence !== undefined) {
+    assertBuildTreeEvidence(
+      buildPath,
+      state.root,
+      "build",
+      oldEvidence,
+      "BUILD_PUBLISH_ROLLBACK",
+    );
+  } else if (entryExists(buildPath)) {
+    fail("BUILD_PUBLISH_ROLLBACK", "首次发布回滚后 build 本应保持不存在。");
+  }
+  if (locations.new === "candidate") {
+    quarantineCandidatePath(state, candidatePath);
+    locations.new = "retired";
+  }
+  if (entryExists(candidatePath) || entryExists(backupPath)) {
+    fail("BUILD_PUBLISH_ROLLBACK", "发布回滚遗留 candidate 或 backup 路径。");
+  }
+  finalizeAbortedTransaction(state);
+}
+
+export function publishCandidateBuild({
+  transaction,
+  expectedCandidateEvidence,
+  verifyActivatedBuild,
+}) {
+  const state = assertActiveTransaction(transaction);
+  if (typeof verifyActivatedBuild !== "function") {
+    fail("BUILD_POST_SWITCH_CHECK", "发布事务缺少 post-switch fresh checker。");
+  }
+  const candidatePath = candidateOutputPath(state.root, state.owner);
+  const backupPath = backupOutputPath(state.root, state.owner);
+  const retiredPath = retiredOutputPath(state.root);
+  const buildPath = resolve(state.root, "build");
+  if (entryExists(retiredPath)) {
+    fail("BUILD_RETIRED_CONFLICT", "发布前 retired 路径必须已在事务开始时回收。");
+  }
+  if (entryExists(backupPath)) {
+    fail("BUILD_BACKUP_EXISTS", "发布前 backup 路径必须不存在。");
+  }
+  assertBuildTreeEvidence(
+    candidatePath,
+    state.root,
+    basename(candidatePath),
+    expectedCandidateEvidence,
+    "BUILD_CANDIDATE_CHANGED",
+  );
+
+  const hadBuild = entryExists(buildPath);
+  const oldEvidence = hadBuild
+    ? captureManagedBuildTree(
+        buildPath,
+        state.root,
+        "build",
+        "BUILD_EXISTING_OUTPUT",
+        "既有 build 不是稳定自有制品树。",
+      )
+    : undefined;
+  const locations = {
+    old: hadBuild ? "build" : "missing",
+    new: "candidate",
+  };
+  try {
+    if (hadBuild) {
+      renameSync(buildPath, backupPath);
+      locations.old = "backup";
+    }
+    state.hooks.beforeCandidateActivation?.();
+    assertBuildTreeEvidence(
+      candidatePath,
+      state.root,
+      basename(candidatePath),
+      expectedCandidateEvidence,
+      "BUILD_CANDIDATE_CHANGED",
+    );
+    renameSync(candidatePath, buildPath);
+    locations.new = "build";
+    assertBuildTreeEvidence(
+      buildPath,
+      state.root,
+      "build",
+      expectedCandidateEvidence,
+      "BUILD_CANDIDATE_CHANGED",
+    );
+    state.hooks.afterCandidateActivation?.();
+    assertBuildTreeEvidence(
+      buildPath,
+      state.root,
+      "build",
+      expectedCandidateEvidence,
+      "BUILD_CANDIDATE_CHANGED",
+    );
+    const verification = verifyActivatedBuild();
+    if (verification !== undefined) {
+      fail("BUILD_POST_SWITCH_CHECK", "post-switch checker 必须同步完成并返回 undefined。");
+    }
+    assertBuildTreeEvidence(
+      buildPath,
+      state.root,
+      "build",
+      expectedCandidateEvidence,
+      "BUILD_CANDIDATE_CHANGED",
+    );
+    cleanupTransactionRoot(state);
+    if (hadBuild) {
+      renameSync(backupPath, retiredPath);
+      locations.old = "retired";
+      assertBuildTreeEvidence(
+        retiredPath,
+        state.root,
+        RETIRED_BUILD_NAME,
+        oldEvidence,
+        "BUILD_RETIRED_IDENTITY",
+      );
+    }
+    state.hooks.beforeLockRelease?.();
+    if (hadBuild) {
+      assertBuildTreeEvidence(
+        retiredPath,
+        state.root,
+        RETIRED_BUILD_NAME,
+        oldEvidence,
+        "BUILD_RETIRED_IDENTITY",
+      );
+    }
+    assertBuildTreeEvidence(
+      buildPath,
+      state.root,
+      "build",
+      expectedCandidateEvidence,
+      "BUILD_CANDIDATE_CHANGED",
+    );
+    releaseBuildLock(state);
+    state.status = "committed";
+  } catch (error) {
+    try {
+      rollbackPublishedCandidate(state, locations, oldEvidence);
+    } catch (rollbackError) {
+      fail("BUILD_PUBLISH_ROLLBACK", "候选发布失败且调用前 build 未能完整恢复。", {
+        cause: rollbackError,
+      });
+    }
+    if (error instanceof BuildSiteError) throw error;
+    fail("BUILD_PUBLISH", "候选制品事务发布失败，调用前 build 已恢复。", {
+      cause: error,
+    });
+  }
+}
+
+export function runProductionBuild({root = ROOT} = {}) {
+  assertCanonicalRoot(root);
+  assertSupportedNodeVersion({root});
+  const cliPath = resolveDocusaurusCli(root);
+  const owner = randomBytes(32).toString("hex");
+  let transaction;
+  try {
+    transaction = beginBuildTransaction({root, owner});
+    runDocusaurusPhase({
+      root,
+      cliPath,
+      context: createBuildContext("production", owner),
+      transactionRoot: transaction.transactionRoot,
+      outputPath: transaction.candidatePath,
+      phase: "build",
+      arguments: ["build", "--out-dir", transaction.candidatePath],
+      failureCode: "BUILD_DOCUSARUS",
+      failureMessage: "Docusaurus production candidate build 失败。",
+    });
+    const candidateEvidence = captureCandidateBuildEvidence(transaction);
+    runDocusaurusPhase({
+      root,
+      cliPath,
+      context: createBuildContext("production", owner),
+      transactionRoot: transaction.transactionRoot,
+      outputPath: transaction.candidatePath,
+      phase: "check",
+      arguments: ["axial-muse:check-production"],
+      failureCode: "BUILD_ARTIFACT_CHECK",
+      failureMessage: "production candidate 独立制品验收失败。",
+    });
+    assertBuildTreeEvidence(
+      transaction.candidatePath,
+      root,
+      basename(transaction.candidatePath),
+      candidateEvidence,
+      "BUILD_CANDIDATE_CHANGED",
+    );
+    publishCandidateBuild({
+      transaction,
+      expectedCandidateEvidence: candidateEvidence,
+      verifyActivatedBuild() {
+        runDocusaurusPhase({
+          root,
+          cliPath,
+          context: createBuildContext("production", owner),
+          transactionRoot: transaction.transactionRoot,
+          outputPath: resolve(root, "build"),
+          phase: "verify",
+          arguments: ["axial-muse:check-production"],
+          failureCode: "BUILD_POST_SWITCH_CHECK",
+          failureMessage: "已切换 build 的 fresh checker 验收失败。",
+        });
+      },
+    });
+  } catch (error) {
+    if (
+      transaction !== undefined
+      && transactionStates.get(transaction)?.status === "active"
+    ) {
+      try {
+        abortBuildTransaction(transaction);
+      } catch (abortError) {
+        fail("BUILD_ABORT_ROLLBACK", "构建失败且事务隔离/回收未完整完成。", {
+          cause: abortError,
+        });
+      }
+    }
+    throw error;
   }
 }
 

@@ -34,8 +34,11 @@ const MAX_BUILD_DEPTH = 24;
 const MAX_BUILD_PATH_BYTES = 1_024;
 const MAX_HTML_BYTES = 8 * 1024 * 1024;
 const MAX_BUILD_HTML_TOTAL_BYTES = 32 * 1024 * 1024;
-const MAX_UNPUBLISHED_TOKEN_TOTAL_BYTES = 512 * 1024;
-const MAX_UNPUBLISHED_TOKENS = MAX_SOURCE_FILES * 2;
+const MAX_UNPUBLISHED_PATH_TOKEN_TOTAL_BYTES = 512 * 1024;
+const MAX_UNPUBLISHED_PATH_TOKENS = MAX_SOURCE_FILES * 2;
+export const MAX_UNPUBLISHED_CONTENT_TOKEN_BYTES = 16 * 1024;
+export const MAX_UNPUBLISHED_CONTENT_TOKEN_TOTAL_BYTES = 512 * 1024;
+export const MAX_UNPUBLISHED_CONTENT_TOKENS = MAX_SOURCE_FILES * 4;
 const READ_CHUNK_BYTES = 64 * 1024;
 const UTF8_DECODER = new TextDecoder("utf-8", {fatal: true});
 const TYPED_ARRAY_BYTE_LENGTH = Object.getOwnPropertyDescriptor(
@@ -56,6 +59,8 @@ export interface BuildFileEvidence {
 export interface BuildTreeEvidence {
   readonly files: readonly BuildFileEvidence[];
   readonly hasLeakedToken: boolean;
+  readonly hasLeakedPathToken: boolean;
+  readonly hasLeakedContentToken: boolean;
   readonly ssrImageReferenceIndexes: ReadonlySet<number>;
 }
 
@@ -71,7 +76,14 @@ interface TokenAutomaton {
 
 interface ScannedArtifact {
   readonly evidence: BuildFileEvidence;
-  readonly hasLeakedToken: boolean;
+  readonly hasLeakedPathToken: boolean;
+  readonly hasLeakedContentToken: boolean;
+}
+
+interface TokenLimits {
+  readonly maximumCount: number;
+  readonly maximumTokenBytes: number;
+  readonly maximumTotalBytes: number;
 }
 
 function compareBuffers(left: Uint8Array, right: Uint8Array): number {
@@ -144,7 +156,10 @@ function scanTokenChunk(
   return {state, hasMatch};
 }
 
-function snapshotToken(value: unknown): Uint8Array | undefined {
+function snapshotToken(
+  value: unknown,
+  maximumTokenBytes: number,
+): Uint8Array | undefined {
   let snapshot: Uint8Array | undefined;
   try {
     if (
@@ -157,7 +172,7 @@ function snapshotToken(value: unknown): Uint8Array | undefined {
     if (
       !Number.isSafeInteger(byteLength)
       || (byteLength as number) <= 0
-      || (byteLength as number) > MAX_SOURCE_PATH_BYTES
+      || (byteLength as number) > maximumTokenBytes
     ) return undefined;
     snapshot = new Uint8Array(byteLength as number);
     Uint8Array.prototype.set.call(snapshot, value as Uint8Array);
@@ -168,35 +183,38 @@ function snapshotToken(value: unknown): Uint8Array | undefined {
   }
 }
 
-function snapshotTokens(values: unknown): readonly Uint8Array[] {
+function snapshotTokens(
+  values: unknown,
+  limits: TokenLimits,
+): readonly Uint8Array[] {
   const snapshots: Uint8Array[] = [];
   try {
-    if (!Array.isArray(values) || values.length > MAX_UNPUBLISHED_TOKENS) {
+    if (!Array.isArray(values) || values.length > limits.maximumCount) {
       failStaticAsset(
-        "STATIC_ASSET_UNPUBLISHED_PATH",
-        "未发布公开路径 token 的数量或总长度不合法。",
+        "STATIC_ASSET_UNPUBLISHED_TOKEN",
+        "未发布素材 token 的数量或总长度不合法。",
         {sourcePath: "build"},
       );
     }
     let totalBytes = 0;
     for (const value of values) {
-      const snapshot = snapshotToken(value);
+      const snapshot = snapshotToken(value, limits.maximumTokenBytes);
       if (
         snapshot === undefined
-        || snapshot.byteLength > MAX_SOURCE_PATH_BYTES
+        || snapshot.byteLength > limits.maximumTokenBytes
       ) {
         failStaticAsset(
-          "STATIC_ASSET_UNPUBLISHED_PATH",
-          "未发布公开路径 token 的数量或总长度不合法。",
+          "STATIC_ASSET_UNPUBLISHED_TOKEN",
+          "未发布素材 token 的数量或总长度不合法。",
           {sourcePath: "build"},
         );
       }
       totalBytes += snapshot.byteLength;
-      if (totalBytes > MAX_UNPUBLISHED_TOKEN_TOTAL_BYTES) {
+      if (totalBytes > limits.maximumTotalBytes) {
         snapshot.fill(0);
         failStaticAsset(
-          "STATIC_ASSET_UNPUBLISHED_PATH",
-          "未发布公开路径 token 的数量或总长度不合法。",
+          "STATIC_ASSET_UNPUBLISHED_TOKEN",
+          "未发布素材 token 的数量或总长度不合法。",
           {sourcePath: "build"},
         );
       }
@@ -207,8 +225,8 @@ function snapshotTokens(values: unknown): readonly Uint8Array[] {
     for (const snapshot of snapshots) snapshot.fill(0);
     if (error instanceof StaticAssetError) throw error;
     failStaticAsset(
-      "STATIC_ASSET_UNPUBLISHED_PATH",
-      "未发布公开路径 token 的数量或总长度不合法。",
+      "STATIC_ASSET_UNPUBLISHED_TOKEN",
+      "未发布素材 token 的数量或总长度不合法。",
       {cause: error, sourcePath: "build"},
     );
   }
@@ -499,7 +517,8 @@ function scanArtifactFile(
   absolutePath: string,
   realRoot: string,
   relativePath: string,
-  tokenAutomaton: TokenAutomaton,
+  pathTokenAutomaton: TokenAutomaton,
+  contentTokenAutomaton: TokenAutomaton,
   ssrPublicUrls: readonly string[],
   ssrImageReferenceIndexes: Set<number>,
 ): ScannedArtifact {
@@ -507,7 +526,8 @@ function scanArtifactFile(
   let descriptor: number | undefined;
   let operationError: unknown;
   let evidence: BuildFileEvidence | undefined;
-  let hasLeakedToken = false;
+  let hasLeakedPathToken = false;
+  let hasLeakedContentToken = false;
   try {
     const before = lstatSync(absolutePath, {bigint: true});
     if (before.isSymbolicLink() || !before.isFile()) {
@@ -565,7 +585,8 @@ function scanArtifactFile(
     }
     const length = Number(opened.size);
     const htmlBytes = isHtml ? new Uint8Array(length) : undefined;
-    let matcherState = 0;
+    let pathMatcherState = 0;
+    let contentMatcherState = 0;
     let offset = 0;
     while (offset < length) {
       const count = readSync(
@@ -585,9 +606,20 @@ function scanArtifactFile(
       const chunk = buffer.slice(0, count);
       digest.update(chunk);
       if (htmlBytes !== undefined) htmlBytes.set(chunk, offset);
-      const tokenResult = scanTokenChunk(tokenAutomaton, matcherState, chunk);
-      matcherState = tokenResult.state;
-      hasLeakedToken ||= tokenResult.hasMatch;
+      const pathTokenResult = scanTokenChunk(
+        pathTokenAutomaton,
+        pathMatcherState,
+        chunk,
+      );
+      pathMatcherState = pathTokenResult.state;
+      hasLeakedPathToken ||= pathTokenResult.hasMatch;
+      const contentTokenResult = scanTokenChunk(
+        contentTokenAutomaton,
+        contentMatcherState,
+        chunk,
+      );
+      contentMatcherState = contentTokenResult.state;
+      hasLeakedContentToken ||= contentTokenResult.hasMatch;
       offset += count;
     }
     const afterRead = fstatSync(descriptor, {bigint: true});
@@ -653,7 +685,11 @@ function scanArtifactFile(
       {sourcePath},
     );
   }
-  return Object.freeze({evidence, hasLeakedToken});
+  return Object.freeze({
+    evidence,
+    hasLeakedPathToken,
+    hasLeakedContentToken,
+  });
 }
 
 function readRawBuildNames(directory: string, sourcePath: string): Buffer[] {
@@ -671,7 +707,8 @@ function readRawBuildNames(directory: string, sourcePath: string): Buffer[] {
 
 function scanBuildTreeOnce(
   buildDirectory: string,
-  tokenAutomaton: TokenAutomaton,
+  pathTokenAutomaton: TokenAutomaton,
+  contentTokenAutomaton: TokenAutomaton,
   ssrPublicUrls: readonly string[],
 ): BuildTreeEvidence {
   const realRoot = assertDirectory(buildDirectory, "build");
@@ -686,7 +723,8 @@ function scanBuildTreeOnce(
   const files: BuildFileEvidence[] = [];
   const ssrImageReferenceIndexes = new Set<number>();
   const foldedPaths = new Map<string, string>();
-  let hasLeakedToken = false;
+  let hasLeakedPathToken = false;
+  let hasLeakedContentToken = false;
   let totalBytes = 0;
   let totalHtmlBytes = 0;
   const walk = (directory: string, segments: readonly string[]): void => {
@@ -782,19 +820,23 @@ function scanBuildTreeOnce(
         absolutePath,
         realRoot,
         relativePath,
-        tokenAutomaton,
+        pathTokenAutomaton,
+        contentTokenAutomaton,
         ssrPublicUrls,
         ssrImageReferenceIndexes,
       );
       files.push(scanned.evidence);
-      hasLeakedToken ||= scanned.hasLeakedToken;
+      hasLeakedPathToken ||= scanned.hasLeakedPathToken;
+      hasLeakedContentToken ||= scanned.hasLeakedContentToken;
     }
   };
   walk(realRoot, []);
   files.sort((left, right) => compareUtf8(left.relativePath, right.relativePath));
   return Object.freeze({
     files: Object.freeze(files),
-    hasLeakedToken,
+    hasLeakedToken: hasLeakedPathToken || hasLeakedContentToken,
+    hasLeakedPathToken,
+    hasLeakedContentToken,
     ssrImageReferenceIndexes,
   });
 }
@@ -808,6 +850,8 @@ function sameBuildTreeEvidence(
   right: BuildTreeEvidence,
 ): boolean {
   return left.hasLeakedToken === right.hasLeakedToken
+    && left.hasLeakedPathToken === right.hasLeakedPathToken
+    && left.hasLeakedContentToken === right.hasLeakedContentToken
     && sameIndexSet(left.ssrImageReferenceIndexes, right.ssrImageReferenceIndexes)
     && left.files.length === right.files.length
     && left.files.every((file, index) => {
@@ -821,8 +865,20 @@ function sameBuildTreeEvidence(
 
 export function scanBuildTree(
   buildDirectory: string,
-  tokens: readonly Uint8Array[],
+  pathTokens: readonly Uint8Array[],
   ssrPublicUrls: readonly string[],
+): BuildTreeEvidence;
+export function scanBuildTree(
+  buildDirectory: string,
+  pathTokens: readonly Uint8Array[],
+  contentTokens: readonly Uint8Array[],
+  ssrPublicUrls: readonly string[],
+): BuildTreeEvidence;
+export function scanBuildTree(
+  buildDirectory: string,
+  pathTokens: readonly Uint8Array[],
+  contentTokensOrSsrPublicUrls: readonly Uint8Array[] | readonly string[],
+  explicitSsrPublicUrls?: readonly string[],
 ): BuildTreeEvidence {
   if (
     typeof buildDirectory !== "string"
@@ -835,25 +891,49 @@ export function scanBuildTree(
       {sourcePath: "build"},
     );
   }
-  const tokenSnapshots = snapshotTokens(tokens);
-  const {tokenAutomaton, ssrPublicUrlSnapshots} = (() => {
+  const pathTokenSnapshots = snapshotTokens(pathTokens, {
+    maximumCount: MAX_UNPUBLISHED_PATH_TOKENS,
+    maximumTokenBytes: MAX_SOURCE_PATH_BYTES,
+    maximumTotalBytes: MAX_UNPUBLISHED_PATH_TOKEN_TOTAL_BYTES,
+  });
+  let contentTokenSnapshots: readonly Uint8Array[] = Object.freeze([]);
+  const contentTokens = explicitSsrPublicUrls === undefined
+    ? []
+    : contentTokensOrSsrPublicUrls as readonly Uint8Array[];
+  const ssrPublicUrls = explicitSsrPublicUrls === undefined
+    ? contentTokensOrSsrPublicUrls as readonly string[]
+    : explicitSsrPublicUrls;
+  const {
+    pathTokenAutomaton,
+    contentTokenAutomaton,
+    ssrPublicUrlSnapshots,
+  } = (() => {
     try {
+      contentTokenSnapshots = snapshotTokens(contentTokens, {
+        maximumCount: MAX_UNPUBLISHED_CONTENT_TOKENS,
+        maximumTokenBytes: MAX_UNPUBLISHED_CONTENT_TOKEN_BYTES,
+        maximumTotalBytes: MAX_UNPUBLISHED_CONTENT_TOKEN_TOTAL_BYTES,
+      });
       return {
-        tokenAutomaton: compileTokenAutomaton(tokenSnapshots),
+        pathTokenAutomaton: compileTokenAutomaton(pathTokenSnapshots),
+        contentTokenAutomaton: compileTokenAutomaton(contentTokenSnapshots),
         ssrPublicUrlSnapshots: snapshotSsrPublicUrls(ssrPublicUrls),
       };
     } finally {
-      for (const token of tokenSnapshots) token.fill(0);
+      for (const token of pathTokenSnapshots) token.fill(0);
+      for (const token of contentTokenSnapshots) token.fill(0);
     }
   })();
   const first = scanBuildTreeOnce(
     buildDirectory,
-    tokenAutomaton,
+    pathTokenAutomaton,
+    contentTokenAutomaton,
     ssrPublicUrlSnapshots,
   );
   const second = scanBuildTreeOnce(
     buildDirectory,
-    tokenAutomaton,
+    pathTokenAutomaton,
+    contentTokenAutomaton,
     ssrPublicUrlSnapshots,
   );
   if (!sameBuildTreeEvidence(first, second)) {

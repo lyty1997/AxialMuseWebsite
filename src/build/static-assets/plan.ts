@@ -1,3 +1,5 @@
+import {createHash} from "node:crypto";
+import type {Hash} from "node:crypto";
 import {
   chmodSync,
   lstatSync,
@@ -40,6 +42,7 @@ import {
   MAX_SOURCE_PATH_BYTES,
   MAX_SOURCE_TOTAL_BYTES,
   MAX_STATIC_PUBLIC_FILE_BYTES,
+  MAX_UNPUBLISHED_CONTENT_TOKEN_BYTES,
   MAX_UNPUBLISHED_FILE_BYTES,
   readAsciiDirectoryNames,
   readPrivateFileSnapshot,
@@ -57,6 +60,7 @@ import type {
   StaticAssetManifestFile,
   StaticAssetMode,
   StaticAssetPlan,
+  StaticPublicAssetRole,
   UnpublishedAssetSnapshotInput,
 } from "./types.js";
 
@@ -92,6 +96,16 @@ const TYPED_ARRAY_TAG = Object.getOwnPropertyDescriptor(
   Symbol.toStringTag,
 )?.get;
 
+interface StaticAssetPlanPrivateState {
+  readonly inputDigest: string;
+  assertInputsCurrent(): void;
+}
+
+const staticAssetPlanPrivateStates = new WeakMap<
+  object,
+  StaticAssetPlanPrivateState
+>();
+
 interface PrivateAllowedFile {
   readonly manifest: StaticAssetManifestFile;
   readonly bytes: Uint8Array;
@@ -106,23 +120,51 @@ interface AllowedFileEvidence {
 
 interface PrivateExcludedFile {
   readonly manifest: StaticAssetExcludedFile;
-  readonly publicUrlBytes: Uint8Array;
+  readonly byteLength: number;
+  readonly projectId?: string;
+  readonly pathTokens: readonly Uint8Array[];
+  readonly contentTokens: readonly Uint8Array[];
+  readonly sha256: string;
+}
+
+interface ExcludedFileCandidate {
+  readonly manifest: StaticAssetExcludedFile;
+  readonly bytes: Uint8Array;
+  readonly projectId?: string;
+  readonly sha256: string;
+}
+
+interface StaticAssetInputDigestRecord {
+  readonly disposition: "allowed" | "excluded";
+  readonly kind: StaticAssetManifestFile["kind"] | StaticAssetExcludedFile["kind"];
+  readonly sourcePath: string;
+  readonly targetPath: string | null;
+  readonly publicUrl: string | null;
+  readonly role: StaticPublicAssetRole | null;
+  readonly projectId: string | null;
+  readonly byteLength: number;
   readonly sha256: string;
 }
 
 interface ProjectScanResult {
   readonly sources: readonly ProjectMediaSourceInput[];
   readonly snapshots: ReadonlyMap<string, Uint8Array>;
+  readonly directories: readonly string[];
 }
 
-interface StaticPublicSnapshot {
+interface StaticPublicFileSnapshot {
   readonly entry: StaticPublicRegistryEntry;
   readonly bytes: Uint8Array;
 }
 
+interface StaticPublicScanResult {
+  readonly snapshots: readonly StaticPublicFileSnapshot[];
+  readonly directories: readonly string[];
+}
+
 interface GenericUnpublishedSnapshot {
   readonly sourcePath: string;
-  readonly publicUrl: string;
+  readonly publicUrl: string | null;
   readonly bytes: Uint8Array;
 }
 
@@ -343,10 +385,16 @@ function scanProjectMedia(
   catalog: ProjectCatalog,
 ): ProjectScanResult {
   const assetRoot = resolve(repositoryRoot, "site-assets");
+  const directories: string[] = [];
   if (optionalStat(assetRoot, "site-assets") === undefined) {
-    return Object.freeze({sources: Object.freeze([]), snapshots: new Map()});
+    return Object.freeze({
+      sources: Object.freeze([]),
+      snapshots: new Map(),
+      directories: Object.freeze([]),
+    });
   }
   const realAssetRoot = assertSourceDirectory(assetRoot, "site-assets", repositoryRoot);
+  directories.push("site-assets");
   const assetEntries = readAsciiDirectoryNames(assetRoot, "site-assets");
   for (const entry of assetEntries) {
     if (entry !== "projects") {
@@ -359,13 +407,18 @@ function scanProjectMedia(
   }
   const projectsRoot = resolve(assetRoot, "projects");
   if (optionalStat(projectsRoot, "site-assets/projects") === undefined) {
-    return Object.freeze({sources: Object.freeze([]), snapshots: new Map()});
+    return Object.freeze({
+      sources: Object.freeze([]),
+      snapshots: new Map(),
+      directories: Object.freeze(directories),
+    });
   }
   const realProjectsRoot = assertSourceDirectory(
     projectsRoot,
     "site-assets/projects",
     realAssetRoot,
   );
+  directories.push("site-assets/projects");
   const knownProjectIds = new Set(catalog.projects.map((project) => project.id));
   const sources: ProjectMediaSourceInput[] = [];
   const snapshots = new Map<string, Uint8Array>();
@@ -388,6 +441,7 @@ function scanProjectMedia(
         projectSourcePath,
         realProjectsRoot,
       );
+      directories.push(projectSourcePath);
       const names = readAsciiDirectoryNames(projectDirectory, projectSourcePath);
       if (names.length === 0) {
         failStaticAsset(
@@ -464,6 +518,7 @@ function scanProjectMedia(
     return Object.freeze({
       sources: Object.freeze(sources),
       snapshots,
+      directories: Object.freeze(directories),
     });
   } catch (error) {
     unownedSnapshot?.fill(0);
@@ -508,7 +563,7 @@ function validateStaticPublicName(
 function scanStaticPublic(
   repositoryRoot: string,
   registry: readonly StaticPublicRegistryEntry[],
-): readonly StaticPublicSnapshot[] {
+): StaticPublicScanResult {
   const staticRoot = resolve(repositoryRoot, "static-public");
   if (optionalStat(staticRoot, "static-public") === undefined) {
     if (registry.length !== 0) {
@@ -518,13 +573,17 @@ function scanStaticPublic(
         {sourcePath: "static-public"},
       );
     }
-    return Object.freeze([]);
+    return Object.freeze({
+      snapshots: Object.freeze([]),
+      directories: Object.freeze([]),
+    });
   }
   const realStaticRoot = assertSourceDirectory(
     staticRoot,
     "static-public",
     repositoryRoot,
   );
+  const directories: string[] = ["static-public"];
   const discovered = new Map<string, string>();
   const walk = (directory: string, segments: readonly string[]): number => {
     let fileCount = 0;
@@ -543,11 +602,13 @@ function scanStaticPublic(
       }
       if (metadata.isDirectory()) {
         validateStaticPublicName(name, segments, true);
+        const sourcePath = `static-public/${[...segments, name].join("/")}`;
         const realDirectory = assertSourceDirectory(
           absolutePath,
-          `static-public/${[...segments, name].join("/")}`,
+          sourcePath,
           realStaticRoot,
         );
+        directories.push(sourcePath);
         const nested = walk(realDirectory, [...segments, name]);
         if (nested === 0) {
           failStaticAsset(
@@ -604,7 +665,7 @@ function scanStaticPublic(
     }
   }
 
-  const snapshots: StaticPublicSnapshot[] = [];
+  const snapshots: StaticPublicFileSnapshot[] = [];
   let totalBytes = 0;
   let unownedSnapshot: Uint8Array | undefined;
   try {
@@ -629,7 +690,10 @@ function scanStaticPublic(
         );
       }
     }
-    return Object.freeze(snapshots);
+    return Object.freeze({
+      snapshots: Object.freeze(snapshots),
+      directories: Object.freeze(directories.sort(compareUtf8)),
+    });
   } catch (error) {
     unownedSnapshot?.fill(0);
     unownedSnapshot = undefined;
@@ -661,6 +725,25 @@ function isSafePublicUrl(value: unknown): value is string {
     && !/[?#%\s\u0000-\u001f\u007f-\u009f]/u.test(value)
     && value.slice(1).split("/").every((segment) => (
       segment !== "" && segment !== "." && segment !== ".."
+    ));
+}
+
+function isContentAssetSourcePath(value: unknown): value is string {
+  if (!isSafeRepositoryPath(value)) return false;
+  const segments = value.split("/");
+  if (
+    segments.length < 5
+    || segments[0] !== "site-content"
+    || (segments[1] !== "projects" && segments[1] !== "writing")
+    || !PROJECT_ID_PATTERN.test(segments[2] ?? "")
+    || segments[3] !== "assets"
+  ) return false;
+  const assetSegments = segments.slice(4);
+  const fileName = assetSegments.at(-1);
+  return fileName !== undefined
+    && STATIC_FILE_PATTERN.test(fileName)
+    && assetSegments.slice(0, -1).every((segment) => (
+      STATIC_DIRECTORY_PATTERN.test(segment)
     ));
 }
 
@@ -711,11 +794,10 @@ function snapshotGenericUnpublished(
     MAX_SOURCE_FILES,
     "STATIC_ASSET_UNPUBLISHED_INPUT",
     "未发布素材快照集合必须是无稀疏、accessor 或额外字段的受控数组。",
-    "site-content/writing",
+    "site-content",
   );
   const snapshots: GenericUnpublishedSnapshot[] = [];
   const sourcePaths = new Set<string>();
-  const publicPaths = new Set<string>();
   let totalBytes = 0;
   let unownedSnapshot: Uint8Array | undefined;
   try {
@@ -726,32 +808,29 @@ function snapshotGenericUnpublished(
         UNPUBLISHED_ENTRY_KEYS,
         "STATIC_ASSET_UNPUBLISHED_INPUT",
         "未发布素材快照条目必须是精确的普通数据字段集合。",
-        "site-content/writing",
+        "site-content",
       );
       if (
-        !isSafeRepositoryPath(fields.sourcePath)
-        || !/^site-content\/writing\/[^/]+\/assets\/.+/u.test(fields.sourcePath)
-        || !isSafePublicUrl(fields.publicPath)
+        !isContentAssetSourcePath(fields.sourcePath)
+        || (fields.publicPath !== null && !isSafePublicUrl(fields.publicPath))
       ) {
         failStaticAsset(
           "STATIC_ASSET_UNPUBLISHED_INPUT",
           "未发布正文素材路径或公开路径不合法。",
-          {sourcePath: "site-content/writing"},
+          {sourcePath: "site-content"},
         );
       }
       const sourcePath = fields.sourcePath;
-      const publicPath = fields.publicPath;
+      const publicPath = fields.publicPath as string | null;
       const foldedSource = sourcePath.toLocaleLowerCase("en-US");
-      const foldedPublic = publicPath.toLocaleLowerCase("en-US");
-      if (sourcePaths.has(foldedSource) || publicPaths.has(foldedPublic)) {
+      if (sourcePaths.has(foldedSource)) {
         failStaticAsset(
           "STATIC_ASSET_UNPUBLISHED_DUPLICATE",
-          "未发布正文素材存在重复或大小写冲突路径。",
+          "未发布正文素材存在重复或大小写冲突源路径。",
           {sourcePath},
         );
       }
       sourcePaths.add(foldedSource);
-      publicPaths.add(foldedPublic);
       unownedSnapshot = snapshotUint8Array(fields.bytes, sourcePath);
       const bytes = unownedSnapshot;
       snapshots.push(Object.freeze({
@@ -765,7 +844,7 @@ function snapshotGenericUnpublished(
         failStaticAsset(
           "STATIC_ASSET_SOURCE_TOTAL_SIZE",
           "未发布正文素材私有快照总字节超过上限。",
-          {sourcePath: "site-content/writing"},
+          {sourcePath: "site-content"},
         );
       }
     }
@@ -777,7 +856,6 @@ function snapshotGenericUnpublished(
     for (const snapshot of snapshots) snapshot.bytes.fill(0);
     snapshots.length = 0;
     sourcePaths.clear();
-    publicPaths.clear();
     throw error;
   }
 }
@@ -826,6 +904,189 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+function updateDigestBytes(hash: Hash, bytes: Uint8Array): void {
+  const length = Buffer.alloc(8);
+  length.writeBigUInt64BE(BigInt(bytes.byteLength));
+  hash.update(length);
+  hash.update(bytes);
+}
+
+function updateDigestString(hash: Hash, value: string): void {
+  updateDigestBytes(hash, Buffer.from(value, "utf8"));
+}
+
+function updateDigestField(hash: Hash, name: string, value: string): void {
+  updateDigestString(hash, name);
+  updateDigestString(hash, value);
+}
+
+function updateNullableDigestField(
+  hash: Hash,
+  name: string,
+  value: string | null,
+): void {
+  updateDigestString(hash, name);
+  hash.update(Uint8Array.of(value === null ? 0 : 1));
+  if (value !== null) updateDigestString(hash, value);
+}
+
+function compareNullableUtf8(left: string | null, right: string | null): number {
+  if (left === null) return right === null ? 0 : -1;
+  return right === null ? 1 : compareUtf8(left, right);
+}
+
+function staticAssetInputDigest(
+  mode: StaticAssetMode,
+  allowed: readonly PrivateAllowedFile[],
+  excluded: readonly PrivateExcludedFile[],
+): string {
+  const records: StaticAssetInputDigestRecord[] = [
+    ...allowed.map((file): StaticAssetInputDigestRecord => Object.freeze({
+      disposition: "allowed",
+      kind: file.manifest.kind,
+      sourcePath: file.manifest.sourcePath,
+      targetPath: file.manifest.targetPath,
+      publicUrl: file.manifest.publicUrl,
+      role: file.manifest.kind === "static-public" ? file.manifest.role : null,
+      projectId: file.manifest.kind === "project-preview"
+        ? file.manifest.projectId
+        : null,
+      byteLength: file.bytes.byteLength,
+      sha256: file.sha256,
+    })),
+    ...excluded.map((file): StaticAssetInputDigestRecord => Object.freeze({
+      disposition: "excluded",
+      kind: file.manifest.kind,
+      sourcePath: file.manifest.sourcePath,
+      targetPath: null,
+      publicUrl: file.manifest.publicUrl,
+      role: null,
+      projectId: file.projectId ?? null,
+      byteLength: file.byteLength,
+      sha256: file.sha256,
+    })),
+  ];
+  records.sort((left, right) => (
+    compareUtf8(left.sourcePath, right.sourcePath)
+    || compareNullableUtf8(left.targetPath, right.targetPath)
+    || compareUtf8(left.disposition, right.disposition)
+    || compareUtf8(left.kind, right.kind)
+  ));
+
+  const hash = createHash("sha256");
+  updateDigestString(hash, "axial-muse-static-asset-input-v1");
+  updateDigestField(hash, "mode", mode);
+  updateDigestField(hash, "record-count", String(records.length));
+  for (const record of records) {
+    updateDigestString(hash, "record");
+    updateDigestField(hash, "disposition", record.disposition);
+    updateDigestField(hash, "kind", record.kind);
+    updateDigestField(hash, "source-path", record.sourcePath);
+    updateNullableDigestField(hash, "target-path", record.targetPath);
+    updateNullableDigestField(hash, "public-url", record.publicUrl);
+    updateNullableDigestField(hash, "role", record.role);
+    updateNullableDigestField(hash, "project-id", record.projectId);
+    updateDigestField(hash, "byte-length", String(record.byteLength));
+    updateDigestField(hash, "sha256", record.sha256);
+  }
+  return hash.digest("hex");
+}
+
+function staticPhysicalSourceDigest(
+  media: ProjectScanResult,
+  publicResult: StaticPublicScanResult,
+): string {
+  const hash = createHash("sha256");
+  updateDigestString(hash, "axial-muse-static-physical-input-v1");
+  updateDigestField(
+    hash,
+    "project-directory-count",
+    String(media.directories.length),
+  );
+  for (const sourcePath of media.directories) {
+    updateDigestField(hash, "project-directory", sourcePath);
+  }
+  const mediaFiles = [...media.snapshots.entries()].sort((left, right) => (
+    compareUtf8(left[0], right[0])
+  ));
+  updateDigestField(hash, "project-file-count", String(mediaFiles.length));
+  for (const [sourcePath, bytes] of mediaFiles) {
+    updateDigestField(hash, "project-source-path", sourcePath);
+    updateDigestField(hash, "project-byte-length", String(bytes.byteLength));
+    updateDigestField(hash, "project-sha256", sha256(bytes));
+  }
+  updateDigestField(
+    hash,
+    "static-public-directory-count",
+    String(publicResult.directories.length),
+  );
+  for (const sourcePath of publicResult.directories) {
+    updateDigestField(hash, "static-public-directory", sourcePath);
+  }
+  updateDigestField(
+    hash,
+    "static-public-file-count",
+    String(publicResult.snapshots.length),
+  );
+  for (const {entry, bytes} of publicResult.snapshots) {
+    updateDigestField(
+      hash,
+      "static-public-source-path",
+      `static-public/${entry.sourcePath}`,
+    );
+    updateDigestField(hash, "static-public-role", entry.role);
+    updateDigestField(hash, "static-public-byte-length", String(bytes.byteLength));
+    updateDigestField(hash, "static-public-sha256", sha256(bytes));
+  }
+  return hash.digest("hex");
+}
+
+function createStaticInputsCurrentAssertion(input: Readonly<{
+  repositoryRoot: string;
+  catalog: ProjectCatalog;
+  registry: readonly StaticPublicRegistryEntry[];
+  expectedPhysicalDigest: string;
+}>): () => void {
+  return (): void => {
+    let media: ProjectScanResult | undefined;
+    let publicResult: StaticPublicScanResult | undefined;
+    let operationError: unknown;
+    try {
+      media = scanProjectMedia(input.repositoryRoot, input.catalog);
+      const mediaResult = validateProjectMedia({
+        catalog: input.catalog,
+        sources: media.sources,
+      });
+      if (!mediaResult.ok) {
+        throw new TypeError("project media currentness validation failed");
+      }
+      publicResult = scanStaticPublic(input.repositoryRoot, input.registry);
+      if (
+        staticPhysicalSourceDigest(media, publicResult)
+        !== input.expectedPhysicalDigest
+      ) {
+        throw new TypeError("static physical input digest changed");
+      }
+    } catch (error) {
+      operationError = error;
+    } finally {
+      if (media !== undefined) {
+        for (const bytes of media.snapshots.values()) bytes.fill(0);
+      }
+      if (publicResult !== undefined) {
+        for (const snapshot of publicResult.snapshots) snapshot.bytes.fill(0);
+      }
+    }
+    if (operationError !== undefined) {
+      failStaticAsset(
+        "STATIC_ASSET_SOURCE_DRIFT",
+        "构建临界点的物理静态素材输入已发生漂移。",
+        {cause: operationError, sourcePath: "site-assets"},
+      );
+    }
+  };
+}
+
 function projectById(catalog: ProjectCatalog): ReadonlyMap<string, ProjectCatalog["projects"][number]> {
   return new Map(catalog.projects.map((project) => [project.id, project]));
 }
@@ -848,7 +1109,7 @@ function sourceSnapshotForPreview(
 
 function assertCombinedSnapshotTotal(
   mediaSnapshots: ReadonlyMap<string, Uint8Array>,
-  publicSnapshots: readonly StaticPublicSnapshot[],
+  publicSnapshots: readonly StaticPublicFileSnapshot[],
   genericUnpublished: readonly GenericUnpublishedSnapshot[],
 ): void {
   let totalBytes = 0;
@@ -864,12 +1125,50 @@ function assertCombinedSnapshotTotal(
   }
 }
 
+function createContentLeakTokens(bytes: Uint8Array): readonly Uint8Array[] {
+  if (bytes.byteLength === 0) return Object.freeze([]);
+  const tokens: Uint8Array[] = [];
+  const rawLength = Math.min(bytes.byteLength, MAX_UNPUBLISHED_CONTENT_TOKEN_BYTES);
+  tokens.push(bytes.slice(0, rawLength));
+  const wholeBase64Length = 4 * Math.ceil(bytes.byteLength / 3);
+  const base64SourceLength = wholeBase64Length <= MAX_UNPUBLISHED_CONTENT_TOKEN_BYTES
+    ? bytes.byteLength
+    : Math.floor(MAX_UNPUBLISHED_CONTENT_TOKEN_BYTES / 4) * 3;
+  tokens.push(Buffer.from(
+    Buffer.from(bytes.subarray(0, base64SourceLength)).toString("base64"),
+    "ascii",
+  ));
+  return Object.freeze(tokens);
+}
+
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
+function uniqueLeakTokens(tokens: readonly Uint8Array[]): readonly Uint8Array[] {
+  const unique: Uint8Array[] = [];
+  const buckets = new Map<string, Uint8Array[]>();
+  for (const token of tokens) {
+    const identity = `${token.byteLength}:${sha256(token)}`;
+    const bucket = buckets.get(identity);
+    if (bucket?.some((candidate) => sameBytes(candidate, token)) === true) continue;
+    unique.push(token);
+    if (bucket === undefined) buckets.set(identity, [token]);
+    else bucket.push(token);
+  }
+  return Object.freeze(unique);
+}
+
 function createPrivateFiles(
   mode: StaticAssetMode,
   catalog: ProjectCatalog,
   previews: readonly ProjectPreviewAsset[],
   mediaSnapshots: ReadonlyMap<string, Uint8Array>,
-  publicSnapshots: readonly StaticPublicSnapshot[],
+  publicSnapshots: readonly StaticPublicFileSnapshot[],
   genericUnpublished: readonly GenericUnpublishedSnapshot[],
 ): Readonly<{
   allowed: readonly PrivateAllowedFile[];
@@ -886,13 +1185,13 @@ function createPrivateFiles(
     bytes,
     sha256: sha256(bytes),
   }));
-  const excluded: PrivateExcludedFile[] = genericUnpublished.map((snapshot) => Object.freeze({
+  const excludedCandidates: ExcludedFileCandidate[] = genericUnpublished.map((snapshot) => Object.freeze({
     manifest: Object.freeze({
-      kind: "article-asset" as const,
+      kind: "content-asset" as const,
       sourcePath: snapshot.sourcePath,
       publicUrl: snapshot.publicUrl,
     }),
-    publicUrlBytes: Buffer.from(snapshot.publicUrl, "utf8"),
+    bytes: snapshot.bytes,
     sha256: sha256(snapshot.bytes),
   }));
   const projects = projectById(catalog);
@@ -921,13 +1220,14 @@ function createPrivateFiles(
         sha256: sha256(bytes),
       }));
     } else {
-      excluded.push(Object.freeze({
+      excludedCandidates.push(Object.freeze({
         manifest: Object.freeze({
           kind: "project-preview" as const,
           sourcePath,
           publicUrl: preview.publicUrl,
         }),
-        publicUrlBytes: Buffer.from(preview.publicUrl, "utf8"),
+        bytes,
+        projectId: preview.projectId,
         sha256: sha256(bytes),
       }));
     }
@@ -936,7 +1236,7 @@ function createPrivateFiles(
     left.manifest.targetPath,
     right.manifest.targetPath,
   ));
-  excluded.sort((left, right) => compareUtf8(
+  excludedCandidates.sort((left, right) => compareUtf8(
     left.manifest.sourcePath,
     right.manifest.sourcePath,
   ));
@@ -967,7 +1267,7 @@ function createPrivateFiles(
   }
   if (mode === "production") {
     const allowedHashes = new Set(allowed.map((file) => file.sha256));
-    if (excluded.some((file) => allowedHashes.has(file.sha256))) {
+    if (excludedCandidates.some((file) => allowedHashes.has(file.sha256))) {
       failStaticAsset(
         "STATIC_ASSET_VISIBILITY_CONFLICT",
         "公开与未发布素材共享字节，无法建立生产泄漏闭包。",
@@ -975,6 +1275,21 @@ function createPrivateFiles(
       );
     }
   }
+  const excluded: readonly PrivateExcludedFile[] = Object.freeze(
+    excludedCandidates.map((file) => Object.freeze({
+      manifest: file.manifest,
+      byteLength: file.bytes.byteLength,
+      ...(file.projectId === undefined ? {} : {projectId: file.projectId}),
+      pathTokens: Object.freeze([
+        Buffer.from(file.manifest.sourcePath, "utf8"),
+        ...(file.manifest.publicUrl === null
+          ? []
+          : [Buffer.from(file.manifest.publicUrl, "utf8")]),
+      ]),
+      contentTokens: createContentLeakTokens(file.bytes),
+      sha256: file.sha256,
+    })),
+  );
   const retainedBytes = new Set(allowed.map((file) => file.bytes));
   for (const bytes of mediaSnapshots.values()) {
     if (!retainedBytes.has(bytes)) bytes.fill(0);
@@ -982,7 +1297,7 @@ function createPrivateFiles(
   for (const snapshot of genericUnpublished) snapshot.bytes.fill(0);
   return Object.freeze({
     allowed: Object.freeze(allowed),
-    excluded: Object.freeze(excluded),
+    excluded,
   });
 }
 
@@ -1080,7 +1395,7 @@ function assertMaterializedTree(
   buildContext: BuildContext,
   allowed: readonly PrivateAllowedFile[],
 ): void {
-  const evidence = scanBuildTree(buildContext.staticDirectory, [], []);
+  const evidence = scanBuildTree(buildContext.staticDirectory, [], [], []);
   const expected = new Map(allowed.map((file) => [file.manifest.targetPath, file]));
   if (
     evidence.files.length !== expected.size
@@ -1114,13 +1429,22 @@ class PreparedStaticAssetPlan implements StaticAssetPlan {
   #pendingFiles: readonly PrivateAllowedFile[];
   #materialized = false;
   #consumed = false;
+  #disposed = false;
 
   constructor(
     mode: StaticAssetMode,
     allowed: readonly PrivateAllowedFile[],
     excluded: readonly PrivateExcludedFile[],
+    assertInputsCurrent: () => void,
   ) {
     this.#mode = mode;
+    staticAssetPlanPrivateStates.set(
+      this,
+      Object.freeze({
+        inputDigest: staticAssetInputDigest(mode, allowed, excluded),
+        assertInputsCurrent,
+      }),
+    );
     this.#allowed = Object.freeze(allowed.map((file) => Object.freeze({
       manifest: file.manifest,
       byteLength: file.bytes.byteLength,
@@ -1139,6 +1463,13 @@ class PreparedStaticAssetPlan implements StaticAssetPlan {
   #discardPendingBytes(): void {
     for (const file of this.#pendingFiles) file.bytes.fill(0);
     this.#pendingFiles = Object.freeze([]);
+  }
+
+  #discardExcludedTokens(): void {
+    for (const file of this.#excluded) {
+      for (const token of file.pathTokens) token.fill(0);
+      for (const token of file.contentTokens) token.fill(0);
+    }
   }
 
   materialize(buildContext: BuildContext): StaticAssetManifest {
@@ -1210,6 +1541,13 @@ class PreparedStaticAssetPlan implements StaticAssetPlan {
   }
 
   assertProductionBuild(buildDirectory: string): void {
+    if (this.#disposed) {
+      failStaticAsset(
+        "STATIC_ASSET_PLAN_CONSUMED",
+        "已释放的静态素材计划不能再检查 production 制品。",
+        {sourcePath: "build"},
+      );
+    }
     if (this.#mode !== "production") {
       failStaticAsset(
         "STATIC_ASSET_PRODUCTION_MODE",
@@ -1224,16 +1562,33 @@ class PreparedStaticAssetPlan implements StaticAssetPlan {
         {sourcePath: "build"},
       );
     }
-    const tokens = this.#excluded.map((file) => file.publicUrlBytes);
+    const pathTokens = uniqueLeakTokens(
+      this.#excluded.flatMap((file) => file.pathTokens),
+    );
+    const contentTokens = uniqueLeakTokens(
+      this.#excluded.flatMap((file) => file.contentTokens),
+    );
     const ssrProjectFiles = this.#allowed.filter((file) => (
       file.manifest.kind === "project-preview"
     ));
     const ssrPublicUrls = ssrProjectFiles.map((file) => file.manifest.publicUrl);
-    const evidence = scanBuildTree(buildDirectory, tokens, ssrPublicUrls);
-    if (evidence.hasLeakedToken) {
+    const evidence = scanBuildTree(
+      buildDirectory,
+      pathTokens,
+      contentTokens,
+      ssrPublicUrls,
+    );
+    if (evidence.hasLeakedPathToken) {
       failStaticAsset(
         "STATIC_ASSET_UNPUBLISHED_PATH_LEAK",
         "production 制品字节包含未发布素材公开路径。",
+        {sourcePath: "build"},
+      );
+    }
+    if (evidence.hasLeakedContentToken) {
+      failStaticAsset(
+        "STATIC_ASSET_UNPUBLISHED_BYTE_LEAK",
+        "production 制品含未发布素材的原始字节或标准 Base64 token。",
         {sourcePath: "build"},
       );
     }
@@ -1308,9 +1663,38 @@ class PreparedStaticAssetPlan implements StaticAssetPlan {
   }
 
   dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
     this.#consumed = true;
     this.#discardPendingBytes();
+    this.#discardExcludedTokens();
   }
+}
+
+function getStaticAssetPlanPrivateState(
+  plan: StaticAssetPlan,
+): StaticAssetPlanPrivateState {
+  const state = plan !== null && typeof plan === "object"
+    ? staticAssetPlanPrivateStates.get(plan)
+    : undefined;
+  if (state === undefined) {
+    failStaticAsset(
+      "STATIC_ASSET_PLAN_PROVENANCE",
+      "静态素材输入摘要只接受本次安全准备形成的计划。",
+      {sourcePath: "site-assets"},
+    );
+  }
+  return state;
+}
+
+export function getStaticAssetPlanInputDigest(plan: StaticAssetPlan): string {
+  return getStaticAssetPlanPrivateState(plan).inputDigest;
+}
+
+export function assertStaticAssetPlanInputsCurrent(
+  plan: StaticAssetPlan,
+): void {
+  getStaticAssetPlanPrivateState(plan).assertInputsCurrent();
 }
 
 function prepareStaticAssetPlanInternal(
@@ -1334,7 +1718,7 @@ function prepareStaticAssetPlanInternal(
   const repositoryRoot = assertCanonicalRepositoryRoot(input.repositoryRoot);
   const registry = decodeStaticPublicRegistry(input.staticPublicRegistry);
   let media: ProjectScanResult | undefined;
-  let publicSnapshots: readonly StaticPublicSnapshot[] = Object.freeze([]);
+  let publicResult: StaticPublicScanResult | undefined;
   let genericUnpublished: readonly GenericUnpublishedSnapshot[] = Object.freeze([]);
   try {
     media = scanProjectMedia(repositoryRoot, input.catalog);
@@ -1353,11 +1737,12 @@ function prepareStaticAssetPlanInternal(
         },
       );
     }
-    publicSnapshots = scanStaticPublic(repositoryRoot, registry);
+    publicResult = scanStaticPublic(repositoryRoot, registry);
+    const physicalDigest = staticPhysicalSourceDigest(media, publicResult);
     genericUnpublished = snapshotGenericUnpublished(input.unpublishedAssets);
     assertCombinedSnapshotTotal(
       media.snapshots,
-      publicSnapshots,
+      publicResult.snapshots,
       genericUnpublished,
     );
     const privateFiles = createPrivateFiles(
@@ -1365,19 +1750,27 @@ function prepareStaticAssetPlanInternal(
       input.catalog,
       mediaResult.value,
       media.snapshots,
-      publicSnapshots,
+      publicResult.snapshots,
       genericUnpublished,
     );
     return new PreparedStaticAssetPlan(
       input.mode,
       privateFiles.allowed,
       privateFiles.excluded,
+      createStaticInputsCurrentAssertion({
+        repositoryRoot,
+        catalog: input.catalog,
+        registry,
+        expectedPhysicalDigest: physicalDigest,
+      }),
     );
   } catch (error) {
     if (media !== undefined) {
       for (const bytes of media.snapshots.values()) bytes.fill(0);
     }
-    for (const snapshot of publicSnapshots) snapshot.bytes.fill(0);
+    if (publicResult !== undefined) {
+      for (const snapshot of publicResult.snapshots) snapshot.bytes.fill(0);
+    }
     for (const snapshot of genericUnpublished) snapshot.bytes.fill(0);
     if (error instanceof StaticAssetError) throw error;
     failStaticAsset(

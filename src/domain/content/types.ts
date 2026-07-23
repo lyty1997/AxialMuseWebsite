@@ -210,3 +210,123 @@ export interface ArticleValidationInput {
   readonly catalog: ProjectCatalog;
   readonly sources: readonly ArticleSourceInput[];
 }
+
+export type ContentBuildMode = "production" | "preview";
+
+export interface ProjectNavigationInput {
+  readonly catalog: ProjectCatalog;
+}
+
+export interface ProjectNavigationPreviewImage {
+  readonly publicUrl: string;
+  readonly width: 1600;
+  readonly height: 1000;
+  readonly alt: string;
+}
+
+export interface ProjectNavigationItem {
+  readonly projectId: string;
+  readonly sourcePath: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly canonicalPath: string;
+  readonly navigationOrder: number;
+  readonly status: "active" | "paused" | "completed" | "archived";
+  readonly publicationStatus: "published" | "archived";
+  readonly updatedAt: string;
+  readonly repositoryUrl?: string;
+  readonly previewImage: ProjectNavigationPreviewImage;
+}
+
+export interface WritingNavigationInput {
+  readonly mode: ContentBuildMode;
+  readonly catalog: ProjectCatalog;
+  readonly articles: readonly Article[];
+}
+
+export interface ArticleAuthorNavigationItem {
+  readonly id: string;
+  readonly displayName: string;
+}
+
+export interface ArticleTopicNavigationItem {
+  readonly id: string;
+  readonly displayName: string;
+}
+
+export interface ArticleSeoNavigationInput {
+  readonly description: string;
+  readonly socialDescription: string;
+}
+
+export interface PublicArticleNavigationItem {
+  readonly articleId: string;
+  readonly sourcePath: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly canonicalPath: string;
+  readonly publicationStatus: "published" | "archived";
+  readonly publishedAt: string;
+  readonly updatedAt: string;
+  readonly authors: readonly ArticleAuthorNavigationItem[];
+  readonly topics: readonly ArticleTopicNavigationItem[];
+  readonly seo: ArticleSeoNavigationInput;
+}
+
+export interface DraftArticleNavigationItem {
+  readonly articleId: string;
+  readonly sourcePath: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly canonicalPath: string;
+  readonly publicationStatus: "draft";
+  readonly updatedAt?: string;
+  readonly authors: readonly ArticleAuthorNavigationItem[];
+  readonly topics: readonly ArticleTopicNavigationItem[];
+  readonly seo: ArticleSeoNavigationInput;
+}
+
+export interface GeneralWritingGroup {
+  readonly kind: "general";
+  readonly label: "通用技术";
+  readonly articles: readonly PublicArticleNavigationItem[];
+}
+
+export interface ModuleWritingGroup {
+  readonly kind: "module";
+  readonly moduleId: string;
+  readonly label: string;
+  readonly navigationOrder: number;
+  readonly articles: readonly PublicArticleNavigationItem[];
+}
+
+export interface ProjectWritingGroup {
+  readonly kind: "project";
+  readonly projectId: string;
+  readonly label: string;
+  readonly navigationOrder: number;
+  readonly rootArticles: readonly PublicArticleNavigationItem[];
+  readonly modules: readonly ModuleWritingGroup[];
+}
+
+export interface DraftWritingGroup {
+  readonly kind: "draft";
+  readonly label: "草稿";
+  readonly articles: readonly DraftArticleNavigationItem[];
+}
+
+export type WritingNavigationGroup =
+  | GeneralWritingGroup
+  | ProjectWritingGroup
+  | DraftWritingGroup;
+
+export interface ArticleDateIndexInput {
+  readonly articles: readonly Article[];
+}
+
+export interface ArticleDateIndexEntry {
+  readonly articleId: string;
+  readonly slug: string;
+  readonly publishedAt: string;
+  readonly updatedAt: string;
+}

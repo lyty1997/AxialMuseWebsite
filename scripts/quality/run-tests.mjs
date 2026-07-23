@@ -2,6 +2,7 @@ import {spawnSync} from "node:child_process";
 import {
   chmodSync,
   lstatSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -41,6 +42,12 @@ const TEMPORARY_PACKAGE = `${JSON.stringify({
   type: "module",
   private: true,
 }, null, 2)}\n`;
+const CONTENT_DECODER_RUNTIME_FILES = Object.freeze([
+  "frontmatter.mjs",
+  "frontmatter.d.mts",
+  "json.mjs",
+  "json.d.mts",
+]);
 
 export class TestRunError extends Error {
   constructor(code, message, options) {
@@ -342,6 +349,55 @@ function writeTemporaryPackage(outputRoot) {
   }
 }
 
+function copyContentDecoderRuntime({root, outputRoot}) {
+  const emittedAdapter = resolve(
+    outputRoot,
+    "src/build/content/content-decoders.js",
+  );
+  if (!existsAsRegularFile(emittedAdapter)) return;
+  const sourceDirectory = resolve(root, "scripts/content");
+  const targetDirectory = resolve(outputRoot, "scripts/content");
+  try {
+    mkdirSync(targetDirectory, {recursive: true, mode: 0o700});
+    chmodSync(resolve(outputRoot, "scripts"), 0o700);
+    chmodSync(targetDirectory, 0o700);
+    for (const name of CONTENT_DECODER_RUNTIME_FILES) {
+      const source = resolve(sourceDirectory, name);
+      const target = resolve(targetDirectory, name);
+      const metadata = lstatSync(source);
+      if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.nlink !== 1) {
+        fail("TEST_DECODER_RUNTIME", "内容解码器运行时源身份不合法。");
+      }
+      const bytes = readFileSync(source);
+      writeFileSync(target, bytes, {flag: "wx", mode: 0o600});
+      chmodSync(target, 0o600);
+      const targetMetadata = lstatSync(target);
+      if (
+        targetMetadata.isSymbolicLink()
+        || !targetMetadata.isFile()
+        || targetMetadata.nlink !== 1
+        || !readFileSync(target).equals(bytes)
+      ) {
+        fail("TEST_DECODER_RUNTIME", "临时内容解码器运行时字节复核失败。");
+      }
+    }
+  } catch (error) {
+    if (error instanceof TestRunError) throw error;
+    fail("TEST_DECODER_RUNTIME", "无法建立临时内容解码器运行时边界。", {
+      cause: error,
+    });
+  }
+}
+
+function existsAsRegularFile(path) {
+  try {
+    const metadata = lstatSync(path);
+    return metadata.isFile() && !metadata.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
 function listEmittedTests(outputRoot) {
   const files = [];
   const walk = (directory) => {
@@ -457,6 +513,7 @@ export function runTests({
     assertChildSucceeded(compileResult, "TEST_COMPILE", "TypeScript 测试 program 编译失败。");
 
     writeTemporaryPackage(outputRoot);
+    copyContentDecoderRuntime({root: realRoot, outputRoot});
     mappings = bindEmittedTests({root: realRoot, outputRoot, sources});
     const executionResult = spawnTestChild(
       spawnProcess,
