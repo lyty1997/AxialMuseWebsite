@@ -178,6 +178,65 @@ function issueCodes(root) {
   return checkModuleBoundaries({root}).issues.map((issue) => issue.code);
 }
 
+function assertTrackedLexerViolations(
+  source,
+  relativePath = "src/build/example/use-domain.ts",
+) {
+  withFixture((root) => {
+    writeFixture(root, relativePath, [
+      source,
+      "\nconst __moduleBoundaryLexerLegacyFixture = require(\"node:fs\");\n",
+      "module.exports = __moduleBoundaryLexerLegacyFixture;\n",
+      "export * from \"../../domain/example/rules.js\";\n",
+    ].join(""));
+    const sourceIssues = checkModuleBoundaries({root}).issues.filter(
+      (issue) => issue.sourcePath === relativePath,
+    );
+    assert.equal(
+      sourceIssues.some((issue) => issue.code === "MODULE_BOUNDARY_PARSE"),
+      false,
+      JSON.stringify(sourceIssues),
+    );
+    assert.equal(
+      sourceIssues.some((issue) => issue.code === "MODULE_BOUNDARY_DEEP_IMPORT"),
+      true,
+      JSON.stringify(sourceIssues),
+    );
+    assert.equal(
+      sourceIssues.some((issue) => issue.code === "MODULE_BOUNDARY_DEFAULT_EXPORT"),
+      true,
+      JSON.stringify(sourceIssues),
+    );
+    assert.equal(
+      sourceIssues.some((issue) => issue.code === "MODULE_BOUNDARY_COMMONJS"),
+      true,
+      JSON.stringify(sourceIssues),
+    );
+    assert.equal(
+      sourceIssues.some((issue) => issue.code === "MODULE_BOUNDARY_EXPORT_STAR"),
+      true,
+      JSON.stringify(sourceIssues),
+    );
+  });
+}
+
+function assertUnsupportedLexerSource(
+  source,
+  relativePath = "src/build/example/use-domain.ts",
+) {
+  withFixture((root) => {
+    writeFixture(root, relativePath, source);
+    const sourceIssues = checkModuleBoundaries({root}).issues.filter(
+      (issue) => issue.sourcePath === relativePath,
+    );
+    assert.deepEqual(
+      sourceIssues.map((issue) => issue.code),
+      ["MODULE_BOUNDARY_PARSE"],
+      JSON.stringify(sourceIssues),
+    );
+  });
+}
+
 test("D-075 合法公共入口、框架默认导出与官方展示别名通过", () => {
   withFixture((root) => {
     const result = checkModuleBoundaries({root});
@@ -226,6 +285,469 @@ test("D-075 本地 preset 默认导出只允许精确入口路径", () => {
       && issue.sourcePath === "src/build/content/docusaurus-preset.ts"
     )), false);
   });
+});
+
+test("D-075 别名默认导出按 ModuleExportName 语义失败关闭", () => {
+  const defaultExportSources = [
+    "const value = 1;\nexport {value as default};\n",
+    "const value = 1;\nexport {value as \"default\"};\n",
+    String.raw`const value = 1;
+export {value as "\u0064efault"};
+`,
+    String.raw`const value = 1;
+export {value as def\u0061ult};
+`,
+  ];
+  for (const source of defaultExportSources) {
+    withFixture((root) => {
+      writeFixture(root, "src/domain/example/rules.ts", source);
+      const issues = checkModuleBoundaries({root}).issues;
+      assert.ok(issues.some((issue) => (
+        issue.code === "MODULE_BOUNDARY_DEFAULT_EXPORT"
+        && issue.sourcePath === "src/domain/example/rules.ts"
+      )));
+    });
+  }
+
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "src/domain/example/rules.ts",
+      "export {default as named} from \"./upstream.js\";\n",
+    );
+    writeFixture(root, "src/domain/example/upstream.ts", "export const named = true;\n");
+    assert.equal(
+      checkModuleBoundaries({root}).issues
+        .some((issue) => issue.code === "MODULE_BOUNDARY_DEFAULT_EXPORT"),
+      false,
+    );
+  });
+});
+
+test("I-04 正则与除法由 control/call、block/object 词法上下文区分", () => {
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "src/build/example/use-domain.ts",
+      [
+        "const compute = () => 4;",
+        "const divisionAfterCall = compute() / 2;",
+        "const divisionAfterObject = {} / 2;",
+        "const divisionAfterPostfix = divisionAfterCall++ / 2;",
+        "if (compute()) /`/u.test(\"`\");",
+        "if (compute()) {} /`/u.test(\"`\");",
+        "export function hasTick(value: string) { return /`/u.test(value); }",
+        "export const syntaxMatcher = /[\\/\"'`]/u;",
+        "void divisionAfterObject;",
+        "void divisionAfterPostfix;",
+        "void syntaxMatcher;",
+        "",
+      ].join("\n"),
+    );
+    assert.deepEqual(checkModuleBoundaries({root}).issues, []);
+  });
+});
+
+test("I-04 两个含反引号正则之间的越界 import 不得逃逸", () => {
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "src/build/example/use-domain.ts",
+      [
+        "const leading = /`/u;",
+        "import {exampleRule} from \"../../domain/example/rules.js\";",
+        "const trailing = /`/u;",
+        "export const buildValue = leading.test(\"`\") && trailing.test(exampleRule);",
+        "",
+      ].join("\n"),
+    );
+    const issues = checkModuleBoundaries({root}).issues;
+    assert.equal(
+      issues.some((issue) => issue.code === "MODULE_BOUNDARY_PARSE"),
+      false,
+    );
+    assert.ok(issues.some((issue) => (
+      issue.code === "MODULE_BOUNDARY_DEEP_IMPORT"
+      && issue.sourcePath === "src/build/example/use-domain.ts"
+    )));
+  });
+});
+
+test("I-04 ASI 语句与模块声明后的正则不得吞掉越界 import", () => {
+  const sources = [
+    [
+      "debugger",
+      "/`/u;",
+      "import {exampleRule as deepRule} from \"../../domain/example/rules.js\";",
+      "/`/u;",
+      "void deepRule;",
+    ].join("\n"),
+    [
+      "import {exampleRule as publicRule} from \"../../domain/example/index.js\"",
+      "/`/u;",
+      "import {exampleRule as deepRule} from \"../../domain/example/rules.js\";",
+      "/`/u;",
+      "void publicRule;",
+      "void deepRule;",
+    ].join("\n"),
+    [
+      "const visible = true;",
+      "export {visible}",
+      "/`/u;",
+      "import {exampleRule as deepRule} from \"../../domain/example/rules.js\";",
+      "/`/u;",
+      "void deepRule;",
+    ].join("\n"),
+    [
+      "let marker",
+      "/`/u;",
+      "import {exampleRule as deepRule} from \"../../domain/example/rules.js\";",
+      "/`/u;",
+      "void marker;",
+      "void deepRule;",
+    ].join("\n"),
+  ];
+  for (const source of sources) {
+    withFixture((root) => {
+      const relativePath = "src/build/example/use-domain.ts";
+      writeFixture(root, relativePath, `${source}\n`);
+      const issues = checkModuleBoundaries({root}).issues.filter(
+        (issue) => issue.sourcePath === relativePath,
+      );
+      assert.equal(
+        issues.some((issue) => issue.code === "MODULE_BOUNDARY_PARSE"),
+        false,
+        JSON.stringify(issues),
+      );
+      assert.equal(
+        issues.some((issue) => issue.code === "MODULE_BOUNDARY_DEEP_IMPORT"),
+        true,
+        JSON.stringify(issues),
+      );
+    });
+  }
+});
+
+test("I-04 async/generator object method 的 return 后正则不得吞掉动态深导入", () => {
+  for (const method of [
+    [
+      "async run() {",
+      "  return",
+      "  /`/u;",
+      "  await import(\"../../domain/example/rules.js\");",
+      "  /`/u;",
+      "}",
+    ].join("\n"),
+    [
+      "*run() {",
+      "  return",
+      "  /`/u;",
+      "  import(\"../../domain/example/rules.js\");",
+      "  /`/u;",
+      "}",
+    ].join("\n"),
+  ]) {
+    withFixture((root) => {
+      const relativePath = "src/build/example/use-domain.ts";
+      writeFixture(root, relativePath, [
+        `const fixture = {${method}};`,
+        "void fixture;",
+        "",
+      ].join("\n"));
+      const issues = checkModuleBoundaries({root}).issues.filter(
+        (issue) => issue.sourcePath === relativePath,
+      );
+      assert.equal(
+        issues.some((issue) => issue.code === "MODULE_BOUNDARY_PARSE"),
+        false,
+        JSON.stringify(issues),
+      );
+      assert.equal(
+        issues.some((issue) => issue.code === "MODULE_BOUNDARY_DEEP_IMPORT"),
+        true,
+        JSON.stringify(issues),
+      );
+    });
+  }
+});
+
+test("I-04 TS 声明与 catch block 后的正则不得吞掉模块边界", () => {
+  const declarations = [
+    "interface Shape {}\n",
+    "declare interface Shape {}\n",
+    "abstract class Shape {}\n",
+    "declare class Shape {}\n",
+    "declare abstract class Shape<Value> {}\n",
+    "class Shape<Value> {}\n",
+    "try {} catch {}\n",
+  ];
+  for (const declaration of declarations) {
+    assertTrackedLexerViolations([
+      declaration,
+      "/`/u.test(\"`\");\n",
+      "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+      "export default exampleRule;\n",
+    ].join(""));
+  }
+});
+
+test("I-04 TS value 后缀与 TSX self-closing element 后的除法保持 division goal", () => {
+  for (const expression of [
+    "const input: number | undefined = 4;\nconst half = input! / 2;\n",
+    "type Identity<Value> = Value;\nconst half = 4 as Identity<number> / 2;\n",
+    "type Identity<Value> = {readonly value: Value};\nconst half = ({value: 4} satisfies Identity<number>).value / 2;\n",
+    "type MaybeValue =\n  | Readonly<{\n      value: string;\n    }>\n  | null;\nconst half = 4 / 2;\n",
+    "const half = <number>4 / 2;\n",
+    "const identity = <Value>(value: Value): Value => value;\nconst half = identity(4) / 2;\n",
+    "const convert = <Value, Result>({value}: Readonly<{value: Value}>): Result => value as unknown as Result;\nconst half = convert<number, number>({value: 4}) / 2;\n",
+  ]) {
+    assertTrackedLexerViolations([
+      expression,
+      "const marker = /`/u;\n",
+      "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+      "export default exampleRule;\n",
+    ].join(""));
+  }
+
+  assertTrackedLexerViolations([
+    "const half = <div /> / 2;\n",
+    "const marker = /`/u;\n",
+    "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+    "export default exampleRule;\n",
+  ].join(""), "src/build/example/use-domain.tsx");
+
+  assertTrackedLexerViolations([
+    "const view = <><div title=\"fixture\" data-active={true}>raw ` text<span>{exampleRule}</span></div></>;\n",
+    "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+    "export default exampleRule;\n",
+  ].join(""), "src/build/example/use-domain.tsx");
+
+  for (const view of [
+    "const view = <p>(draft)</p>;\n",
+    "const view = <div extends=\"base\" />;\n",
+  ]) {
+    assertTrackedLexerViolations([
+      view,
+      "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+      "export default exampleRule;\n",
+    ].join(""), "src/build/example/use-domain.tsx");
+  }
+});
+
+test("I-04 comparison、catch 后括号除法与 JSX raw text 不得误报 PARSE", () => {
+  for (const source of [
+    [
+      "const compared = 1 < /`/u;\n",
+      "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+      "export default exampleRule;\n",
+    ].join(""),
+    [
+      "const compute = () => 4;\n",
+      "try {} catch {} (compute()) / 2;\n",
+      "const marker = /`/u;\n",
+      "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+      "export default exampleRule;\n",
+    ].join(""),
+  ]) {
+    assertTrackedLexerViolations(source);
+  }
+
+  assertTrackedLexerViolations([
+    "const view = <div>raw ` text</div>;\n",
+    "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+    "export default exampleRule;\n",
+  ].join(""), "src/build/example/use-domain.tsx");
+});
+
+test("I-04 object literal 与 labeled block 结束后的 slash goal 不得互换", () => {
+  assertTrackedLexerViolations([
+    "const condition = true;\n",
+    "const value = condition ? 1 : {} / 2;\n",
+    "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+    "const quote = /\"/u;\n",
+    "export default exampleRule;\n",
+  ].join(""));
+
+  assertTrackedLexerViolations([
+    "tracked: {} /`/u;\n",
+    "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+    "const tick = /`/u;\n",
+    "export default exampleRule;\n",
+  ].join(""));
+
+  for (const statement of [
+    "if (true) { const nested = true ? 1 : {} / 2; void nested; }\n",
+    "try { const nested = true ? {value: 1} : {} / 2; void nested; } finally {}\n",
+  ]) {
+    assertTrackedLexerViolations([
+      statement,
+      "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+      "export default exampleRule;\n",
+    ].join(""));
+  }
+});
+
+test("D-075 line-continuation ModuleExportName 仍按解码后的 default 失败关闭", () => {
+  for (const lineTerminator of ["\n", "\r\n", "\u2028", "\u2029"]) {
+    assertTrackedLexerViolations([
+      "const value = 1;\n",
+      `export {value as "defau\\${lineTerminator}lt"};\n`,
+      `const continued = "line\\${lineTerminator}continuation";\n`,
+      "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+      "void continued;\n",
+      "void exampleRule;\n",
+    ].join(""));
+  }
+});
+
+test("I-04 restricted production 与 update expression 保持换行敏感 slash goal", () => {
+  for (const statement of [
+    "function hasTick() { return\n/`/u.test(\"`\"); }\n",
+    "function* ticks() { yield\n/`/u.test(\"`\"); }\n",
+    "while (true) { break\n/`/u.test(\"`\"); }\n",
+    "tracked: while (true) { continue tracked\n/`/u.test(\"`\"); }\n",
+    "let left = 1; let right = 2; left\n++right / 2;\n",
+    "let left = 1; let right = 2; left/*\u2028*/++right / 2;\n",
+  ]) {
+    assertTrackedLexerViolations([
+      statement,
+      "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+      "export default exampleRule;\n",
+    ].join(""));
+  }
+
+  for (const lineTerminator of ["\r", "\u2028", "\u2029"]) {
+    assertTrackedLexerViolations([
+      `const value = 1; // comment${lineTerminator}/\`/u.test("\`");\n`,
+      "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+      "export default exampleRule;\n",
+    ].join(""));
+    assertTrackedLexerViolations([
+      `while (true) { break/*${lineTerminator}*/ /\`/u.test("\`"); }\n`,
+      "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+      "export default exampleRule;\n",
+    ].join(""));
+  }
+});
+
+test("I-04 正则之后的 CommonJS 与 export star 必须精确保留诊断", () => {
+  withFixture((root) => {
+    const relativePath = "src/build/example/use-domain.ts";
+    writeFixture(root, relativePath, [
+      "const marker = /`/u;\n",
+      "const legacy = require(\"../../domain/example/rules.js\");\n",
+      "module.exports = legacy;\n",
+      "export * from \"../../domain/example/rules.js\";\n",
+    ].join(""));
+    const sourceIssues = checkModuleBoundaries({root}).issues.filter(
+      (issue) => issue.sourcePath === relativePath,
+    );
+    assert.equal(
+      sourceIssues.some((issue) => issue.code === "MODULE_BOUNDARY_PARSE"),
+      false,
+      JSON.stringify(sourceIssues),
+    );
+    assert.equal(
+      sourceIssues.filter((issue) => issue.code === "MODULE_BOUNDARY_COMMONJS").length,
+      2,
+      JSON.stringify(sourceIssues),
+    );
+    assert.equal(
+      sourceIssues.filter((issue) => issue.code === "MODULE_BOUNDARY_EXPORT_STAR").length,
+      1,
+      JSON.stringify(sourceIssues),
+    );
+  });
+});
+
+test("I-04 普通数组配对后仍能发现后续模块边界违规", () => {
+  assertTrackedLexerViolations([
+    "const values = [{value: 4}, [8]];\n",
+    "const half = values[0]!.value / 2;\n",
+    "void half;\n",
+    "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+    "export default exampleRule;\n",
+  ].join(""));
+});
+
+test("I-04 shift 与 contextual type identifier 不得误判为类型声明", () => {
+  for (const source of [
+    "const count = 1; const value = 4; const shifted = value <<count; type();\nfunction type() { return shifted; }\n",
+    "const count = 1; let type = 0; type = 4; const shifted = type <<count;\nvoid shifted;\n",
+  ]) {
+    assertTrackedLexerViolations([
+      source,
+      "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+      "export default exampleRule;\n",
+    ].join(""));
+  }
+});
+
+test("I-04 受控子集之外与未闭合输入稳定失败关闭", () => {
+  const unsafeSuffix = [
+    "/`/u.test(\"`\");\n",
+    "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+    "const legacy = require(\"node:fs\");\n",
+    "module.exports = legacy;\n",
+    "export * from \"../../domain/example/rules.js\";\n",
+    "export default exampleRule;\n",
+  ].join("");
+  const unsupportedTypeScript = [
+    "type Alias = {value: string}\n",
+    "type Alias = string\nconsume();\n",
+    "module Fixture {}\n",
+    "declare module \"fixture\" {}\n",
+    "const enum Kind {One}\n",
+    "namespace Fixture {}\n",
+    "@sealed\nclass Fixture {}\n",
+    "switch (true) { default: break; }\n",
+    "const value = <Type/value;\n",
+    "type Alias = string\nconst value = 1;\n",
+    "const values = [1, 2;\n",
+    "const values = ];\n",
+    "const values = ([1, 2);\n",
+    "const value = ({)};\n",
+    "const value = {(});\n",
+    "{\n",
+    "(\n",
+  ];
+  for (const source of unsupportedTypeScript) {
+    assertUnsupportedLexerSource(`${source}${unsafeSuffix}`);
+  }
+  for (const source of [
+    "const identity = <Value,>(value: Value) => value;\n",
+    "const asserted = <Value>input;\n",
+    "const view = <div value=raw />;\n",
+    "const view = <div></span>;\n",
+  ]) {
+    assertUnsupportedLexerSource(
+      `${source}${unsafeSuffix}`,
+      "src/build/example/use-domain.tsx",
+    );
+  }
+});
+
+test("I-04 throw 换行与 prefix update 缺失目标稳定失败关闭", () => {
+  const unsafeSuffix = [
+    "import {exampleRule} from \"../../domain/example/rules.js\";\n",
+    "export default exampleRule;\n",
+  ].join("");
+  for (const lineTerminator of ["\n", "\r", "\u2028", "\u2029"]) {
+    assertUnsupportedLexerSource(
+      `function fail() { throw/*${lineTerminator}*/new Error("fixture"); }\n${unsafeSuffix}`,
+    );
+  }
+  assertUnsupportedLexerSource(
+    `let value = 1;\nvalue\n++ /\`/u;\n${unsafeSuffix}`,
+  );
+  for (const source of [
+    "const identity = <Value, Result>(value: Value)\n=> value;\n",
+    "const value = <>input;\n",
+    "const value = <number>;\n",
+    "function* values() { yield\n* input; }\n",
+  ]) {
+    assertUnsupportedLexerSource(`${source}${unsafeSuffix}`);
+  }
 });
 
 test("D-075 构建测试内部深导入 allowlist 精确绑定导入者与目标", () => {

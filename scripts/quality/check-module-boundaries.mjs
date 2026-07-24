@@ -154,6 +154,9 @@ const BUILD_INTERNAL_TEST_IMPORTS = Object.freeze({
     "src/build/content/docs-adapter.ts",
     "src/build/content/docusaurus-preset-factory.ts",
   ])),
+  "tests/build/static-assets-input.test.ts": Object.freeze(new Set([
+    "src/build/static-assets/plain-data.ts",
+  ])),
   "tests/build/static-assets.test.ts": Object.freeze(new Set([
     "src/build/content/build-seal.ts",
     "src/build/static-assets/plan.ts",
@@ -550,6 +553,13 @@ function decodeStringLiteral(raw) {
     }
     index += 1;
     const escaped = raw[index];
+    if (escaped === "\n" || escaped === "\u2028" || escaped === "\u2029") {
+      continue;
+    }
+    if (escaped === "\r") {
+      if (raw[index + 1] === "\n") index += 1;
+      continue;
+    }
     const simple = {
       "'": "'",
       "\"": "\"",
@@ -595,26 +605,425 @@ function decodeStringLiteral(raw) {
   return result;
 }
 
-function tokenizeModuleSyntax(source) {
+const IDENTIFIER_START = /^[$_\p{ID_Start}]$/u;
+const IDENTIFIER_CONTINUE = /^[$_\u200c\u200d\p{ID_Continue}]$/u;
+const CONTROL_PARENTHESES = new Set([
+  "catch",
+  "for",
+  "if",
+  "switch",
+  "while",
+  "with",
+]);
+const BRACED_DECLARATION_KEYWORDS = new Set(["interface"]);
+const DECLARATION_PREFIX_KEYWORDS = new Set([
+  "abstract",
+  "declare",
+]);
+const EXPRESSION_PREFIX_KEYWORDS = new Set([
+  "await",
+  "case",
+  "delete",
+  "extends",
+  "in",
+  "instanceof",
+  "keyof",
+  "new",
+  "of",
+  "typeof",
+  "void",
+]);
+const RESTRICTED_PRODUCTION_KEYWORDS = new Set([
+  "break",
+  "continue",
+  "debugger",
+  "return",
+  "throw",
+  "yield",
+]);
+const TYPE_ALIAS_TERMINATING_DECLARATIONS = new Set([
+  "abstract",
+  "class",
+  "const",
+  "declare",
+  "enum",
+  "export",
+  "function",
+  "import",
+  "interface",
+  "let",
+  "namespace",
+  "type",
+  "var",
+]);
+const TYPE_ALIAS_LINE_CONTINUATIONS = new Set([
+  "&",
+  ".",
+  ":",
+  ";",
+  "<",
+  "?",
+  "[",
+  "|",
+]);
+const STATEMENT_BODY_KEYWORDS = new Set([
+  "do",
+  "else",
+  "finally",
+  "try",
+]);
+const VALUE_KEYWORDS = new Set([
+  "false",
+  "null",
+  "super",
+  "this",
+  "true",
+]);
+const STATEMENT_BRACE_KINDS = new Set([
+  "arrow",
+  "block",
+  "function-declaration",
+  "function-expression",
+]);
+const TYPE_ASSERTION_KEYWORDS = new Set([
+  "as",
+  "satisfies",
+]);
+
+function sourceCharacterAt(source, index) {
+  const codePoint = source.codePointAt(index);
+  if (codePoint === undefined) return undefined;
+  const value = String.fromCodePoint(codePoint);
+  return {end: index + value.length, value};
+}
+
+function identifierUnicodeEscapeAt(source, index) {
+  if (source[index] !== "\\" || source[index + 1] !== "u") return undefined;
+  if (source[index + 2] === "{") {
+    const end = source.indexOf("}", index + 3);
+    const digits = source.slice(index + 3, end);
+    if (
+      end === -1
+      || !/^[0-9a-fA-F]{1,6}$/u.test(digits)
+      || Number.parseInt(digits, 16) > 0x10ffff
+    ) {
+      throw new SyntaxError("bad identifier unicode escape");
+    }
+    return {
+      end: end + 1,
+      value: String.fromCodePoint(Number.parseInt(digits, 16)),
+    };
+  }
+  const digits = source.slice(index + 2, index + 6);
+  if (!/^[0-9a-fA-F]{4}$/u.test(digits)) {
+    throw new SyntaxError("bad identifier unicode escape");
+  }
+  return {
+    end: index + 6,
+    value: String.fromCodePoint(Number.parseInt(digits, 16)),
+  };
+}
+
+function nextNonTriviaCharacter(source, start) {
+  let cursor = start;
+  while (cursor < source.length) {
+    if (/\s/u.test(source[cursor])) {
+      cursor += 1;
+      continue;
+    }
+    if (source[cursor] === "/" && source[cursor + 1] === "/") {
+      cursor += 2;
+      while (
+        cursor < source.length
+        && !/[\n\r\u2028\u2029]/u.test(source[cursor])
+      ) {
+        cursor += 1;
+      }
+      continue;
+    }
+    if (source[cursor] === "/" && source[cursor + 1] === "*") {
+      const end = source.indexOf("*/", cursor + 2);
+      if (end === -1) throw new SyntaxError("unterminated comment");
+      cursor = end + 2;
+      continue;
+    }
+    return sourceCharacterAt(source, cursor);
+  }
+  return undefined;
+}
+
+function sourceStartsIdentifier(source, start, expected) {
+  if (!source.startsWith(expected, start)) return false;
+  const before = sourceCharacterAt(source, start - 1)?.value ?? "";
+  const after = sourceCharacterAt(source, start + expected.length)?.value ?? "";
+  return (
+    !IDENTIFIER_CONTINUE.test(before)
+    && !IDENTIFIER_CONTINUE.test(after)
+  );
+}
+
+function isControlledMethodHead(tokens, braceDepth, containerKind) {
+  if (!["object", "class-declaration", "class-expression"].includes(containerKind)) {
+    return false;
+  }
+  let start = tokens.length - 2;
+  while (start >= 0) {
+    const token = tokens[start];
+    if (token.depth < braceDepth) break;
+    if (
+      token.depth === braceDepth
+      && [",", ";", "}"].includes(token.value)
+    ) {
+      break;
+    }
+    start -= 1;
+  }
+  const memberHead = tokens.slice(start + 1, -1);
+  if (memberHead.length === 0) return false;
+  if (memberHead.some((token) => [":", "="].includes(token.value))) return false;
+
+  let cursor = 0;
+  const modifiers = containerKind === "object"
+    ? new Set(["async", "get", "set"])
+    : new Set([
+        "abstract",
+        "accessor",
+        "async",
+        "declare",
+        "get",
+        "override",
+        "private",
+        "protected",
+        "public",
+        "set",
+        "static",
+      ]);
+  while (
+    cursor < memberHead.length - 1
+    && memberHead[cursor].type === "identifier"
+    && modifiers.has(memberHead[cursor].value)
+  ) {
+    cursor += 1;
+  }
+  if (memberHead[cursor]?.value === "*") cursor += 1;
+  const name = memberHead.slice(cursor);
+  if (name.length === 1) {
+    return ["identifier", "literal", "string"].includes(name[0].type);
+  }
+  return name[0]?.value === "[" && name.at(-1)?.value === "]";
+}
+
+function hasHazardousRegexAlternative(source, start) {
+  let cursor = start + 1;
+  let inCharacterClass = false;
+  let hazardous = false;
+  while (cursor < source.length) {
+    const character = source[cursor];
+    if (/[\n\r\u2028\u2029]/u.test(character)) return false;
+    if (character === "\\") {
+      hazardous = true;
+      cursor += 2;
+      continue;
+    }
+    if (character === "[") {
+      hazardous = true;
+      inCharacterClass = true;
+      cursor += 1;
+      continue;
+    }
+    if (character === "]" && inCharacterClass) {
+      inCharacterClass = false;
+      cursor += 1;
+      continue;
+    }
+    if (["'", "\"", "`"].includes(character)) hazardous = true;
+    if (character === "/" && !inCharacterClass) return hazardous;
+    cursor += sourceCharacterAt(source, cursor)?.value.length ?? 1;
+  }
+  return false;
+}
+
+function tokenizeModuleSyntax(source, jsx) {
   const tokens = [];
   let index = 0;
   let braceDepth = 0;
+  let expressionAllowed = true;
+  let statementAllowed = true;
+  let declarationPrefix = false;
+  let pendingControlParenthesis;
+  let pendingFunction;
+  let pendingClass;
+  let pendingBracedDeclaration;
+  let pendingDeclarationModifier = false;
+  let nextBraceKind;
+  let lastToken;
+  let lineTerminatorSinceLastToken = false;
+  let lineTerminatedYield = false;
+  let pendingAngleOperand = false;
+  let pendingPrefixUpdate = false;
+  let prefixAngleExpression;
+  let pendingGenericArrow;
+  let restrictedProduction;
+  let moduleDeclaration;
+  let variableDeclaration;
+  let typeAlias;
+  let typeAssertion;
+  const parentheses = [];
+  const braces = [];
+  const brackets = [];
+
+  const pushToken = (type, value, depth = braceDepth) => {
+    const token = {
+      type,
+      value,
+      depth,
+      lineTerminatorBefore: lineTerminatorSinceLastToken,
+    };
+    tokens.push(token);
+    lastToken = token;
+    lineTerminatorSinceLastToken = false;
+    return token;
+  };
+
+  const markValue = () => {
+    expressionAllowed = false;
+    statementAllowed = false;
+    declarationPrefix = false;
+    if (nextBraceKind?.kind === "arrow") nextBraceKind = undefined;
+  };
+
+  const noteLineTerminator = () => {
+    lineTerminatorSinceLastToken = true;
+    if (
+      typeAlias?.phase === "body"
+      && !expressionAllowed
+      && braceDepth === typeAlias.braceDepth
+      && brackets.length === typeAlias.bracketDepth
+      && parentheses.length === typeAlias.parenthesisDepth
+      && typeAlias.angleDepth === 0
+    ) {
+      typeAlias = Object.freeze({
+        ...typeAlias,
+        requiresContinuation: true,
+      });
+    }
+    if (restrictedProduction === undefined) return;
+    if (restrictedProduction.keyword === "throw") {
+      throw new SyntaxError("line terminator after throw");
+    }
+    if (restrictedProduction.keyword === "yield") lineTerminatedYield = true;
+    restrictedProduction = undefined;
+    expressionAllowed = true;
+    statementAllowed = true;
+    declarationPrefix = false;
+  };
+
+  const prepareCompletedDeclaration = (character) => {
+    if (
+      variableDeclaration?.phase === "can-end"
+      && lineTerminatorSinceLastToken
+    ) {
+      const continuesDeclaration = [",", "=", ":", "!"].includes(character);
+      if (!continuesDeclaration) {
+        if (variableDeclaration.kind === "const") {
+          throw new SyntaxError("const declaration requires an initializer");
+        }
+        variableDeclaration = undefined;
+        expressionAllowed = true;
+        statementAllowed = true;
+        declarationPrefix = false;
+      }
+    }
+    if (moduleDeclaration === undefined) return;
+    if (moduleDeclaration.phase === "local-export") {
+      if (sourceStartsIdentifier(source, index, "from")) return;
+    } else if (moduleDeclaration.phase !== "complete") {
+      return;
+    }
+    if (character === ";") return;
+    if (lineTerminatorSinceLastToken || character === "}") {
+      moduleDeclaration = undefined;
+      expressionAllowed = true;
+      statementAllowed = true;
+      declarationPrefix = false;
+      return;
+    }
+    throw new SyntaxError("module declaration requires a statement boundary");
+  };
+
+  const prepareRestrictedProduction = (character) => {
+    if (restrictedProduction === undefined) return;
+    if (["return", "yield"].includes(restrictedProduction.keyword)) {
+      restrictedProduction = undefined;
+      return;
+    }
+    if (restrictedProduction.keyword === "throw") {
+      if (character === ";" || character === "}") {
+        throw new SyntaxError("throw requires an expression");
+      }
+      restrictedProduction = undefined;
+      return;
+    }
+    if (restrictedProduction.keyword === "debugger") {
+      if (character === ";" || character === "}") {
+        restrictedProduction = undefined;
+        expressionAllowed = true;
+        statementAllowed = true;
+        declarationPrefix = false;
+        return;
+      }
+      throw new SyntaxError("debugger requires a statement boundary");
+    }
+    const isIdentifier = (
+      IDENTIFIER_START.test(sourceCharacterAt(source, index)?.value ?? "")
+      || (character === "\\" && source[index + 1] === "u")
+    );
+    if (!restrictedProduction.hasLabel && isIdentifier) return;
+    if (character === ";" || character === "}") {
+      restrictedProduction = undefined;
+      expressionAllowed = true;
+      statementAllowed = true;
+      declarationPrefix = false;
+      return;
+    }
+    throw new SyntaxError("invalid break or continue continuation");
+  };
 
   const scanString = (quote) => {
     const start = index;
     index += 1;
     while (index < source.length) {
       if (source[index] === "\\") {
-        index += 2;
+        index += source[index + 1] === "\r" && source[index + 2] === "\n"
+          ? 3
+          : 2;
         continue;
       }
       if (source[index] === quote) {
         index += 1;
         const raw = source.slice(start, index);
-        tokens.push({type: "string", value: decodeStringLiteral(raw), depth: braceDepth});
+        pushToken("string", decodeStringLiteral(raw));
+        if (
+          moduleDeclaration !== undefined
+          && braceDepth === moduleDeclaration.braceDepth
+          && (
+            moduleDeclaration.kind === "import"
+            || moduleDeclaration.phase === "source"
+          )
+        ) {
+          moduleDeclaration = Object.freeze({
+            ...moduleDeclaration,
+            phase: "complete",
+          });
+          expressionAllowed = false;
+          statementAllowed = false;
+          declarationPrefix = false;
+          return;
+        }
+        markValue();
         return;
       }
-      if (source[index] === "\n" || source[index] === "\r") {
+      if (/[\n\r\u2028\u2029]/u.test(source[index])) {
         throw new SyntaxError("unterminated string");
       }
       index += 1;
@@ -622,91 +1031,1456 @@ function tokenizeModuleSyntax(source) {
     throw new SyntaxError("unterminated string");
   };
 
+  const scanIdentifier = () => {
+    let value = "";
+    let isFirst = true;
+    while (index < source.length) {
+      const part = source[index] === "\\"
+        ? identifierUnicodeEscapeAt(source, index)
+        : sourceCharacterAt(source, index);
+      if (part === undefined) break;
+      const isAllowed = isFirst
+        ? IDENTIFIER_START.test(part.value)
+        : IDENTIFIER_CONTINUE.test(part.value);
+      if (!isAllowed) {
+        if (source[index] === "\\") {
+          throw new SyntaxError("escaped identifier character is not allowed");
+        }
+        break;
+      }
+      value += part.value;
+      index = part.end;
+      isFirst = false;
+    }
+    if (isFirst) throw new SyntaxError("identifier expected");
+
+    const previousToken = lastToken;
+    const restrictedBeforeIdentifier = restrictedProduction;
+    const wasExpressionAllowed = expressionAllowed;
+    const wasStatementAllowed = statementAllowed;
+    if (
+      typeAlias?.phase === "body"
+      && braceDepth === typeAlias.braceDepth
+      && parentheses.length === typeAlias.parenthesisDepth
+      && (
+        ["export", "import"].includes(value)
+        || (
+          lineTerminatorSinceLastToken
+          && TYPE_ALIAS_TERMINATING_DECLARATIONS.has(value)
+        )
+      )
+    ) {
+      throw new SyntaxError("type alias requires semicolon");
+    }
+    pendingAngleOperand = false;
+    const token = pushToken("identifier", value);
+    if (
+      variableDeclaration?.phase === "binding"
+      && braceDepth === variableDeclaration.braceDepth
+      && brackets.length === variableDeclaration.bracketDepth
+      && parentheses.length === variableDeclaration.parenthesisDepth
+    ) {
+      variableDeclaration = Object.freeze({
+        ...variableDeclaration,
+        phase: "can-end",
+      });
+      pendingPrefixUpdate = false;
+      markValue();
+      return;
+    }
+    if (
+      moduleDeclaration?.kind === "export"
+      && moduleDeclaration.phase === "local-export"
+      && braceDepth === moduleDeclaration.braceDepth
+      && value === "from"
+    ) {
+      moduleDeclaration = Object.freeze({
+        ...moduleDeclaration,
+        phase: "source",
+      });
+      expressionAllowed = true;
+      statementAllowed = false;
+      declarationPrefix = false;
+      return;
+    }
+    if (
+      prefixAngleExpression?.angleDepth === 1
+      && ["extends"].includes(value)
+    ) {
+      prefixAngleExpression = Object.freeze({
+        ...prefixAngleExpression,
+        requiresArrow: true,
+      });
+    }
+    const containerKind = braces.at(-1)?.kind;
+    token.canBeLabel = wasStatementAllowed && (
+      containerKind === undefined || STATEMENT_BRACE_KINDS.has(containerKind)
+    );
+    if (
+      restrictedBeforeIdentifier !== undefined
+      && ["break", "continue"].includes(restrictedBeforeIdentifier.keyword)
+    ) {
+      if (restrictedBeforeIdentifier.hasLabel) {
+        throw new SyntaxError("break or continue has multiple labels");
+      }
+      restrictedProduction = Object.freeze({
+        ...restrictedBeforeIdentifier,
+        hasLabel: true,
+      });
+      expressionAllowed = false;
+      statementAllowed = false;
+      declarationPrefix = false;
+      return;
+    }
+    const isPropertyName = previousToken?.value === ".";
+    if (isPropertyName) {
+      pendingPrefixUpdate = false;
+      markValue();
+      return;
+    }
+    if (
+      value === "switch"
+      && token.canBeLabel === true
+    ) {
+      throw new SyntaxError("switch is outside the controlled syntax subset");
+    }
+    if (
+      ["enum", "namespace"].includes(value)
+      && (
+        token.canBeLabel === true
+        || declarationPrefix
+        || (previousToken?.value === "const" && previousToken.canBeLabel === true)
+      )
+    ) {
+      throw new SyntaxError("declaration is outside the controlled syntax subset");
+    }
+    const moduleFollower = value === "module"
+      ? nextNonTriviaCharacter(source, index)?.value
+      : undefined;
+    if (
+      value === "module"
+      && (token.canBeLabel === true || declarationPrefix)
+      && (
+        moduleFollower === "'"
+        || moduleFollower === "\""
+        || IDENTIFIER_START.test(moduleFollower ?? "")
+      )
+    ) {
+      throw new SyntaxError("ambient module is outside the controlled syntax subset");
+    }
+    if (
+      pendingDeclarationModifier
+      && !["abstract", "class", "interface"].includes(value)
+    ) {
+      throw new SyntaxError("declaration modifier is outside the controlled subset");
+    }
+    if (
+      typeAlias?.phase === "name"
+      && value !== "type"
+    ) {
+      typeAlias = Object.freeze({
+        ...typeAlias,
+        phase: "equals",
+      });
+      expressionAllowed = false;
+      statementAllowed = false;
+      declarationPrefix = false;
+      return;
+    }
+    const typeFollower = value === "type"
+      ? nextNonTriviaCharacter(source, index)?.value
+      : undefined;
+    if (
+      value === "type"
+      && (token.canBeLabel === true || declarationPrefix)
+      && (
+        IDENTIFIER_START.test(typeFollower ?? "")
+        || typeFollower === "\\"
+      )
+    ) {
+      typeAlias = Object.freeze({
+        angleDepth: 0,
+        braceDepth,
+        bracketDepth: brackets.length,
+        parenthesisDepth: parentheses.length,
+        phase: "name",
+        requiresContinuation: false,
+      });
+      expressionAllowed = true;
+      statementAllowed = false;
+      declarationPrefix = false;
+      return;
+    }
+    if (
+      RESTRICTED_PRODUCTION_KEYWORDS.has(value)
+      && (
+        wasStatementAllowed
+        || (value === "yield" && wasExpressionAllowed)
+      )
+    ) {
+      restrictedProduction = Object.freeze({
+        hasLabel: false,
+        keyword: value,
+      });
+      expressionAllowed = !["break", "continue", "debugger"].includes(value);
+      statementAllowed = false;
+      declarationPrefix = false;
+      return;
+    }
+    if (CONTROL_PARENTHESES.has(value) && wasStatementAllowed) {
+      pendingControlParenthesis = value;
+      expressionAllowed = true;
+      statementAllowed = false;
+      declarationPrefix = false;
+      return;
+    }
+    if (STATEMENT_BODY_KEYWORDS.has(value) && wasStatementAllowed) {
+      expressionAllowed = true;
+      statementAllowed = true;
+      declarationPrefix = false;
+      return;
+    }
+    if (
+      DECLARATION_PREFIX_KEYWORDS.has(value)
+      && (wasStatementAllowed || declarationPrefix)
+    ) {
+      pendingDeclarationModifier = true;
+      expressionAllowed = true;
+      statementAllowed = false;
+      declarationPrefix = true;
+      return;
+    }
+    if (
+      value === "import"
+      && wasStatementAllowed
+      && braceDepth === 0
+    ) {
+      const follower = nextNonTriviaCharacter(source, index)?.value;
+      if (follower !== "." && follower !== "(") {
+        moduleDeclaration = Object.freeze({
+          braceDepth,
+          kind: "import",
+          phase: "source",
+        });
+        expressionAllowed = true;
+        statementAllowed = false;
+        declarationPrefix = false;
+        return;
+      }
+    }
+    if (value === "export" && wasStatementAllowed) {
+      const follower = nextNonTriviaCharacter(source, index)?.value;
+      moduleDeclaration = (
+        braceDepth === 0
+        && (follower === "{" || follower === "*")
+      )
+        ? Object.freeze({
+            braceDepth,
+            form: follower === "{" ? "named" : "star",
+            kind: "export",
+            phase: follower === "{" ? "specifiers" : "source",
+          })
+        : undefined;
+      expressionAllowed = true;
+      statementAllowed = false;
+      declarationPrefix = true;
+      return;
+    }
+    if (
+      value === "default"
+      && declarationPrefix
+    ) {
+      expressionAllowed = true;
+      statementAllowed = false;
+      return;
+    }
+    if (
+      value === "async"
+      && (wasStatementAllowed || declarationPrefix)
+    ) {
+      expressionAllowed = true;
+      statementAllowed = false;
+      declarationPrefix = true;
+      return;
+    }
+    if (value === "function") {
+      pendingFunction = Object.freeze({
+        isExpression: !(wasStatementAllowed || declarationPrefix),
+      });
+      expressionAllowed = true;
+      statementAllowed = false;
+      declarationPrefix = false;
+      return;
+    }
+    if (
+      BRACED_DECLARATION_KEYWORDS.has(value)
+      && (wasStatementAllowed || declarationPrefix)
+    ) {
+      pendingDeclarationModifier = false;
+      pendingBracedDeclaration = Object.freeze({
+        angleDepth: 0,
+        parenthesisDepth: parentheses.length,
+      });
+      expressionAllowed = true;
+      statementAllowed = false;
+      declarationPrefix = false;
+      return;
+    }
+    if (value === "class") {
+      pendingDeclarationModifier = false;
+      pendingClass = Object.freeze({
+        angleDepth: 0,
+        isExpression: !(wasStatementAllowed || declarationPrefix),
+        parenthesisDepth: parentheses.length,
+      });
+      expressionAllowed = true;
+      statementAllowed = false;
+      declarationPrefix = false;
+      return;
+    }
+    if (
+      TYPE_ASSERTION_KEYWORDS.has(value)
+      && !wasExpressionAllowed
+    ) {
+      typeAssertion = Object.freeze({angleDepth: 0});
+      expressionAllowed = true;
+      statementAllowed = false;
+      declarationPrefix = false;
+      return;
+    }
+    if (["const", "let", "var"].includes(value) && (wasStatementAllowed || declarationPrefix)) {
+      variableDeclaration = Object.freeze({
+        braceDepth,
+        bracketDepth: brackets.length,
+        kind: value,
+        parenthesisDepth: parentheses.length,
+        phase: "binding",
+      });
+      expressionAllowed = true;
+      statementAllowed = false;
+      declarationPrefix = false;
+      return;
+    }
+    if (EXPRESSION_PREFIX_KEYWORDS.has(value)) {
+      expressionAllowed = true;
+      statementAllowed = false;
+      declarationPrefix = false;
+      return;
+    }
+    if (VALUE_KEYWORDS.has(value)) {
+      pendingPrefixUpdate = false;
+      markValue();
+      return;
+    }
+    pendingPrefixUpdate = false;
+    markValue();
+  };
+
+  const scanNumber = () => {
+    const start = index;
+    index += 1;
+    while (index < source.length) {
+      const character = source[index];
+      if (/[A-Za-z0-9_.]/u.test(character)) {
+        index += 1;
+        continue;
+      }
+      if (
+        (character === "+" || character === "-")
+        && /[eE]$/u.test(source.slice(start, index))
+      ) {
+        index += 1;
+        continue;
+      }
+      break;
+    }
+    pushToken("literal", source.slice(start, index));
+    markValue();
+  };
+
+  const scanRegexLiteral = () => {
+    const start = index;
+    index += 1;
+    let inCharacterClass = false;
+    let closed = false;
+    while (index < source.length) {
+      const character = source[index];
+      if (character === "\n" || character === "\r" || character === "\u2028" || character === "\u2029") {
+        throw new SyntaxError("unterminated regular expression");
+      }
+      if (character === "\\") {
+        index += 1;
+        if (index >= source.length || /[\n\r\u2028\u2029]/u.test(source[index])) {
+          throw new SyntaxError("unterminated regular expression escape");
+        }
+        index += sourceCharacterAt(source, index)?.value.length ?? 1;
+        continue;
+      }
+      if (character === "[") {
+        inCharacterClass = true;
+        index += 1;
+        continue;
+      }
+      if (character === "]" && inCharacterClass) {
+        inCharacterClass = false;
+        index += 1;
+        continue;
+      }
+      if (character === "/" && !inCharacterClass) {
+        index += 1;
+        closed = true;
+        break;
+      }
+      index += sourceCharacterAt(source, index)?.value.length ?? 1;
+    }
+    if (!closed) throw new SyntaxError("unterminated regular expression");
+    while (index < source.length) {
+      const part = source[index] === "\\"
+        ? identifierUnicodeEscapeAt(source, index)
+        : sourceCharacterAt(source, index);
+      if (part === undefined || !IDENTIFIER_CONTINUE.test(part.value)) break;
+      index = part.end;
+    }
+    pushToken("regex", source.slice(start, index));
+    markValue();
+  };
+
+  const scanTemplate = () => {
+    index += 1;
+    let closed = false;
+    while (index < source.length) {
+      if (source[index] === "\\") {
+        index += 2;
+        continue;
+      }
+      if (source[index] === "`") {
+        index += 1;
+        closed = true;
+        break;
+      }
+      if (source[index] === "$" && source[index + 1] === "{") {
+        index += 2;
+        const stopDepth = braceDepth;
+        braceDepth += 1;
+        expressionAllowed = true;
+        statementAllowed = false;
+        declarationPrefix = false;
+        scanCode(stopDepth);
+        continue;
+      }
+      index += sourceCharacterAt(source, index)?.value.length ?? 1;
+    }
+    if (!closed) throw new SyntaxError("unterminated template");
+    pushToken("template", "`");
+    markValue();
+  };
+
+  const scanJsxName = () => {
+    let value = "";
+    let first = true;
+    while (index < source.length) {
+      const part = sourceCharacterAt(source, index);
+      if (part === undefined) break;
+      const allowed = first
+        ? IDENTIFIER_START.test(part.value)
+        : IDENTIFIER_CONTINUE.test(part.value) || /^[-.:]$/u.test(part.value);
+      if (!allowed) break;
+      value += part.value;
+      index = part.end;
+      first = false;
+    }
+    if (first) throw new SyntaxError("JSX name expected");
+    return value;
+  };
+
+  const scanJsxAttributeString = (quote) => {
+    index += 1;
+    while (index < source.length) {
+      if (source[index] === quote) {
+        index += 1;
+        return;
+      }
+      index += sourceCharacterAt(source, index)?.value.length ?? 1;
+    }
+    throw new SyntaxError("unterminated JSX attribute string");
+  };
+
+  const scanJsxExpression = () => {
+    const stopDepth = braceDepth;
+    index += 1;
+    braceDepth += 1;
+    expressionAllowed = true;
+    statementAllowed = false;
+    declarationPrefix = false;
+    typeAssertion = undefined;
+    scanCode(stopDepth);
+  };
+
+  const scanJsxElement = () => {
+    if (source[index] !== "<") throw new SyntaxError("JSX opening expected");
+    index += 1;
+    let tagName;
+    if (source[index] === ">") {
+      index += 1;
+    } else {
+      tagName = scanJsxName();
+      let openingClosed = false;
+      while (index < source.length) {
+        let hasAttributeBoundary = false;
+        while (index < source.length && /\s/u.test(source[index])) {
+          hasAttributeBoundary = true;
+          index += 1;
+        }
+        if (source[index] === ">") {
+          index += 1;
+          openingClosed = true;
+          break;
+        }
+        if (source[index] === "/" && source[index + 1] === ">") {
+          index += 2;
+          pushToken("jsx", "<jsx>");
+          markValue();
+          return;
+        }
+        if (!hasAttributeBoundary) {
+          throw new SyntaxError("JSX attributes require a boundary");
+        }
+        if (source[index] === "{") {
+          scanJsxExpression();
+          continue;
+        }
+        const attributeName = scanJsxName();
+        const attributeEnd = index;
+        while (index < source.length && /\s/u.test(source[index])) index += 1;
+        if (source[index] !== "=") {
+          index = attributeEnd;
+          continue;
+        }
+        index += 1;
+        while (index < source.length && /\s/u.test(source[index])) index += 1;
+        if (source[index] === "'" || source[index] === "\"") {
+          scanJsxAttributeString(source[index]);
+          continue;
+        }
+        if (source[index] === "{") {
+          scanJsxExpression();
+          continue;
+        }
+        if (source[index] === "<") {
+          scanJsxElement();
+          continue;
+        }
+        throw new SyntaxError("JSX attribute value is outside the controlled subset");
+      }
+      if (!openingClosed) throw new SyntaxError("unterminated JSX opening");
+    }
+
+    while (index < source.length) {
+      if (source[index] === "{") {
+        scanJsxExpression();
+        continue;
+      }
+      if (source[index] !== "<") {
+        index += sourceCharacterAt(source, index)?.value.length ?? 1;
+        continue;
+      }
+      if (source[index + 1] !== "/") {
+        scanJsxElement();
+        continue;
+      }
+      index += 2;
+      if (tagName === undefined) {
+        if (source[index] !== ">") throw new SyntaxError("invalid JSX fragment closing");
+        index += 1;
+      } else {
+        const closingName = scanJsxName();
+        if (closingName !== tagName) throw new SyntaxError("mismatched JSX closing");
+        while (index < source.length && /\s/u.test(source[index])) index += 1;
+        if (source[index] !== ">") throw new SyntaxError("invalid JSX closing");
+        index += 1;
+      }
+      pushToken("jsx", "<jsx>");
+      markValue();
+      return;
+    }
+    throw new SyntaxError("unterminated JSX element");
+  };
+
   const scanCode = (templateStopDepth = null) => {
     while (index < source.length) {
       const character = source[index];
       const next = source[index + 1];
-      if (templateStopDepth !== null && character === "}" && braceDepth === templateStopDepth + 1) {
-        tokens.push({type: "punctuator", value: "}", depth: braceDepth});
-        braceDepth -= 1;
-        index += 1;
-        return;
-      }
       if (/\s/u.test(character)) {
+        if (/[\n\r\u2028\u2029]/u.test(character)) noteLineTerminator();
         index += 1;
         continue;
       }
       if (character === "/" && next === "/") {
         index += 2;
-        while (index < source.length && source[index] !== "\n") index += 1;
+        while (
+          index < source.length
+          && !/[\n\r\u2028\u2029]/u.test(source[index])
+        ) {
+          index += 1;
+        }
         continue;
       }
       if (character === "/" && next === "*") {
         const end = source.indexOf("*/", index + 2);
         if (end === -1) throw new SyntaxError("unterminated comment");
+        if (/[\n\r\u2028\u2029]/u.test(source.slice(index + 2, end))) {
+          noteLineTerminator();
+        }
         index = end + 2;
         continue;
+      }
+      if (typeAlias?.requiresContinuation) {
+        const extendsEnd = index + "extends".length;
+        const isExtendsContinuation = (
+          source.startsWith("extends", index)
+          && !IDENTIFIER_CONTINUE.test(
+            sourceCharacterAt(source, extendsEnd)?.value ?? "",
+          )
+        );
+        const isPunctuatorContinuation = (
+          TYPE_ALIAS_LINE_CONTINUATIONS.has(character)
+          || (character === "=" && next === ">")
+        );
+        if (!isExtendsContinuation && !isPunctuatorContinuation) {
+          throw new SyntaxError("type alias requires semicolon");
+        }
+        typeAlias = Object.freeze({
+          ...typeAlias,
+          requiresContinuation: false,
+        });
+      }
+      prepareCompletedDeclaration(character);
+      prepareRestrictedProduction(character);
+      if (lineTerminatedYield) {
+        if (character === "*") {
+          throw new SyntaxError("yield star cannot contain a line terminator");
+        }
+        lineTerminatedYield = false;
+      }
+      if (pendingAngleOperand) {
+        const beginsAngleOperand = (
+          IDENTIFIER_START.test(sourceCharacterAt(source, index)?.value ?? "")
+          || (character === "\\" && next === "u")
+          || /[0-9]/u.test(character)
+          || ["'", "\"", "`", "/", "(", "[", "{", "<", "+", "-", "!", "~"].includes(character)
+        );
+        if (!beginsAngleOperand) {
+          throw new SyntaxError("angle assertion requires an operand");
+        }
+        pendingAngleOperand = false;
+      }
+      if (
+        pendingGenericArrow?.phase === "parameters"
+        && character !== "("
+      ) {
+        throw new SyntaxError("generic arrow requires a parameter list");
+      }
+      if (
+        pendingGenericArrow?.phase === "after-parameters"
+        && character !== ":"
+        && !(character === "=" && next === ">")
+      ) {
+        throw new SyntaxError("generic arrow requires an arrow");
+      }
+      const startsIdentifier = (
+        IDENTIFIER_START.test(sourceCharacterAt(source, index)?.value ?? "")
+        || (character === "\\" && next === "u")
+      );
+      if (
+        prefixAngleExpression !== undefined
+        && character !== ">"
+      ) {
+        prefixAngleExpression = Object.freeze({
+          ...prefixAngleExpression,
+          hasContent: true,
+        });
+      }
+      if (
+        pendingPrefixUpdate
+        && !startsIdentifier
+        && character !== "("
+        && !((character === "+" || character === "-") && next === character)
+      ) {
+        throw new SyntaxError("prefix update requires a controlled assignment target");
+      }
+      if (pendingPrefixUpdate && character === "(") pendingPrefixUpdate = false;
+      if (
+        templateStopDepth !== null
+        && character === "}"
+        && braceDepth === templateStopDepth + 1
+      ) {
+        if (
+          parentheses.at(-1)?.braceDepth === braceDepth
+          || brackets.at(-1)?.braceDepth === braceDepth
+        ) {
+          throw new SyntaxError("unclosed delimiter before template expression");
+        }
+        pushToken("punctuator", "}", braceDepth);
+        braceDepth -= 1;
+        index += 1;
+        return;
+      }
+      if (character === "@") {
+        throw new SyntaxError("decorators are outside the controlled syntax subset");
       }
       if (character === "'" || character === "\"") {
         scanString(character);
         continue;
       }
       if (character === "`") {
-        index += 1;
-        let closed = false;
-        while (index < source.length) {
-          if (source[index] === "\\") {
-            index += 2;
-            continue;
-          }
-          if (source[index] === "`") {
-            index += 1;
-            closed = true;
-            break;
-          }
-          if (source[index] === "$" && source[index + 1] === "{") {
-            index += 2;
-            const stopDepth = braceDepth;
-            braceDepth += 1;
-            scanCode(stopDepth);
-            continue;
-          }
-          index += 1;
-        }
-        if (!closed) throw new SyntaxError("unterminated template");
+        scanTemplate();
         continue;
       }
-      if (/[A-Za-z_$]/u.test(character)) {
-        const start = index;
+      if (
+        IDENTIFIER_START.test(sourceCharacterAt(source, index)?.value ?? "")
+        || (character === "\\" && next === "u")
+      ) {
+        scanIdentifier();
+        continue;
+      }
+      if (/[0-9]/u.test(character) || (character === "." && /[0-9]/u.test(next ?? ""))) {
+        scanNumber();
+        continue;
+      }
+      if (character === "/") {
+        if (prefixAngleExpression !== undefined) {
+          throw new SyntaxError("slash is outside the controlled angle type subset");
+        }
+        if (typeAlias !== undefined) {
+          throw new SyntaxError("type alias requires semicolon");
+        }
+        if (expressionAllowed) {
+          scanRegexLiteral();
+        } else {
+          if (hasHazardousRegexAlternative(source, index)) {
+            throw new SyntaxError("ambiguous slash could hide a lexical boundary");
+          }
+          pushToken("punctuator", character);
+          expressionAllowed = true;
+          statementAllowed = false;
+          declarationPrefix = false;
+          typeAssertion = undefined;
+          index += 1;
+        }
+        continue;
+      }
+      if (
+        (character === "+" || character === "-")
+        && next === character
+      ) {
+        const isPostfix = (
+          !expressionAllowed
+          && !lineTerminatorSinceLastToken
+        );
+        pushToken("punctuator", `${character}${next}`);
+        expressionAllowed = !isPostfix;
+        statementAllowed = false;
+        declarationPrefix = false;
+        pendingPrefixUpdate = !isPostfix;
+        typeAssertion = undefined;
+        index += 2;
+        continue;
+      }
+      if (character === "=" && next === ">") {
+        if (lineTerminatorSinceLastToken) {
+          throw new SyntaxError("line terminator before arrow");
+        }
+        if (
+          pendingGenericArrow !== undefined
+          && ["after-parameters", "return-type"].includes(pendingGenericArrow.phase)
+          && braceDepth === pendingGenericArrow.braceDepth
+          && brackets.length === pendingGenericArrow.bracketDepth
+          && parentheses.length === pendingGenericArrow.parenthesisDepth
+        ) {
+          pendingGenericArrow = undefined;
+        }
+        pushToken("punctuator", "=>");
+        expressionAllowed = true;
+        statementAllowed = false;
+        declarationPrefix = false;
+        nextBraceKind = Object.freeze({kind: "arrow"});
+        index += 2;
+        continue;
+      }
+      if (
+        character === "<"
+        && next === "<"
+        && prefixAngleExpression === undefined
+      ) {
+        if (expressionAllowed) {
+          throw new SyntaxError("shift operator requires a left operand");
+        }
+        pushToken("punctuator", "<<");
+        expressionAllowed = true;
+        statementAllowed = false;
+        declarationPrefix = false;
+        index += 2;
+        continue;
+      }
+      if (character === "<") {
+        const nextCharacter = sourceCharacterAt(source, index + 1)?.value ?? "";
+        if (typeAlias?.phase === "body") {
+          pushToken("punctuator", character);
+          typeAlias = Object.freeze({
+            ...typeAlias,
+            angleDepth: typeAlias.angleDepth + 1,
+          });
+          expressionAllowed = true;
+          statementAllowed = false;
+          declarationPrefix = false;
+          index += 1;
+          continue;
+        }
+        if (prefixAngleExpression !== undefined) {
+          pushToken("punctuator", character);
+          prefixAngleExpression = Object.freeze({
+            ...prefixAngleExpression,
+            angleDepth: prefixAngleExpression.angleDepth + 1,
+          });
+          expressionAllowed = true;
+          statementAllowed = false;
+          declarationPrefix = false;
+          index += 1;
+          continue;
+        }
+        if (
+          expressionAllowed
+          && (next === ">" || IDENTIFIER_START.test(nextCharacter))
+        ) {
+          if (!jsx) {
+            pushToken("punctuator", character);
+            prefixAngleExpression = Object.freeze({
+              angleDepth: 1,
+              braceDepth,
+              bracketDepth: brackets.length,
+              hasContent: false,
+              parenthesisDepth: parentheses.length,
+              requiresArrow: false,
+            });
+            expressionAllowed = true;
+            statementAllowed = false;
+            declarationPrefix = false;
+            index += 1;
+            continue;
+          }
+          scanJsxElement();
+          continue;
+        }
+        pushToken("punctuator", character);
+        if (
+          pendingClass !== undefined
+          && pendingClass.parenthesisDepth === parentheses.length
+        ) {
+          pendingClass = Object.freeze({
+            ...pendingClass,
+            angleDepth: pendingClass.angleDepth + 1,
+          });
+        }
+        if (
+          pendingBracedDeclaration !== undefined
+          && pendingBracedDeclaration.parenthesisDepth === parentheses.length
+        ) {
+          pendingBracedDeclaration = Object.freeze({
+            ...pendingBracedDeclaration,
+            angleDepth: pendingBracedDeclaration.angleDepth + 1,
+          });
+        }
+        if (typeAssertion !== undefined) {
+          typeAssertion = Object.freeze({
+            angleDepth: typeAssertion.angleDepth + 1,
+          });
+        }
+        expressionAllowed = true;
+        statementAllowed = false;
+        declarationPrefix = false;
         index += 1;
-        while (/[A-Za-z0-9_$]/u.test(source[index] ?? "")) index += 1;
-        tokens.push({
-          type: "identifier",
-          value: source.slice(start, index),
-          depth: braceDepth,
-        });
+        continue;
+      }
+      if (character === ">") {
+        pushToken("punctuator", character);
+        if (typeAlias?.phase === "body" && typeAlias.angleDepth > 0) {
+          typeAlias = Object.freeze({
+            ...typeAlias,
+            angleDepth: typeAlias.angleDepth - 1,
+          });
+          expressionAllowed = false;
+          statementAllowed = false;
+          declarationPrefix = false;
+          index += 1;
+          continue;
+        }
+        if (prefixAngleExpression !== undefined) {
+          const angleDepth = prefixAngleExpression.angleDepth - 1;
+          if (angleDepth === 0) {
+            if (!prefixAngleExpression.hasContent) {
+              throw new SyntaxError("angle assertion type cannot be empty");
+            }
+            if (
+              braceDepth !== prefixAngleExpression.braceDepth
+              || brackets.length !== prefixAngleExpression.bracketDepth
+              || parentheses.length !== prefixAngleExpression.parenthesisDepth
+            ) {
+              throw new SyntaxError("unbalanced angle assertion type");
+            }
+            if (prefixAngleExpression.requiresArrow) {
+              pendingGenericArrow = Object.freeze({
+                braceDepth,
+                bracketDepth: brackets.length,
+                parenthesisDepth: parentheses.length,
+                phase: "parameters",
+              });
+            }
+            prefixAngleExpression = undefined;
+            expressionAllowed = true;
+            pendingAngleOperand = true;
+          } else {
+            prefixAngleExpression = Object.freeze({
+              ...prefixAngleExpression,
+              angleDepth,
+            });
+            expressionAllowed = false;
+          }
+          statementAllowed = false;
+          declarationPrefix = false;
+          index += 1;
+          continue;
+        }
+        if (pendingClass?.angleDepth > 0) {
+          pendingClass = Object.freeze({
+            ...pendingClass,
+            angleDepth: pendingClass.angleDepth - 1,
+          });
+        }
+        if (pendingBracedDeclaration?.angleDepth > 0) {
+          pendingBracedDeclaration = Object.freeze({
+            ...pendingBracedDeclaration,
+            angleDepth: pendingBracedDeclaration.angleDepth - 1,
+          });
+        }
+        if (typeAssertion !== undefined && typeAssertion.angleDepth > 0) {
+          typeAssertion = Object.freeze({
+            angleDepth: typeAssertion.angleDepth - 1,
+          });
+          expressionAllowed = false;
+        } else {
+          typeAssertion = undefined;
+          expressionAllowed = true;
+        }
+        statementAllowed = false;
+        declarationPrefix = false;
+        index += 1;
+        continue;
+      }
+      if (character === "(") {
+        pushToken("punctuator", character);
+        let kind = "expression";
+        const containerKind = braces.at(-1)?.kind;
+        const isControlledMethod = isControlledMethodHead(
+          tokens,
+          braceDepth,
+          containerKind,
+        );
+        if (
+          pendingGenericArrow?.phase === "parameters"
+          && braceDepth === pendingGenericArrow.braceDepth
+          && brackets.length === pendingGenericArrow.bracketDepth
+          && parentheses.length === pendingGenericArrow.parenthesisDepth
+        ) {
+          kind = "generic-arrow-parameters";
+          pendingGenericArrow = Object.freeze({
+            ...pendingGenericArrow,
+            phase: "inside-parameters",
+          });
+        } else if (nextBraceKind?.kind === "arrow") {
+          nextBraceKind = undefined;
+        }
+        if (kind === "generic-arrow-parameters") {
+          // 受控 generic arrow 的首个括号已经拥有明确语义。
+        } else if (pendingControlParenthesis !== undefined) {
+          kind = "control";
+          pendingControlParenthesis = undefined;
+        } else if (pendingFunction !== undefined) {
+          kind = pendingFunction.isExpression
+            ? "function-expression"
+            : "function-declaration";
+          pendingFunction = undefined;
+        } else if (isControlledMethod) {
+          kind = "method";
+        }
+        parentheses.push(Object.freeze({
+          braceDepth,
+          bracketDepth: brackets.length,
+          kind,
+        }));
+        expressionAllowed = true;
+        statementAllowed = false;
+        declarationPrefix = false;
+        index += 1;
+        continue;
+      }
+      if (character === ")") {
+        if (parentheses.length === 0) {
+          throw new SyntaxError("unmatched closing parenthesis");
+        }
+        const opening = parentheses.at(-1);
+        if (
+          opening.braceDepth !== braceDepth
+          || opening.bracketDepth !== brackets.length
+        ) {
+          throw new SyntaxError("unclosed bracket before closing parenthesis");
+        }
+        pushToken("punctuator", character);
+        const kind = parentheses.pop().kind;
+        if (kind === "generic-arrow-parameters") {
+          pendingGenericArrow = Object.freeze({
+            ...pendingGenericArrow,
+            phase: "after-parameters",
+          });
+          expressionAllowed = false;
+          statementAllowed = false;
+        } else if (kind === "control") {
+          expressionAllowed = true;
+          statementAllowed = true;
+        } else {
+          expressionAllowed = false;
+          statementAllowed = false;
+          if (
+            kind === "function-expression"
+            || kind === "function-declaration"
+            || kind === "method"
+          ) {
+            nextBraceKind = Object.freeze({
+              kind,
+            });
+          }
+        }
+        declarationPrefix = false;
+        index += 1;
+        continue;
+      }
+      if (character === "[") {
+        if (
+          variableDeclaration?.phase === "binding"
+          && braceDepth === variableDeclaration.braceDepth
+          && parentheses.length === variableDeclaration.parenthesisDepth
+        ) {
+          variableDeclaration = undefined;
+        }
+        pushToken("punctuator", character);
+        brackets.push(Object.freeze({
+          braceDepth,
+          parenthesisDepth: parentheses.length,
+        }));
+        expressionAllowed = true;
+        statementAllowed = false;
+        declarationPrefix = false;
+        index += 1;
+        continue;
+      }
+      if (character === "]") {
+        if (brackets.length === 0) {
+          throw new SyntaxError("unmatched closing bracket");
+        }
+        const opening = brackets.pop();
+        if (
+          opening.braceDepth !== braceDepth
+          || opening.parenthesisDepth !== parentheses.length
+        ) {
+          throw new SyntaxError("mismatched closing bracket");
+        }
+        pushToken("punctuator", character);
+        markValue();
+        index += 1;
         continue;
       }
       if (character === "{") {
-        tokens.push({type: "punctuator", value: character, depth: braceDepth});
+        if (
+          variableDeclaration?.phase === "binding"
+          && braceDepth === variableDeclaration.braceDepth
+          && parentheses.length === variableDeclaration.parenthesisDepth
+        ) {
+          variableDeclaration = undefined;
+        }
+        if (typeAlias?.phase === "name") typeAlias = undefined;
+        pushToken("punctuator", character);
+        let kind;
+        if (
+          moduleDeclaration?.kind === "export"
+          && moduleDeclaration.form === "named"
+          && moduleDeclaration.phase === "specifiers"
+          && braceDepth === moduleDeclaration.braceDepth
+        ) {
+          kind = Object.freeze({kind: "module-export-specifiers"});
+        } else if (nextBraceKind !== undefined) {
+          kind = nextBraceKind;
+          nextBraceKind = undefined;
+        } else if (
+          pendingClass !== undefined
+          && pendingClass.angleDepth === 0
+          && pendingClass.parenthesisDepth === parentheses.length
+        ) {
+          kind = Object.freeze({
+            kind: pendingClass.isExpression ? "class-expression" : "class-declaration",
+          });
+          pendingClass = undefined;
+        } else if (
+          pendingBracedDeclaration !== undefined
+          && pendingBracedDeclaration.angleDepth === 0
+          && pendingBracedDeclaration.parenthesisDepth === parentheses.length
+        ) {
+          kind = Object.freeze({kind: "type-declaration"});
+          pendingBracedDeclaration = undefined;
+        } else if (pendingControlParenthesis === "catch") {
+          kind = Object.freeze({kind: "block"});
+          pendingControlParenthesis = undefined;
+        } else {
+          kind = Object.freeze({kind: statementAllowed ? "block" : "object"});
+        }
+        braces.push(Object.freeze({
+          ...kind,
+          bracketDepth: brackets.length,
+          parenthesisDepth: parentheses.length,
+        }));
         braceDepth += 1;
+        expressionAllowed = true;
+        statementAllowed = kind.kind !== "object";
+        declarationPrefix = false;
         index += 1;
         continue;
       }
       if (character === "}") {
-        braceDepth = Math.max(0, braceDepth - 1);
-        tokens.push({type: "punctuator", value: character, depth: braceDepth});
+        if (braceDepth === 0 || braces.length === 0) {
+          throw new SyntaxError("unmatched closing brace");
+        }
+        const opening = braces.at(-1);
+        if (
+          opening.bracketDepth !== brackets.length
+          || opening.parenthesisDepth !== parentheses.length
+        ) {
+          throw new SyntaxError("unclosed delimiter before closing brace");
+        }
+        braceDepth -= 1;
+        pushToken("punctuator", character, braceDepth);
+        const context = braces.pop()?.kind ?? "block";
+        if (context === "module-export-specifiers") {
+          moduleDeclaration = Object.freeze({
+            ...moduleDeclaration,
+            phase: "local-export",
+          });
+          expressionAllowed = false;
+          statementAllowed = false;
+        } else if (["object", "class-expression", "function-expression", "arrow"].includes(context)) {
+          expressionAllowed = false;
+          statementAllowed = false;
+        } else {
+          expressionAllowed = true;
+          statementAllowed = true;
+        }
+        declarationPrefix = false;
         index += 1;
         continue;
       }
-      tokens.push({type: "punctuator", value: character, depth: braceDepth});
+      if (character === ";") {
+        if (
+          moduleDeclaration !== undefined
+          && !["complete", "local-export"].includes(moduleDeclaration.phase)
+        ) {
+          throw new SyntaxError("incomplete module declaration");
+        }
+        if (variableDeclaration?.phase === "binding") {
+          throw new SyntaxError("variable declaration requires a binding");
+        }
+        if (
+          variableDeclaration?.kind === "const"
+          && variableDeclaration.phase === "can-end"
+        ) {
+          throw new SyntaxError("const declaration requires an initializer");
+        }
+        if (pendingGenericArrow !== undefined) {
+          throw new SyntaxError("generic arrow requires an arrow");
+        }
+        if (pendingDeclarationModifier) {
+          throw new SyntaxError("declaration modifier requires class or interface");
+        }
+        if (typeAlias !== undefined) {
+          const closesTypeAlias = (
+            braceDepth === typeAlias.braceDepth
+            && brackets.length === typeAlias.bracketDepth
+            && parentheses.length === typeAlias.parenthesisDepth
+            && typeAlias.angleDepth === 0
+          );
+          if (!closesTypeAlias) {
+            pushToken("punctuator", character);
+            expressionAllowed = true;
+            statementAllowed = false;
+            declarationPrefix = false;
+            index += 1;
+            continue;
+          }
+          if (typeAlias.phase !== "body") {
+            throw new SyntaxError("invalid controlled type alias");
+          }
+        }
+        pushToken("punctuator", character);
+        expressionAllowed = true;
+        statementAllowed = true;
+        declarationPrefix = false;
+        pendingControlParenthesis = undefined;
+        pendingFunction = undefined;
+        pendingClass = undefined;
+        pendingBracedDeclaration = undefined;
+        nextBraceKind = undefined;
+        pendingPrefixUpdate = false;
+        restrictedProduction = undefined;
+        moduleDeclaration = undefined;
+        variableDeclaration = undefined;
+        typeAlias = undefined;
+        typeAssertion = undefined;
+        index += 1;
+        continue;
+      }
+      if (character === ".") {
+        pushToken("punctuator", character);
+        expressionAllowed = false;
+        statementAllowed = false;
+        declarationPrefix = false;
+        index += 1;
+        continue;
+      }
+      if (character === ",") {
+        if (
+          variableDeclaration?.phase === "can-end"
+          && braceDepth === variableDeclaration.braceDepth
+          && brackets.length === variableDeclaration.bracketDepth
+          && parentheses.length === variableDeclaration.parenthesisDepth
+        ) {
+          variableDeclaration = Object.freeze({
+            ...variableDeclaration,
+            phase: "binding",
+          });
+        }
+        if (prefixAngleExpression?.angleDepth === 1) {
+          prefixAngleExpression = Object.freeze({
+            ...prefixAngleExpression,
+            requiresArrow: true,
+          });
+        }
+        pushToken("punctuator", character);
+        expressionAllowed = true;
+        statementAllowed = false;
+        declarationPrefix = false;
+        index += 1;
+        continue;
+      }
+      if (character === ":") {
+        if (
+          variableDeclaration?.phase === "can-end"
+          && braceDepth === variableDeclaration.braceDepth
+          && brackets.length === variableDeclaration.bracketDepth
+          && parentheses.length === variableDeclaration.parenthesisDepth
+        ) {
+          variableDeclaration = undefined;
+        }
+        const isLabel = lastToken?.canBeLabel === true;
+        if (isLabel && lastToken?.value === "type") typeAlias = undefined;
+        if (
+          pendingGenericArrow?.phase === "after-parameters"
+          && braceDepth === pendingGenericArrow.braceDepth
+          && brackets.length === pendingGenericArrow.bracketDepth
+          && parentheses.length === pendingGenericArrow.parenthesisDepth
+        ) {
+          pendingGenericArrow = Object.freeze({
+            ...pendingGenericArrow,
+            phase: "return-type",
+          });
+        }
+        pushToken("punctuator", character);
+        expressionAllowed = true;
+        statementAllowed = isLabel;
+        declarationPrefix = false;
+        if (typeAssertion?.angleDepth === 0) typeAssertion = undefined;
+        index += 1;
+        continue;
+      }
+      if (character === "?") {
+        pushToken("punctuator", character);
+        expressionAllowed = true;
+        statementAllowed = false;
+        declarationPrefix = false;
+        if (typeAssertion?.angleDepth === 0) typeAssertion = undefined;
+        index += 1;
+        continue;
+      }
+      if (character === "!") {
+        if (
+          variableDeclaration?.phase === "can-end"
+          && braceDepth === variableDeclaration.braceDepth
+          && brackets.length === variableDeclaration.bracketDepth
+          && parentheses.length === variableDeclaration.parenthesisDepth
+        ) {
+          variableDeclaration = undefined;
+        }
+        const isPostfixNonNull = !expressionAllowed && next !== "=";
+        pushToken("punctuator", character);
+        expressionAllowed = !isPostfixNonNull;
+        statementAllowed = false;
+        declarationPrefix = false;
+        if (!isPostfixNonNull && typeAssertion?.angleDepth === 0) {
+          typeAssertion = undefined;
+        }
+        index += 1;
+        continue;
+      }
+      if (["=", "+", "-", "*", "%", "&", "|", "^", "~"].includes(character)) {
+        if (
+          character === "="
+          && variableDeclaration?.phase === "can-end"
+          && braceDepth === variableDeclaration.braceDepth
+          && brackets.length === variableDeclaration.bracketDepth
+          && parentheses.length === variableDeclaration.parenthesisDepth
+        ) {
+          variableDeclaration = undefined;
+        }
+        if (
+          character === "*"
+          && typeAlias?.phase === "name"
+        ) {
+          typeAlias = undefined;
+        } else if (
+          character === "="
+          && typeAlias?.phase === "equals"
+          && braceDepth === typeAlias.braceDepth
+          && parentheses.length === typeAlias.parenthesisDepth
+        ) {
+          typeAlias = Object.freeze({
+            ...typeAlias,
+            phase: "body",
+          });
+        }
+        if (
+          character === "="
+          && prefixAngleExpression?.angleDepth === 1
+        ) {
+          prefixAngleExpression = Object.freeze({
+            ...prefixAngleExpression,
+            requiresArrow: true,
+          });
+        }
+        pushToken("punctuator", character);
+        expressionAllowed = true;
+        statementAllowed = false;
+        declarationPrefix = false;
+        if (typeAssertion?.angleDepth === 0) typeAssertion = undefined;
+        index += 1;
+        continue;
+      }
+      pushToken("punctuator", character);
+      expressionAllowed = true;
+      statementAllowed = false;
+      declarationPrefix = false;
       index += 1;
     }
     if (templateStopDepth !== null) throw new SyntaxError("unterminated template expression");
   };
 
   scanCode();
+  if (
+    braceDepth !== 0
+    || braces.length !== 0
+    || brackets.length !== 0
+    || parentheses.length !== 0
+    || pendingBracedDeclaration !== undefined
+    || pendingClass !== undefined
+    || pendingControlParenthesis !== undefined
+    || pendingDeclarationModifier
+    || pendingFunction !== undefined
+    || nextBraceKind !== undefined
+    || pendingAngleOperand
+    || pendingPrefixUpdate
+    || pendingGenericArrow !== undefined
+    || prefixAngleExpression !== undefined
+    || (
+      moduleDeclaration !== undefined
+      && !["complete", "local-export"].includes(moduleDeclaration.phase)
+    )
+    || variableDeclaration?.phase === "binding"
+    || (
+      variableDeclaration?.kind === "const"
+      && variableDeclaration.phase === "can-end"
+    )
+    || typeAlias !== undefined
+    || (restrictedProduction !== undefined && restrictedProduction.keyword === "throw")
+  ) {
+    throw new SyntaxError("unterminated controlled syntax");
+  }
   return tokens;
+}
+
+function isDefaultModuleExportName(token) {
+  return (
+    (token?.type === "identifier" || token?.type === "string")
+    && token.value === "default"
+  );
+}
+
+function exportSpecifierDeclaresDefault(segment) {
+  const asIndex = segment.findLastIndex((token) => (
+    token.type === "identifier" && token.value === "as"
+  ));
+  if (asIndex >= 0) return isDefaultModuleExportName(segment[asIndex + 1]);
+  const names = segment.filter((token) => (
+    token.type === "identifier" || token.type === "string"
+  ));
+  const exportedName = names[0]?.value === "type" && names.length > 1
+    ? names[1]
+    : names[0];
+  return isDefaultModuleExportName(exportedName);
+}
+
+function namedExportDeclaresDefault(tokens, exportIndex) {
+  const exportDepth = tokens[exportIndex]?.depth;
+  let openingIndex = exportIndex + 1;
+  if (
+    tokens[openingIndex]?.type === "identifier"
+    && tokens[openingIndex]?.value === "type"
+  ) {
+    openingIndex += 1;
+  }
+  if (
+    tokens[openingIndex]?.value === "*"
+    && tokens[openingIndex + 1]?.type === "identifier"
+    && tokens[openingIndex + 1]?.value === "as"
+  ) {
+    return isDefaultModuleExportName(tokens[openingIndex + 2]);
+  }
+  if (
+    tokens[openingIndex]?.value !== "{"
+    || tokens[openingIndex]?.depth !== exportDepth
+  ) {
+    return false;
+  }
+
+  const memberDepth = exportDepth + 1;
+  let segment = [];
+  for (let index = openingIndex + 1; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.depth === exportDepth && token.value === "}") {
+      return exportSpecifierDeclaresDefault(segment);
+    }
+    if (token.depth !== memberDepth) continue;
+    if (token.value === ",") {
+      if (exportSpecifierDeclaresDefault(segment)) return true;
+      segment = [];
+    } else {
+      segment.push(token);
+    }
+  }
+  return false;
 }
 
 function findStatementSpecifier(tokens, startIndex) {
@@ -731,7 +2505,7 @@ function findStatementSpecifier(tokens, startIndex) {
 function extractModuleReferences(source, relativePath, issues) {
   let tokens;
   try {
-    tokens = tokenizeModuleSyntax(source);
+    tokens = tokenizeModuleSyntax(source, relativePath.endsWith(".tsx"));
   } catch {
     addIssue(
       issues,
@@ -814,7 +2588,10 @@ function extractModuleReferences(source, relativePath, issues) {
         "公共入口和内部模块都不得使用 export *。",
       );
     }
-    if (next?.type === "identifier" && next.value === "default") {
+    if (
+      isDefaultModuleExportName(next)
+      || namedExportDeclaresDefault(tokens, index)
+    ) {
       defaultExport = true;
     }
     const specifier = findStatementSpecifier(tokens, index + 1);

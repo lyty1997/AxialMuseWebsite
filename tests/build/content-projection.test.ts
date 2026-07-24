@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {
+import fs, {
   chmodSync,
   mkdirSync,
   mkdtempSync,
@@ -9,6 +9,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import {syncBuiltinESMExports} from "node:module";
 import {tmpdir} from "node:os";
 import {join, resolve} from "node:path";
 import test from "node:test";
@@ -28,6 +29,7 @@ import {
   createProjectPreviewRemarkPluginForTest,
 } from "../../src/build/content/project-preview-projection.js";
 
+const ARTICLE_DATE_INDEX_SOURCE_PATH = "axial-muse/article-date-index.json";
 const ARTICLE_IDS = Object.freeze({
   published: "018f0000-0000-7000-8000-000000000001",
   archived: "018f0000-0000-7000-8000-000000000002",
@@ -40,6 +42,38 @@ interface FixtureOptions {
 }
 
 type LoadedContent = Awaited<ReturnType<typeof loadValidatedContent>>;
+type FileSystemOverrides = Partial<Pick<
+  typeof fs,
+  "closeSync" | "readFileSync" | "renameSync" | "unlinkSync"
+>>;
+
+let fileSystemOverridesActive = false;
+
+async function withFileSystemOverrides<T>(
+  overrides: FileSystemOverrides,
+  action: () => T | Promise<T>,
+): Promise<T> {
+  assert.equal(fileSystemOverridesActive, false);
+  const originals: Required<FileSystemOverrides> = {
+    closeSync: fs.closeSync,
+    readFileSync: fs.readFileSync,
+    renameSync: fs.renameSync,
+    unlinkSync: fs.unlinkSync,
+  };
+  fileSystemOverridesActive = true;
+  try {
+    Object.assign(fs, overrides);
+    syncBuiltinESMExports();
+    return await action();
+  } finally {
+    try {
+      Object.assign(fs, originals);
+      syncBuiltinESMExports();
+    } finally {
+      fileSystemOverridesActive = false;
+    }
+  }
+}
 
 function writeJson(repositoryRoot: string, sourcePath: string, value: unknown): void {
   const absolutePath = resolve(repositoryRoot, sourcePath);
@@ -310,6 +344,34 @@ function assertBuildError(
     }
     return true;
   };
+}
+
+function assertBuildErrorCause(
+  expectedCode: string,
+  expectedSourcePath: string,
+  assertCause: (cause: unknown) => void,
+): (error: unknown) => boolean {
+  return (error: unknown): boolean => {
+    assertBuildError(expectedCode)(error);
+    const value = error as Error & Readonly<{
+      cause?: unknown;
+      sourcePath?: string;
+    }>;
+    assert.equal(value.sourcePath, expectedSourcePath);
+    assertCause(value.cause);
+    return true;
+  };
+}
+
+function assertAggregateCause(
+  cause: unknown,
+  operationError: unknown,
+  secondaryError: unknown,
+): void {
+  assert.ok(cause instanceof AggregateError);
+  assert.equal(cause.errors.length, 2);
+  assert.strictEqual(cause.errors[0], operationError);
+  assert.strictEqual(cause.errors[1], secondaryError);
 }
 
 function publicSourcePaths(content: LoadedContent): ReadonlySet<string> {
@@ -1568,6 +1630,128 @@ test("E-016 日期索引只在 postBuild 原子写入私有 generated files", as
     assert.equal(privateIndex.includes(ARTICLE_IDS.draft), false);
     assert.equal(sealWrites, 1);
   });
+});
+
+test("CODE-003 私有日期索引写入保留 operation 与 cleanup 双故障 cause", async () => {
+  for (const failureMode of ["operation-only", "dual"] as const) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const outputDirectory = resolve(repositoryRoot, "artifact-build");
+      const generatedFilesDirectory = resolve(repositoryRoot, ".docusaurus");
+      mkdirSync(outputDirectory, {mode: 0o700});
+      mkdirSync(generatedFilesDirectory, {mode: 0o700});
+      let sealWrites = 0;
+      const session = Object.freeze({
+        content,
+        docsAdapterSession: Object.freeze({}),
+        outputDirectory,
+        phase: "build" as const,
+        staticPlan: Object.freeze({}),
+        writeBuildSeal() {
+          sealWrites += 1;
+        },
+        assertBuildSeal() {
+          throw new Error("build fixture must not assert seal");
+        },
+      });
+      const pluginModule = createContentDataPluginForTest(session as never);
+      const plugin = await pluginModule(
+        {generatedFilesDir: generatedFilesDirectory} as never,
+        undefined,
+      );
+      const postBuild = plugin?.postBuild;
+      assert.ok(postBuild);
+
+      const operationError = new Error(`fixture ${failureMode} rename failure`);
+      const cleanupError = new Error("fixture cleanup failure");
+      const realUnlinkSync = fs.unlinkSync;
+      let cleanupCalls = 0;
+      await withFileSystemOverrides({
+        renameSync: (() => {
+          throw operationError;
+        }) as typeof fs.renameSync,
+        unlinkSync: ((path: Parameters<typeof fs.unlinkSync>[0]) => {
+          cleanupCalls += 1;
+          if (failureMode === "dual") throw cleanupError;
+          realUnlinkSync(path);
+        }) as typeof fs.unlinkSync,
+      }, async () => {
+        await assert.rejects(
+          async () => postBuild({outDir: outputDirectory} as never),
+          assertBuildErrorCause(
+            "CONTENT_PLUGIN_DATE_INDEX",
+            ARTICLE_DATE_INDEX_SOURCE_PATH,
+            (cause) => {
+              if (failureMode === "dual") {
+                assertAggregateCause(cause, operationError, cleanupError);
+              } else {
+                assert.strictEqual(cause, operationError);
+              }
+            },
+          ),
+        );
+      });
+      assert.equal(cleanupCalls, 1);
+      assert.equal(sealWrites, 0);
+    });
+  }
+});
+
+test("CODE-003 production artifact 稳定读取保留 operation 与 close 双故障 cause", async () => {
+  for (const failureMode of ["operation-only", "close-only", "dual"] as const) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const operationError = new Error(`fixture ${failureMode} read failure`);
+      const closeError = new Error(`fixture ${failureMode} close failure`);
+      const realCloseSync = fs.closeSync;
+      let closeCalls = 0;
+      const trace = {sealAssertions: 0, staticAssertions: 0, disposals: 0};
+      const overrides: FileSystemOverrides = {
+        closeSync: ((descriptor: number) => {
+          closeCalls += 1;
+          realCloseSync(descriptor);
+          if (failureMode !== "operation-only") throw closeError;
+        }) as typeof fs.closeSync,
+        ...(failureMode === "close-only"
+          ? {}
+          : {
+              readFileSync: (() => {
+                throw operationError;
+              }) as typeof fs.readFileSync,
+            }),
+      };
+      await withFileSystemOverrides(overrides, async () => {
+        await assert.rejects(
+          () => invokeArtifactCheck(
+            content,
+            fixture.buildDirectory,
+            fixture.generatedFilesDirectory,
+            {trace},
+          ),
+          assertBuildErrorCause(
+            "CONTENT_ARTIFACT_READ",
+            ARTICLE_DATE_INDEX_SOURCE_PATH,
+            (cause) => {
+              if (failureMode === "operation-only") {
+                assert.strictEqual(cause, operationError);
+              } else if (failureMode === "close-only") {
+                assert.strictEqual(cause, closeError);
+              } else {
+                assertAggregateCause(cause, operationError, closeError);
+              }
+            },
+          ),
+        );
+      });
+      assert.equal(closeCalls, 1);
+      assert.deepEqual(trace, {
+        sealAssertions: 1,
+        staticAssertions: 0,
+        disposals: 1,
+      });
+    });
+  }
 });
 
 test("E-016 production artifact 只验收内容详情 canonical/sidebar 并保持页面元数据下游边界", async () => {

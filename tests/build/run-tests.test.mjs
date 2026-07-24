@@ -14,6 +14,10 @@ import {tmpdir} from "node:os";
 import {dirname, join, resolve} from "node:path";
 import test from "node:test";
 import {
+  checkJavaScriptSyntax,
+  JAVASCRIPT_SOURCE_FILES,
+} from "../../scripts/quality/check-javascript.mjs";
+import {
   assertSupportedTestNodeVersion,
   assertTestWorkspace,
   parseTestArguments,
@@ -158,6 +162,24 @@ function assertTemporaryParentEmpty(fixture) {
   assert.deepEqual(readdirSync(fixture.temporaryParent), []);
 }
 
+function captureJavaScriptCheck(root) {
+  let stdout = "";
+  let stderr = "";
+  const result = checkJavaScriptSyntax({
+    root,
+    spawnProcess(executable, arguments_, options) {
+      return spawnSync(executable, arguments_, {
+        ...options,
+        encoding: "utf8",
+        stdio: "pipe",
+      });
+    },
+    standardOutput: {write(value) { stdout += value; }},
+    standardError: {write(value) { stderr += value; }},
+  });
+  return {result, stderr, stdout};
+}
+
 function createCompilerFixture() {
   const root = mkdtempSync(join(tmpdir(), "axial-muse-test-compiler-fixture-"));
   const compilerPath = resolve(root, "node_modules/typescript/bin/tsc");
@@ -171,6 +193,33 @@ function createCompilerFixture() {
   );
   return {compilerPath, root};
 }
+
+test("CODE-012 check:js 对 run-tests 入口与自身测试执行真实语法 mutation", () => {
+  const targets = [
+    "scripts/quality/run-tests.mjs",
+    "tests/build/run-tests.test.mjs",
+  ];
+  assert.equal(new Set(JAVASCRIPT_SOURCE_FILES).size, JAVASCRIPT_SOURCE_FILES.length);
+  for (const target of targets) {
+    assert.ok(JAVASCRIPT_SOURCE_FILES.includes(target));
+    const root = mkdtempSync(join(tmpdir(), "axial-muse-check-javascript-fixture-"));
+    try {
+      for (const sourcePath of JAVASCRIPT_SOURCE_FILES) {
+        writeFixture(root, sourcePath, "export {};\n");
+      }
+      writeFixture(root, target, "export const syntaxMutation = ;\n");
+      const captured = captureJavaScriptCheck(root);
+      assert.deepEqual(captured.result, {ok: false, sourcePath: target});
+      assert.equal(captured.stdout, "");
+      assert.equal(
+        captured.stderr,
+        `JavaScript syntax check failed: ${target}\n`,
+      );
+    } finally {
+      rmSync(root, {recursive: true, force: true});
+    }
+  }
+});
 
 test("E-012 测试入口参数、工作区与主/最低 Node 端点封闭", () => {
   assert.deepEqual(parseTestArguments([]), {});
@@ -270,6 +319,42 @@ test("E-012 精确 emitted decoder importer 触发固定四文件复制与字节
     assert.equal(captured.calls.length, 2);
     assert.match(captured.stdout, /E-012 copied decoder runtime/u);
     assert.equal(captured.stderr, "");
+    assertTemporaryParentEmpty(fixture);
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-012 emitted decoder adapter lstat 非 ENOENT 以稳定 cause 失败关闭", () => {
+  const fixture = createFixture({behavior: "decoder-runtime"});
+  const accessError = Object.assign(
+    new Error("synthetic emitted adapter access failure"),
+    {code: "EACCES"},
+  );
+  let probedPath;
+  let probeCalls = 0;
+  try {
+    const captured = captureRun(fixture, {
+      lstatEmittedAdapter(path) {
+        probedPath = path;
+        probeCalls += 1;
+        throw accessError;
+      },
+    });
+    assert.ok(hasTestCode("TEST_DECODER_RUNTIME")(captured.error));
+    assert.strictEqual(captured.error.cause, accessError);
+    assert.equal(probeCalls, 1);
+    assert.equal(captured.calls.length, 1);
+    const compileArguments = captured.calls[0].arguments_;
+    const outputIndex = compileArguments.indexOf("--outDir");
+    assert.notEqual(outputIndex, -1);
+    assert.equal(
+      probedPath,
+      resolve(
+        compileArguments[outputIndex + 1],
+        "src/build/content/content-decoders.js",
+      ),
+    );
     assertTemporaryParentEmpty(fixture);
   } finally {
     destroyFixture(fixture);

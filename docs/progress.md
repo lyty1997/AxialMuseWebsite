@@ -4,6 +4,34 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-24 — #46 逐项收口与发布授权（本地验收完成，待远端闭环）
+
+- **主题**：逐项实现、复核并验收 #46 的原生子 Issue；不把 #8 或相邻未列风险暗中并入本轮。
+- **用户授权**：
+  - 允许在任务私有 `/tmp` 副本中通过 E-010 联系官方 npm registry，以冻结 lock、禁用 lifecycle scripts 和 audit 的方式安装既有依赖；允许在需要时从 Node.js 官方源下载并校验既定最低端点 Node `24.16.0`，在主/最低端点运行同一测试、类型检查和 production build。不得修改 manifest/lock，不在仓库根创建 `node_modules/`，结束后清理任务副本。
+  - 上述验收全绿后，允许提交并推送到 `origin/dev`，观察精确提交 SHA 的 CI，向 #47–#52、#54、#49 和父 #46 回填证据并完成关闭处置；#53 保持 `not planned`，#8 保持在 #16 路线中。
+  - 允许把本轮独立审计确认的相邻 operation/close 双故障错误保真风险建立为不挂 #46 的后续 Issue；本轮不暗中修改这些相邻路径。已据此建立 [#55](https://github.com/lyty1997/AxialMuseWebsite/issues/55)，只跟踪 `file-safety.ts` 两个共享同一不变量的安全读取事务边界。
+- **已完成的本地证据**：
+  - #47 经五轮对抗审计收口；最后一轮额外发现并修复 `debugger`、无分号 static import/named export、无 initializer `let|var` 及 async/generator object method 的 slash-goal 结束态。模块门禁 36/36、真实 49 个 TypeScript 文件、`check:js` mutation 和 5 种换行形态组成的 80/80 独立合法样例通过；仍有词法歧义的受控子集外输入稳定报 `MODULE_BOUNDARY_PARSE`，不再静默吞掉模块 token。
+  - #48–#52、#54 的正常与反例 fixture 已实现并独立复核；Node 24 补充运行时验证分别为 32/32、15/15、34/34。
+  - E-010 隔离 `quality` 总入口通过，供应链静态闭包仍为 1,225 项；仓库根无 `node_modules` 或构建锁。
+  - 任务私有副本已按 E-010 从官方 registry 完成冻结安装；Node `24.18.0` / npm `11.16.0` 与最低 Node `24.16.0` / npm `11.13.0` 对同一工作树分别通过完整 `quality`、严格 `typecheck`、209/209 测试与 production `build`。两端隔离入口均报告官方 registry、全新缓存和隔离配置，安装前后 `package.json` 与 lockfile SHA-256 精确一致；仓库根仍无 `node_modules` 或构建锁。
+- **遗留项**：形成提交并只推送到 `origin/dev`，观察精确提交 SHA 的 CI 成功，再逐项回填/关闭 #47–#52 与 #54，最后关闭父 #46；#53、#8 与独立后续 #55 状态不变。
+
+## 2026-07-24 — dev 分支代码审查（#46）、二次复核与拆解
+
+- **主题**：对 `dev` 相对 `main`（7 提交、89 文件、HEAD `91dd3c7`）做代码审查，并逐条对照 `docs/`、真实输入闭包和可达错误路径二次复核；本次只修订跟踪口径和文档，未改源码。
+- **完成内容**：
+  - **审查方法**：6 个 finder 分角度扫描得 60 候选 → 每个 `(file,line)` 派独立 verifier 复核 → 53 项存活、7 项驳回；再对存活项逐条对照设计真相源。只读代码、不查设计的第一轮在本仓容易把 D-075 分层隔离、D-077 零依赖和 E-016 防漂移形态误判为缺陷，后续审查必须保留设计核对。
+  - **二次复核结论**：原“10 项待修缺陷”更正为 **7 项真实缺陷 + 3 项澄清/维护议题**；21 项既定设计的非缺陷结论不变。复核期间另确认 `production-artifact-check.ts:187` 在 operation/close 双故障时丢弃主错误，单建 [#54](https://github.com/lyty1997/AxialMuseWebsite/issues/54)。因此 [#46](https://github.com/lyty1997/AxialMuseWebsite/issues/46) 当前共跟踪 **8 项确认缺陷，其中 1 项为原清单外的后续发现**。
+  - **GitHub 处置**：#47–#54 已建立为 #46 的原生子 issue。原清单 7 项缺陷由 #47（覆盖原第 1/7/8 项）、#48、#50、#51、#52 跟踪；#54 跟踪后续独立缺陷。#49 改为低优先级 `enhancement` / hardening；#53 撤回与 HTML 无关的 `spec:401` 依据，改为 `enhancement + question`，不再执行旧“直接合并为单实现”决定；#8 已有父 issue #16，继续用评论与 #46 交叉链接，并把版本级 `noIndex` 澄清为 preview 实现期集成选择，最终制品全页 noindex 且无 sitemap 才是 E-009 验收。
+  - **保留的既有决定**：#48 上限取 2048（登记侧复用 `MAX_SOURCE_FILES`）；`deepFreeze`/摘要长度帧去重接受现状；第四节 18 项轻微清理整体推迟，`loader.ts:333` 明确不修。
+  - **文档**：本条 progress 已按二次复核口径更正；`docs/operations/maintenance.md` 的“构建锁残留”人工恢复步骤保留，锁语义仍是 E-016 既定设计。
+- **遗留项**：
+  - 必修缺陷尚未实现，可按 #47 → #51/#54 → #52 → #50 → #48 逐个闭环；#49/#53 不阻塞，#53 是否做共享 tokenizer/event 层维护重构仍需另行确认。
+  - #8 仍按既有 roadmap / blocked-by 推进真实 preview；不得把版本 metadata 断言替代最终制品验收。
+  - CI 未运行目标 Node 24 `.test.ts` 与真实 `build` 属已声明的迁移前状态，由 #32 跟踪，卡在 GitHub Actions/CI 外部接线授权，不计为本分支新缺陷。
+
 ## 2026-07-23 — #7 远端闭环与 #26 本地实现/验收中
 
 - **#7 关闭证据**：I-12 精确提交 `7f2115d9f1dc5396ca0c81fc9960223644d79725` 已只 push 到 `origin/dev`；该 SHA 的 GitHub Actions run `29950131762` 为 `completed/success`。逐条脱敏验收已写入 [GitHub #7 评论](https://github.com/lyty1997/AxialMuseWebsite/issues/7#issuecomment-5050422648)，Issue 随后以 `completed` 关闭。

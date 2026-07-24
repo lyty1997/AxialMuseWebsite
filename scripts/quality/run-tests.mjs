@@ -349,15 +349,15 @@ function writeTemporaryPackage(outputRoot) {
   }
 }
 
-function copyContentDecoderRuntime({root, outputRoot}) {
+function copyContentDecoderRuntime({root, outputRoot, lstatEmittedAdapter}) {
   const emittedAdapter = resolve(
     outputRoot,
     "src/build/content/content-decoders.js",
   );
-  if (!existsAsRegularFile(emittedAdapter)) return;
   const sourceDirectory = resolve(root, "scripts/content");
   const targetDirectory = resolve(outputRoot, "scripts/content");
   try {
+    if (!existsAsRegularFile(emittedAdapter, lstatEmittedAdapter)) return;
     mkdirSync(targetDirectory, {recursive: true, mode: 0o700});
     chmodSync(resolve(outputRoot, "scripts"), 0o700);
     chmodSync(targetDirectory, 0o700);
@@ -389,12 +389,13 @@ function copyContentDecoderRuntime({root, outputRoot}) {
   }
 }
 
-function existsAsRegularFile(path) {
+function existsAsRegularFile(path, lstatFile) {
   try {
-    const metadata = lstatSync(path);
+    const metadata = lstatFile(path);
     return metadata.isFile() && !metadata.isSymbolicLink();
-  } catch {
-    return false;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
   }
 }
 
@@ -471,6 +472,7 @@ export function runTests({
   resolveCompiler = resolveTypeScriptCli,
   makeTemporary = mkdtempSync,
   removeTemporary = (path) => rmSync(path, {recursive: true, force: false}),
+  lstatEmittedAdapter = lstatSync,
   spawnProcess = spawnSync,
   standardOutput = process.stdout,
   standardError = process.stderr,
@@ -513,7 +515,11 @@ export function runTests({
     assertChildSucceeded(compileResult, "TEST_COMPILE", "TypeScript 测试 program 编译失败。");
 
     writeTemporaryPackage(outputRoot);
-    copyContentDecoderRuntime({root: realRoot, outputRoot});
+    copyContentDecoderRuntime({
+      root: realRoot,
+      outputRoot,
+      lstatEmittedAdapter,
+    });
     mappings = bindEmittedTests({root: realRoot, outputRoot, sources});
     const executionResult = spawnTestChild(
       spawnProcess,

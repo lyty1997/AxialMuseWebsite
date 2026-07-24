@@ -239,6 +239,16 @@ GitHub 计划任务可能延迟，不作为分钟级监控。M0 不注入浏览�
 
 ## 故障手册
 
+### 构建锁残留（BUILD_LOCKED / CONTENT_SESSION_LOCK）
+
+`scripts/build/build-site.mjs` 以仓库根 `.axial-muse-build.lock`（权限 `0600`，内容为单行 owner 标识、**不含 PID**）作为 owner 绑定的排他构建锁，失败关闭且不自动抢占。构建进程被 `SIGKILL`、断电或异常路径未走到 `releaseBuildLock` 时锁文件会残留，之后每次通过隔离入口运行 `node scripts/quality/run-isolated-npm.mjs run-script build`（及依赖锁身份的内容构建 session）都以 `BUILD_LOCKED` 或 `CONTENT_SESSION_LOCK` 失败。锁文件不记录 PID，因此**只能靠进程检查判断是否为陈旧锁**，不能凭锁文件本身判断。
+
+1. 确认当前确实没有构建在运行：`pgrep -af build-site.mjs`，并核对触发构建的 CI job 或终端。存在活动构建时**不要删锁**，等其结束或正常中止。
+2. 确认无活动构建后，删除仓库根的陈旧锁文件：`rm -f .axial-muse-build.lock`。该文件已被 `.gitignore` 忽略，属本地未跟踪临时物，删除不影响任何受版本控制内容。
+3. 若同时残留 `.axial-muse-build-retired/`、`.axial-muse-build-candidate-*/`、`.axial-muse-build-backup-*/`，它们会在下一次取得锁后、任何新改动前由构建自身回收，通常无需手动清理；仅在明确不再需要时手动删除。
+4. 重跑 `node scripts/quality/run-isolated-npm.mjs run-script build` 确认恢复。
+5. 在项目进度记录被中断的原因、影响与预防措施。
+
 ### 新部署导致页面损坏
 
 1. 确认 GitHub deployment、TAT invocation、服务器 `current`、活动 Nginx 精确 SHA、payload/规则摘要和 URL 暴露账本摘要。

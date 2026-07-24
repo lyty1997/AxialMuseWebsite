@@ -1,17 +1,20 @@
 import assert from "node:assert/strict";
 import {
   chmodSync,
+  mkdirSync,
   mkdtempSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {join, resolve} from "node:path";
 import test from "node:test";
 import {
   formatStaticAssetError,
   prepareStaticAssetPlan,
   StaticAssetError,
 } from "../../src/build/static-assets/index.js";
+import {isDeepFrozenPlainData} from "../../src/build/static-assets/plain-data.js";
 import type {
   PrepareStaticAssetPlanInput,
   UnpublishedAssetSnapshotInput,
@@ -126,6 +129,35 @@ function registryDocument(): RegistryDocumentInput {
   };
 }
 
+function countedRegistryDocument(count: number): RegistryDocumentInput {
+  return {
+    sourcePath: "docs/contracts/static-public-assets.json",
+    value: deepFreeze({
+      version: "0.1.0",
+      kind: "axial_muse_static_public_assets",
+      status: "active",
+      owner: "AxialMuseWebsite",
+      roleValues: ["brand", "operational"],
+      assets: Array.from({length: count}, (_, index) => ({
+        sourcePath: `.well-known/asset-${String(index).padStart(4, "0")}.txt`,
+        role: "operational",
+      })),
+    }),
+  };
+}
+
+function writeCountedStaticPublicFiles(repositoryRoot: string, count: number): void {
+  const directory = resolve(repositoryRoot, "static-public/.well-known");
+  mkdirSync(directory, {recursive: true, mode: 0o700});
+  for (let index = 0; index < count; index += 1) {
+    writeFileSync(
+      resolve(directory, `asset-${String(index).padStart(4, "0")}.txt`),
+      `${index}\n`,
+      {encoding: "utf8", flag: "wx", mode: 0o600},
+    );
+  }
+}
+
 function validInput(
   repositoryRoot: string,
   unpublishedAssets?: readonly UnpublishedAssetSnapshotInput[],
@@ -176,6 +208,78 @@ function assertDiagnosticSuppressed(error: StaticAssetError): void {
   assert.doesNotMatch(error.message, /private getter diagnostic/u);
   assert.doesNotMatch(formatStaticAssetError(error), /private getter diagnostic/u);
 }
+
+test("I-12 深冻结检查区分共享 DAG 与当前递归路径中的真实循环", () => {
+  const shared = Object.freeze({value: "shared"});
+  const directedAcyclicGraph = Object.freeze({
+    first: shared,
+    second: Object.freeze([shared]),
+  });
+  assert.equal(isDeepFrozenPlainData(directedAcyclicGraph), true);
+
+  const cyclic: {readonly value: string; self?: unknown} = {value: "cycle"};
+  cyclic.self = cyclic;
+  Object.freeze(cyclic);
+  assert.equal(isDeepFrozenPlainData(cyclic), false);
+
+  const cycleLeft: {next?: unknown} = {};
+  const cycleRight: {next?: unknown} = {};
+  cycleLeft.next = cycleRight;
+  cycleRight.next = cycleLeft;
+  Object.freeze(cycleLeft);
+  Object.freeze(cycleRight);
+  assert.equal(isDeepFrozenPlainData(cycleLeft), false);
+});
+
+test("I-12 深冻结检查只完整验证共享 DAG 节点一次", () => {
+  let descriptorReads = 0;
+  const countedFrozenObject = (
+    value: Readonly<Record<string, unknown>>,
+  ): Readonly<Record<string, unknown>> => new Proxy(Object.freeze(value), {
+    getOwnPropertyDescriptor(target, property) {
+      descriptorReads += 1;
+      return Reflect.getOwnPropertyDescriptor(target, property);
+    },
+  });
+
+  let shared: Readonly<Record<string, unknown>> = countedFrozenObject({
+    value: "leaf",
+  });
+  for (let depth = 0; depth < 12; depth += 1) {
+    shared = countedFrozenObject({left: shared, right: shared});
+  }
+
+  assert.equal(isDeepFrozenPlainData(shared), true);
+  assert.ok(
+    descriptorReads <= 128,
+    `共享 DAG 节点被重复验证：descriptorReads=${descriptorReads}`,
+  );
+});
+
+test("I-12 static-public 登记与物理扫描统一允许恰好 2048 个文件", () => {
+  withRepository((repositoryRoot) => {
+    writeCountedStaticPublicFiles(repositoryRoot, 2_048);
+    const plan = prepareStaticAssetPlan({
+      ...validInput(repositoryRoot),
+      staticPublicRegistry: countedRegistryDocument(2_048),
+    });
+    try {
+      assert.equal(plan.manifest.files.length, 2_048);
+    } finally {
+      plan.dispose();
+    }
+  });
+
+  withRepository((repositoryRoot) => {
+    expectStaticAssetFailure(
+      () => prepareStaticAssetPlan({
+        ...validInput(repositoryRoot),
+        staticPublicRegistry: countedRegistryDocument(2_049),
+      }),
+      "STATIC_ASSET_SOURCE_COUNT",
+    );
+  });
+});
 
 test("I-12 prepareStaticAssetPlan 根输入只接受单次精确数据 descriptor 快照", async (t) => {
   await t.test("revoked Proxy", () => {

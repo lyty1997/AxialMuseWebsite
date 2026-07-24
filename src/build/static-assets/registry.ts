@@ -1,6 +1,10 @@
 import type {RegistryDocumentInput} from "../../domain/content/index.js";
 import type {StaticPublicAssetRole} from "./types.js";
-import {compareUtf8} from "./file-safety.js";
+import {
+  compareUtf8,
+  MAX_SOURCE_FILES,
+  MAX_SOURCE_PATH_BYTES,
+} from "./file-safety.js";
 import {failStaticAsset} from "./errors.js";
 import {isDeepFrozenPlainData} from "./plain-data.js";
 
@@ -31,7 +35,7 @@ function isSafeRelativePath(value: unknown): value is string {
   if (
     typeof value !== "string"
     || value.length === 0
-    || Buffer.byteLength(value, "utf8") > 512
+    || Buffer.byteLength(value, "utf8") > MAX_SOURCE_PATH_BYTES
     || value.startsWith("/")
     || value.includes("\\")
     || /[\u0000-\u001f\u007f-\u009f]/u.test(value)
@@ -162,7 +166,7 @@ export function decodeStaticPublicRegistry(
       sourcePath: entry.sourcePath,
       role: entry.role,
     }));
-    if (index >= 2_047) {
+    if (index >= MAX_SOURCE_FILES) {
       failStaticAsset(
         "STATIC_ASSET_SOURCE_COUNT",
         "始终公开素材登记数量超过上限。",

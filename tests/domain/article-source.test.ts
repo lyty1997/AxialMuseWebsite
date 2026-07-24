@@ -430,6 +430,54 @@ test("I-06 文章关系拒绝自身与悬空引用，项目 relatedWriting 也�
   );
 });
 
+test("CODE-003 relations 只为真实空输入报告省略要求", () => {
+  const relationIssues = (relations: unknown) => {
+    const result = validateArticleSource({
+      catalog: makeCatalog(),
+      sources: [makeSource("relation-diagnostics", makeFrontMatter({relations}))],
+    });
+    if (result.ok) assert.fail("关系诊断 fixture 必须失败。");
+    return result.issues.filter((issue) => issue.fieldPath?.startsWith("relations"));
+  };
+  const hasEmptyRelationDiagnostic = (
+    issues: ReturnType<typeof relationIssues>,
+  ): boolean => issues.some((issue) => (
+    issue.fieldPath === "relations"
+    && issue.message === "空关系对象或空关系数组必须省略。"
+  ));
+
+  for (const relations of [{}, {projects: []}, {articles: []}]) {
+    const issues = relationIssues(relations);
+    assert.equal(hasEmptyRelationDiagnostic(issues), true);
+  }
+
+  const projectOverflow = relationIssues({
+    projects: ["one", "two", "three", "four", "five", "six"],
+  });
+  assert.deepEqual(
+    projectOverflow.map(({fieldPath, message}) => ({fieldPath, message})),
+    [{
+      fieldPath: "relations.projects",
+      message: "字段必须是 1-5 个不重复 lowercase kebab-case ID。",
+    }],
+  );
+  assert.equal(hasEmptyRelationDiagnostic(projectOverflow), false);
+
+  const articleOverflow = relationIssues({
+    articles: Array.from({length: 11}, (_, index) => (
+      `018f0000-0000-7000-8000-${String(index + 16).padStart(12, "0")}`
+    )),
+  });
+  assert.deepEqual(
+    articleOverflow.map(({fieldPath, message}) => ({fieldPath, message})),
+    [{
+      fieldPath: "relations.articles",
+      message: "相关文章必须是 1-10 个不重复 UUIDv7。",
+    }],
+  );
+  assert.equal(hasEmptyRelationDiagnostic(articleOverflow), false);
+});
+
 test("E-016 公开文章与项目不得把未发布关系带入 production 模型", () => {
   const draft = makeSource("dependency-inversion");
   const published = makeSource("public-reference", makeFrontMatter({

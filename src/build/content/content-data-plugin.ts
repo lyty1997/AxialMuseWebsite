@@ -106,8 +106,11 @@ function writePrivateDateIndex(
     }
   }
   if (operationError !== undefined || cleanupError !== undefined) {
+    const cause = operationError !== undefined && cleanupError !== undefined
+      ? new AggregateError([operationError, cleanupError])
+      : operationError ?? cleanupError;
     failContentBuild("CONTENT_PLUGIN_DATE_INDEX", "私有日期索引无法原子写入。", {
-      cause: cleanupError ?? operationError,
+      cause,
       sourcePath: ARTICLE_DATE_INDEX_RELATIVE_PATH,
     });
   }

@@ -183,8 +183,11 @@ function readStableFileBytes(
     }
   }
   if (operationError !== undefined || closeError !== undefined || value === undefined) {
+    const cause = operationError !== undefined && closeError !== undefined
+      ? new AggregateError([operationError, closeError])
+      : operationError ?? closeError;
     failContentBuild("CONTENT_ARTIFACT_READ", "production 制品文本无法绑定静态扫描证据。", {
-      cause: closeError ?? operationError,
+      cause,
       sourcePath,
     });
   }

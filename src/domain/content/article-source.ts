@@ -244,6 +244,14 @@ function validateRelations(
     "relations",
     "ARTICLE",
   );
+  const relationInputKeys = Object.keys(value);
+  const relationInputIsEmpty = relationInputKeys.length === 0 || (
+    relationInputKeys.every((key) => (
+      (key === "projects" || key === "articles")
+      && Array.isArray(value[key])
+      && value[key].length === 0
+    ))
+  );
 
   let projects: string[] | undefined;
   if (Object.hasOwn(value, "projects")) {
@@ -302,7 +310,9 @@ function validateRelations(
   }
 
   if ((projects?.length ?? 0) + (articles?.length ?? 0) === 0) {
-    addInvalidField(collector, sourcePath, "relations", "空关系对象或空关系数组必须省略。");
+    if (relationInputIsEmpty) {
+      addInvalidField(collector, sourcePath, "relations", "空关系对象或空关系数组必须省略。");
+    }
     return undefined;
   }
   return {
