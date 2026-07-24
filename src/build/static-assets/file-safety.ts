@@ -465,7 +465,12 @@ export function readPrivateFileSnapshot({
     failStaticAsset(
       "STATIC_ASSET_SOURCE_CLOSE",
       "素材源文件描述符关闭失败。",
-      {cause: closeError, sourcePath},
+      {
+        cause: operationError === undefined
+          ? closeError
+          : new AggregateError([operationError, closeError]),
+        sourcePath,
+      },
     );
   }
   if (operationError !== undefined) {
@@ -674,7 +679,12 @@ function scanArtifactFile(
     failStaticAsset(
       "STATIC_ASSET_BUILD_CLOSE",
       "production 制品文件描述符关闭失败。",
-      {cause: closeError, sourcePath},
+      {
+        cause: operationError === undefined
+          ? closeError
+          : new AggregateError([operationError, closeError]),
+        sourcePath,
+      },
     );
   }
   if (operationError !== undefined) rethrowIo(operationError, sourcePath);

@@ -159,6 +159,7 @@ const BUILD_INTERNAL_TEST_IMPORTS = Object.freeze({
   ])),
   "tests/build/static-assets.test.ts": Object.freeze(new Set([
     "src/build/content/build-seal.ts",
+    "src/build/static-assets/file-safety.ts",
     "src/build/static-assets/plan.ts",
   ])),
 });
