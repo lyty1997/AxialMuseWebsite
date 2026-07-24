@@ -4,7 +4,7 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
-## 2026-07-24 — #46 逐项收口与发布授权（本地验收完成，待远端闭环）
+## 2026-07-24 — #46 逐项收口与远端闭环（完成）
 
 - **主题**：逐项实现、复核并验收 #46 的原生子 Issue；不把 #8 或相邻未列风险暗中并入本轮。
 - **用户授权**：
@@ -16,7 +16,10 @@
   - #48–#52、#54 的正常与反例 fixture 已实现并独立复核；Node 24 补充运行时验证分别为 32/32、15/15、34/34。
   - E-010 隔离 `quality` 总入口通过，供应链静态闭包仍为 1,225 项；仓库根无 `node_modules` 或构建锁。
   - 任务私有副本已按 E-010 从官方 registry 完成冻结安装；Node `24.18.0` / npm `11.16.0` 与最低 Node `24.16.0` / npm `11.13.0` 对同一工作树分别通过完整 `quality`、严格 `typecheck`、209/209 测试与 production `build`。两端隔离入口均报告官方 registry、全新缓存和隔离配置，安装前后 `package.json` 与 lockfile SHA-256 精确一致；仓库根仍无 `node_modules` 或构建锁。
-- **遗留项**：形成提交并只推送到 `origin/dev`，观察精确提交 SHA 的 CI 成功，再逐项回填/关闭 #47–#52 与 #54，最后关闭父 #46；#53、#8 与独立后续 #55 状态不变。
+- **远端闭环**：
+  - 实现提交 `c766279a16ec8aa4b4204bd13c5c30b4e4d0dcf5` 已只推送到 `origin/dev`；精确 SHA 的 GitHub Actions run [30099114683](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/30099114683) 为 `completed/success`，`Website quality gates` 与 `Diagram compile check` 均成功。
+  - #47–#52、#54 已分别回填独立正常/反例、双 Node、提交与 CI 证据并以 `completed` 关闭；#53 保持 `not planned`。GraphQL 读回确认 #46 的 8 个原生子项已 8/8 完成处置，父 [#46](https://github.com/lyty1997/AxialMuseWebsite/issues/46) 随后以 `completed` 关闭。
+- **完整性与后续**：本轮未新增、升级或删除依赖，未引入第三方运行时服务、浏览器外部请求或用户数据处理。#8 继续归 #16 并保持开放；相邻 `file-safety.ts` 风险由独立 [#55](https://github.com/lyty1997/AxialMuseWebsite/issues/55) 跟踪，不属于 #46 的遗留缺陷。
 
 ## 2026-07-24 — dev 分支代码审查（#46）、二次复核与拆解
 
