@@ -27,10 +27,7 @@ export const NPM_VERSIONS_BY_ROLE = Object.freeze({
 export const RUN_SCRIPT_COMMANDS = Object.freeze({
   quality: Object.freeze(["node scripts/quality/run-quality.mjs"]),
   typecheck: Object.freeze(["tsc --noEmit"]),
-  test: Object.freeze([
-    "node --test tests/build/run-isolated-npm.test.mjs tests/build/deterministic-spdx.test.mjs tests/build/supply-chain-audit-report.test.mjs tests/build/supply-chain-audit.test.mjs tests/build/supply-chain-candidate-review.test.mjs tests/build/supply-chain-download.test.mjs tests/build/supply-chain-dual-endpoint-ci.test.mjs tests/build/supply-chain-final-admission.test.mjs tests/build/supply-chain-final-admission-runner.test.mjs tests/build/supply-chain-generation.test.mjs tests/build/supply-chain-notices.test.mjs tests/build/supply-chain-policy.test.mjs tests/build/supply-chain-review-report.test.mjs tests/build/supply-chain-tarball.test.mjs",
-    "node scripts/quality/run-tests.mjs",
-  ]),
+  test: Object.freeze(["node scripts/quality/run-tests.mjs"]),
   build: Object.freeze(["node scripts/build/build-site.mjs --mode production"]),
   "check:artifact": Object.freeze(["node scripts/quality/check-artifact.mjs"]),
 });

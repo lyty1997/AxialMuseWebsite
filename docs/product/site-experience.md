@@ -1,7 +1,7 @@
 # 主站体验与内容架构
 
 状态：active
-最近更新：2026-07-19
+最近更新：2026-07-22
 适用范围：M0-M2 主站定位、信息架构、内容模型、页面体验与 SEO
 
 ## 目的
@@ -183,7 +183,7 @@ classification:
 
 `published` 与 `archived` 项目必须恰有一个正文入口和一个 `previewImage`；`draft` 与 `planned` 可以在准备期没有正文和预览，不会产生生产路由，也不得用占位图满足字段。单对象本身就是主预览选择规则，不增加 `primary`、顺序、公开 URL、审核布尔值或内容哈希副本。主预览固定为非动画 WebP、1600 x 1000、最多 300,000 bytes；扩展名、文件签名、动画状态、实际尺寸和登记尺寸必须一致，`alt` 去除首尾空白后不得为空、包含换行或与项目标题/摘要完全相同。
 
-正文创建前，当前两个项目分别由 `docs/projects/docrestore-experience.md` 的“主站叙事迁移源（过渡）”和 `docs/projects/vibecoding-project-scaffold.md` 的“主站内容契约”临时拥有叙事。创建目标正文的同一提交必须人工移动并审核内容，把原过渡章节替换成正文链接；迁移前后任一时刻只允许一个可编辑叙事来源。`projects.json` 旧有同名字段删除后不得作为迁移输入重新生成。项目正文同目录素材放在 `assets/`；主预览原件放在 `site-assets/projects/<project-id>/`，始终公开的全站资源放在 `static-public/`，二者均由 E-008 的受控构建入口投影，不能直接配置为未过滤的项目素材目录。体验 URL 与运行状态只从 `project-experiences.json` 派生；只有对应条目为 `live` 且健康检查通过时显示入口，不在项目注册表复制在线布尔值、体验 URL 或体验状态。
+当前两个项目的唯一叙事正文分别位于 `site-content/projects/docrestore/index.md` 和 `site-content/projects/vibecoding-project-scaffold/index.md`；原过渡章节已经在创建正文的同一变更中替换为正文链接，迁移前后只保留一个可编辑叙事来源。`projects.json` 旧有同名字段删除后不得作为迁移输入重新生成。项目正文同目录素材放在 `assets/`；主预览原件放在 `site-assets/projects/<project-id>/`，始终公开的全站资源放在 `static-public/`，二者均由 E-008 的受控构建入口投影，不能直接配置为未过滤的项目素材目录。体验 URL 与运行状态只从 `project-experiences.json` 派生；只有对应条目为 `live` 且健康检查通过时显示入口，不在项目注册表复制在线布尔值、体验 URL 或体验状态。
 
 ### 技术分享 Writing
 

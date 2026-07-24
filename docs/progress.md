@@ -4,6 +4,112 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-24 — #46 逐项收口与远端闭环（完成）
+
+- **主题**：逐项实现、复核并验收 #46 的原生子 Issue；不把 #8 或相邻未列风险暗中并入本轮。
+- **用户授权**：
+  - 允许在任务私有 `/tmp` 副本中通过 E-010 联系官方 npm registry，以冻结 lock、禁用 lifecycle scripts 和 audit 的方式安装既有依赖；允许在需要时从 Node.js 官方源下载并校验既定最低端点 Node `24.16.0`，在主/最低端点运行同一测试、类型检查和 production build。不得修改 manifest/lock，不在仓库根创建 `node_modules/`，结束后清理任务副本。
+  - 上述验收全绿后，允许提交并推送到 `origin/dev`，观察精确提交 SHA 的 CI，向 #47–#52、#54、#49 和父 #46 回填证据并完成关闭处置；#53 保持 `not planned`，#8 保持在 #16 路线中。
+  - 允许把本轮独立审计确认的相邻 operation/close 双故障错误保真风险建立为不挂 #46 的后续 Issue；本轮不暗中修改这些相邻路径。已据此建立 [#55](https://github.com/lyty1997/AxialMuseWebsite/issues/55)，只跟踪 `file-safety.ts` 两个共享同一不变量的安全读取事务边界。
+- **已完成的本地证据**：
+  - #47 经五轮对抗审计收口；最后一轮额外发现并修复 `debugger`、无分号 static import/named export、无 initializer `let|var` 及 async/generator object method 的 slash-goal 结束态。模块门禁 36/36、真实 49 个 TypeScript 文件、`check:js` mutation 和 5 种换行形态组成的 80/80 独立合法样例通过；仍有词法歧义的受控子集外输入稳定报 `MODULE_BOUNDARY_PARSE`，不再静默吞掉模块 token。
+  - #48–#52、#54 的正常与反例 fixture 已实现并独立复核；Node 24 补充运行时验证分别为 32/32、15/15、34/34。
+  - E-010 隔离 `quality` 总入口通过，供应链静态闭包仍为 1,225 项；仓库根无 `node_modules` 或构建锁。
+  - 任务私有副本已按 E-010 从官方 registry 完成冻结安装；Node `24.18.0` / npm `11.16.0` 与最低 Node `24.16.0` / npm `11.13.0` 对同一工作树分别通过完整 `quality`、严格 `typecheck`、209/209 测试与 production `build`。两端隔离入口均报告官方 registry、全新缓存和隔离配置，安装前后 `package.json` 与 lockfile SHA-256 精确一致；仓库根仍无 `node_modules` 或构建锁。
+- **远端闭环**：
+  - 实现提交 `c766279a16ec8aa4b4204bd13c5c30b4e4d0dcf5` 已只推送到 `origin/dev`；精确 SHA 的 GitHub Actions run [30099114683](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/30099114683) 为 `completed/success`，`Website quality gates` 与 `Diagram compile check` 均成功。
+  - #47–#52、#54 已分别回填独立正常/反例、双 Node、提交与 CI 证据并以 `completed` 关闭；#53 保持 `not planned`。GraphQL 读回确认 #46 的 8 个原生子项已 8/8 完成处置，父 [#46](https://github.com/lyty1997/AxialMuseWebsite/issues/46) 随后以 `completed` 关闭。
+- **完整性与后续**：本轮未新增、升级或删除依赖，未引入第三方运行时服务、浏览器外部请求或用户数据处理。#8 继续归 #16 并保持开放；相邻 `file-safety.ts` 风险由独立 [#55](https://github.com/lyty1997/AxialMuseWebsite/issues/55) 跟踪，不属于 #46 的遗留缺陷。
+
+## 2026-07-24 — dev 分支代码审查（#46）、二次复核与拆解
+
+- **主题**：对 `dev` 相对 `main`（7 提交、89 文件、HEAD `91dd3c7`）做代码审查，并逐条对照 `docs/`、真实输入闭包和可达错误路径二次复核；本次只修订跟踪口径和文档，未改源码。
+- **完成内容**：
+  - **审查方法**：6 个 finder 分角度扫描得 60 候选 → 每个 `(file,line)` 派独立 verifier 复核 → 53 项存活、7 项驳回；再对存活项逐条对照设计真相源。只读代码、不查设计的第一轮在本仓容易把 D-075 分层隔离、D-077 零依赖和 E-016 防漂移形态误判为缺陷，后续审查必须保留设计核对。
+  - **二次复核结论**：原“10 项待修缺陷”更正为 **7 项真实缺陷 + 3 项澄清/维护议题**；21 项既定设计的非缺陷结论不变。复核期间另确认 `production-artifact-check.ts:187` 在 operation/close 双故障时丢弃主错误，单建 [#54](https://github.com/lyty1997/AxialMuseWebsite/issues/54)。因此 [#46](https://github.com/lyty1997/AxialMuseWebsite/issues/46) 当前共跟踪 **8 项确认缺陷，其中 1 项为原清单外的后续发现**。
+  - **GitHub 处置**：#47–#54 已建立为 #46 的原生子 issue。原清单 7 项缺陷由 #47（覆盖原第 1/7/8 项）、#48、#50、#51、#52 跟踪；#54 跟踪后续独立缺陷。#49 改为低优先级 `enhancement` / hardening；#53 撤回与 HTML 无关的 `spec:401` 依据，改为 `enhancement + question`，不再执行旧“直接合并为单实现”决定；#8 已有父 issue #16，继续用评论与 #46 交叉链接，并把版本级 `noIndex` 澄清为 preview 实现期集成选择，最终制品全页 noindex 且无 sitemap 才是 E-009 验收。
+  - **保留的既有决定**：#48 上限取 2048（登记侧复用 `MAX_SOURCE_FILES`）；`deepFreeze`/摘要长度帧去重接受现状；第四节 18 项轻微清理整体推迟，`loader.ts:333` 明确不修。
+  - **文档**：本条 progress 已按二次复核口径更正；`docs/operations/maintenance.md` 的“构建锁残留”人工恢复步骤保留，锁语义仍是 E-016 既定设计。
+- **遗留项**：
+  - 必修缺陷尚未实现，可按 #47 → #51/#54 → #52 → #50 → #48 逐个闭环；#49/#53 不阻塞，#53 是否做共享 tokenizer/event 层维护重构仍需另行确认。
+  - #8 仍按既有 roadmap / blocked-by 推进真实 preview；不得把版本 metadata 断言替代最终制品验收。
+  - CI 未运行目标 Node 24 `.test.ts` 与真实 `build` 属已声明的迁移前状态，由 #32 跟踪，卡在 GitHub Actions/CI 外部接线授权，不计为本分支新缺陷。
+
+## 2026-07-23 — #7 远端闭环与 #26 本地实现/验收中
+
+- **#7 关闭证据**：I-12 精确提交 `7f2115d9f1dc5396ca0c81fc9960223644d79725` 已只 push 到 `origin/dev`；该 SHA 的 GitHub Actions run `29950131762` 为 `completed/success`。逐条脱敏验收已写入 [GitHub #7 评论](https://github.com/lyty1997/AxialMuseWebsite/issues/7#issuecomment-5050422648)，Issue 随后以 `completed` 关闭。
+- **语义压缩与依赖链**：#26 只继承 #7 已验证的 production/preview 静态素材计划、受控构建上下文、未发布正文素材私有快照接口和目的限定的 production 泄漏判定；#26 原子拥有单一 docs 实例、真实内容扫描、frontmatter 投影、侧栏、日期索引、global data 与 production Docusaurus 装配。#8 继续独占 preview `build --dev`、全站 noindex、无 sitemap 和持久候选激活，#33 独占 release 身份、整树摘要与封装。
+- **E-016 current-only 实例**：#26 本地实现以 `site-content/` 为唯一 docs 物理根、`routeBasePath: "/"`，选项精确为 `includeCurrentVersion: true`、`onlyIncludeVersions: ["current"]`、`tags: false`。不得使用 `disableVersioning: true`；Docusaurus 3.10.2 在没有版本清单时会拒绝该组合。扫描器同时拒绝 version roots、localized 第二内容根和 category metadata，不能用条件 `docs:false`、占位文档、额外实例或框架默认推断绕过。
+- **公共装配契约**：`src/build/content/index.ts` 只公开 `loadValidatedContent`、`createParseFrontMatter`、`createSidebarItemsGenerator` 与 `createContentDataPlugin`；根侧栏稳定名称为 `projectsSidebar`、`writingSidebar`，安全 global data 键为 `projectNavigation`、`writingNavigation`。日期索引只在 browser bundle 完成后的本地插件 `postBuild` 中，以私有临时普通文件写入并原子 rename 到本次 `generatedFilesDir/axial-muse/article-date-index.json`；独立 checker 再按 fresh session 的同一投影逐字节核对。它不能进入最终 `build/`、global data、公开 route 或浏览器 bundle。
+- **三阶段 production build**：受控入口在仓库级独占锁内依次完成“候选 Docusaurus build → 候选路径 fresh checker → 可回滚切换并在最终 `build/` 路径再次 fresh verify”。两次 checker 都创建全新 session、重新扫描并核对同一输入摘要；该摘要域分隔合并内容批次与全部公开/未发布静态计划语义、长度和字节摘要，不会在非公开预览换字节后放行旧字节候选。切换不是 POSIX 单 syscall 目录交换。commit point 前任一步失败都恢复调用前的有效 `build/` 或原先不存在状态，并把失败候选移入唯一 retired/quarantine 隔离路径；retired 只能在下一次取得锁后、任何新改动前回收。该流程不生成 #33 的 release 身份、摘要或封装。
+- **当前本地验收**：Node `24.18.0` / npm `11.16.0` 与最低 Node `24.16.0` / npm `11.13.0` 已对最终同一快照通过严格 `typecheck`、13 个 TypeScript 测试 source、203/203 个逻辑子测试、完整 `quality`、49 个 TypeScript 文件的模块边界和真实 Docusaurus production build。当前两个 `planned` 项目正文可在不伪造公开 doc、路由或 sitemap 项的前提下完成装配。独立全新 fixture 再以两个公开项目、两篇公开文章和一篇 draft 文章证明 4 条唯一详情路由、两组精确侧栏、4 个 canonical、首页加 4 个详情的 5 项 sitemap、每项目唯一且属性精确的 SSR `<img>`、公开 WebP 源/制品哈希一致、browser global data 只有公开 docs 且 `draftIds: []`、五类 draft token 零泄漏，以及权限 `0600` 且未进入 `build/` 的私有日期索引；最终 fixture build 整树 SHA-256 为 `d240e69ba15e16b3c5a2bb8ad76601339242fb5e43a7ad64a39236acf4d82b75`。重复文章 slug 与缺失公开项目预览均失败关闭并保持旧 build 的摘要和 inode；final verify 建 plan 后对物理静态树改字节、增成员、删成员的确定性 seam 也全部以 `STATIC_ASSET_SOURCE_DRIFT` 拒绝并保留旧 build。PlantUML 3 个源码块编译通过，三份 SVG 重新渲染逐字节无需更新。本节不宣称 #26 已提交、push、取得远端 CI 成功或关闭 Issue。
+- **完整性与遗留**：#26 未新增依赖、第三方运行时服务、浏览器外部请求或用户数据处理；最终独立只读审查无 P0/P1/P2。精确提交、`origin/dev` push、精确 SHA CI、验收评论与 Issue 状态仍须在真实发生后完成。
+
+## 2026-07-23 — #6 远端闭环与 #7 本地验收历史快照（后续已远端闭环）
+
+- **#6 关闭证据**：I-11 精确提交 `8d926ea43e92b4cd49e4a1d541f52105075acf1a` 已只 push 到 `origin/dev`；该 SHA 唯一 push CI run `29939606613` 为 `completed/success`，`Website quality gates` 与 `Diagram compile check` 全部成功。双 Node、46/46 子测试、类型与质量证据及 #7 的同次私有字节快照交接已写入 GitHub #6，Issue 于 2026-07-22T16:51:59Z 以 `completed` 关闭；任务临时安装、运行时、WebP 样本与评论草稿随后已清理。
+- **#7 当时的依赖与边界**：语义压缩后只继承已验证 `ProjectCatalog`、`validateProjectMedia` 六字段投影和扫描适配同次读取的私有字节快照；当时活动链为 `#6 -> #7 -> #26`。#7 拥有 production/preview 白名单计划、私有临时树与目的限定的 production 素材泄漏判定；#26 拥有共享双模式内容扫描/投影 API、唯一 docs 实例基础装配和 production Docusaurus 接线，#8 消费这些共享结果完成 preview Docusaurus、持久候选与原子切换，#33 独占 release 封装与整树摘要。
+- **I-12 工程决定**：原设计无法仅从任意新字节的视觉语义自动判断 `static-public/` 是否误放项目素材。为使“显式登记”可证伪，新增空的 `docs/contracts/static-public-assets.json`，目录文件与登记必须一一对应，角色封闭为 `brand|operational`；再以保留 namespace 和项目/未发布正文素材同字节反查捕获可机械证明的误放。该机制不批准真实素材，也不替代入 Git 前的真实性、凭证、隐私和版权审核。
+- **I-12 实现与定向验收**：新增受版本约束的始终公开素材登记、production/preview 不可复用的 `BuildContext`、一次性静态素材计划、私有 byte snapshot、受控物化，以及只产出逐文件路径/长度/SHA-256、未发布泄漏和 SSR 引用证据的 production 素材检查。两个静态素材定向测试文件 70/70 证明 production 只含公开项目、preview 含全部登记预览且输出目录隔离；已执行反例覆盖输入 Proxy/accessor/sparse 漂移、源路径 symlink/realpath/非普通文件/hardlink/大小写、`static-public` 登记闭合与保留 namespace、浏览器丢弃的伪图片 token，以及 production 素材缺失、多余、改字节、未发布 path、跨 64 KiB 分块的改名同字节和通用 draft 文章素材。工作树中的登记当前为空，且未批准任何真实素材；这项仓库事实不冒充带真实素材的正常路径验收。
+- **当时的双端点验收**：任务私有候选通过 E-010 从官方 npm registry 冻结安装 1,298 个包且未执行 lifecycle script。Node `24.18.0` / npm `11.16.0` 与最低 Node `24.16.0` / npm `11.13.0` 对当时最终同一代码均通过 9 个 TypeScript source、118/118 子测试、严格 `typecheck` 和完整 `quality`，模块边界覆盖 29 个 TypeScript 文件。两端 production `build` 当时都精确以 `BUILD_PIPELINE_INCOMPLETE` 退出 1，证明 #26 接线前没有静默忽略正文或提前发布素材；该失败码不是 #26 当前本地实现状态。
+- **完整性与后续状态**：当时未修改依赖、lockfile、workflow、发布封装或真实内容，也未引入第三方运行时服务、浏览器请求或用户数据处理。依赖边界、代码缺口与 SSR/私有字节对抗三路最终只读审计均无 blocker；#7 后续已按本文件顶部证据完成提交、`origin/dev` push、精确 SHA CI、脱敏验收回填与关闭，#26 已在语义压缩后启动。
+
+## 2026-07-23 — #5 远端闭环与 #6 本地验收闭环
+
+- **#5 关闭证据**：I-10 精确提交 `d4a92ad9b6a024fdf42f5cd35efec5847a15fadb` 已 push 到 `origin/dev`；该 SHA 的 GitHub Actions run `29931912784` 于 2026-07-22 完成，`Website quality gates` 与 `Diagram compile check` 均为 `success`。逐条脱敏验收和下游交接已写入 GitHub #5，Issue 于 2026-07-22T15:13:55Z 以 `completed` 关闭。
+- **语义压缩与依赖链**：#6 只继承 #23 的已验证 `ProjectCatalog`、主预览登记字段、稳定 issue 和全有或全无结果，以及 #5 当前两个 `planned` 项目无预览/无素材的真实基线；不继承两项任务的临时安装诊断。活动依赖链收敛为 `#6 -> #7 -> #26`。#7 必须消费已验证 catalog、媒体投影和扫描适配同次安全读取后独占的私有字节快照，不得在校验成功后按路径重读；#26 继续原子拥有唯一 docs 实例、真实扫描、投影、侧栏、路由和构建装配。
+- **I-11 公共契约与实现**：新增纯领域 `validateProjectMedia({catalog,sources})`、`ProjectMediaSourceInput`、`ProjectMediaValidationInput` 和稳定深冻结 `ProjectPreviewAsset[]`。完整乱序清单逐项闭合登记路径、缺失、孤儿、重复候选、重复登记、跨项目、路径逃逸、大小写、符号链接、realpath 和普通文件事实；成功结果只投影项目 ID、登记路径、`/assets/<sourcePath>`、1600 x 1000 和 alt，不读文件系统、不回写注册表，也不实现 #7 白名单或 #26 Docusaurus 装配。
+- **metadata-first 与字节边界**：扫描输入先提交路径和三项文件事实；只有已证明非符号链接、真实路径在素材根内且为普通文件时才要求同次读取的真实 `Uint8Array`，危险候选必须省略字节，意外携带会失败。属性先通过一次 descriptor 快照拒绝 accessor、非枚举、未知/symbol 和 Proxy trap；TypedArray 使用内建 tag/长度支持跨 realm 真值，300,000 bytes 上限在分配复制前执行，DataView 伪造、revoked Proxy 和超限输入均失败关闭。
+- **WebP 与逐条反例**：零依赖解析验证精确 RIFF/WEBP 长度、完整 chunk 遍历、零 padding、唯一静态 VP8/VP8L bitstream、VP8X 首位/保留位/画布、动画标志与 `ANIM`/`ANMF`，并要求非空压缩数据、VP8X 与内部 bitstream 尺寸一致、实际尺寸等于登记值。真实 VP8、VP8L、VP8X 正常路径和当前真实空素材基线通过；header-only、截断、非法长度、重复 bitstream、动画、尺寸冲突、300,001 bytes、危险 symlink 和失败无部分结果均有定向 fixture，完整输出六字段逐项等值且深冻结。
+- **双端点验收**：任务私有候选通过 E-010 从官方 npm registry 冻结安装 1,298 个包且未执行 lifecycle script。Node `24.18.0` 与最低 Node `24.16.0` / npm `11.13.0` 对最终同一字节均通过 7 个 TypeScript source、46/46 subtests、严格 `typecheck` 和完整 `quality`；模块边界覆盖 19 个 TypeScript 文件。最低 Node 官方归档为 `31,428,548` bytes，SHA-256 精确为 `d804845d34eddc21dc1092b519d643ef40b1f58ec5dec5c22b1f4bd8fabde6c9`，单顶层、完整运行时树和精确 Node/npm 身份均由仓库检查器复核。两端 production build 都精确以 `BUILD_PIPELINE_INCOMPLETE` 退出 1，证明 #6 未越界吞掉真实正文或提前接管 #26。
+- **审计、完整性与遗留**：媒体解析/输入对抗审计和下游范围/TOCTOU 审计复审后均无 P0/P1/P2 或 blocker；当前两个真实项目仍为 `planned`，未新增预览登记或真实素材。工作区与候选的 `package.json`、lockfile、dependency policy/admissions/license evidence、SBOM/evidence 和 `THIRD_PARTY_NOTICES` 摘要逐项一致；仓库根无 `node_modules`/build/dist，候选无 build/dist。未新增、升级或删除依赖，未引入第三方运行时服务、浏览器请求或用户数据处理。#6 当前尚待单一提交、仅 `origin/dev` 推送、精确 SHA CI 成功、脱敏回填与关闭；完成语义压缩前不启动 #7。
+
+## 2026-07-22 — #23 远端闭环与 #5 本地验收闭环
+
+- **#23 关闭证据**：I-06 精确提交 `49a97bf55e69119b31b03e309fe117c04b767f31` 已 push 到 `origin/dev`；该 SHA 的 GitHub Actions run `29925256721` 于 2026-07-22T13:44:57Z 完成，`Website quality gates` 与 `Diagram compile check` 均为 `success`。逐条脱敏验收和下游接口已写入 GitHub #23，Issue 于 2026-07-22T13:47:53Z 以 `completed` 关闭；关闭顺序经再次核对为 CI 成功、验收评论、Issue 关闭。
+- **语义压缩与依赖链**：#5 只继承 #23 的结构化解码、路径分类、`validateProjectCatalog`、稳定 `ContentIssue` 和全有或全无结果，不继承其临时安装诊断。#5 与 #6 在依赖图上可并行，但按 D-092 保持逐 Issue 串行；当前链为 `#5 + (#6 -> #7) -> #26`。#26 仍原子拥有唯一 docs 实例、真实扫描、只读投影、侧栏、路由与构建装配；其远端闭环并语义压缩后，启动 #27 前必须按 D-091 提醒切换到 Codex Desktop。
+- **I-10 唯一正文迁移**：创建 `site-content/projects/docrestore/index.md` 与 `site-content/projects/vibecoding-project-scaffold/index.md`，正文从 H2 开始且不含 frontmatter、H1、项目 ID、摘要、状态、日期、仓库或路由字段，只拥有问题、能力与架构、关键取舍、当前限制、证据说明和复盘。DocRestore 的处理链、源码优先和素材未完成边界完整迁移；VibeCoding Project Scaffold 的初始化、文档/Agent 规则、零第三方依赖质量基线、CI 与 Git hooks、框架中立取舍和 Apache License 2.0 事实完整迁移，未补写未经确认的许可证动机。两个原设计文档的过渡叙事已在同一变更中替换为正文相对链接，产品体验与 M0 实现 Spec 也同步改为迁移完成状态；`projects.json`、四份注册表、项目状态、日期和素材字段均未改变。
+- **定向正常路径与反例**：新增 I-10 仓库级测试，以当前四份注册表和精确两份正文调用 #23 公共领域入口，得到唯一 `projectId`/路径映射；迁移事实锚点与两个链接所有权章节逐项通过。恢复 `problem`、`decisions` 或 `evidence` 会逐字段命中 `CONTENT_PROJECT_FIELD_UNKNOWN` 且不返回 `value`；frontmatter、H1、孤儿正文和 `.md`/`.mdx` 双入口分别稳定失败。主、最低 Node 的统一 `npm test` 均为 6 个 TypeScript source、35/35 subtests，其中 I-10 定向 4/4；真实冻结 `@docusaurus/utils@3.10.2` 解析探针在两端都得到 `registries=4 projectSources=2`。
+- **双端点与 fail-loud 构建验收**：任务私有候选按唯一 lock 通过 E-010 从官方 npm registry 冻结安装 1,298 个包，未执行 lifecycle script。Node `24.18.0` 与最低 Node `24.16.0` / npm `11.13.0` 均通过同一 `test`、严格 `typecheck` 和完整 `quality`；统一门禁关键计数为 E-010 58/58、E-011 41/41、E-012 runner 10/10、module boundary 16/16、decoder 14/14。最低 Node 归档从仓库固定的 Node.js 官方 HTTPS URL 直连下载并显式绕过作者环境代理，大小 `31,428,548` 字节、SHA-256 `d804845d34eddc21dc1092b519d643ef40b1f58ec5dec5c22b1f4bd8fabde6c9`，再由仓库加固入口复核摘要、归档布局、运行时树和身份。两端 production build 都以 `BUILD_PIPELINE_INCOMPLETE` 退出 1，这是 #5 的预期通过条件：真实正文在 #26 接线前不得被静默忽略或提前发布。
+- **完整性与遗留**：验收前后 `package.json`、lockfile、admissions、license evidence、`THIRD_PARTY_NOTICES` 和 SBOM SHA-256 精确一致；仓库根没有 `node_modules`、顶层 build、dist 或测试 emit，候选也未产生 build/dist。未新增依赖、第三方运行时服务、浏览器请求或用户数据处理。内容事实/所有权审计与契约/测试综合审计均无 blocker；#5 当前尚待单一提交、仅 `origin/dev` 推送、精确 SHA CI 成功、脱敏回填与关闭，在此之前不启动 #6。
+
+## 2026-07-22 — #11 远端闭环与 #23 本地验收闭环
+
+- **#11 关闭证据**：I-05 精确提交 `ca10de5318543b89dd829db24ed2a646c6535a12` 已 push 到 `origin/dev`；该 SHA 的 GitHub Actions run `29913247834` 为 `completed/success`，脱敏验收与 #23 交接已写入 GitHub #11，Issue 以 `completed` 关闭。关闭后本地 `dev` 与 `origin/dev` 一致，工作树干净；进入 #23 前已完成语义压缩。
+- **依赖与职责复核**：#23 blocked-by #11，并阻塞 #5/#6/#12/#25。固定 Docusaurus `3.10.2` 已实证拒绝零文档实例，而首批真实项目正文属于 #5 且 #5 又依赖 #23；因此 I-06 只实现无文件系统 I/O 的内容门禁，不用占位文档、第二内容根或条件 fallback 伪造 docs 已接线。依赖链修正为 `#23 -> (#5 + #6 -> #7) -> #26`，由 #26 原子启用唯一 `site-content/` docs 实例、真实扫描、投影、侧栏与路由构建装配。
+- **I-06 实现**：新增统一 frontmatter/JSON 解码边界、稳定脱敏 `ContentDecodeError`、仓库相对 POSIX 路径规范化与显式 symlink/realpath 分类，以及项目目录和整批文章领域校验公共入口。注册表、项目、主预览、文章状态日期、作者/主题/项目/模块引用、关系、推荐、修订、来源和项目 `relatedWriting` 都按闭集 schema 聚合校验；任一问题都只返回确定性排序、去重且脱敏的 `ContentIssue`，不返回部分 value。成功对象按稳定键排序并深冻结，不读取文件系统、时间或随机数，也不调用下游投影。结构化 parser 的原始异常按 CODE-003 的窄安全例外替换为无堆栈通用 cause，稳定 code 与脱敏相对路径继续保留。
+- **逐条与安全反例**：领域 fixture 覆盖完整合法 planned/published 项目、draft/public 文章、乱序确定性、四类注册表 envelope、未知字段、重复 ID/slug/source、缺失与悬空引用、项目/模块不一致、状态日期、视频三元组、preview、SEO、推荐、关系、revisions、sources、项目正文 frontmatter/H1、路径逃逸、绝对路径、symlink/realpath 和失败无 value。跨批 probe 既聚合可独立检测的重复/冲突，又不把无效成员制造成虚假悬空级联；恶意 key、Map/Date/Proxy、revoked trap、控制字符、非规范 URL/站内路径、typed-array brand/长度伪造和临时绝对路径不会绕过 schema 或进入 field/source/message/stack。H1 线性状态机覆盖有序 quote/list container、fence、HTML block/inline comment、匹配与未匹配跨行 code span、缩进代码和 paragraph continuation。
+- **真实解码与双端点验收**：任务私有 `/tmp` 候选通过 E-010 从官方 npm registry 冻结安装 1,298 个包；真实冻结 `@docusaurus/utils` 的默认解析器完成嵌套 YAML 正向、malformed YAML 脱敏反例，以及带引号日期保留为 string、未加引号 YAML timestamp 以 `CONTENT_FRONTMATTER_SHAPE` 失败的公共动态导入回归。最终快照在 Node `24.18.0` 与官方固定摘要 `d804845d34eddc21dc1092b519d643ef40b1f58ec5dec5c22b1f4bd8fabde6c9` 的 Node `24.16.0` 上均通过同一 `npm test`（5 个 TypeScript source、31/31 subtests）、严格 `typecheck`、完整 `quality` 和 production `build`；两端统一质量入口均通过 decoder 14/14、E-010 58/58、E-011 41/41、E-012 runner 10/10、模块边界 16/16 与既有回归。
+- **完整性与遗留**：验收前后候选与工作区的 `package.json`、lockfile、admissions、license evidence、`THIRD_PARTY_NOTICES` 和 SBOM SHA-256 精确一致，仓库根没有 `node_modules`、build、dist 或测试 emit；未新增依赖、第三方运行时服务、浏览器请求或用户数据处理。D-089 授权的临时测试与 D-090 授权的单提交、仅 `origin/dev` 推送和精确 SHA CI 跟踪已经记录；#23 在远端成功、Issue 回填/关闭和语义压缩前仍不解锁下游。按 D-091，#26 完成同样闭环后、#27 启动前提醒用户切换到 Codex Desktop。
+
+## 2026-07-22 — #22 远端闭环与 #11 本地验收闭环
+
+- **#22 关闭证据**：I-04 精确提交 `7cb529c1a68bd1979d8a9b9b6ba8731dc2fe49100` 已 push 到 `origin/dev`；该 SHA 唯一相关的 GitHub Actions push run `29907159529` 为 `completed/success`，`Website quality gates` 与 `Diagram compile check` 的全部步骤均成功。脱敏验收与 #11 交接已写入 GitHub #22，Issue 以 `completed` 关闭；本地 `dev`、`origin/dev` 和工作区在关闭后均一致且干净。
+- **语义压缩**：#11 只继承 #22 的生产 `tsconfig`、显式 `.mjs` ESM 边界、目录层图、公共入口、稳定错误码和 quality 接线；#22 的 npm 安装诊断、Docusaurus 兼容排查及临时构建过程不再作为活动上下文。依赖链固定为 `#22 -> #11 -> #23`，#23 在本项闭环前保持阻塞。
+- **I-05 开工决定**：TypeScript 官方 NodeNext 语义要求普通 `.ts`/`.tsx` 从最近祖先 `package.json#type` 判定 module format；根 manifest 又必须为 I-04 保持无 `type`。因此 E-012 使用精确的 `src/package.json` 与 `tests/package.json` 局部 ESM 源码边界，临时 emit 根另写同样的两键 package；不恢复根 module type，不改变 manifest 依赖、lockfile、Docusaurus 生成目录或浏览器边界。
+- **I-05 验收授权**：D-087 允许在任务专用临时副本中通过 E-010 联系官方 npm registry 做冻结安装，并从 Node.js 官方源下载、校验仓库固定摘要的最低端点 Node `24.16.0`。授权只覆盖主/最低端点同负载、约定反例、`typecheck`、production `build` 与清理验收；不包含 Git、CI 或 Issue 写操作。
+- **I-05 实现**：新增独立 `tests/tsconfig.json`、局部 ESM package 边界、`tests/domain|build` TypeScript 测试物理层、`scripts/quality/run-tests.mjs` 与唯一 `npm test` 入口；runner 只解析 lock 冻结且未逃逸 `node_modules/typescript` 的 CLI，稳定枚举测试、输出到系统私有临时目录、写入独立 ESM package 后以当前 Node `--test` 显式直跑，并在所有路径清理。模块边界与 quality 接线同步拒绝无扩展名、`.ts`、alias、目录猜测、第三方测试运行时、错误源码扩展与生产层 Node ESM 说明符漂移。真实 npm 安装暴露作者机 `umask 0002` 会合法产生 `typescript/bin/tsc` 的 `0775`；runner 因而接受组模式，仍拒绝 symlink、hardlink、world-writable 与 lock 版本漂移，避免把真实冻结安装误判为非法。
+- **双端点正向验收**：任务私有候选通过 E-010 官方 registry 冻结安装 1,298 个包且未执行 lifecycle script；固定归档 `node-v24.16.0-linux-x64.tar.xz` 经仓库加固入口核对 SHA-256 `d804845d34eddc21dc1092b519d643ef40b1f58ec5dec5c22b1f4bd8fabde6c9`、单顶层布局、运行时树与精确 Node `24.16.0` / npm `11.13.0`。同一候选、同一 `npm test` 和同一 `tests/build/site-config.test.ts` 分别在 Node `24.18.0` 与 `24.16.0` 直接执行成功，明确报告 `primary` 与 `minimum`；合法 `.js` 公共入口通过 NodeNext 编译和原生 Node ESM 运行。
+- **逐条反例验收**：可恢复临时 mutation 共 9 项全部命中预期：无扩展名、`.ts`、目录猜测与 `@site` alias 均为 `TEST_PROGRAM`；直接 NodeNext 编译分别产生 `TS2835` 与 `TS5097`；空测试集为 `TEST_EMPTY`，真实类型错误为 `TEST_COMPILE`，真实失败测试为 `TEST_EXECUTION`。失败输出保留 `tests/build/site-config.test.ts` 与测试名，不包含任务临时根或 `axial-muse-tests-*`；提交内 15 项模块 fixture 与 10 项 runner fixture 共 25/25 通过，覆盖编译、emit、执行、清理、临时创建及部分创建失败，其中清理失败以 `TEST_CLEANUP` 覆盖原状态。
+- **回归与完整性**：同一全新安装上的隔离 `typecheck` 与 production `build` 均成功；最终工作树 pre-commit 在固定 nvm `0.40.6` / Node `24.18.0` 下完整通过，包含文档、Secret、6 个 TypeScript 文件的模块边界、1,225 项供应链静态闭包、E-010 58 项、E-011 41 项、runner 10 项、模块边界 15 项和全部既有回归。安装、双端点、mutation 前后 `package.json` SHA-256 均为 `7b089fd3df1b14f8c7117fa4608d895f5fb7327528281f20274df2e068ccf82c`，`package-lock.json` 仍为 `fae564f5a83ceaf4f5d57118192779a2679f5380403d0a79d33f409d75dc01aa`，NOTICE/evidence/SBOM/admissions 摘要同 #21；候选源码与主工作树摘要一致，仓库根始终没有 `node_modules`、测试 emit、build 或 dist。本项未新增第三方服务、浏览器请求或用户数据处理。
+- **Git 与远端授权**：D-088 已授权把当前 I-05 完整变更 commit 并且只 push 到 `origin/dev`，锁定精确 SHA 跟踪现有 CI；失败修复不得越出 #11，CI 成功后按 D-084 评论并关闭 #11。`main`、PR/merge、历史改写、workflow/凭证和生产操作均不在授权内；#23 在远端闭环、可恢复摘要和语义压缩完成前继续保持阻塞。
+
+## 2026-07-22 — #22 Docusaurus 与严格 TypeScript 本地验收闭环
+
+- **主题与依赖边界**：按 Roadmap 的 `#9 + #21 -> #22 -> #11` 链执行 I-04，只消费既有 `.nvmrc`、`engines.node`、唯一 lock 与 #21 准入图；没有新增、升级或删除依赖，没有修改 `package-lock.json` 或供应链制品。D-085 授权只在任务专用临时副本中通过 E-010 联系官方 npm registry 做全新冻结安装和真实构建，不在仓库根创建 `node_modules/`。
+- **完成内容**：创建继承官方基线且显式收紧的 `tsconfig.json`、类型化 `docusaurus.config.ts`/`sidebars.ts`、`site-content/projects|writing` 空物理分区、`src/build/site-config/` 公共入口和仅含已确认站点名的最小 `src/pages/index.tsx`；新增受控 production build、`typecheck`/`build`/模块边界 scripts，并把确定性零依赖检查器及 fixture 接入统一质量入口。构建上下文使用同用户私有临时根、随机标记和空静态树，拒绝直接 Docusaurus 绕过、错误 Node、preview、真实内容与静态素材提前进入；Docusaurus persistent cache 显式关闭。
+- **真实兼容收口**：实际 build 先暴露三项不能由 mock 发现的问题并按根因修复：正常 Linux 目录的 `nlink` 不能固定为 `1`，文件仍保持单链接检查；固定 docs 插件拒绝零文档，因此 I-04 使用 `docs: false` 而不伪造内容，后续依赖复核已将唯一 `site-content/` docs 实例的原子启用职责固定给真实项目正文与素材接线之后的 #26；根 `package.json#type=module` 会把固定版本生成的 `.docusaurus/client-modules.js` 改判为 ESM，使 CSS `require()` 逃逸到 SSG，因而移除该旧声明并用 `.mjs` 保持仓库 Node 脚本 ESM，检查器用 `MODULE_BOUNDARY_PACKAGE_TYPE` 防漂移。完整 `future.v4: true` 与 `future.faster: true` 保持启用。
+- **正向证据**：最终候选在全新 HOME/config/cache 下执行 `npm ci --ignore-scripts --audit=false`，从官方源安装 1,298 个包并退出 0；安装前后 `package.json` SHA-256 均为 `72e44f92feb6796c2dba26dd9cad3001d8ab6ba1189756e0351d4a0377585621`，`package-lock.json` 均为 `fae564f5a83ceaf4f5d57118192779a2679f5380403d0a79d33f409d75dc01aa`。同一全新安装上的隔离 `typecheck` 与 production `build` 均通过；产物只包含 `/`、404、sitemap 与本地 JS/CSS，根 HTML 为 `lang=zh-CN` 且标题为 `Axial Muse`，未检出远程资源标签、分析标识或 Cookie，也未产生 `node_modules/.cache`。
+- **反例与回归**：模块边界 11 项 fixture 覆盖合法公共入口以及 `paths`、根 module type、JS/JSX、深导入、`export *`、自定义别名、展示层 Node 内置模块、领域层框架依赖、版本漂移和非静态 dynamic import；构建 4 项 fixture 覆盖参数、主/最低 Node、真实内容和静态素材前置失败。直接 Docusaurus 以 `BUILD_CONTEXT_MODE`、preview 以 `BUILD_MODE_UNAVAILABLE`、系统 Node 22 以 `BUILD_RUNTIME_NODE`、检查器参数以 `MODULE_BOUNDARY_ARGUMENTS` 失败。最终 pre-commit 在 nvm `0.40.6` / Node `24.18.0` 下退出 0，文档、契约、Secret、静态站、1,225 项供应链闭包与全部既有测试均通过。
+- **下游与遗留**：#11 只能消费当前生产 `tsconfig`、显式 `.mjs` ESM 边界、目录层图、公共入口、稳定错误码和现有 quality 接线，新增独立测试 program、临时 emit runner 与 fixture；不得改变依赖图、重新启用根 package module type、启用 docs/真实内容、素材白名单、preview 或目标 workflow。D-086 已授权把本项作为完整提交 push 到 `origin/dev` 并跟踪该 SHA 的现有 CI；远端结果不得在运行完成前预先宣告，最终 SHA、run 与结论写入 GitHub #22 的脱敏验收评论。#22 在相关 run 全部成功前保持开放；未引入第三方运行时服务、浏览器请求或用户数据处理。
+
+## 2026-07-22 — 确认 Roadmap Issue 验收写回委托
+
+- **主题**：用户确认从 #21 起，允许 Agent 在每个已拆解 Roadmap Issue 真正通过独立验收后，把脱敏关闭证据与直接下游交接摘要写回对应 GitHub Issue，并以 `completed` 关闭；该委托用于支持按依赖链连续推进和每项之间的语义压缩。
+- **授权范围与验证**：每项必须先证明主要不变量、正常路径、至少一个有效反例、相关回归和该项要求的远端证据；关闭后先持久化紧凑交接摘要，再只定向重载直接上游接口、当前设计、源码、测试和工作区差异。证据不全或失败时保持 Issue 开放并停止依赖它的下游。
+- **排除项**：不授权创建或改写 Issue 范围，也不授权 commit、push、PR、merge、分支与历史操作、Action/凭证、服务器、TAT、DNS、证书、云资源或生产操作；这些仍按各自门禁单独确认。验收评论不得包含凭证、隐私、受限原始报告或其他敏感内容。
+- **当前应用**：#21 已在 Node 24 固定入口完成现态回归，并核对同 SHA 的远端 push/PR CI 成功；授权记录验证通过后先写回并关闭 #21，再以其交接摘要定向进入 #22。
+
 ## 2026-07-21 — #21 真实依赖图本地准入闭环
 
 - **主题**：用户批准 D-082 的两项精确传递 override、35 项 immutable upstream 正文、11 项同 tarball 文件区段和 12 项 exact owner exception 后，继续执行 #21 直到真实图满足完整本地验收。本条只宣告仓库实现与真实依赖图本地准入闭环；Git 提交、push、远端 CI、Issue 状态和 Action 修改均须按各自授权与实际记录独立验收，不能由本条推导。

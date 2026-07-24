@@ -8,10 +8,13 @@ node_modules/
 .pnpm-store/
 
 # Build outputs
-dist/
-build/
-!tests/build/
-!tests/build/**
+/dist/
+/build/
+/.axial-muse-build.lock
+/.axial-muse-build-retired/
+/.axial-muse-build-candidate-*/
+/.axial-muse-build-backup-*/
+/.docusaurus/
 .next/
 out/
 coverage/

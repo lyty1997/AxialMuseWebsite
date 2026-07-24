@@ -8,6 +8,7 @@ const ROOT = projectRoot();
 const CHILD_ENVIRONMENT = buildQualityChildEnvironment();
 export const QUALITY_COMMANDS = Object.freeze([
   ["scripts/quality/check-javascript.mjs"],
+  ["scripts/quality/check-module-boundaries.mjs"],
   ["scripts/quality/check-npm-isolation.mjs"],
   ["scripts/quality/check-markdown.mjs"],
   ["scripts/quality/check-contracts.mjs"],
@@ -28,6 +29,10 @@ export const QUALITY_COMMANDS = Object.freeze([
   ["--test", "tests/build/supply-chain-policy.test.mjs"],
   ["--test", "tests/build/supply-chain-review-report.test.mjs"],
   ["--test", "tests/build/supply-chain-tarball.test.mjs"],
+  ["--test", "tests/build/run-tests.test.mjs"],
+  ["--test", "tests/build/module-boundaries.test.mjs"],
+  ["--test", "tests/build/content-decoders.test.mjs"],
+  ["--test", "tests/build/build-site.test.mjs"],
 ].map((command) => Object.freeze(command)));
 
 export function runQuality() {

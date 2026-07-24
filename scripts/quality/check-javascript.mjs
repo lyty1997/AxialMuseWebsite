@@ -1,10 +1,11 @@
-import { spawnSync } from "node:child_process";
-import { relative, resolve } from "node:path";
-import { projectRoot } from "./lib/files.mjs";
-import { buildQualityChildEnvironment } from "./lib/process-environment.mjs";
+import {spawnSync} from "node:child_process";
+import {resolve} from "node:path";
+import {pathToFileURL} from "node:url";
+import {projectRoot} from "./lib/files.mjs";
+import {buildQualityChildEnvironment} from "./lib/process-environment.mjs";
 
 const ROOT = projectRoot();
-const FILES = [
+export const JAVASCRIPT_SOURCE_FILES = Object.freeze([
   "scripts/quality/lib/files.mjs",
   "scripts/quality/lib/plantuml.mjs",
   "scripts/quality/lib/process-environment.mjs",
@@ -35,6 +36,8 @@ const FILES = [
   "scripts/quality/lib/supply-chain/strict-json.mjs",
   "scripts/quality/lib/supply-chain/tarball-download.mjs",
   "scripts/quality/lib/supply-chain/tarball.mjs",
+  "scripts/content/frontmatter.mjs",
+  "scripts/content/json.mjs",
   "scripts/quality/check-javascript.mjs",
   "scripts/quality/check-npm-isolation.mjs",
   "scripts/quality/check-markdown.mjs",
@@ -44,6 +47,8 @@ const FILES = [
   "scripts/quality/check-static-site.mjs",
   "scripts/quality/check-diagrams.mjs",
   "scripts/quality/render-diagrams.mjs",
+  "scripts/quality/check-module-boundaries.mjs",
+  "scripts/build/build-site.mjs",
   "scripts/quality/generate-supply-chain-artifacts.mjs",
   "scripts/quality/review-supply-chain-candidates.mjs",
   "scripts/quality/run-dual-endpoint-ci-worker.mjs",
@@ -52,6 +57,7 @@ const FILES = [
   "scripts/quality/run-isolated-npm.mjs",
   "scripts/quality/run-supply-chain-audit.mjs",
   "scripts/quality/run-quality.mjs",
+  "scripts/quality/run-tests.mjs",
   "tests/build/deterministic-spdx.test.mjs",
   "tests/build/run-isolated-npm.test.mjs",
   "tests/build/supply-chain-audit-report.test.mjs",
@@ -67,19 +73,39 @@ const FILES = [
   "tests/build/supply-chain-policy.test.mjs",
   "tests/build/supply-chain-review-report.test.mjs",
   "tests/build/supply-chain-tarball.test.mjs",
-].map((path) => resolve(ROOT, path));
+  "tests/build/module-boundaries.test.mjs",
+  "tests/build/content-decoders.test.mjs",
+  "tests/build/build-site.test.mjs",
+  "tests/build/run-tests.test.mjs",
+]);
 const CHILD_ENVIRONMENT = buildQualityChildEnvironment();
 
-for (const path of FILES) {
-  const result = spawnSync(process.execPath, ["--check", path], {
-    cwd: ROOT,
-    env: CHILD_ENVIRONMENT,
-    stdio: "inherit",
-  });
-  if (result.error || result.status !== 0 || result.signal) {
-    console.error(`JavaScript syntax check failed: ${relative(ROOT, path)}`);
-    process.exit(1);
+export function checkJavaScriptSyntax({
+  root = ROOT,
+  spawnProcess = spawnSync,
+  standardOutput = process.stdout,
+  standardError = process.stderr,
+} = {}) {
+  for (const sourcePath of JAVASCRIPT_SOURCE_FILES) {
+    const path = resolve(root, sourcePath);
+    const result = spawnProcess(process.execPath, ["--check", path], {
+      cwd: root,
+      env: CHILD_ENVIRONMENT,
+      stdio: "inherit",
+    });
+    if (result.error || result.status !== 0 || result.signal) {
+      standardError.write(`JavaScript syntax check failed: ${sourcePath}\n`);
+      return Object.freeze({ok: false, sourcePath});
+    }
   }
+  standardOutput.write("JavaScript syntax checks passed.\n");
+  return Object.freeze({ok: true});
 }
 
-console.log("JavaScript syntax checks passed.");
+function runCli() {
+  if (!checkJavaScriptSyntax().ok) process.exitCode = 1;
+}
+
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  runCli();
+}
