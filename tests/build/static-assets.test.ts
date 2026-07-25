@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {
+import fs, {
   chmodSync,
   linkSync,
   lstatSync,
@@ -14,6 +14,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import {syncBuiltinESMExports} from "node:module";
 import {tmpdir} from "node:os";
 import {
   dirname,
@@ -24,6 +25,7 @@ import {
 } from "node:path";
 import test from "node:test";
 import {
+  formatStaticAssetError,
   prepareStaticAssetPlan,
   StaticAssetError,
 } from "../../src/build/static-assets/index.js";
@@ -31,6 +33,10 @@ import {
   assertStaticAssetPlanInputsCurrent,
   getStaticAssetPlanInputDigest,
 } from "../../src/build/static-assets/plan.js";
+import {
+  readPrivateFileSnapshot,
+  scanBuildTree,
+} from "../../src/build/static-assets/file-safety.js";
 import {
   combineContentBuildInputDigests,
   createContentBuildSealController,
@@ -60,6 +66,58 @@ const STATIC_BRAND_BYTES = Buffer.from("<svg xmlns=\"http://www.w3.org/2000/svg\
 const STATIC_ROBOTS_BYTES = Buffer.from("User-agent: *\nDisallow:\n");
 const DRAFT_ARTICLE_BYTES = Uint8Array.from([0xde, 0xad, 0xfa, 0xce, 0x01]);
 const DRAFT_ARTICLE_URL = "/writing/draft-entry/assets/private-diagram.png";
+
+type FileSystemOverrides = Partial<Pick<
+  typeof fs,
+  "closeSync" | "readSync"
+>>;
+
+let fileSystemOverridesActive = false;
+
+function withFileSystemOverrides<T>(
+  overrides: FileSystemOverrides,
+  action: () => T,
+): T {
+  assert.equal(fileSystemOverridesActive, false);
+  const originals: Required<FileSystemOverrides> = {
+    closeSync: fs.closeSync,
+    readSync: fs.readSync,
+  };
+  fileSystemOverridesActive = true;
+  try {
+    Object.assign(fs, overrides);
+    syncBuiltinESMExports();
+    return action();
+  } finally {
+    try {
+      Object.assign(fs, originals);
+      syncBuiltinESMExports();
+    } finally {
+      fileSystemOverridesActive = false;
+    }
+  }
+}
+
+function captureStaticAssetError(action: () => unknown): StaticAssetError {
+  try {
+    action();
+  } catch (error) {
+    assert.ok(error instanceof StaticAssetError);
+    return error;
+  }
+  assert.fail("expected StaticAssetError");
+}
+
+function assertAggregateCause(
+  cause: unknown,
+  operationError: Error,
+  closeError: Error,
+): void {
+  assert.ok(cause instanceof AggregateError);
+  assert.deepEqual(cause.errors, [operationError, closeError]);
+  assert.strictEqual(cause.errors[0], operationError);
+  assert.strictEqual(cause.errors[1], closeError);
+}
 
 function writeUint32LittleEndian(bytes: Uint8Array, offset: number, value: number): void {
   bytes[offset] = value & 0xff;
@@ -391,6 +449,187 @@ function materializedProduction(
     staticRoot: buildContext.context.staticDirectory,
   };
 }
+
+test("CODE-003 素材源安全读取保留 operation 与 close 双故障并清零失败快照", () => {
+  for (const failureMode of [
+    "success",
+    "operation-only",
+    "close-only",
+    "dual",
+  ] as const) {
+    const root = mkdtempSync(join(tmpdir(), "axial-muse-source-read-"));
+    chmodSync(root, 0o700);
+    const absolutePath = resolve(root, "asset.bin");
+    const expectedBytes = Uint8Array.from([0x11, 0x22, 0x33, 0x44]);
+    writeFileSync(absolutePath, expectedBytes, {mode: 0o600});
+    const operationError = new Error(`fixture ${failureMode} read failure`);
+    const closeError = new Error(`fixture ${failureMode} close failure`);
+    const realReadSync = fs.readSync;
+    const realCloseSync = fs.closeSync;
+    let capturedSnapshot: Uint8Array | undefined;
+    let closeCalls = 0;
+    let returned = false;
+    try {
+      const resultOrError = withFileSystemOverrides({
+        readSync: ((
+          descriptor: number,
+          buffer: Uint8Array,
+          offset: number,
+          length: number,
+          position: number | null,
+        ) => {
+          capturedSnapshot = buffer;
+          if (failureMode === "operation-only" || failureMode === "dual") {
+            buffer.fill(0xa5);
+            throw operationError;
+          }
+          return realReadSync(descriptor, buffer, offset, length, position);
+        }) as typeof fs.readSync,
+        closeSync: ((descriptor: number) => {
+          closeCalls += 1;
+          realCloseSync(descriptor);
+          if (failureMode === "close-only" || failureMode === "dual") {
+            throw closeError;
+          }
+        }) as typeof fs.closeSync,
+      }, () => {
+        if (failureMode === "success") {
+          const value = readPrivateFileSnapshot({
+            absolutePath,
+            realRoot: root,
+            sourcePath: "fixture/asset.bin",
+            maximumBytes: expectedBytes.byteLength,
+          });
+          returned = true;
+          return value;
+        }
+        return captureStaticAssetError(() => readPrivateFileSnapshot({
+          absolutePath,
+          realRoot: root,
+          sourcePath: "fixture/asset.bin",
+          maximumBytes: expectedBytes.byteLength,
+        }));
+      });
+
+      assert.equal(closeCalls, 1, failureMode);
+      assert.ok(capturedSnapshot);
+      if (failureMode === "success") {
+        assert.equal(returned, true);
+        assert.deepEqual(resultOrError, expectedBytes);
+        assert.strictEqual(resultOrError, capturedSnapshot);
+        continue;
+      }
+
+      assert.equal(returned, false);
+      assert.ok(resultOrError instanceof StaticAssetError);
+      assert.equal(resultOrError.sourcePath, "fixture/asset.bin");
+      const formattedError = formatStaticAssetError(resultOrError);
+      assert.equal(formattedError.includes(operationError.message), false);
+      assert.equal(formattedError.includes(closeError.message), false);
+      assert.deepEqual(capturedSnapshot, new Uint8Array(expectedBytes.byteLength));
+      if (failureMode === "operation-only") {
+        assert.equal(resultOrError.code, "STATIC_ASSET_IO");
+        assert.strictEqual(resultOrError.cause, operationError);
+      } else if (failureMode === "close-only") {
+        assert.equal(resultOrError.code, "STATIC_ASSET_SOURCE_CLOSE");
+        assert.strictEqual(resultOrError.cause, closeError);
+      } else {
+        assert.equal(resultOrError.code, "STATIC_ASSET_SOURCE_CLOSE");
+        assertAggregateCause(resultOrError.cause, operationError, closeError);
+      }
+    } finally {
+      rmSync(root, {recursive: true, force: true});
+    }
+  }
+});
+
+test("CODE-003 production 制品扫描保留 operation 与 close 双故障且不返回部分证据", () => {
+  for (const failureMode of [
+    "success",
+    "operation-only",
+    "close-only",
+    "dual",
+  ] as const) {
+    const root = mkdtempSync(join(tmpdir(), "axial-muse-build-read-"));
+    chmodSync(root, 0o700);
+    const artifactBytes = Uint8Array.from([0x51, 0x52, 0x53, 0x54]);
+    writeFileSync(resolve(root, "artifact.bin"), artifactBytes, {mode: 0o600});
+    const operationError = new Error(`fixture ${failureMode} read failure`);
+    const closeError = new Error(`fixture ${failureMode} close failure`);
+    const realReadSync = fs.readSync;
+    const realCloseSync = fs.closeSync;
+    let readCalls = 0;
+    let closeCalls = 0;
+    let returned = false;
+    try {
+      const resultOrError = withFileSystemOverrides({
+        readSync: ((
+          descriptor: number,
+          buffer: Uint8Array,
+          offset: number,
+          length: number,
+          position: number | null,
+        ) => {
+          readCalls += 1;
+          if (failureMode === "operation-only" || failureMode === "dual") {
+            throw operationError;
+          }
+          return realReadSync(descriptor, buffer, offset, length, position);
+        }) as typeof fs.readSync,
+        closeSync: ((descriptor: number) => {
+          closeCalls += 1;
+          realCloseSync(descriptor);
+          if (failureMode === "close-only" || failureMode === "dual") {
+            throw closeError;
+          }
+        }) as typeof fs.closeSync,
+      }, () => {
+        if (failureMode === "success") {
+          const value = scanBuildTree(root, [], [], []);
+          returned = true;
+          return value;
+        }
+        return captureStaticAssetError(() => scanBuildTree(root, [], [], []));
+      });
+
+      if (failureMode === "success") {
+        assert.equal(returned, true);
+        assert.equal(readCalls, 2);
+        assert.equal(closeCalls, 2);
+        assert.ok(!(resultOrError instanceof StaticAssetError));
+        assert.deepEqual(resultOrError.files, [{
+          relativePath: "artifact.bin",
+          byteLength: artifactBytes.byteLength,
+          sha256: "3205ec026521f6eef80fa45778082d83e4de532c57f0861677cb30c394c11400",
+        }]);
+        assert.equal(resultOrError.hasLeakedToken, false);
+        assert.equal(resultOrError.ssrImageReferenceIndexes.size, 0);
+        continue;
+      }
+
+      assert.equal(returned, false);
+      assert.equal(readCalls, 1);
+      assert.equal(closeCalls, 1);
+      assert.ok(resultOrError instanceof StaticAssetError);
+      assert.equal(resultOrError.sourcePath, "build/artifact.bin");
+      const formattedError = formatStaticAssetError(resultOrError);
+      assert.equal(formattedError.includes(operationError.message), false);
+      assert.equal(formattedError.includes(closeError.message), false);
+      if (failureMode === "operation-only") {
+        assert.equal(resultOrError.code, "STATIC_ASSET_IO");
+        assert.strictEqual(resultOrError.cause, operationError);
+      } else if (failureMode === "close-only") {
+        assert.equal(resultOrError.code, "STATIC_ASSET_BUILD_CLOSE");
+        assert.strictEqual(resultOrError.cause, closeError);
+      } else {
+        assert.equal(resultOrError.code, "STATIC_ASSET_BUILD_CLOSE");
+        assertAggregateCause(resultOrError.cause, operationError, closeError);
+      }
+    } finally {
+      rmSync(root, {recursive: true, force: true});
+    }
+  }
+});
 
 test("I-12 静态输入摘要双模式确定并绑定字节、路径与可见性处置", () => {
   const repositoryRoot = createRepositoryFixture();
