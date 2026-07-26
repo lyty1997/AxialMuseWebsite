@@ -245,6 +245,66 @@ test("D-075 合法公共入口、框架默认导出与官方展示别名通过",
   });
 });
 
+test("CODE-005 展示层只允许精确官方入口与同路径 theme-original 包装", () => {
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "src/pages/Home.tsx",
+      [
+        "import Head from \"@docusaurus/Head\";\n",
+        "import Link from \"@docusaurus/Link\";\n",
+        "import {useLocation} from \"@docusaurus/router\";\n",
+        "import useDocusaurusContext from \"@docusaurus/useDocusaurusContext\";\n",
+        "import {usePluginData} from \"@docusaurus/useGlobalData\";\n",
+        "export default function Home() {\n",
+        "  void useLocation; void useDocusaurusContext; void usePluginData;\n",
+        "  return <Head><Link to=\"/\">fixture</Link></Head>;\n",
+        "}\n",
+      ].join(""),
+    );
+    writeFixture(
+      root,
+      "src/theme/DocItem/Content/index.tsx",
+      "import Original from \"@theme-original/DocItem/Content\";\nexport default function Content() { return <Original />; }\n",
+    );
+    assert.deepEqual(checkModuleBoundaries({root}).issues, []);
+  });
+
+  for (const specifier of [
+    "@docusaurus/Head/internal",
+    "@docusaurus/Linker",
+    "@docusaurus/useGlobalData/unsafe",
+    "@theme-originally/DocItem/Content",
+  ]) {
+    withFixture((root) => {
+      writeFixture(
+        root,
+        "src/pages/Home.tsx",
+        `import value from "${specifier}";\nexport default function Home() { return <p>{String(value)}</p>; }\n`,
+      );
+      assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_CUSTOM_ALIAS"));
+    });
+  }
+
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "src/build/example/official.ts",
+      "import Head from \"@docusaurus/Head\";\nexport const value = Head;\n",
+    );
+    assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_OFFICIAL_ALIAS"));
+  });
+
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "src/theme/DocItem/Content/index.tsx",
+      "import Original from \"@theme-original/DocItem/Metadata\";\nexport default function Content() { return <Original />; }\n",
+    );
+    assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_OFFICIAL_ALIAS"));
+  });
+});
+
 test("CODE-013 根侧栏拒绝手写 doc ID 与额外 sidebar", () => {
   withFixture((root) => {
     writeFixture(
@@ -816,6 +876,63 @@ test("D-075 构建测试内部深导入 allowlist 精确绑定导入者与目标
       issue.code === "MODULE_BOUNDARY_DEEP_IMPORT"
       && issue.sourcePath === "tests/build/content-projection.test.ts"
     )));
+  });
+});
+
+test("CODE-005 零依赖展示契约测试例外精确绑定导入者与目标", () => {
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "src/components/SeoMetadata/contract.ts",
+      "export const metadataContract = true;\n",
+    );
+    writeFixture(
+      root,
+      "src/components/SiteContentData/contract.ts",
+      "export const contentContract = true;\n",
+    );
+    writeFixture(
+      root,
+      "tests/build/presentation-contract.test.ts",
+      "import {metadataContract} from \"../../src/components/SeoMetadata/contract.js\";\nimport {contentContract} from \"../../src/components/SiteContentData/contract.js\";\nvoid metadataContract;\nvoid contentContract;\n",
+    );
+    assert.deepEqual(checkModuleBoundaries({root}).issues, []);
+  });
+
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "src/components/SeoMetadata/contract.ts",
+      "export const metadataContract = true;\n",
+    );
+    writeFixture(
+      root,
+      "tests/build/example.test.ts",
+      "import {metadataContract} from \"../../src/components/SeoMetadata/contract.js\";\nvoid metadataContract;\n",
+    );
+    assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_LAYER_DIRECTION"));
+  });
+
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "src/components/SeoMetadata/contract.ts",
+      "import React from \"react\";\nexport const metadataContract = React;\n",
+    );
+    assert.ok(
+      issueCodes(root).includes("MODULE_BOUNDARY_PRESENTATION_CONTRACT_DEPENDENCY"),
+    );
+  });
+
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "src/components/SiteContentData/contract.ts",
+      "export const contentContract = document.location;\n",
+    );
+    assert.ok(
+      issueCodes(root).includes("MODULE_BOUNDARY_PRESENTATION_CONTRACT_BROWSER"),
+    );
   });
 });
 

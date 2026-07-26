@@ -51,6 +51,39 @@ const config: Config = {
       disableSwitch: true,
       respectPrefersColorScheme: false,
     },
+    navbar: {
+      title: "Axial Muse",
+      items: [
+        {to: "/projects/", label: "项目", position: "left"},
+        {to: "/writing/", label: "技术分享", position: "left"},
+        {to: "/#roadmap", label: "路线", position: "left"},
+        {to: "/#about", label: "关于", position: "left"},
+        {
+          href: "https://github.com/lyty1997",
+          label: "GitHub",
+          position: "right",
+        },
+      ],
+    },
+    footer: {
+      style: "light",
+      links: [
+        {
+          title: "Axial Muse",
+          items: [
+            {
+              label: "GitHub",
+              href: "https://github.com/lyty1997",
+            },
+            {
+              label: "沪ICP备2026029086号",
+              href: "https://beian.miit.gov.cn/",
+            },
+          ],
+        },
+      ],
+      copyright: "2026 Axial Muse",
+    },
   } satisfies ThemeConfig,
 };
 

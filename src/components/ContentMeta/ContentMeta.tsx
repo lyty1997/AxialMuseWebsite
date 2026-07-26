@@ -1,0 +1,86 @@
+import {useCurrentContentDetail} from "../SiteContentData";
+
+const PROJECT_STATUS = {
+  active: "进行中",
+  paused: "已暂停",
+  completed: "已完成",
+  archived: "已归档",
+} as const;
+
+export function ContentMeta() {
+  const detail = useCurrentContentDetail();
+  if (detail.kind === "project") {
+    const project = detail.item;
+    return (
+      <>
+        <p>{project.summary}</p>
+        <dl aria-label="项目资料">
+          <dt>项目状态</dt>
+          <dd>{PROJECT_STATUS[project.status]}</dd>
+          {project.publicationStatus === "archived"
+            ? (
+              <>
+                <dt>公开状态</dt>
+                <dd>已归档</dd>
+              </>
+            )
+            : null}
+          <dt>最近更新</dt>
+          <dd><time dateTime={project.updatedAt}>{project.updatedAt}</time></dd>
+          {project.repositoryUrl === undefined
+            ? null
+            : (
+              <>
+                <dt>公开仓库</dt>
+                <dd>
+                  <a href={project.repositoryUrl}>查看源码</a>
+                </dd>
+              </>
+            )}
+        </dl>
+      </>
+    );
+  }
+
+  const article = detail.item;
+  return (
+    <>
+      <p>{article.summary}</p>
+      <dl aria-label="文章资料">
+        <dt>作者</dt>
+        <dd>{article.authors.map((author) => author.displayName).join("、")}</dd>
+        {article.publicationStatus === "draft"
+          ? (
+            <>
+              <dt>公开状态</dt>
+              <dd>草稿预览</dd>
+            </>
+          )
+          : (
+            <>
+              <dt>发布于</dt>
+              <dd><time dateTime={article.publishedAt}>{article.publishedAt}</time></dd>
+            </>
+          )}
+        {article.updatedAt === undefined
+          ? null
+          : (
+            <>
+              <dt>更新于</dt>
+              <dd><time dateTime={article.updatedAt}>{article.updatedAt}</time></dd>
+            </>
+          )}
+        <dt>主题</dt>
+        <dd>{article.topics.map((topic) => topic.displayName).join("、")}</dd>
+        {article.publicationStatus === "archived"
+          ? (
+            <>
+              <dt>公开状态</dt>
+              <dd>已归档</dd>
+            </>
+          )
+          : null}
+      </dl>
+    </>
+  );
+}

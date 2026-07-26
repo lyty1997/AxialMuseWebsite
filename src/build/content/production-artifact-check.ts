@@ -29,6 +29,52 @@ const CANONICAL_ORIGIN = "https://www.axialmuse.com";
 export const ARTICLE_DATE_INDEX_RELATIVE_PATH = "axial-muse/article-date-index.json";
 const MIN_UNPUBLISHED_SEMANTIC_FRAGMENT_BYTES = 16;
 const UTF8_DECODER = new TextDecoder("utf-8", {fatal: true});
+const PROJECT_EMPTY_STATE = "当前还没有完成公开审核的项目。项目资料通过事实、隐私和视觉证据检查后会在这里出现。";
+const WRITING_EMPTY_STATE = "技术分享正在从项目记录中整理。首批内容发布后会在这里提供可核验的原始资料与实现细节。";
+const PROJECT_STATUS_LABELS = Object.freeze({
+  active: "进行中",
+  paused: "已暂停",
+  completed: "已完成",
+  archived: "已归档",
+});
+const ARTICLE_STATUS_LABELS = Object.freeze({
+  archived: "已归档",
+});
+const STATIC_PAGE_METADATA = Object.freeze({
+  "/": Object.freeze({
+    title: "Axial Muse | 个人项目与技术分享",
+    description: "Axial Muse 记录个人项目的设计、实现、技术取舍与复盘，公开可核验的源码与工程资料。",
+    h1: "Axial Muse",
+  }),
+  "/projects/": Object.freeze({
+    title: "项目 | Axial Muse",
+    description: "浏览 Axial Muse 中已完成公开审核的个人项目，查看问题、实现、技术取舍与源码资料。",
+    h1: "项目",
+  }),
+  "/writing/": Object.freeze({
+    title: "技术分享 | Axial Muse",
+    description: "浏览 Axial Muse 的技术分享，查看来自真实项目的工程问题、实现取舍与复盘记录。",
+    h1: "技术分享",
+  }),
+});
+const REQUIRED_GLOBAL_LINKS = Object.freeze([
+  Object.freeze({href: "/", label: "Axial Muse"}),
+  Object.freeze({href: "/projects/", label: "项目"}),
+  Object.freeze({href: "/writing/", label: "技术分享"}),
+  Object.freeze({href: "/#roadmap", label: "路线"}),
+  Object.freeze({href: "/#about", label: "关于"}),
+  Object.freeze({href: "https://github.com/lyty1997", label: "GitHub"}),
+]);
+const REQUIRED_FOOTER_LINKS = Object.freeze([
+  Object.freeze({href: "https://github.com/lyty1997", label: "GitHub"}),
+  Object.freeze({
+    href: "https://beian.miit.gov.cn/",
+    label: "沪ICP备2026029086号",
+  }),
+]);
+const UNAPPROVED_ACTION_LABEL = /^(?:(?:(?:在线|立即|开始|免费)(?:体验|试用|演示))|(?:(?:体验|试用)(?:产品|项目|服务)?)|(?:(?:查看|观看|播放)(?:演示|视频))|(?:上传(?:文件|资料)?)|(?:登录(?:账户|账号)?)|(?:(?:view|watch|play)(?:[ \t]+(?:demo|video)))|(?:(?:start|try)[ \t]+(?:demo|experience|trial))|(?:demo|experience|login|upload|video|trial|watch))$/iu;
+const UNAPPROVED_BUTTON_LABEL = /(?:登录|登入|上传|体验|试用|演示|视频|播放|观看|\b(?:demo|experience|login|play|trial|upload|video|watch)\b|log[ \t-]*in)/iu;
+const MEDIA_ACTION_HREF = /\.(?:m4v|mov|mp4|ogv|webm)(?:[?#].*)?$/iu;
 
 function hasOnlyHtmlWhitespace(value: string): boolean {
   return /^[\t\n\f\r ]*$/u.test(value);
@@ -37,6 +83,38 @@ function hasOnlyHtmlWhitespace(value: string): boolean {
 interface SidebarLink {
   readonly href: string;
   readonly label: string;
+}
+
+interface ArtifactAnchor {
+  readonly href: string;
+  readonly label: string;
+}
+
+interface ArtifactPageExpectation {
+  readonly title: string;
+  readonly description: string;
+  readonly socialDescription: string;
+  readonly canonicalPath: string;
+  readonly openGraphType: "article" | "website";
+  readonly h1: string;
+  readonly openGraphImage?: string;
+}
+
+interface PublicArticleProjection {
+  readonly articleId: string;
+  readonly sourcePath: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly canonicalPath: string;
+  readonly publicationStatus: "published" | "archived";
+  readonly publishedAt: string;
+  readonly updatedAt: string;
+  readonly authors: readonly Readonly<{id: string; displayName: string}>[];
+  readonly topics: readonly Readonly<{id: string; displayName: string}>[];
+  readonly seo: Readonly<{
+    description: string;
+    socialDescription: string;
+  }>;
 }
 
 function expectedPageRoutes(repositoryRoot: string): readonly string[] {
@@ -222,6 +300,14 @@ const INERT_HTML_ELEMENTS = new Set([
   "textarea",
   "title",
   "xmp",
+]);
+const FORBIDDEN_PUBLIC_ELEMENTS = new Set([
+  "embed",
+  "form",
+  "iframe",
+  "input",
+  "object",
+  "video",
 ]);
 const FORBIDDEN_HTML_TREE_BUILDERS = new Set([
   "frame",
@@ -431,6 +517,13 @@ function activeHtmlMarkup(html: string, sourcePath: string): string {
     }
     const closing = match[1] === "/";
     const name = (match[2] ?? "").toLowerCase();
+    if (!closing && FORBIDDEN_PUBLIC_ELEMENTS.has(name)) {
+      failContentBuild(
+        "CONTENT_ARTIFACT_INTERACTIVE",
+        `production 页面不得包含 ${name} 交互表面。`,
+        {sourcePath},
+      );
+    }
     if (!closing && name === "head") {
       inRawHead = true;
     } else if (closing && name === "head") {
@@ -495,6 +588,12 @@ function activeHtmlMarkup(html: string, sourcePath: string): string {
           "production HTML 的 script 含未受控 tokenizer 状态转换。",
           {sourcePath},
         );
+      }
+      if (name === "title") {
+        const titleText = html.slice(end + 1, inertClosing.index)
+          .replaceAll("<", "&#60;")
+          .replaceAll(">", "&#62;");
+        sanitized += `<title>${titleText}</title>`;
       }
       cursor = (inertClosing.index ?? end + 1) + inertClosing[0].length;
       continue;
@@ -639,7 +738,7 @@ function hasClass(
 
 function extractUniqueElementByClass(
   html: string,
-  tagName: "aside" | "ul",
+  tagName: "aside" | "nav" | "ul",
   className: string,
   sourcePath: string,
 ): string {
@@ -650,10 +749,15 @@ function extractUniqueElementByClass(
   const openings = [...html.matchAll(openingPattern)].filter((match) => (
     hasClass(htmlAttributes(match[0], sourcePath), className, sourcePath)
   ));
+  const isNavbar = className === "navbar";
   if (openings.length !== 1 || openings[0]?.index === undefined) {
     failContentBuild(
-      "CONTENT_ARTIFACT_SIDEBAR_STRUCTURE",
-      "公开详情页必须包含唯一 Docusaurus 文档侧栏容器。",
+      isNavbar
+        ? "CONTENT_ARTIFACT_NAVIGATION"
+        : "CONTENT_ARTIFACT_SIDEBAR_STRUCTURE",
+      isNavbar
+        ? "公开页面必须包含唯一 Docusaurus navbar 容器。"
+        : "公开详情页必须包含唯一 Docusaurus 文档侧栏容器。",
       {sourcePath},
     );
   }
@@ -680,13 +784,22 @@ function extractUniqueElementByClass(
     }
   }
   failContentBuild(
-    "CONTENT_ARTIFACT_SIDEBAR_STRUCTURE",
-    "Docusaurus 文档侧栏容器未正确闭合。",
+    isNavbar
+      ? "CONTENT_ARTIFACT_NAVIGATION"
+      : "CONTENT_ARTIFACT_SIDEBAR_STRUCTURE",
+    isNavbar
+      ? "Docusaurus navbar 容器未正确闭合。"
+      : "Docusaurus 文档侧栏容器未正确闭合。",
     {sourcePath},
   );
 }
 
-function decodeHtmlText(value: string, sourcePath: string): string {
+function decodeArtifactHtmlText(
+  value: string,
+  sourcePath: string,
+  errorCode: string,
+  errorMessage: string,
+): string {
   let failed = false;
   const entityPattern = /&(#(?:x[0-9a-f]+|[0-9]+)|amp|lt|gt|quot|apos|nbsp);/giu;
   const unconsumed = value.replace(entityPattern, "");
@@ -717,12 +830,30 @@ function decodeHtmlText(value: string, sourcePath: string): string {
   );
   if (failed || unconsumed.includes("&")) {
     failContentBuild(
-      "CONTENT_ARTIFACT_SIDEBAR_STRUCTURE",
-      "Docusaurus 文档侧栏含无法确定解码的 HTML entity。",
+      errorCode,
+      errorMessage,
       {sourcePath},
     );
   }
   return decoded;
+}
+
+function decodeHtmlText(value: string, sourcePath: string): string {
+  return decodeArtifactHtmlText(
+    value,
+    sourcePath,
+    "CONTENT_ARTIFACT_SIDEBAR_STRUCTURE",
+    "Docusaurus 文档侧栏含无法确定解码的 HTML entity。",
+  );
+}
+
+function decodePageHtmlText(value: string, sourcePath: string): string {
+  return decodeArtifactHtmlText(
+    value,
+    sourcePath,
+    "CONTENT_ARTIFACT_HTML_STRUCTURE",
+    "production HTML 含无法确定解码的 HTML entity。",
+  );
 }
 
 function sidebarLinkLabel(innerHtml: string, sourcePath: string): string {
@@ -855,10 +986,16 @@ function assertCanonical(html: string, route: string, sourcePath: string): void 
   }
   const head = html.slice(opening.index + opening[0].length, closing.index);
   const headTags = [...head.matchAll(/<[^>]*>/gu)].map((match) => match[0]);
+  const titlePattern = /<title(?=[\t\n\f\r />])[^>]*>[\s\S]*?<\/title[\t\n\f\r ]*>/giu;
   if (
-    headTags.some((tag) => !/^<(?:link|meta)(?=[\t\n\f\r />])[^>]*>$/iu.test(tag))
+    headTags.some((tag) => (
+      !/^<(?:link|meta)(?=[\t\n\f\r />])[^>]*>$/iu.test(tag)
+      && !/^<\/?title(?=[\t\n\f\r />])[^>]*>$/iu.test(tag)
+    ))
     || !hasOnlyHtmlWhitespace(
-      head.replace(/<(?:link|meta)(?=[\t\n\f\r />])[^>]*>/giu, ""),
+      head
+        .replace(titlePattern, "")
+        .replace(/<(?:link|meta)(?=[\t\n\f\r />])[^>]*>/giu, ""),
     )
   ) {
     failContentBuild(
@@ -909,6 +1046,1038 @@ function assertProductionIndexing(html: string, sourcePath: string): void {
       sourcePath,
     });
   }
+}
+
+function extractUniqueElementInnerHtml(
+  html: string,
+  tagName: "body" | "footer" | "h1" | "main",
+  sourcePath: string,
+): string {
+  const openings = [...html.matchAll(new RegExp(
+    `<${tagName}(?=[\\t\\n\\f\\r />])[^>]*>`,
+    "giu",
+  ))];
+  const closings = [...html.matchAll(new RegExp(
+    `<\\/${tagName}[\\t\\n\\f\\r ]*>`,
+    "giu",
+  ))];
+  const elements = [...html.matchAll(new RegExp(
+    `<${tagName}(?=[\\t\\n\\f\\r />])[^>]*>([\\s\\S]*?)<\\/${tagName}[\\t\\n\\f\\r ]*>`,
+    "giu",
+  ))];
+  if (
+    openings.length !== 1
+    || closings.length !== 1
+    || elements.length !== 1
+    || elements[0]?.[1] === undefined
+  ) {
+    failContentBuild(
+      tagName === "h1"
+        ? "CONTENT_ARTIFACT_H1"
+        : "CONTENT_ARTIFACT_HTML_STRUCTURE",
+      `production 页面必须包含唯一且闭合的 ${tagName} 元素。`,
+      {sourcePath},
+    );
+  }
+  return elements[0][1];
+}
+
+function visibleFragmentText(value: string, sourcePath: string): string {
+  return decodePageHtmlText(value.replace(/<[^>]*>/gu, " "), sourcePath)
+    .replace(/\u200b/gu, "")
+    .replace(/[\t\n\f\r ]+/gu, " ")
+    .trim();
+}
+
+function extractAnchors(html: string, sourcePath: string): readonly ArtifactAnchor[] {
+  const openings = [...html.matchAll(/<a(?=[\t\n\f\r />])[^>]*>/giu)];
+  const closings = [...html.matchAll(/<\/a[\t\n\f\r ]*>/giu)];
+  const elements = [...html.matchAll(
+    /(<a(?=[\t\n\f\r />])[^>]*>)([\s\S]*?)<\/a[\t\n\f\r ]*>/giu,
+  )];
+  if (
+    openings.length !== closings.length
+    || openings.length !== elements.length
+    || elements.some((element) => /<a(?=[\t\n\f\r />])/iu.test(element[2] ?? ""))
+  ) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_HTML_STRUCTURE",
+      "production 页面含无法唯一配对的链接元素。",
+      {sourcePath},
+    );
+  }
+  return Object.freeze(elements.map((element) => {
+    const attributes = htmlAttributes(element[1] ?? "", sourcePath);
+    const rawHref = attributes.get("href");
+    if (rawHref === undefined) {
+      failContentBuild(
+        "CONTENT_ARTIFACT_NAVIGATION",
+        "production 页面链接缺少 href。",
+        {sourcePath},
+      );
+    }
+    return Object.freeze({
+      href: decodePageHtmlText(rawHref, sourcePath),
+      label: visibleFragmentText(element[2] ?? "", sourcePath),
+    });
+  }));
+}
+
+function extractFlatArticleCards(
+  html: string,
+  sourcePath: string,
+): readonly string[] {
+  const openings = [...html.matchAll(/<article(?=[\t\n\f\r />])[^>]*>/giu)];
+  const closings = [...html.matchAll(/<\/article[\t\n\f\r ]*>/giu)];
+  const elements = [...html.matchAll(
+    /<article(?=[\t\n\f\r />])[^>]*>([\s\S]*?)<\/article[\t\n\f\r ]*>/giu,
+  )];
+  if (
+    openings.length !== closings.length
+    || openings.length !== elements.length
+    || elements.some((element) => /<article(?=[\t\n\f\r />])/iu.test(element[1] ?? ""))
+  ) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_HTML_STRUCTURE",
+      "production 列表页含无法唯一配对或嵌套的 article 卡片。",
+      {sourcePath},
+    );
+  }
+  return Object.freeze(elements.map((element) => element[1] ?? ""));
+}
+
+function assertExactAnchors(
+  anchors: readonly ArtifactAnchor[],
+  expected: readonly ArtifactAnchor[],
+  code: string,
+  message: string,
+  sourcePath: string,
+): void {
+  const firstMismatch = anchors.findIndex((anchor, index) => (
+    anchor.href !== expected[index]?.href
+    || anchor.label !== expected[index]?.label
+  ));
+  if (
+    anchors.length !== expected.length
+    || firstMismatch >= 0
+  ) {
+    failContentBuild(
+      code,
+      `${message}（实际 ${anchors.length} 项，预期 ${expected.length} 项，首个差异索引 ${firstMismatch}。）`,
+      {sourcePath},
+    );
+  }
+}
+
+function assertRequiredLink(
+  anchors: readonly ArtifactAnchor[],
+  expected: ArtifactAnchor,
+  sourcePath: string,
+): void {
+  if (!anchors.some((anchor) => (
+    anchor.label === expected.label && anchor.href === expected.href
+  ))) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_NAVIGATION",
+      `production 页面缺少固定链接“${expected.label}”。`,
+      {sourcePath},
+    );
+  }
+}
+
+function assertHtmlLanguage(html: string, sourcePath: string): void {
+  const openings = [...html.matchAll(/<html(?=[\t\n\f\r />])[^>]*>/giu)];
+  const opening = openings[0];
+  if (
+    openings.length !== 1
+    || opening === undefined
+    || decodePageHtmlText(
+      htmlAttributes(opening[0], sourcePath).get("lang") ?? "",
+      sourcePath,
+    ) !== "zh-CN"
+  ) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_LANGUAGE",
+      "production 页面必须唯一声明 lang=\"zh-CN\"。",
+      {sourcePath},
+    );
+  }
+}
+
+function headHtml(html: string, sourcePath: string): string {
+  const opening = /<head(?=[\t\n\f\r />])[^>]*>/iu.exec(html);
+  const closing = /<\/head[\t\n\f\r ]*>/iu.exec(html);
+  if (
+    opening?.index === undefined
+    || closing?.index === undefined
+    || closing.index <= opening.index + opening[0].length
+  ) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_METADATA",
+      "production 页面缺少可验证 head。",
+      {sourcePath},
+    );
+  }
+  return html.slice(opening.index + opening[0].length, closing.index);
+}
+
+function metadataValues(
+  head: string,
+  attributeName: "name" | "property",
+  attributeValue: string,
+  sourcePath: string,
+): readonly string[] {
+  return Object.freeze([...head.matchAll(/<meta(?=[\t\n\f\r />])[^>]*>/giu)]
+    .map((match) => htmlAttributes(match[0], sourcePath))
+    .filter((attributes) => (
+      decodePageHtmlText(
+        attributes.get(attributeName) ?? "",
+        sourcePath,
+      ).toLowerCase() === attributeValue
+    ))
+    .map((attributes) => decodePageHtmlText(
+      attributes.get("content") ?? "",
+      sourcePath,
+    )));
+}
+
+function assertUniqueMetadataValue(
+  values: readonly string[],
+  expected: string,
+  fieldName: string,
+  sourcePath: string,
+): void {
+  if (values.length !== 1 || values[0] !== expected) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_METADATA",
+      `production 页面 ${fieldName} 缺失、重复或不符合安全投影。`,
+      {sourcePath},
+    );
+  }
+}
+
+function assertPageMetadata(
+  html: string,
+  expected: ArtifactPageExpectation,
+  sourcePath: string,
+): void {
+  const head = headHtml(html, sourcePath);
+  const titles = [...head.matchAll(
+    /<title(?=[\t\n\f\r />])[^>]*>([\s\S]*?)<\/title[\t\n\f\r ]*>/giu,
+  )].map((match) => decodePageHtmlText(match[1] ?? "", sourcePath));
+  assertUniqueMetadataValue(titles, expected.title, "title", sourcePath);
+  assertUniqueMetadataValue(
+    metadataValues(head, "name", "description", sourcePath),
+    expected.description,
+    "description",
+    sourcePath,
+  );
+  assertUniqueMetadataValue(
+    metadataValues(head, "property", "og:title", sourcePath),
+    expected.title,
+    "og:title",
+    sourcePath,
+  );
+  assertUniqueMetadataValue(
+    metadataValues(head, "property", "og:description", sourcePath),
+    expected.socialDescription,
+    "og:description",
+    sourcePath,
+  );
+  assertUniqueMetadataValue(
+    metadataValues(head, "property", "og:url", sourcePath),
+    `${CANONICAL_ORIGIN}${expected.canonicalPath}`,
+    "og:url",
+    sourcePath,
+  );
+  assertUniqueMetadataValue(
+    metadataValues(head, "property", "og:type", sourcePath),
+    expected.openGraphType,
+    "og:type",
+    sourcePath,
+  );
+  const imageProperties = [...head.matchAll(/<meta(?=[\t\n\f\r />])[^>]*>/giu)]
+    .map((match) => htmlAttributes(match[0], sourcePath))
+    .filter((attributes) => decodePageHtmlText(
+      attributes.get("property") ?? "",
+      sourcePath,
+    ).toLowerCase().startsWith("og:image"));
+  if (expected.openGraphImage === undefined) {
+    if (imageProperties.length !== 0) {
+      failContentBuild(
+        "CONTENT_ARTIFACT_METADATA",
+        "没有已验证分享图的页面不得输出 og:image metadata。",
+        {sourcePath},
+      );
+    }
+  } else {
+    const images = imageProperties
+      .filter((attributes) => decodePageHtmlText(
+        attributes.get("property") ?? "",
+        sourcePath,
+      ).toLowerCase() === "og:image")
+      .map((attributes) => decodePageHtmlText(
+        attributes.get("content") ?? "",
+        sourcePath,
+      ));
+    if (imageProperties.length !== 1 || images.length !== 1 || images[0] !== expected.openGraphImage) {
+      failContentBuild(
+        "CONTENT_ARTIFACT_METADATA",
+        "项目详情 og:image 必须唯一来自已验证主预览。",
+        {sourcePath},
+      );
+    }
+  }
+}
+
+function publicArticleProjections(
+  content: LoadedValidatedContent,
+): readonly PublicArticleProjection[] {
+  const articles: PublicArticleProjection[] = [];
+  for (const group of content.writingNavigation) {
+    if (group.kind === "draft") {
+      failContentBuild(
+        "CONTENT_ARTIFACT_SIDEBAR_MODEL",
+        "production 导航投影不得包含草稿侧栏组。",
+        {sourcePath: "site-content/writing"},
+      );
+    } else if (group.kind === "general") {
+      articles.push(...group.articles);
+    } else {
+      articles.push(...group.rootArticles);
+      for (const module of group.modules) articles.push(...module.articles);
+    }
+  }
+  return Object.freeze(articles);
+}
+
+function expectedPageExpectation(
+  content: LoadedValidatedContent,
+  route: string,
+  articles: readonly PublicArticleProjection[],
+): ArtifactPageExpectation {
+  const staticPage = route === "/"
+    ? STATIC_PAGE_METADATA["/"]
+    : route === "/projects/"
+      ? STATIC_PAGE_METADATA["/projects/"]
+      : route === "/writing/"
+        ? STATIC_PAGE_METADATA["/writing/"]
+        : undefined;
+  if (staticPage !== undefined) {
+    return Object.freeze({
+      title: staticPage.title,
+      description: staticPage.description,
+      socialDescription: staticPage.description,
+      canonicalPath: route,
+      openGraphType: "website",
+      h1: staticPage.h1,
+    });
+  }
+  const project = content.projectNavigation.find((item) => item.canonicalPath === route);
+  if (project !== undefined) {
+    return Object.freeze({
+      title: `${project.title} | Axial Muse`,
+      description: project.summary,
+      socialDescription: project.summary,
+      canonicalPath: project.canonicalPath,
+      openGraphType: "website",
+      h1: project.title,
+      openGraphImage: `${CANONICAL_ORIGIN}${project.previewImage.publicUrl}`,
+    });
+  }
+  const article = articles.find((item) => item.canonicalPath === route);
+  if (article !== undefined) {
+    return Object.freeze({
+      title: `${article.title} | Axial Muse`,
+      description: article.seo.description,
+      socialDescription: article.seo.socialDescription,
+      canonicalPath: article.canonicalPath,
+      openGraphType: "article",
+      h1: article.title,
+    });
+  }
+  failContentBuild(
+    "CONTENT_ARTIFACT_ROUTE_SET",
+    "production HTML 路由不属于公开页面投影。",
+    {sourcePath: `build/${artifactHtmlPathForRoute(route)}`},
+  );
+}
+
+function artifactHtmlPathForRoute(route: string): string {
+  return route === "/" ? "index.html" : `${route.slice(1)}index.html`;
+}
+
+function assertVisibleValues(
+  visibleText: string,
+  values: readonly string[],
+  sourcePath: string,
+): void {
+  if (values.some((value) => value.length === 0 || !visibleText.includes(value))) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_DISPLAY_PROJECTION",
+      "production 页面缺少公开安全显示字段。",
+      {sourcePath},
+    );
+  }
+}
+
+function assertHref(
+  anchors: readonly ArtifactAnchor[],
+  href: string,
+  sourcePath: string,
+): void {
+  if (!anchors.some((anchor) => anchor.href === href)) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_DISPLAY_PROJECTION",
+      "production 页面缺少安全投影动作 URL。",
+      {sourcePath},
+    );
+  }
+}
+
+function assertProjectImage(
+  main: string,
+  project: LoadedValidatedContent["projectNavigation"][number],
+  sourcePath: string,
+): void {
+  const images = [...main.matchAll(/<img(?=[\t\n\f\r />])[^>]*>/giu)]
+    .map((match) => htmlAttributes(match[0], sourcePath))
+    .filter((attributes) => (
+      decodePageHtmlText(attributes.get("src") ?? "", sourcePath)
+      === project.previewImage.publicUrl
+    ));
+  const image = images[0];
+  if (
+    images.length !== 1
+    || image === undefined
+    || decodePageHtmlText(image.get("alt") ?? "", sourcePath) !== project.previewImage.alt
+    || decodePageHtmlText(image.get("width") ?? "", sourcePath) !== String(project.previewImage.width)
+    || decodePageHtmlText(image.get("height") ?? "", sourcePath) !== String(project.previewImage.height)
+  ) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_PROJECT_IMAGE",
+      "项目主预览必须按已验证 src/alt/width/height 在页面主内容中恰好投影一次。",
+      {sourcePath},
+    );
+  }
+}
+
+function assertProjectProjection(
+  main: string,
+  project: LoadedValidatedContent["projectNavigation"][number],
+  sourcePath: string,
+  options: Readonly<{requireSelfLink: boolean}>,
+): void {
+  const visibleText = visibleFragmentText(main, sourcePath);
+  assertVisibleValues(visibleText, [
+    project.title,
+    project.summary,
+    PROJECT_STATUS_LABELS[project.status],
+    ...(project.publicationStatus === "archived"
+      ? [options.requireSelfLink ? "公开状态：已归档" : "公开状态 已归档"]
+      : []),
+    project.updatedAt,
+  ], sourcePath);
+  const anchors = extractAnchors(main, sourcePath);
+  if (options.requireSelfLink) {
+    assertHref(anchors, project.canonicalPath, sourcePath);
+  }
+  if (project.repositoryUrl !== undefined) {
+    assertHref(anchors, project.repositoryUrl, sourcePath);
+  }
+  assertProjectImage(main, project, sourcePath);
+}
+
+function assertArticleProjection(
+  main: string,
+  article: PublicArticleProjection,
+  sourcePath: string,
+  options: Readonly<{requireSummary: boolean; requireSelfLink: boolean}>,
+): void {
+  const visibleText = visibleFragmentText(main, sourcePath);
+  assertVisibleValues(visibleText, [
+    article.title,
+    ...(options.requireSummary ? [article.summary] : []),
+    ...(article.publicationStatus === "archived"
+      ? [ARTICLE_STATUS_LABELS.archived]
+      : []),
+    article.publishedAt,
+    article.updatedAt,
+    ...article.authors.map((author) => author.displayName),
+    ...article.topics.map((topic) => topic.displayName),
+  ], sourcePath);
+  if (options.requireSelfLink) {
+    assertHref(extractAnchors(main, sourcePath), article.canonicalPath, sourcePath);
+  }
+  if (visibleText.includes(article.articleId)) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_DISPLAY_PROJECTION",
+      "文章 UUID 身份不得成为主视觉字段。",
+      {sourcePath},
+    );
+  }
+}
+
+function projectCardAnchors(
+  project: LoadedValidatedContent["projectNavigation"][number],
+): readonly ArtifactAnchor[] {
+  return Object.freeze([
+    Object.freeze({href: project.canonicalPath, label: project.title}),
+    Object.freeze({href: project.canonicalPath, label: "查看项目"}),
+    ...(project.repositoryUrl === undefined
+      ? []
+      : [Object.freeze({href: project.repositoryUrl, label: "查看源码"})]),
+  ]);
+}
+
+function articleCardAnchors(
+  article: PublicArticleProjection,
+): readonly ArtifactAnchor[] {
+  return Object.freeze([
+    Object.freeze({href: article.canonicalPath, label: article.title}),
+  ]);
+}
+
+function assertCardHeading(
+  card: string,
+  title: string,
+  canonicalPath: string,
+  sourcePath: string,
+): void {
+  const headings = [...card.matchAll(
+    /<h([2-5])(?=[\t\n\f\r />])[^>]*>([\s\S]*?)<\/h\1[\t\n\f\r ]*>/giu,
+  )];
+  const heading = headings[0];
+  if (
+    headings.length !== 1
+    || heading === undefined
+    || visibleFragmentText(heading[2] ?? "", sourcePath) !== title
+  ) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_CARD_SET",
+      "每张公开列表卡片必须包含唯一且匹配投影标题的 heading。",
+      {sourcePath},
+    );
+  }
+  assertExactAnchors(
+    extractAnchors(heading[2] ?? "", sourcePath),
+    Object.freeze([Object.freeze({href: canonicalPath, label: title})]),
+    "CONTENT_ARTIFACT_CARD_SET",
+    "公开列表卡片 heading 必须只链接到自身规范详情路由。",
+    sourcePath,
+  );
+}
+
+function assertCardProjectionSet(
+  main: string,
+  projects: LoadedValidatedContent["projectNavigation"],
+  articles: readonly PublicArticleProjection[],
+  sourcePath: string,
+): void {
+  const cards = extractFlatArticleCards(main, sourcePath);
+  if (cards.length !== projects.length + articles.length) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_CARD_SET",
+      "production 列表卡片数量与安全展示投影不一致。",
+      {sourcePath},
+    );
+  }
+  const consumed = new Set<number>();
+  const uniqueCard = (
+    canonicalPath: string,
+    label: string,
+  ): Readonly<{card: string; index: number}> => {
+    const index = consumed.size;
+    const card = cards[index];
+    if (
+      card === undefined
+      || consumed.has(index)
+      || !extractAnchors(card, sourcePath).some((anchor) => (
+        anchor.href === canonicalPath && anchor.label === label
+      ))
+    ) {
+      failContentBuild(
+        "CONTENT_ARTIFACT_CARD_SET",
+        "production 列表卡片无法按投影顺序唯一闭合。",
+        {sourcePath},
+      );
+    }
+    consumed.add(index);
+    return Object.freeze({card, index});
+  };
+
+  for (const project of projects) {
+    const {card} = uniqueCard(project.canonicalPath, project.title);
+    assertCardHeading(card, project.title, project.canonicalPath, sourcePath);
+    assertProjectProjection(card, project, sourcePath, {requireSelfLink: true});
+    assertExactVisibleProjection(
+      card,
+      Object.freeze([
+        project.title,
+        `项目状态：${PROJECT_STATUS_LABELS[project.status]}`,
+        ...(project.publicationStatus === "archived"
+          ? ["公开状态：已归档"]
+          : []),
+        project.summary,
+        "最近更新：",
+        project.updatedAt,
+        "查看项目",
+        ...(project.repositoryUrl === undefined ? [] : ["·", "查看源码"]),
+      ]),
+      "CONTENT_ARTIFACT_CARD_SET",
+      sourcePath,
+      "项目卡片含不属于安全展示投影的可见内容。",
+    );
+    assertExactAnchors(
+      extractAnchors(card, sourcePath),
+      projectCardAnchors(project),
+      "CONTENT_ARTIFACT_CARD_SET",
+      "项目卡片链接集合或顺序不属于安全展示投影。",
+      sourcePath,
+    );
+  }
+  for (const article of articles) {
+    const {card} = uniqueCard(article.canonicalPath, article.title);
+    assertCardHeading(card, article.title, article.canonicalPath, sourcePath);
+    assertArticleProjection(card, article, sourcePath, {
+      requireSelfLink: true,
+      requireSummary: true,
+    });
+    assertExactVisibleProjection(
+      card,
+      Object.freeze([
+        article.title,
+        article.summary,
+        `作者：${article.authors.map((author) => author.displayName).join("、")}`,
+        "发布于",
+        article.publishedAt,
+        "·",
+        "更新于",
+        article.updatedAt,
+        ...(article.publicationStatus === "archived" ? ["·", "已归档"] : []),
+        `主题：${article.topics.map((topic) => topic.displayName).join("、")}`,
+      ]),
+      "CONTENT_ARTIFACT_CARD_SET",
+      sourcePath,
+      "文章卡片含不属于安全展示投影的可见内容。",
+    );
+    assertExactAnchors(
+      extractAnchors(card, sourcePath),
+      articleCardAnchors(article),
+      "CONTENT_ARTIFACT_CARD_SET",
+      "文章卡片链接集合或顺序不属于安全展示投影。",
+      sourcePath,
+    );
+  }
+  if (consumed.size !== cards.length) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_CARD_SET",
+      "production 列表含不属于安全展示投影的额外卡片。",
+      {sourcePath},
+    );
+  }
+}
+
+function assertStaticPageAnchors(
+  main: string,
+  expected: readonly ArtifactAnchor[],
+  sourcePath: string,
+): void {
+  assertExactAnchors(
+    extractAnchors(main, sourcePath),
+    expected,
+    "CONTENT_ARTIFACT_CARD_SET",
+    "production 静态页含不属于固定 CTA 或安全卡片投影的链接。",
+    sourcePath,
+  );
+}
+
+function assertExactVisibleProjection(
+  html: string,
+  expectedParts: readonly string[],
+  code: "CONTENT_ARTIFACT_CARD_SET" | "CONTENT_ARTIFACT_PUBLIC_COPY",
+  sourcePath: string,
+  message: string,
+): void {
+  if (visibleFragmentText(html, sourcePath) !== expectedParts.join(" ")) {
+    failContentBuild(
+      code,
+      message,
+      {sourcePath},
+    );
+  }
+}
+
+function withoutFlatArticleCards(main: string): string {
+  return main.replace(
+    /<article(?=[\t\n\f\r />])[^>]*>[\s\S]*?<\/article[\t\n\f\r ]*>/giu,
+    " ",
+  );
+}
+
+function publicWritingLabels(
+  content: LoadedValidatedContent,
+): readonly string[] {
+  return Object.freeze(content.writingNavigation.flatMap((group) => (
+    group.kind === "project"
+      ? [group.label, ...group.modules.map((module) => module.label)]
+      : [group.label]
+  )));
+}
+
+function assertElementId(
+  html: string,
+  expectedId: "about" | "roadmap",
+  sourcePath: string,
+): void {
+  const matches = [...html.matchAll(/<[A-Za-z][A-Za-z0-9:-]*(?=[\t\n\f\r />])[^>]*>/gu)]
+    .map((match) => htmlAttributes(match[0], sourcePath))
+    .filter((attributes) => decodePageHtmlText(
+      attributes.get("id") ?? "",
+      sourcePath,
+    ) === expectedId);
+  if (matches.length !== 1) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_PUBLIC_COPY",
+      `首页必须包含唯一 #${expectedId} 区域。`,
+      {sourcePath},
+    );
+  }
+}
+
+function assertHomeProjection(
+  main: string,
+  content: LoadedValidatedContent,
+  articles: readonly PublicArticleProjection[],
+  sourcePath: string,
+): void {
+  const visibleText = visibleFragmentText(main, sourcePath);
+  const fixedCopy = [
+    "围绕个人项目，记录设计、实现、技术取舍与复盘。",
+    "首版先公开可核验的项目资料和工程记录。产品服务会在边界明确并真实可用后再提供入口。",
+    "当前：建立可信主站",
+    "下一步：形成技术分享",
+    "探索：产品服务",
+    "我关注 AI 工程、知识工作流、开发规范和个人产品构建。本站公开项目、技术取舍与复盘，不公开私人联系方式、凭证或私有仓库。",
+  ];
+  assertVisibleValues(visibleText, fixedCopy, sourcePath);
+  const fixedIndexes = fixedCopy.map((value) => visibleText.indexOf(value));
+  if (fixedIndexes.some((value, index) => index > 0 && value <= (fixedIndexes[index - 1] ?? -1))) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_PUBLIC_COPY",
+      "首页固定公开表达顺序发生漂移。",
+      {sourcePath},
+    );
+  }
+  assertElementId(main, "roadmap", sourcePath);
+  assertElementId(main, "about", sourcePath);
+  assertRequiredLink(
+    extractAnchors(main, sourcePath),
+    Object.freeze({href: "/projects/", label: "浏览项目"}),
+    sourcePath,
+  );
+  if (content.projectNavigation.length === 0) {
+    assertVisibleValues(visibleText, [PROJECT_EMPTY_STATE], sourcePath);
+  }
+  if (articles.length === 0) {
+    assertVisibleValues(visibleText, [WRITING_EMPTY_STATE], sourcePath);
+  }
+  assertCardProjectionSet(main, content.projectNavigation, articles, sourcePath);
+  assertStaticPageAnchors(
+    main,
+    Object.freeze([
+      Object.freeze({href: "/projects/", label: "浏览项目"}),
+      ...content.projectNavigation.flatMap(projectCardAnchors),
+      ...articles.flatMap(articleCardAnchors),
+      Object.freeze({href: "#roadmap", label: ""}),
+      Object.freeze({href: "#about", label: ""}),
+    ]),
+    sourcePath,
+  );
+  assertExactVisibleProjection(
+    withoutFlatArticleCards(main),
+    Object.freeze([
+      "Axial Muse",
+      fixedCopy[0] ?? "",
+      fixedCopy[1] ?? "",
+      "浏览项目",
+      "项目",
+      ...(content.projectNavigation.length === 0 ? [PROJECT_EMPTY_STATE] : []),
+      "技术分享",
+      ...(articles.length === 0
+        ? [WRITING_EMPTY_STATE]
+        : publicWritingLabels(content)),
+      "路线",
+      fixedCopy[2] ?? "",
+      fixedCopy[3] ?? "",
+      fixedCopy[4] ?? "",
+      "关于",
+      fixedCopy[5] ?? "",
+    ]),
+    "CONTENT_ARTIFACT_PUBLIC_COPY",
+    sourcePath,
+    "首页含不属于固定公开表达或安全卡片投影的可见内容。",
+  );
+}
+
+function assertProjectsIndexProjection(
+  main: string,
+  content: LoadedValidatedContent,
+  sourcePath: string,
+): void {
+  const visibleText = visibleFragmentText(main, sourcePath);
+  if (content.projectNavigation.length === 0) {
+    assertVisibleValues(visibleText, [PROJECT_EMPTY_STATE], sourcePath);
+  }
+  assertCardProjectionSet(main, content.projectNavigation, [], sourcePath);
+  assertStaticPageAnchors(
+    main,
+    Object.freeze(content.projectNavigation.flatMap(projectCardAnchors)),
+    sourcePath,
+  );
+  assertExactVisibleProjection(
+    withoutFlatArticleCards(main),
+    Object.freeze([
+      "项目",
+      ...(content.projectNavigation.length === 0 ? [PROJECT_EMPTY_STATE] : []),
+    ]),
+    "CONTENT_ARTIFACT_PUBLIC_COPY",
+    sourcePath,
+    "项目目录含不属于固定空状态或安全卡片投影的可见内容。",
+  );
+}
+
+function assertWritingIndexProjection(
+  main: string,
+  content: LoadedValidatedContent,
+  articles: readonly PublicArticleProjection[],
+  sourcePath: string,
+): void {
+  const visibleText = visibleFragmentText(main, sourcePath);
+  if (articles.length === 0) {
+    assertVisibleValues(visibleText, [WRITING_EMPTY_STATE], sourcePath);
+  } else {
+    for (const group of content.writingNavigation) {
+      if (group.kind === "draft") continue;
+      assertVisibleValues(visibleText, [group.label], sourcePath);
+      if (group.kind === "project") {
+        for (const module of group.modules) {
+          assertVisibleValues(visibleText, [module.label], sourcePath);
+        }
+      }
+    }
+  }
+  assertCardProjectionSet(main, [], articles, sourcePath);
+  assertStaticPageAnchors(
+    main,
+    Object.freeze(articles.flatMap(articleCardAnchors)),
+    sourcePath,
+  );
+  assertExactVisibleProjection(
+    withoutFlatArticleCards(main),
+    Object.freeze([
+      "技术分享",
+      ...(articles.length === 0
+        ? [WRITING_EMPTY_STATE]
+        : publicWritingLabels(content)),
+    ]),
+    "CONTENT_ARTIFACT_PUBLIC_COPY",
+    sourcePath,
+    "技术分享目录含不属于固定空状态或安全卡片投影的可见内容。",
+  );
+}
+
+function actionLabels(
+  openingTag: string,
+  innerHtml: string,
+  sourcePath: string,
+): readonly string[] {
+  const attributes = htmlAttributes(openingTag, sourcePath);
+  return Object.freeze([
+    visibleFragmentText(innerHtml, sourcePath),
+    decodePageHtmlText(attributes.get("aria-label") ?? "", sourcePath).trim(),
+    decodePageHtmlText(attributes.get("title") ?? "", sourcePath).trim(),
+  ].filter((label) => label.length > 0));
+}
+
+function assertNoUnapprovedServiceReferences(
+  body: string,
+  content: LoadedValidatedContent,
+  sourcePath: string,
+): void {
+  const canonicalHostname = (value: string): string => {
+    const lower = value.toLowerCase();
+    return lower.endsWith(".") ? lower.slice(0, -1) : lower;
+  };
+  const experienceHostnames = new Set(
+    content.catalog.experiences.map((experience) => (
+      canonicalHostname(experience.hostname)
+    )),
+  );
+  const unfinishedVideoValues = new Set<string>();
+  for (const project of content.catalog.projects) {
+    if (project.demoVideoStatus === "approved") continue;
+    for (const value of [
+      project.demoVideoUrl,
+      project.demoVideoPoster,
+      project.demoVideoCaptions,
+    ]) {
+      if (value !== undefined) unfinishedVideoValues.add(value);
+    }
+  }
+  const tags = [...body.matchAll(/<[A-Za-z][A-Za-z0-9:-]*(?=[\t\n\f\r />])[^>]*>/gu)];
+  for (const tag of tags) {
+    const attributes = htmlAttributes(tag[0], sourcePath);
+    for (const name of ["data", "href", "poster", "src"]) {
+      const rawValue = attributes.get(name);
+      if (rawValue === undefined) continue;
+      const value = decodePageHtmlText(rawValue, sourcePath);
+      if (unfinishedVideoValues.has(value)) {
+        failContentBuild(
+          "CONTENT_ARTIFACT_INTERACTIVE",
+          "公开页面不得引用尚未审核完成的视频素材。",
+          {sourcePath},
+        );
+      }
+      let url: URL | undefined;
+      try {
+        url = new URL(value, CANONICAL_ORIGIN);
+      } catch {
+        // 非 URL 属性仍由既有 HTML、路由与资源闭包处理。
+      }
+      if (
+        url !== undefined
+        && (url.protocol === "http:" || url.protocol === "https:")
+        && experienceHostnames.has(canonicalHostname(url.hostname))
+      ) {
+        failContentBuild(
+          "CONTENT_ARTIFACT_INTERACTIVE",
+          "M0 页面不得引用尚未批准上线的项目体验域名。",
+          {sourcePath},
+        );
+      }
+    }
+  }
+}
+
+function assertNoUnapprovedPublicActions(
+  body: string,
+  content: LoadedValidatedContent,
+  sourcePath: string,
+): void {
+  assertNoUnapprovedServiceReferences(body, content, sourcePath);
+  const anchors = [...body.matchAll(
+    /(<a(?=[\t\n\f\r />])[^>]*>)([\s\S]*?)<\/a[\t\n\f\r ]*>/giu,
+  )];
+  const buttons = [...body.matchAll(
+    /(<button(?=[\t\n\f\r />])[^>]*>)([\s\S]*?)<\/button[\t\n\f\r ]*>/giu,
+  )];
+  const hasUnapprovedAnchor = anchors.some((match) => {
+    const attributes = htmlAttributes(match[1] ?? "", sourcePath);
+    const href = decodePageHtmlText(attributes.get("href") ?? "", sourcePath);
+    return MEDIA_ACTION_HREF.test(href)
+      || actionLabels(match[1] ?? "", match[2] ?? "", sourcePath)
+        .some((label) => UNAPPROVED_ACTION_LABEL.test(label));
+  });
+  const hasUnapprovedButton = buttons.some((match) => (
+    actionLabels(match[1] ?? "", match[2] ?? "", sourcePath)
+      .some((label) => (
+        UNAPPROVED_ACTION_LABEL.test(label)
+        || UNAPPROVED_BUTTON_LABEL.test(label)
+      ))
+  ));
+  if (hasUnapprovedAnchor || hasUnapprovedButton) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_INTERACTIVE",
+      "公开页面不得暴露未上线体验、上传、登录或视频动作。",
+      {sourcePath},
+    );
+  }
+}
+
+function assertGlobalChrome(html: string, sourcePath: string): void {
+  const body = extractUniqueElementInnerHtml(html, "body", sourcePath);
+  const navbar = extractUniqueElementByClass(body, "nav", "navbar", sourcePath);
+  const anchors = extractAnchors(navbar, sourcePath);
+  assertExactAnchors(
+    anchors,
+    REQUIRED_GLOBAL_LINKS,
+    "CONTENT_ARTIFACT_NAVIGATION",
+    "production navbar 链接集合或顺序不属于固定 M0 导航。",
+    sourcePath,
+  );
+  const footer = extractUniqueElementInnerHtml(body, "footer", sourcePath);
+  const footerText = visibleFragmentText(footer, sourcePath);
+  assertVisibleValues(footerText, ["2026 Axial Muse", "沪ICP备2026029086号"], sourcePath);
+  const footerAnchors = extractAnchors(footer, sourcePath);
+  assertExactAnchors(
+    footerAnchors,
+    REQUIRED_FOOTER_LINKS,
+    "CONTENT_ARTIFACT_NAVIGATION",
+    "production footer 链接集合或顺序不属于固定 M0 页脚。",
+    sourcePath,
+  );
+  if (/(?:公安|公网安备|网安备案)/u.test(visibleFragmentText(body, sourcePath))) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_PUBLIC_COPY",
+      "公安联网备案现场核验前不得显示占位文本。",
+      {sourcePath},
+    );
+  }
+}
+
+function assertPageProjection(
+  html: string,
+  route: string,
+  content: LoadedValidatedContent,
+  articles: readonly PublicArticleProjection[],
+  expected: ArtifactPageExpectation,
+  sourcePath: string,
+): void {
+  assertHtmlLanguage(html, sourcePath);
+  assertPageMetadata(html, expected, sourcePath);
+  assertGlobalChrome(html, sourcePath);
+  const body = extractUniqueElementInnerHtml(html, "body", sourcePath);
+  assertNoUnapprovedPublicActions(body, content, sourcePath);
+  const main = extractUniqueElementInnerHtml(body, "main", sourcePath);
+  const h1 = extractUniqueElementInnerHtml(main, "h1", sourcePath);
+  if (visibleFragmentText(h1, sourcePath) !== expected.h1) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_H1",
+      "production 页面 H1 与安全页面投影不一致。",
+      {sourcePath},
+    );
+  }
+  if (route === "/") {
+    assertHomeProjection(main, content, articles, sourcePath);
+    return;
+  }
+  if (route === "/projects/") {
+    assertProjectsIndexProjection(main, content, sourcePath);
+    return;
+  }
+  if (route === "/writing/") {
+    assertWritingIndexProjection(main, content, articles, sourcePath);
+    return;
+  }
+  const project = content.projectNavigation.find((item) => item.canonicalPath === route);
+  if (project !== undefined) {
+    assertProjectProjection(main, project, sourcePath, {requireSelfLink: false});
+    return;
+  }
+  const article = articles.find((item) => item.canonicalPath === route);
+  if (article !== undefined) {
+    assertArticleProjection(main, article, sourcePath, {
+      requireSelfLink: false,
+      requireSummary: false,
+    });
+    return;
+  }
+  failContentBuild(
+    "CONTENT_ARTIFACT_ROUTE_SET",
+    "production HTML 路由不属于公开页面投影。",
+    {sourcePath},
+  );
 }
 
 function parseSitemap(xml: string): readonly string[] {
@@ -1588,7 +2757,10 @@ function unpublishedTokens(content: LoadedValidatedContent): UnpublishedLeakToke
         pathValues.add(source.sourcePath);
         addSourceEvidence(source);
       }
-      addStructuredValue(project);
+      for (const [field, value] of Object.entries(project)) {
+        if (field === "showcaseMode") continue;
+        addStructuredValue(value);
+      }
     }
   }
   for (const article of content.articles) {
@@ -1670,6 +2842,8 @@ export function assertProductionArtifact(
       }
     }
     const expected = expectedRoutes(content);
+    const expectedRouteSet = new Set(expected);
+    const articles = publicArticleProjections(content);
     const projectSidebar = expectedProjectSidebar(content);
     const writingSidebar = expectedWritingSidebar(content);
     const projectDetailRoutes = new Set(projectSidebar.map((link) => link.href));
@@ -1715,13 +2889,21 @@ export function assertProductionArtifact(
         );
       }
       assertProductionIndexing(activeHtml, sourcePath);
+      if (!expectedRouteSet.has(route)) continue;
+      assertCanonical(activeHtml, route, sourcePath);
       if (projectDetailRoutes.has(route)) {
-        assertCanonical(activeHtml, route, sourcePath);
         assertSidebarProjection(activeHtml, projectSidebar, sourcePath);
       } else if (writingDetailRoutes.has(route)) {
-        assertCanonical(activeHtml, route, sourcePath);
         assertSidebarProjection(activeHtml, writingSidebar, sourcePath);
       }
+      assertPageProjection(
+        activeHtml,
+        route,
+        content,
+        articles,
+        expectedPageExpectation(content, route, articles),
+        sourcePath,
+      );
     }
     actual.sort();
     if (
