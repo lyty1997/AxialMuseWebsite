@@ -18,7 +18,7 @@ AxialMuseWebsite 的首版目标是建立一个可维护的个人技术分享网
 
 | 决策域 | M0 选择 | 设计依据 |
 |---|---|---|
-| 页面技术 | 当前公开交付仍是手写静态骨架；仓库已建立 Node 24 LTS + 严格 TypeScript + Docusaurus `3.10.2`，#26 已远端闭环唯一 `site-content/` docs 实例、内容投影和 production 候选制品验收，#27 已远端闭环页面与公开表达并完成关闭后审查补验，#28 当前接管主题、响应式与可访问性验收 | classic/Infima 最小适配；首页与列表页使用严格 TypeScript 页面，项目与文章详情由 docs 实例承载；项目/文章双侧栏遵守 E-004 的三档响应式契约，不引入 UI 库、搜索或文章专属交互 |
+| 页面技术 | 当前公开交付仍是手写静态骨架；仓库已建立 Node 24 LTS + 严格 TypeScript + Docusaurus `3.10.2`，#26 已远端闭环唯一 `site-content/` docs 实例、内容投影和 production 候选制品验收，#27 已远端闭环页面与公开表达并完成关闭后审查补验，#28 已远端闭环主题、响应式与可访问性验收 | classic/Infima 最小适配；首页与列表页使用严格 TypeScript 页面，项目与文章详情由 docs 实例承载；项目/文章双侧栏遵守 E-004 的三档响应式契约，不引入 UI 库、搜索或文章专属交互 |
 | 内容事实 | Git 审核；`projects.json` 拥有项目结构化事实与主预览引用，`site-content/projects/` 拥有项目长文，`site-content/writing/` 拥有技术文章 | E-001/E-003/E-006/E-007 固定叙事所有者、作者、主题、项目模块与主预览 schema；构建期只读投影框架字段，构建产物不成为编辑源 |
 | URL 与发现 | 根 `routeBasePath`，文章原生完整 `slug`，项目短 slug；canonical 统一使用末尾 `/` | E-002/E-014 失败关闭检查重复路由、断链、锚点和精确重定向；旧路径及活动无斜杠路径由同一 release 的 Nginx exact rules 返回 301，不生成静态跳转页 |
 | 当前质量运行时 | 仓库已固定 `.nvmrc` 精确基线与 `>=24.16.0 <25` 兼容入口；D-080 已让本地 pre-commit 在子进程使用用户级 nvm/Node 24，系统默认 Node 与迁移前 CI 仍为 Node.js 22 ESM | E-010 隔离 runner、随附 npm 双端点、离线 CLI、本地作者 hook 与 #21 真实图准入已落盘；Node `24.18.0`/npm `11.16.0` 与 Node `24.16.0`/npm `11.13.0` 已对同一 lock 完成临时隔离冻结安装，目标 CI 接线尚未完成 |
@@ -28,7 +28,7 @@ AxialMuseWebsite 的首版目标是建立一个可维护的个人技术分享网
 | 发布 | GitHub Actions `production-artifact` 在 prerequisite 成功后对 `main` 精确 SHA fresh rebuild + full quality，将同一 `build/` 与派生 301 配置封装为不可变 `payload/` + `metadata/` artifact -> main HEAD 新鲜度检查 -> CAM -> TAT 固定命令 -> 整版 release | 不跨 job 传递 build；最终 artifact 绑定 repository/run/ID/SHA、外层 `artifactDigest`、artifact 外 `releaseContentSha256`、build tree、payload、运行清单、Nginx 配置与逐文件 SHA-256；服务器安装同 SHA payload/config，不安装 Node、不拉源码、不执行仓库脚本 |
 | 数据与隐私 | 无应用数据层、无 Cookie、无第三方运行时请求 | M0 没有已确认的数据收集需求 |
 
-当前有效的选择、取舍和实施门禁见[主站目标架构](main-site-target-architecture.md)。[M0 主站实现 Spec](../product/m0-main-site-spec.md)已按 D-078 与 E-001 至 E-016 收敛为 Docusaurus 多页面实现基线；内部实现细节不再逐项请求用户选择。#9、#10、#21、#22、#11、#23、#5、#6、#7、#26 与 #27 已闭环各自实现和远端验收；#27 的关闭后审查修复 `0fb38b20b8b576e53b238ab65f4ed964b52f0728` 也已完成精确 CI 与独立 Linux/浏览器补验，#28 当前接管主题、响应式与可访问性，#8、#12 至 #14 按依赖链继续推进。Git 提交、push、远端 CI 与 Issue 状态必须以 GitHub 实际记录单独验收，不能由本地闭环推导；基础设施、公开事实、数据与未来动态能力仍执行原门禁，后续依赖变化也必须重新准入。
+当前有效的选择、取舍和实施门禁见[主站目标架构](main-site-target-architecture.md)。[M0 主站实现 Spec](../product/m0-main-site-spec.md)已按 D-078 与 E-001 至 E-016 收敛为 Docusaurus 多页面实现基线；内部实现细节不再逐项请求用户选择。#9、#10、#21、#22、#11、#23、#5、#6、#7、#26、#27 与 #28 已闭环各自实现和远端验收；#27 的关闭后审查修复 `0fb38b20b8b576e53b238ab65f4ed964b52f0728` 已完成精确 CI 与独立 Linux/浏览器补验，#28 的实现提交 `255fe98f494344aca400d5a48a5d19ccb425183d` 及精确 CI run `30244831021` 也已验收，#8、#12 至 #14 按依赖链继续推进。Git 提交、push、远端 CI 与 Issue 状态必须以 GitHub 实际记录单独验收，不能由本地闭环推导；基础设施、公开事实、数据与未来动态能力仍执行原门禁，后续依赖变化也必须重新准入。
 
 ## 当前实现
 

@@ -37,7 +37,7 @@
 
 ## 当前阶段
 
-- 阶段：Docusaurus 静态主站的上层方向和 M0 多页面基线已经固定。#9/#10/#21/#22/#11/#23/#5/#6/#7 已分别闭环 npm 隔离、供应链、严格 TypeScript、测试、内容 schema、真实项目正文与静态素材门禁；#26 已由提交 `91dd3c7d4b8553910418119d7ee8e677974fe01a` 完成唯一 docs 实例、真实内容投影和 production 制品闭环，精确 CI run `29970675298` 成功并关闭。用户已完成 D-091 的 Codex Desktop 交接；[Issue #27](https://github.com/lyty1997/AxialMuseWebsite/issues/27) 已由实现提交 `4d436c1ea53c957f66f147565bcc96b6c98f8b36` 和关闭后审查修复 `0fb38b20b8b576e53b238ab65f4ed964b52f0728` 完成首页、目录/详情公开表达、导航、页脚、统一 SEO 与安全关系链接投影，精确 CI runs `30203875055`、`30229220799` 均成功且补充验收已回填。当前解锁 [Issue #28](https://github.com/lyty1997/AxialMuseWebsite/issues/28) 的主题、响应式与可访问性验收，#8、#12 至 #14 按依赖链继续。当前两个项目仍为 `planned` 且没有已批准主预览，技术文章为零，production 只能输出可信空状态；公开素材、目标 GitHub Action/凭证、服务器、DNS、证书和生产操作仍须各自授权。
+- 阶段：Docusaurus 静态主站的上层方向和 M0 多页面基线已经固定。#9/#10/#21/#22/#11/#23/#5/#6/#7 已分别闭环 npm 隔离、供应链、严格 TypeScript、测试、内容 schema、真实项目正文与静态素材门禁；#26 已由提交 `91dd3c7d4b8553910418119d7ee8e677974fe01a` 完成唯一 docs 实例、真实内容投影和 production 制品闭环，精确 CI run `29970675298` 成功并关闭。用户已完成 D-091 的 Codex Desktop 交接；[Issue #27](https://github.com/lyty1997/AxialMuseWebsite/issues/27) 已由实现提交 `4d436c1ea53c957f66f147565bcc96b6c98f8b36` 和关闭后审查修复 `0fb38b20b8b576e53b238ab65f4ed964b52f0728` 完成首页、目录/详情公开表达、导航、页脚、统一 SEO 与安全关系链接投影，精确 CI runs `30203875055`、`30229220799` 均成功且补充验收已回填。[Issue #28](https://github.com/lyty1997/AxialMuseWebsite/issues/28) 已由实现提交 `255fe98f494344aca400d5a48a5d19ccb425183d` 完成中性编辑式主题令牌、页面 CSS Modules、`1280/996` 三档目录、原生折叠、键盘焦点、200% 文本与无脚本退化验收，精确 CI run `30244831021` 成功；#8、#12 至 #14 按依赖链继续。当前两个项目仍为 `planned` 且没有已批准主预览，技术文章为零，production 只能输出可信空状态；公开素材、目标 GitHub Action/凭证、服务器、DNS、证书和生产操作仍须各自授权。
 - 范围：静态主站、Git 内容发布、项目展示与入口，以及未来中央账户、评论和独立项目服务的解耦边界。
 - 当前非目标：部署登录、评论、订阅、收费、用户数据采集、CMS、站内搜索、动态后端或项目试用环境。
 
