@@ -1,7 +1,7 @@
 # 主站目标架构
 
 状态：active
-最近更新：2026-07-23
+最近更新：2026-07-26
 适用范围：主站内容构建、未来中央账户、评论服务和独立项目服务的职责边界
 
 ## 决策依据
@@ -128,7 +128,7 @@ Git 仓库中的内容与页面
 - 该选择只减少同一静态主站内的插件与配置边界，不提供独立构建、部署或故障隔离；主站仍生成一个静态 release。
 - 未来若出现相互独立的文档版本生命周期，或明确批准时间流、归档、Feed 等产品需求，必须重新评估内容拓扑，并保持既定公开 URL。
 
-单一 docs 实例的 `routeBasePath` 为 `/`，物理内容根为仓库根 `site-content/`。技术文章继续使用 `site-content/writing/<source-name>/index.md|index.mdx` 与 D-059 至 D-067 的身份、投影和作者工具方向；E-001 又把项目正文固定为 `site-content/projects/<project-id>/index.md|index.mdx`，结构化事实由 `projects.json` 唯一拥有，框架字段只在构建内存中派生。E-004 固定首页、项目目录和技术分享目录由 `src/pages/` 提供，详情由同一个 docs 实例提供；项目侧栏与技术分享侧栏都只消费已校验的注册表、内容和当前 `docs[].id`。构建层公共入口只导出 `loadValidatedContent`、`createParseFrontMatter`、`createSidebarItemsGenerator` 与 `createContentDataPlugin`；侧栏稳定名称为 `projectsSidebar`、`writingSidebar`，安全 global data 键为 `projectNavigation`、`writingNavigation`。项目投影只含安全显示用的身份/来源、title/summary、canonical/顺序、状态/日期、可选仓库和主预览公开属性；文章投影只含身份/来源、title/summary、canonical/日期/状态、作者与主题显示名及已合并的 SEO description，不包含正文、原始注册表、关系/推荐/引用、私有索引或字节快照。内部 API、错误格式和测试编排属于 D-078 工程实现，不再形成逐项用户门禁；#9/#10/#21/#22/#11/#23/#5/#6/#7/#26 已完成各自实现与远端闭环。#27 当前消费该安全投影实现页面与公开表达，#8、#12 至 #14 继续跟踪预览候选与历史；不能把单项闭环等同于全站就绪，Git 提交、push、远端 CI、Issue 关闭、Action 改造和基础设施操作仍以各自授权与实际证据为准。
+单一 docs 实例的 `routeBasePath` 为 `/`，物理内容根为仓库根 `site-content/`。技术文章继续使用 `site-content/writing/<source-name>/index.md|index.mdx` 与 D-059 至 D-067 的身份、投影和作者工具方向；E-001 又把项目正文固定为 `site-content/projects/<project-id>/index.md|index.mdx`，结构化事实由 `projects.json` 唯一拥有，框架字段只在构建内存中派生。E-004 固定首页、项目目录和技术分享目录由 `src/pages/` 提供，详情由同一个 docs 实例提供；项目侧栏与技术分享侧栏都只消费已校验的注册表、内容和当前 `docs[].id`。构建层公共入口只导出 `loadValidatedContent`、`createParseFrontMatter`、`createSidebarItemsGenerator` 与 `createContentDataPlugin`；侧栏稳定名称为 `projectsSidebar`、`writingSidebar`，安全 global data 键为 `projectNavigation`、`writingNavigation`。项目投影只含安全显示用的身份/来源、title/summary、canonical/顺序、状态/日期、可选仓库、主预览公开属性，以及按注册表显式顺序解析到公开文章的相关技术分享标题与规范路径；文章投影只含身份/来源、title/summary、canonical/日期/状态、作者与主题显示名、已合并的 SEO description，以及按 frontmatter 显式顺序解析到当前可见项目或文章的标题与规范路径。该投影不包含正文、原始注册表、未解析关系 ID、推荐、引用、私有索引或字节快照；production 的每个关系目标必须已经公开且与同批投影闭合，不能静默省略。内部 API、错误格式和测试编排属于 D-078 工程实现，不再形成逐项用户门禁；#9/#10/#21/#22/#11/#23/#5/#6/#7/#26 已完成各自实现与远端闭环。#27 当前消费该安全投影实现页面与公开表达，#8、#12 至 #14 继续跟踪预览候选与历史；不能把单项闭环等同于全站就绪，Git 提交、push、远端 CI、Issue 关闭、Action 改造和基础设施操作仍以各自授权与实际证据为准。
 
 ## 内容字段适配边界
 

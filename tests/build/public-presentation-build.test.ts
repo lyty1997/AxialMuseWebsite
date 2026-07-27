@@ -118,6 +118,7 @@ function materializePublicContentFixture(root: string): Uint8Array {
       repositoryUrl: "https://github.com/lyty1997/AxialMuseWebsite",
       productionBranch: "main",
       showcaseMode: "repository",
+      relatedWriting: [ARTICLE_IDS.published, ARTICLE_IDS.archived],
       writingModules: [{
         id: "architecture-module",
         displayName: "架构模块",
@@ -203,6 +204,10 @@ function materializePublicContentFixture(root: string): Uint8Array {
       publishedAt: "2026-07-10",
       updatedAt: "2026-07-20",
       classification: {topics: ["architecture"]},
+      relations: {
+        projects: ["archived-project"],
+        articles: [ARTICLE_IDS.archived],
+      },
       seo: {
         description: "以真实 Docusaurus 构建证明通用文章列表、详情和 SEO 投影保持一致。",
         socialDescription: "真实公开文章 fixture 覆盖首页、技术分享目录、详情页和主题包装层。",
@@ -226,6 +231,7 @@ function materializePublicContentFixture(root: string): Uint8Array {
         module: "architecture-module",
         topics: ["architecture"],
       },
+      relations: {articles: [ARTICLE_IDS.published]},
       seo: {
         description: "以真实 Docusaurus 构建证明归档文章的列表、详情与 SEO 投影一致。",
         socialDescription: "真实归档文章 fixture 覆盖项目分组、模块分组、详情元数据和归档标记。",
@@ -393,6 +399,9 @@ test("I-14 真实 production build 渲染公开项目、文章与同路径主题
       "公开状态",
       "已归档",
       "查看源码",
+      "相关技术分享",
+      "Published Fixture Article",
+      "Archived Fixture Article",
       "PUBLIC-PROJECT-BODY-27",
       "https://www.axialmuse.com/projects/archived-fixture-project/",
       "https://www.axialmuse.com/assets/projects/archived-project/overview.webp",
@@ -403,6 +412,10 @@ test("I-14 真实 production build 渲染公开项目、文章与同路径主题
       "架构",
       "2026-07-10",
       "2026-07-20",
+      "相关项目",
+      "Archived Fixture Project",
+      "相关文章",
+      "Archived Fixture Article",
       "PUBLIC-ARTICLE-BODY-27",
       "https://www.axialmuse.com/writing/published-fixture-article/",
     ]);
@@ -411,12 +424,26 @@ test("I-14 真实 production build 渲染公开项目、文章与同路径主题
       "Fixture 作者",
       "架构",
       "已归档",
+      "相关文章",
+      "Published Fixture Article",
       "ARCHIVED-ARTICLE-BODY-27",
       "https://www.axialmuse.com/writing/archived-fixture-article/",
     ]);
     assert.match(
       projectDetail,
       /aria-label=(?:"项目资料"|项目资料)(?=[\t\n\f\r >])/u,
+    );
+    assert.match(
+      projectDetail,
+      /aria-label=(?:"相关技术分享"|相关技术分享)(?=[\t\n\f\r >])/u,
+    );
+    assert.match(
+      publishedArticle,
+      /aria-label=(?:"相关项目"|相关项目)(?=[\t\n\f\r >])/u,
+    );
+    assert.match(
+      publishedArticle,
+      /aria-label=(?:"相关文章"|相关文章)(?=[\t\n\f\r >])/u,
     );
     for (const articleDetail of [publishedArticle, archivedArticle]) {
       assert.match(

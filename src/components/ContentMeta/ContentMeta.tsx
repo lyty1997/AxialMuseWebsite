@@ -1,4 +1,6 @@
+import Link from "@docusaurus/Link";
 import {useCurrentContentDetail} from "../SiteContentData";
+import type {SiteContentLink} from "../SiteContentData";
 
 const PROJECT_STATUS = {
   active: "进行中",
@@ -6,6 +8,30 @@ const PROJECT_STATUS = {
   completed: "已完成",
   archived: "已归档",
 } as const;
+
+function RelatedLinks({
+  label,
+  links,
+}: Readonly<{
+  label: "相关技术分享" | "相关项目" | "相关文章";
+  links: readonly SiteContentLink[];
+}>) {
+  if (links.length === 0) return null;
+  return (
+    <>
+      <dt>{label}</dt>
+      <dd>
+        <ul aria-label={label}>
+          {links.map((link) => (
+            <li key={link.canonicalPath}>
+              <Link to={link.canonicalPath}>{link.title}</Link>
+            </li>
+          ))}
+        </ul>
+      </dd>
+    </>
+  );
+}
 
 export function ContentMeta() {
   const detail = useCurrentContentDetail();
@@ -37,6 +63,10 @@ export function ContentMeta() {
                 </dd>
               </>
             )}
+          <RelatedLinks
+            label="相关技术分享"
+            links={project.relatedWriting}
+          />
         </dl>
       </>
     );
@@ -80,6 +110,8 @@ export function ContentMeta() {
             </>
           )
           : null}
+        <RelatedLinks label="相关项目" links={article.relatedProjects} />
+        <RelatedLinks label="相关文章" links={article.relatedArticles} />
       </dl>
     </>
   );

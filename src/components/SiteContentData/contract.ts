@@ -5,6 +5,11 @@ export interface SiteProjectPreviewImage {
   readonly alt: string;
 }
 
+export interface SiteContentLink {
+  readonly title: string;
+  readonly canonicalPath: string;
+}
+
 export interface SiteProject {
   readonly projectId: string;
   readonly sourcePath: string;
@@ -16,6 +21,7 @@ export interface SiteProject {
   readonly publicationStatus: "published" | "archived";
   readonly updatedAt: string;
   readonly repositoryUrl?: string;
+  readonly relatedWriting: readonly SiteContentLink[];
   readonly previewImage: SiteProjectPreviewImage;
 }
 
@@ -43,6 +49,8 @@ interface SiteArticleBase {
   readonly authors: readonly SiteArticleAuthor[];
   readonly topics: readonly SiteArticleTopic[];
   readonly seo: SiteArticleSeo;
+  readonly relatedProjects: readonly SiteContentLink[];
+  readonly relatedArticles: readonly SiteContentLink[];
 }
 
 export interface SitePublicArticle extends SiteArticleBase {
@@ -224,6 +232,37 @@ function date(value: unknown, fieldPath: string): string {
   return candidate;
 }
 
+function readContentLinks(
+  value: unknown,
+  fieldPath: string,
+  kind: "project" | "article",
+  maximum: 5 | 10,
+): readonly SiteContentLink[] {
+  const entries = array(value, fieldPath);
+  if (entries.length > maximum) fail(fieldPath);
+  const routes = new Set<string>();
+  return entries.map((entry, index) => {
+    const itemPath = `${fieldPath}.${index}`;
+    const candidate = record(entry, itemPath);
+    exactKeys(candidate, ["title", "canonicalPath"], itemPath);
+    const route = canonicalPath(
+      candidate.canonicalPath,
+      `${itemPath}.canonicalPath`,
+    );
+    const routePattern = kind === "project"
+      ? /^\/projects\/[a-z0-9]+(?:-[a-z0-9]+)*\/$/u
+      : /^\/writing\/[a-z0-9]+(?:-[a-z0-9]+)*\/$/u;
+    if (!routePattern.test(route) || routes.has(route)) {
+      fail(`${itemPath}.canonicalPath`);
+    }
+    routes.add(route);
+    return {
+      title: string(candidate.title, `${itemPath}.title`),
+      canonicalPath: route,
+    };
+  });
+}
+
 function readProject(value: unknown, fieldPath: string): SiteProject {
   const candidate = record(value, fieldPath);
   exactKeys(candidate, [
@@ -237,6 +276,7 @@ function readProject(value: unknown, fieldPath: string): SiteProject {
     "publicationStatus",
     "updatedAt",
     "repositoryUrl",
+    "relatedWriting",
     "previewImage",
   ], fieldPath);
   const preview = record(candidate.previewImage, `${fieldPath}.previewImage`);
@@ -279,6 +319,12 @@ function readProject(value: unknown, fieldPath: string): SiteProject {
     ...(candidate.repositoryUrl === undefined
       ? {}
       : {repositoryUrl: httpsUrl(candidate.repositoryUrl, `${fieldPath}.repositoryUrl`)}),
+    relatedWriting: readContentLinks(
+      candidate.relatedWriting,
+      `${fieldPath}.relatedWriting`,
+      "article",
+      10,
+    ),
     previewImage: {
       publicUrl: assetUrl(preview.publicUrl, `${fieldPath}.previewImage.publicUrl`),
       width: 1600,
@@ -328,6 +374,8 @@ function readArticle(
     "authors",
     "topics",
     "seo",
+    "relatedProjects",
+    "relatedArticles",
   ], fieldPath);
   const publicationStatus = expectedStatus === "draft"
     ? enumValue<"draft">(
@@ -372,6 +420,18 @@ function readArticle(
         `${fieldPath}.seo.socialDescription`,
       ),
     },
+    relatedProjects: readContentLinks(
+      candidate.relatedProjects,
+      `${fieldPath}.relatedProjects`,
+      "project",
+      5,
+    ),
+    relatedArticles: readContentLinks(
+      candidate.relatedArticles,
+      `${fieldPath}.relatedArticles`,
+      "article",
+      10,
+    ),
   };
   if (publicationStatus === "draft") {
     if (candidate.publishedAt !== undefined) fail(`${fieldPath}.publishedAt`);
@@ -493,6 +553,58 @@ export function readSiteContentData(value: unknown): SiteContentData {
   for (const article of siteArticles({projectNavigation, writingNavigation})) {
     if (routes.has(article.canonicalPath)) fail("writingNavigation.canonicalPath");
     routes.add(article.canonicalPath);
+  }
+  const projectsByRoute = new Map(
+    projectNavigation.map((project) => [project.canonicalPath, project]),
+  );
+  const articles = siteArticles({projectNavigation, writingNavigation});
+  const articlesByRoute = new Map(
+    articles.map((article) => [article.canonicalPath, article]),
+  );
+  const assertResolvedLinks = (
+    links: readonly SiteContentLink[],
+    targets: ReadonlyMap<
+      string,
+      Readonly<{title: string; publicationStatus: string}>
+    >,
+    fieldPath: string,
+    selfPath?: string,
+    requirePublicTarget = false,
+  ): void => {
+    for (const [index, link] of links.entries()) {
+      const target = targets.get(link.canonicalPath);
+      if (
+        target === undefined
+        || target.title !== link.title
+        || link.canonicalPath === selfPath
+        || (requirePublicTarget && target.publicationStatus === "draft")
+      ) {
+        fail(`${fieldPath}.${index}`);
+      }
+    }
+  };
+  for (const [projectIndex, project] of projectNavigation.entries()) {
+    assertResolvedLinks(
+      project.relatedWriting,
+      articlesByRoute,
+      `projectNavigation.${projectIndex}.relatedWriting`,
+      undefined,
+      true,
+    );
+  }
+  for (const [articleIndex, article] of articles.entries()) {
+    assertResolvedLinks(
+      article.relatedProjects,
+      projectsByRoute,
+      `articles.${articleIndex}.relatedProjects`,
+    );
+    assertResolvedLinks(
+      article.relatedArticles,
+      articlesByRoute,
+      `articles.${articleIndex}.relatedArticles`,
+      article.canonicalPath,
+      article.publicationStatus !== "draft",
+    );
   }
   return {projectNavigation, writingNavigation};
 }

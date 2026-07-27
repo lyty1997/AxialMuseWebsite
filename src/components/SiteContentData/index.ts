@@ -6,6 +6,7 @@ export {
 } from "./contract";
 export type {
   SiteArticle,
+  SiteContentLink,
   SiteContentData,
   SiteContentDetail,
   SiteDraftArticle,

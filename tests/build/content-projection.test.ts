@@ -105,6 +105,7 @@ function projectRecord(
   publicationStatus: "draft" | "planned" | "published" | "archived",
   writingModules: readonly Record<string, unknown>[] = [],
   hasPreview = publicationStatus === "published" || publicationStatus === "archived",
+  relatedWriting: readonly string[] = [],
 ): Record<string, unknown> {
   return {
     id,
@@ -120,6 +121,7 @@ function projectRecord(
     productionBranch: "main",
     showcaseMode: "repository",
     writingModules,
+    ...(relatedWriting.length === 0 ? {} : {relatedWriting}),
     ...(hasPreview
       ? {
           previewImage: {
@@ -144,6 +146,10 @@ function articleFrontMatter(
     updatedAt?: string;
     project?: string;
     module?: string;
+    relations?: Readonly<{
+      projects?: readonly string[];
+      articles?: readonly string[];
+    }>;
   }> = {},
 ): string {
   const frontMatter = {
@@ -160,6 +166,7 @@ function articleFrontMatter(
       ...(options.module === undefined ? {} : {module: options.module}),
       topics: ["architecture"],
     },
+    ...(options.relations === undefined ? {} : {relations: options.relations}),
   };
   return `---
 ${JSON.stringify(frontMatter)}
@@ -230,6 +237,11 @@ function createFixture(options: FixtureOptions = {}): string {
         "Archived Project",
         10,
         options.emptyPublicContent === true ? "planned" : "archived",
+        [],
+        options.emptyPublicContent !== true,
+        options.emptyPublicContent === true
+          ? []
+          : [ARTICLE_IDS.published, ARTICLE_IDS.archived],
       ),
     ],
   });
@@ -296,7 +308,14 @@ function createFixture(options: FixtureOptions = {}): string {
         "Published Article",
         "/writing/published-article",
         "published",
-        {publishedAt: "2026-07-10", updatedAt: "2026-07-20"},
+        {
+          publishedAt: "2026-07-10",
+          updatedAt: "2026-07-20",
+          relations: {
+            projects: ["archived-project"],
+            articles: [ARTICLE_IDS.archived],
+          },
+        },
       ),
     );
     writeText(
@@ -312,6 +331,7 @@ function createFixture(options: FixtureOptions = {}): string {
           updatedAt: "2026-07-19",
           project: "published-project",
           module: "architecture-module",
+          relations: {articles: [ARTICLE_IDS.published]},
         },
       ),
     );
@@ -556,6 +576,14 @@ interface ArtifactArticleProjection {
   readonly authors: readonly Readonly<{id: string; displayName: string}>[];
   readonly topics: readonly Readonly<{id: string; displayName: string}>[];
   readonly seo: Readonly<{description: string; socialDescription: string}>;
+  readonly relatedProjects: readonly Readonly<{
+    title: string;
+    canonicalPath: string;
+  }>[];
+  readonly relatedArticles: readonly Readonly<{
+    title: string;
+    canonicalPath: string;
+  }>[];
 }
 
 interface ArtifactPageParts {
@@ -606,6 +634,19 @@ function artifactFooterHtml(): string {
     + '<a href="https://github.com/lyty1997">GitHub</a>'
     + '<a href="https://beian.miit.gov.cn/">沪ICP备2026029086号</a>'
     + "</footer>";
+}
+
+function artifactRelatedList(
+  label: "相关技术分享" | "相关项目" | "相关文章",
+  links: readonly Readonly<{title: string; canonicalPath: string}>[],
+): string {
+  if (links.length === 0) return "";
+  return `<dt>${label}</dt><dd><ul aria-label="${label}">`
+    + links.map((link) => (
+      `<li><a href="${escapeFixtureHtml(link.canonicalPath)}">`
+      + `${escapeFixtureHtml(link.title)}</a></li>`
+    )).join("")
+    + "</ul></dd>";
 }
 
 function artifactProjectCard(
@@ -767,7 +808,10 @@ function artifactExpectedPageHtml(
           : `<a href="${escapeFixtureHtml(project.repositoryUrl)}">查看源码</a>`)
         + `<img src="${escapeFixtureHtml(project.previewImage.publicUrl)}" `
         + `alt="${escapeFixtureHtml(project.previewImage.alt)}" `
-        + `width="${project.previewImage.width}" height="${project.previewImage.height}">`,
+        + `width="${project.previewImage.width}" height="${project.previewImage.height}">`
+        + (project.relatedWriting.length === 0
+          ? ""
+          : `<dl>${artifactRelatedList("相关技术分享", project.relatedWriting)}</dl>`),
     });
   }
   const article = articles.find((item) => item.canonicalPath === route);
@@ -783,6 +827,10 @@ function artifactExpectedPageHtml(
       + `<time datetime="${article.publishedAt}">${article.publishedAt}</time>`
       + `<time datetime="${article.updatedAt}">${article.updatedAt}</time>`
       + `<p>${article.topics.map((topic) => escapeFixtureHtml(topic.displayName)).join("、")}</p>`
+      + (article.relatedProjects.length + article.relatedArticles.length === 0
+        ? ""
+        : `<dl>${artifactRelatedList("相关项目", article.relatedProjects)}`
+          + `${artifactRelatedList("相关文章", article.relatedArticles)}</dl>`)
       + "<h2>技术问题</h2><p>公开正文。</p>",
   });
 }
@@ -2405,6 +2453,124 @@ test("I-14 production artifact 锁定项目图片与项目文章安全显示字�
   });
 });
 
+test("I-14 production artifact 精确闭合详情关联列表并省略空关系列表", async () => {
+  const mutationNames = ["missing", "href", "title", "order"] as const;
+  for (const mutationName of mutationNames) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const project = content.projectNavigation.find(
+        (item) => item.relatedWriting.length > 1,
+      );
+      assert.ok(project);
+      const projectPath = resolve(
+        fixture.buildDirectory,
+        artifactHtmlPath(project.canonicalPath),
+      );
+      const input = readFileSync(projectPath, "utf8");
+      const relationList = artifactRelatedList(
+        "相关技术分享",
+        project.relatedWriting,
+      );
+      const first = project.relatedWriting[0];
+      assert.ok(first);
+      const mutatedList = mutationName === "missing"
+        ? ""
+        : mutationName === "href"
+          ? relationList.replace(
+              `href="${first.canonicalPath}"`,
+              'href="/writing/wrong-target/"',
+            )
+          : mutationName === "title"
+            ? relationList.replace(
+                `>${escapeFixtureHtml(first.title)}</a>`,
+                ">错误标题</a>",
+              )
+            : artifactRelatedList(
+                "相关技术分享",
+                [...project.relatedWriting].reverse(),
+              );
+      const output = input.replace(relationList, mutatedList);
+      assert.notEqual(output, input, mutationName);
+      writeFileSync(projectPath, output, {encoding: "utf8", mode: 0o600});
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_DISPLAY_PROJECTION"),
+      );
+    });
+  }
+
+  for (const label of ["相关项目", "相关文章"] as const) {
+    for (const mutationName of ["missing", "href"] as const) {
+      await withFixture(async (repositoryRoot) => {
+        const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+        const fixture = createArtifactFixture(repositoryRoot, content);
+        const article = artifactArticles(content).find((item) => (
+          label === "相关项目"
+            ? item.relatedProjects.length > 0
+            : item.relatedArticles.length > 0
+        ));
+        assert.ok(article);
+        const links = label === "相关项目"
+          ? article.relatedProjects
+          : article.relatedArticles;
+        const first = links[0];
+        assert.ok(first);
+        const articlePath = resolve(
+          fixture.buildDirectory,
+          artifactHtmlPath(article.canonicalPath),
+        );
+        const relationList = artifactRelatedList(label, links);
+        const mutatedList = mutationName === "missing"
+          ? ""
+          : relationList.replace(
+              `href="${first.canonicalPath}"`,
+              'href="/wrong-relation-target/"',
+            );
+        const input = readFileSync(articlePath, "utf8");
+        const output = input.replace(relationList, mutatedList);
+        assert.notEqual(output, input);
+        writeFileSync(articlePath, output, {encoding: "utf8", mode: 0o600});
+        await assert.rejects(
+          () => invokeArtifactCheck(
+            content,
+            fixture.buildDirectory,
+            fixture.generatedFilesDirectory,
+          ),
+          assertBuildError("CONTENT_ARTIFACT_DISPLAY_PROJECTION"),
+        );
+      });
+    }
+  }
+
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    const project = content.projectNavigation.find(
+      (item) => item.relatedWriting.length === 0,
+    );
+    assert.ok(project);
+    const projectHtml = readFileSync(
+      resolve(fixture.buildDirectory, artifactHtmlPath(project.canonicalPath)),
+      "utf8",
+    );
+    assert.equal(projectHtml.includes('aria-label="相关技术分享"'), false);
+    assert.equal(projectHtml.includes("<dl>"), false);
+    assert.deepEqual(
+      await invokeArtifactCheck(
+        content,
+        fixture.buildDirectory,
+        fixture.generatedFilesDirectory,
+      ),
+      {sealAssertions: 2, staticAssertions: 2, disposals: 1},
+    );
+  });
+});
+
 test("I-14 production artifact 拒绝活动交互表面与未上线项目动作", async () => {
   const activeMutations = [
     "<form></form>",
@@ -2610,6 +2776,49 @@ test("I-14 production artifact 在 navbar、footer 与 writing 表面拒绝可�
       const output = mutation(input);
       assert.notEqual(output, input);
       writeFileSync(pagePath, output, {encoding: "utf8", mode: 0o600});
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_INTERACTIVE"),
+      );
+    });
+  }
+});
+
+test("I-14 production artifact 从行内格式、图片替代文本与修饰短语识别未上线动作", async () => {
+  const additions = [
+    '<a href="https://example.invalid/try"><strong>在线</strong>体验</a>',
+    '<a href="https://example.invalid/try"><img data-action-image alt="在线体验"></a>',
+    '<a href="https://example.invalid/try"><img data-action-image alt="在线">体验</a>',
+    '<a href="https://example.invalid/try">立即在线体验 DocRestore</a>',
+    '<a href="https://example.invalid/try">查看在线演示</a>',
+    '<a href="https://example.invalid/try" aria-label="在线&#x200b;体验">项目说明</a>',
+  ];
+  for (const addition of additions) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const article = artifactArticles(content)[0];
+      const project = content.projectNavigation[0];
+      assert.ok(article);
+      assert.ok(project);
+      const articlePath = resolve(
+        fixture.buildDirectory,
+        artifactHtmlPath(article.canonicalPath),
+      );
+      const input = readFileSync(articlePath, "utf8");
+      const renderedAddition = addition.replace(
+        "data-action-image",
+        `src="${project.previewImage.publicUrl}"`,
+      );
+      writeFileSync(
+        articlePath,
+        input.replace("</main>", `${renderedAddition}</main>`),
+        {encoding: "utf8", mode: 0o600},
+      );
       await assert.rejects(
         () => invokeArtifactCheck(
           content,

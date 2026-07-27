@@ -73,6 +73,8 @@ const REQUIRED_FOOTER_LINKS = Object.freeze([
   }),
 ]);
 const UNAPPROVED_ACTION_LABEL = /^(?:(?:(?:在线|立即|开始|免费)(?:体验|试用|演示))|(?:(?:体验|试用)(?:产品|项目|服务)?)|(?:(?:查看|观看|播放)(?:演示|视频))|(?:上传(?:文件|资料)?)|(?:登录(?:账户|账号)?)|(?:(?:view|watch|play)(?:[ \t]+(?:demo|video)))|(?:(?:start|try)[ \t]+(?:demo|experience|trial))|(?:demo|experience|login|upload|video|trial|watch))$/iu;
+const UNAPPROVED_CJK_ACTION_PHRASE = /(?:(?:在线|立即|马上|现在|开始|免费)(?:在线)?(?:体验|试用|演示)|(?:查看|观看|播放)(?:在线)?(?:演示|视频))/u;
+const UNAPPROVED_ENGLISH_ACTION_PHRASE = /\b(?:(?:view|watch|play)[ \t-]+(?:online[ \t-]+)?(?:demo|video)|(?:start|try)[ \t-]+(?:online[ \t-]+)?(?:demo|experience|trial))\b/iu;
 const UNAPPROVED_BUTTON_LABEL = /(?:登录|登入|上传|体验|试用|演示|视频|播放|观看|\b(?:demo|experience|login|play|trial|upload|video|watch)\b|log[ \t-]*in)/iu;
 const MEDIA_ACTION_HREF = /\.(?:m4v|mov|mp4|ogv|webm)(?:[?#].*)?$/iu;
 
@@ -115,6 +117,14 @@ interface PublicArticleProjection {
     description: string;
     socialDescription: string;
   }>;
+  readonly relatedProjects: readonly Readonly<{
+    title: string;
+    canonicalPath: string;
+  }>[];
+  readonly relatedArticles: readonly Readonly<{
+    title: string;
+    canonicalPath: string;
+  }>[];
 }
 
 function expectedPageRoutes(repositoryRoot: string): readonly string[] {
@@ -1435,6 +1445,48 @@ function assertHref(
   }
 }
 
+function assertRelatedLinks(
+  html: string,
+  label: "相关技术分享" | "相关项目" | "相关文章",
+  links: readonly Readonly<{title: string; canonicalPath: string}>[],
+  sourcePath: string,
+): void {
+  const lists = [...html.matchAll(
+    /(<ul(?=[\t\n\f\r />])[^>]*>)([\s\S]*?)<\/ul[\t\n\f\r ]*>/giu,
+  )].filter((match) => (
+    decodePageHtmlText(
+      htmlAttributes(match[1] ?? "", sourcePath).get("aria-label") ?? "",
+      sourcePath,
+    ) === label
+  ));
+  if (links.length === 0) {
+    if (lists.length === 0) return;
+    failContentBuild(
+      "CONTENT_ARTIFACT_DISPLAY_PROJECTION",
+      "production 详情页不得为空关系生成关联列表。",
+      {sourcePath},
+    );
+  }
+  const list = lists[0];
+  if (lists.length !== 1 || list === undefined) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_DISPLAY_PROJECTION",
+      "production 详情页缺少唯一的显式关联内容列表。",
+      {sourcePath},
+    );
+  }
+  assertExactAnchors(
+    extractAnchors(list[2] ?? "", sourcePath),
+    Object.freeze(links.map((link) => Object.freeze({
+      href: link.canonicalPath,
+      label: link.title,
+    }))),
+    "CONTENT_ARTIFACT_DISPLAY_PROJECTION",
+    "production 详情页关联内容的标题、顺序或规范链接发生漂移。",
+    sourcePath,
+  );
+}
+
 function assertProjectImage(
   main: string,
   project: LoadedValidatedContent["projectNavigation"][number],
@@ -1466,7 +1518,7 @@ function assertProjectProjection(
   main: string,
   project: LoadedValidatedContent["projectNavigation"][number],
   sourcePath: string,
-  options: Readonly<{requireSelfLink: boolean}>,
+  options: Readonly<{requireRelations: boolean; requireSelfLink: boolean}>,
 ): void {
   const visibleText = visibleFragmentText(main, sourcePath);
   assertVisibleValues(visibleText, [
@@ -1477,6 +1529,12 @@ function assertProjectProjection(
       ? [options.requireSelfLink ? "公开状态：已归档" : "公开状态 已归档"]
       : []),
     project.updatedAt,
+    ...(options.requireRelations && project.relatedWriting.length > 0
+      ? [
+          "相关技术分享",
+          ...project.relatedWriting.map((article) => article.title),
+        ]
+      : []),
   ], sourcePath);
   const anchors = extractAnchors(main, sourcePath);
   if (options.requireSelfLink) {
@@ -1485,6 +1543,14 @@ function assertProjectProjection(
   if (project.repositoryUrl !== undefined) {
     assertHref(anchors, project.repositoryUrl, sourcePath);
   }
+  if (options.requireRelations) {
+    assertRelatedLinks(
+      main,
+      "相关技术分享",
+      project.relatedWriting,
+      sourcePath,
+    );
+  }
   assertProjectImage(main, project, sourcePath);
 }
 
@@ -1492,7 +1558,11 @@ function assertArticleProjection(
   main: string,
   article: PublicArticleProjection,
   sourcePath: string,
-  options: Readonly<{requireSummary: boolean; requireSelfLink: boolean}>,
+  options: Readonly<{
+    requireRelations: boolean;
+    requireSummary: boolean;
+    requireSelfLink: boolean;
+  }>,
 ): void {
   const visibleText = visibleFragmentText(main, sourcePath);
   assertVisibleValues(visibleText, [
@@ -1505,9 +1575,20 @@ function assertArticleProjection(
     article.updatedAt,
     ...article.authors.map((author) => author.displayName),
     ...article.topics.map((topic) => topic.displayName),
+    ...(options.requireRelations && article.relatedProjects.length > 0
+      ? ["相关项目", ...article.relatedProjects.map((project) => project.title)]
+      : []),
+    ...(options.requireRelations && article.relatedArticles.length > 0
+      ? ["相关文章", ...article.relatedArticles.map((related) => related.title)]
+      : []),
   ], sourcePath);
+  const anchors = extractAnchors(main, sourcePath);
   if (options.requireSelfLink) {
-    assertHref(extractAnchors(main, sourcePath), article.canonicalPath, sourcePath);
+    assertHref(anchors, article.canonicalPath, sourcePath);
+  }
+  if (options.requireRelations) {
+    assertRelatedLinks(main, "相关项目", article.relatedProjects, sourcePath);
+    assertRelatedLinks(main, "相关文章", article.relatedArticles, sourcePath);
   }
   if (visibleText.includes(article.articleId)) {
     failContentBuild(
@@ -1609,7 +1690,10 @@ function assertCardProjectionSet(
   for (const project of projects) {
     const {card} = uniqueCard(project.canonicalPath, project.title);
     assertCardHeading(card, project.title, project.canonicalPath, sourcePath);
-    assertProjectProjection(card, project, sourcePath, {requireSelfLink: true});
+    assertProjectProjection(card, project, sourcePath, {
+      requireRelations: false,
+      requireSelfLink: true,
+    });
     assertExactVisibleProjection(
       card,
       Object.freeze([
@@ -1640,6 +1724,7 @@ function assertCardProjectionSet(
     const {card} = uniqueCard(article.canonicalPath, article.title);
     assertCardHeading(card, article.title, article.canonicalPath, sourcePath);
     assertArticleProjection(card, article, sourcePath, {
+      requireRelations: false,
       requireSelfLink: true,
       requireSummary: true,
     });
@@ -1893,11 +1978,49 @@ function actionLabels(
   sourcePath: string,
 ): readonly string[] {
   const attributes = htmlAttributes(openingTag, sourcePath);
-  return Object.freeze([
-    visibleFragmentText(innerHtml, sourcePath),
-    decodePageHtmlText(attributes.get("aria-label") ?? "", sourcePath).trim(),
-    decodePageHtmlText(attributes.get("title") ?? "", sourcePath).trim(),
-  ].filter((label) => label.length > 0));
+  const labels = new Set<string>();
+  const addLabel = (value: string): void => {
+    const normalized = value
+      .normalize("NFKC")
+      .replace(/\p{Cf}/gu, "")
+      .replace(/[\t\n\f\r ]+/gu, " ")
+      .trim();
+    if (normalized.length > 0) labels.add(normalized);
+  };
+  const addEncodedLabel = (value: string | undefined): void => {
+    if (value !== undefined) addLabel(decodePageHtmlText(value, sourcePath));
+  };
+
+  addLabel(visibleFragmentText(innerHtml, sourcePath));
+  const accessibleContents = innerHtml
+    .replace(/<(?:img|input)(?=[\t\n\f\r />])[^>]*>/giu, (tag) => {
+      const descendant = htmlAttributes(tag, sourcePath);
+      return descendant.get("alt")
+        ?? descendant.get("aria-label")
+        ?? descendant.get("title")
+        ?? "";
+    })
+    .replace(/<[^>]*>/gu, "");
+  addEncodedLabel(accessibleContents);
+  addEncodedLabel(attributes.get("aria-label"));
+  addEncodedLabel(attributes.get("title"));
+  for (const match of innerHtml.matchAll(
+    /<[A-Za-z][A-Za-z0-9:-]*(?=[\t\n\f\r />])[^>]*>/gu,
+  )) {
+    const descendant = htmlAttributes(match[0], sourcePath);
+    addEncodedLabel(descendant.get("alt"));
+    addEncodedLabel(descendant.get("aria-label"));
+    addEncodedLabel(descendant.get("title"));
+  }
+  return Object.freeze([...labels]);
+}
+
+function isUnapprovedActionLabel(label: string): boolean {
+  const compactCjk = label.replace(/[\p{P}\p{Z}\s]+/gu, "");
+  return UNAPPROVED_ACTION_LABEL.test(label)
+    || UNAPPROVED_ACTION_LABEL.test(compactCjk)
+    || UNAPPROVED_CJK_ACTION_PHRASE.test(compactCjk)
+    || UNAPPROVED_ENGLISH_ACTION_PHRASE.test(label);
 }
 
 function assertNoUnapprovedServiceReferences(
@@ -1977,12 +2100,12 @@ function assertNoUnapprovedPublicActions(
     const href = decodePageHtmlText(attributes.get("href") ?? "", sourcePath);
     return MEDIA_ACTION_HREF.test(href)
       || actionLabels(match[1] ?? "", match[2] ?? "", sourcePath)
-        .some((label) => UNAPPROVED_ACTION_LABEL.test(label));
+        .some(isUnapprovedActionLabel);
   });
   const hasUnapprovedButton = buttons.some((match) => (
     actionLabels(match[1] ?? "", match[2] ?? "", sourcePath)
       .some((label) => (
-        UNAPPROVED_ACTION_LABEL.test(label)
+        isUnapprovedActionLabel(label)
         || UNAPPROVED_BUTTON_LABEL.test(label)
       ))
   ));
@@ -2062,12 +2185,16 @@ function assertPageProjection(
   }
   const project = content.projectNavigation.find((item) => item.canonicalPath === route);
   if (project !== undefined) {
-    assertProjectProjection(main, project, sourcePath, {requireSelfLink: false});
+    assertProjectProjection(main, project, sourcePath, {
+      requireRelations: true,
+      requireSelfLink: false,
+    });
     return;
   }
   const article = articles.find((item) => item.canonicalPath === route);
   if (article !== undefined) {
     assertArticleProjection(main, article, sourcePath, {
+      requireRelations: true,
       requireSelfLink: false,
       requireSummary: false,
     });
