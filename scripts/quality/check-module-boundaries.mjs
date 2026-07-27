@@ -67,6 +67,7 @@ const NODE_ESM_LAYERS = new Set(["build", "domain", "test-build", "test-domain"]
 const OFFICIAL_PRESENTATION_IMPORTS = new Set([
   "@docusaurus/Head",
   "@docusaurus/Link",
+  "@docusaurus/plugin-content-docs/client",
   "@docusaurus/router",
   "@docusaurus/useDocusaurusContext",
   "@docusaurus/useGlobalData",
@@ -2767,7 +2768,7 @@ function validatePackageImport({
   const packageName = packageNameFromSpecifier(specifier);
   if (
     !packageNames.has(packageName)
-    && !APPROVED_FRAMEWORK_TYPE_IMPORTS.has(packageName)
+    && !APPROVED_FRAMEWORK_TYPE_IMPORTS.has(specifier)
   ) {
     addIssue(
       issues,
@@ -2843,6 +2844,35 @@ function validateSpecifier({
       packageNames,
       issues,
     });
+    return;
+  }
+  if (specifier.endsWith(".css")) {
+    const target = resolve(dirname(importerPath), specifier);
+    const relativeTarget = relative(root, target);
+    let isOrdinaryFile = false;
+    try {
+      const metadata = lstatSync(target);
+      isOrdinaryFile = metadata.isFile() && !metadata.isSymbolicLink();
+    } catch {
+      isOrdinaryFile = false;
+    }
+    if (
+      importerLayer !== "presentation"
+      || typeOnly
+      || !specifier.startsWith("./")
+      || !specifier.endsWith(".module.css")
+      || dirname(target) !== dirname(importerPath)
+      || relativeTarget.startsWith("..")
+      || isAbsolute(relativeTarget)
+      || !isOrdinaryFile
+    ) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_CSS_MODULE",
+        relativePath,
+        "CSS Modules 只能由展示层通过同目录 ./<name>.module.css 普通文件导入。",
+      );
+    }
     return;
   }
   const approvedDecoderDeclaration = CONTENT_DECODER_TYPE_IMPORTS[relativePath]?.[specifier];

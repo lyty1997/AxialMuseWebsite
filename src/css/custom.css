@@ -1,0 +1,168 @@
+:root {
+  --am-canvas: #f4f6f3;
+  --am-surface: #ffffff;
+  --am-ink: #171a1c;
+  --am-muted: #596168;
+  --am-line: #cfd6d1;
+  --am-accent: #0b6b5f;
+  --am-signal: #b94b35;
+  --ifm-background-color: var(--am-canvas);
+  --ifm-background-surface-color: var(--am-surface);
+  --ifm-color-primary: var(--am-accent);
+  --ifm-color-primary-dark: #095f55;
+  --ifm-color-primary-darker: #08594f;
+  --ifm-color-primary-darkest: #06483f;
+  --ifm-color-primary-light: #0d7769;
+  --ifm-color-primary-lighter: #0e7d6f;
+  --ifm-color-primary-lightest: #11907f;
+  --ifm-font-color-base: var(--am-ink);
+  --ifm-font-color-secondary: var(--am-muted);
+  --ifm-font-family-base: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ifm-font-size-base: 100%;
+  --ifm-line-height-base: 1.65;
+  --ifm-heading-font-family: var(--ifm-font-family-base);
+  --ifm-heading-font-weight: 650;
+  --ifm-heading-line-height: 1.25;
+  --ifm-global-radius: 8px;
+  --ifm-global-shadow-lw: none;
+  --ifm-global-shadow-md: none;
+  --ifm-global-shadow-tl: none;
+  --ifm-navbar-background-color: var(--am-canvas);
+  --ifm-navbar-shadow: none;
+  --ifm-footer-background-color: var(--am-canvas);
+  --ifm-footer-color: var(--am-muted);
+  --ifm-footer-link-color: var(--am-ink);
+  --ifm-toc-border-color: var(--am-line);
+  --ifm-menu-color: var(--am-muted);
+  --ifm-menu-color-active: var(--am-accent);
+  --ifm-code-font-size: 0.9rem;
+}
+
+html {
+  background: var(--am-canvas);
+  color: var(--am-ink);
+  scroll-padding-top: calc(var(--ifm-navbar-height) + 1rem);
+}
+
+body {
+  background: var(--am-canvas);
+  color: var(--am-ink);
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+a {
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.16em;
+}
+
+:focus-visible {
+  border-radius: 3px;
+  outline: 3px solid var(--am-accent);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--am-accent) 24%, transparent);
+  color: var(--am-ink);
+}
+
+.navbar {
+  border-bottom: 1px solid var(--am-line);
+}
+
+.navbar__brand {
+  color: var(--am-ink);
+  font-weight: 700;
+}
+
+.navbar__link {
+  color: var(--am-muted);
+  font-weight: 600;
+}
+
+.navbar__link:hover,
+.navbar__link--active {
+  color: var(--am-accent);
+}
+
+.footer {
+  border-top: 1px solid var(--am-line);
+}
+
+.footer__title {
+  color: var(--am-ink);
+  font-size: 1rem;
+}
+
+.footer__copyright,
+.footer__link-item {
+  font-size: 0.9rem;
+}
+
+.footer__link-item {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.theme-doc-markdown {
+  color: var(--am-ink);
+  font-size: 1rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.theme-doc-markdown > :first-child {
+  margin-top: 0;
+}
+
+.theme-doc-markdown h1,
+.theme-doc-markdown h2,
+.theme-doc-markdown h3 {
+  scroll-margin-top: calc(var(--ifm-navbar-height) + 1rem);
+}
+
+.theme-doc-markdown img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-block: 1.5rem;
+  border: 1px solid var(--am-line);
+  border-radius: 8px;
+  background: var(--am-surface);
+}
+
+.breadcrumbs__link,
+.pagination-nav__link {
+  border-radius: 8px;
+}
+
+.pagination-nav__link {
+  border-color: var(--am-line);
+  box-shadow: none;
+}
+
+.pagination-nav__link:hover {
+  border-color: var(--am-accent);
+}
+
+@media (max-width: 995px) {
+  .container {
+    padding-inline: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+  }
+}

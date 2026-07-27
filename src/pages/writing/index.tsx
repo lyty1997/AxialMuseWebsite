@@ -1,6 +1,7 @@
 import Layout from "@theme/Layout";
 import {SeoMetadata} from "../../components/SeoMetadata";
 import {WritingList} from "../../components/WritingList";
+import styles from "./index.module.css";
 
 export default function WritingPage() {
   return (
@@ -12,8 +13,10 @@ export default function WritingPage() {
         canonicalPath="/writing/"
         type="website"
       />
-      <main>
-        <h1>技术分享</h1>
+      <main className={styles.page}>
+        <header className={styles.header}>
+          <h1>技术分享</h1>
+        </header>
         <WritingList groupHeadingLevel="h2" />
       </main>
     </Layout>

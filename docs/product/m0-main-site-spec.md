@@ -126,7 +126,7 @@ DocRestore 只能表达源码与项目资料已经公开，不得暗示在线体
 
 ## 主题与响应式
 
-M0 使用 Docusaurus classic/Infima 的语义、导航和可访问性基础，通过 `themeConfig`、`src/css/custom.css`、CSS custom properties 与页面 CSS Modules 适配品牌。只提供亮色主题，不引入 UI 库，不 eject 主题，不做默认 swizzle；只有现有配置点无法满足已确认需求时，才对锁定版本做最小包装并补契约测试。
+M0 使用 Docusaurus classic/Infima 的语义、导航和可访问性基础，通过 `themeConfig`、`src/css/custom.css`、CSS custom properties 与页面 CSS Modules 适配品牌。只提供亮色主题，不引入 UI 库，不 eject 主题，不做默认 swizzle；只有现有配置点无法满足已确认需求时，才对锁定版本做最小包装并补契约测试。#28 的 fit-gap 已将包装边界锁定为同路径 `DocRoot/Layout` 与 `DocItem/Layout`：内容目录不得进入框架全局移动导航抽屉，标题目录只消费当前正文已有 H2/H3，空目录省略，移动折叠使用原生 `details`。
 
 ### 视觉基线
 
@@ -153,6 +153,8 @@ M0 使用 Docusaurus classic/Infima 的语义、导航和可访问性基础，�
 | `< 996px` | 左目录和右标题导航都折叠到正文上方，正文单列 |
 
 列表页与首页在 320 px 宽度仍须可读且无页面级横向滚动。固定比例素材使用 `aspect-ratio` 和明确尺寸，图片加载、标签或 hover 不得改变布局。M0 不实现滚动高亮、搜索、筛选或分页。
+
+断点实现必须覆盖浏览器分数视口：小于 `1280px` 的“浏览本栏目”使用基础显示规则，并只在 `min-width:1280px` 隐藏，不能用相邻 `max-width:1279px` 与 `min-width:1280px` 条件制造空档。浏览器验收除四个固定视口外还须直接探测 `995/996` 与 `1279/1280` 边界。
 
 ## 素材契约
 

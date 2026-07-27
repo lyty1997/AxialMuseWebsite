@@ -253,11 +253,12 @@ test("CODE-005 展示层只允许精确官方入口与同路径 theme-original �
       [
         "import Head from \"@docusaurus/Head\";\n",
         "import Link from \"@docusaurus/Link\";\n",
+        "import {useDoc} from \"@docusaurus/plugin-content-docs/client\";\n",
         "import {useLocation} from \"@docusaurus/router\";\n",
         "import useDocusaurusContext from \"@docusaurus/useDocusaurusContext\";\n",
         "import {usePluginData} from \"@docusaurus/useGlobalData\";\n",
         "export default function Home() {\n",
-        "  void useLocation; void useDocusaurusContext; void usePluginData;\n",
+        "  void useDoc; void useLocation; void useDocusaurusContext; void usePluginData;\n",
         "  return <Head><Link to=\"/\">fixture</Link></Head>;\n",
         "}\n",
       ].join(""),
@@ -273,6 +274,7 @@ test("CODE-005 展示层只允许精确官方入口与同路径 theme-original �
   for (const specifier of [
     "@docusaurus/Head/internal",
     "@docusaurus/Linker",
+    "@docusaurus/plugin-content-docs/client/internal",
     "@docusaurus/useGlobalData/unsafe",
     "@theme-originally/DocItem/Content",
   ]) {
@@ -303,6 +305,51 @@ test("CODE-005 展示层只允许精确官方入口与同路径 theme-original �
     );
     assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_OFFICIAL_ALIAS"));
   });
+});
+
+test("CODE-008 CSS Modules 只允许展示层同目录普通文件", () => {
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "src/pages/Styled.tsx",
+      "import styles from \"./Styled.module.css\";\nexport default function Styled() { return <main className={styles.page}>fixture</main>; }\n",
+    );
+    writeFixture(root, "src/pages/Styled.module.css", ".page { min-width: 0; }\n");
+    assert.deepEqual(checkModuleBoundaries({root}).issues, []);
+  });
+
+  for (const [sourcePath, specifier, stylePath] of [
+    [
+      "src/pages/Nested.tsx",
+      "../components/shared.module.css",
+      "src/components/shared.module.css",
+    ],
+    [
+      "src/domain/example/styled.ts",
+      "./styled.module.css",
+      "src/domain/example/styled.module.css",
+    ],
+    [
+      "src/pages/Global.tsx",
+      "./global.css",
+      "src/pages/global.css",
+    ],
+    [
+      "src/pages/Missing.tsx",
+      "./missing.module.css",
+      null,
+    ],
+  ]) {
+    withFixture((root) => {
+      writeFixture(
+        root,
+        sourcePath,
+        `import styles from "${specifier}";\nvoid styles;\n`,
+      );
+      if (stylePath !== null) writeFixture(root, stylePath, ".fixture { color: inherit; }\n");
+      assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_CSS_MODULE"));
+    });
+  }
 });
 
 test("CODE-013 根侧栏拒绝手写 doc ID 与额外 sidebar", () => {

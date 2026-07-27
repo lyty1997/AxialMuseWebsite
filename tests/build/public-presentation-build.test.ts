@@ -45,6 +45,7 @@ const ARTICLE_IDS = Object.freeze({
   archived: "018f0000-0000-7000-8000-000000000002",
   published: "018f0000-0000-7000-8000-000000000001",
 });
+const LONG_ARTICLE_TITLE = "用于验证窄屏折行、键盘可达与二倍文本缩放后仍不截断的超长技术分享标题";
 
 function assertOrdinaryDirectory(path: string, label: string): string {
   const metadata = lstatSync(path);
@@ -189,14 +190,14 @@ function materializePublicContentFixture(root: string): Uint8Array {
   writeText(
     root,
     "site-content/projects/archived-project/index.md",
-    "## Fixture 项目正文\n\n真实 Docusaurus 项目详情正文指纹：PUBLIC-PROJECT-BODY-27。\n",
+    "## Fixture 项目正文\n\n### Fixture 项目边界\n\n真实 Docusaurus 项目详情正文指纹：PUBLIC-PROJECT-BODY-27。\n",
   );
   writeText(
     root,
     "site-content/writing/published-article/index.md",
     articleSource({
       articleId: ARTICLE_IDS.published,
-      title: "Published Fixture Article",
+      title: LONG_ARTICLE_TITLE,
       slug: "/writing/published-fixture-article",
       summary: "A traceable general article rendered by the real presentation pipeline.",
       publicationStatus: "published",
@@ -212,7 +213,7 @@ function materializePublicContentFixture(root: string): Uint8Array {
         description: "以真实 Docusaurus 构建证明通用文章列表、详情和 SEO 投影保持一致。",
         socialDescription: "真实公开文章 fixture 覆盖首页、技术分享目录、详情页和主题包装层。",
       },
-    }, "## Fixture 通用文章正文\n\n真实文章正文指纹：PUBLIC-ARTICLE-BODY-27。\n"),
+    }, "## Fixture 通用文章正文与异常边界\n\n### 固有尺寸与失败状态\n\n真实文章正文指纹：PUBLIC-ARTICLE-BODY-27。\n"),
   );
   writeText(
     root,
@@ -236,7 +237,7 @@ function materializePublicContentFixture(root: string): Uint8Array {
         description: "以真实 Docusaurus 构建证明归档文章的列表、详情与 SEO 投影一致。",
         socialDescription: "真实归档文章 fixture 覆盖项目分组、模块分组、详情元数据和归档标记。",
       },
-    }, "## Fixture 归档文章正文\n\n真实归档正文指纹：ARCHIVED-ARTICLE-BODY-27。\n"),
+    }, "真实归档正文指纹：ARCHIVED-ARTICLE-BODY-27。此页面没有 H2/H3，不应制造标题导航控件。\n"),
   );
 
   const previewBytes = Uint8Array.from(
@@ -261,6 +262,29 @@ function assertContainsAll(value: string, expected: readonly string[]): void {
 
 function articleElementCount(value: string): number {
   return [...value.matchAll(/<article(?=[\t\n\f\r />])/giu)].length;
+}
+
+function elementCount(value: string, tagName: string): number {
+  return [...value.matchAll(new RegExp(
+    `<${tagName}(?=[\\t\\n\\f\\r />])`,
+    "giu",
+  ))].length;
+}
+
+function readCss(root: string): string {
+  const values: string[] = [];
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(directory, {withFileTypes: true})) {
+      const path = resolve(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(path);
+      } else if (entry.isFile() && entry.name.endsWith(".css")) {
+        values.push(readFileSync(path, "utf8"));
+      }
+    }
+  };
+  visit(root);
+  return values.join("\n");
 }
 
 function sanitizedBuildDiagnostic(
@@ -373,7 +397,7 @@ test("I-14 真实 production build 渲染公开项目、文章与同路径主题
     }
     assertContainsAll(home, [
       "Archived Fixture Project",
-      "Published Fixture Article",
+      LONG_ARTICLE_TITLE,
       "Archived Fixture Article",
       "公开状态：已归档",
     ]);
@@ -388,7 +412,7 @@ test("I-14 真实 production build 渲染公开项目、文章与同路径主题
       "通用技术",
       "Archived Fixture Project",
       "架构模块",
-      "Published Fixture Article",
+      LONG_ARTICLE_TITLE,
       "Archived Fixture Article",
       "已归档",
     ]);
@@ -400,14 +424,14 @@ test("I-14 真实 production build 渲染公开项目、文章与同路径主题
       "已归档",
       "查看源码",
       "相关技术分享",
-      "Published Fixture Article",
+      LONG_ARTICLE_TITLE,
       "Archived Fixture Article",
       "PUBLIC-PROJECT-BODY-27",
       "https://www.axialmuse.com/projects/archived-fixture-project/",
       "https://www.axialmuse.com/assets/projects/archived-project/overview.webp",
     ]);
     assertContainsAll(publishedArticle, [
-      "Published Fixture Article",
+      LONG_ARTICLE_TITLE,
       "Fixture 作者",
       "架构",
       "2026-07-10",
@@ -425,10 +449,44 @@ test("I-14 真实 production build 渲染公开项目、文章与同路径主题
       "架构",
       "已归档",
       "相关文章",
-      "Published Fixture Article",
+      LONG_ARTICLE_TITLE,
       "ARCHIVED-ARTICLE-BODY-27",
       "https://www.axialmuse.com/writing/archived-fixture-article/",
     ]);
+    for (const detailPage of [projectDetail, publishedArticle, archivedArticle]) {
+      assertContainsAll(detailPage, ["浏览本栏目"]);
+      assert.match(detailPage, /<details(?=[\t\n\f\r >])/u);
+    }
+    for (const detailWithToc of [projectDetail, publishedArticle]) {
+      assertContainsAll(detailWithToc, ["本页目录"]);
+      assert.equal(elementCount(detailWithToc, "details"), 2);
+      assert.match(
+        detailWithToc,
+        /aria-label=(?:"本页目录"|本页目录)(?=[\t\n\f\r >])/u,
+      );
+    }
+    assert.equal(elementCount(archivedArticle, "details"), 1);
+    assert.equal(archivedArticle.includes("本页目录"), false);
+    assert.match(
+      projectDetail,
+      /aria-label=(?:"项目目录"|项目目录)(?=[\t\n\f\r >])/u,
+    );
+    for (const articleDetail of [publishedArticle, archivedArticle]) {
+      assert.match(
+        articleDetail,
+        /aria-label=(?:"技术分享目录"|技术分享目录)(?=[\t\n\f\r >])/u,
+      );
+    }
+    assert.match(
+      projectDetail,
+      /aria-current=(?:"page"|page)(?=[\t\n\f\r >])/u,
+    );
+    for (const listPage of [home, projects]) {
+      assert.match(
+        listPage,
+        /<img(?=[^>]*\bloading=(?:"lazy"|lazy)(?=[\t\n\f\r />]))(?=[^>]*\bdecoding=(?:"async"|async)(?=[\t\n\f\r />]))[^>]*>/u,
+      );
+    }
     assert.match(
       projectDetail,
       /aria-label=(?:"项目资料"|项目资料)(?=[\t\n\f\r >])/u,
@@ -465,6 +523,19 @@ test("I-14 真实 production build 渲染公开项目、文章与同路径主题
       ),
       Buffer.from(previewBytes),
     );
+    const css = readCss(resolve(buildRoot, "assets"));
+    assertContainsAll(css, [
+      "--am-canvas",
+      "--am-surface",
+      "--am-ink",
+      "--am-muted",
+      "--am-line",
+      "--am-accent",
+      "--am-signal",
+      "prefers-reduced-motion",
+    ]);
+    assert.match(css, /(?:min-width:996px|width>=996px)/u);
+    assert.match(css, /(?:min-width:1280px|width>=1280px)/u);
     const sitemap = readFileSync(resolve(buildRoot, "sitemap.xml"), "utf8");
     assertContainsAll(sitemap, [
       "https://www.axialmuse.com/",

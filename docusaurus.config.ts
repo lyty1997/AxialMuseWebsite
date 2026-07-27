@@ -40,7 +40,9 @@ const config: Config = {
       "./src/build/content/docusaurus-preset.ts",
       {
         blog: false,
-        theme: {},
+        theme: {
+          customCss: "./src/css/custom.css",
+        },
         sitemap: {},
       } satisfies Omit<ClassicPresetOptions, "docs">,
     ],

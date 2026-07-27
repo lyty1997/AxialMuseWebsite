@@ -1,5 +1,6 @@
 import Link from "@docusaurus/Link";
 import {useSiteContentData} from "../SiteContentData";
+import styles from "./ProjectList.module.css";
 
 const EMPTY_PROJECTS = "当前还没有完成公开审核的项目。项目资料通过事实、隐私和视觉证据检查后会在这里出现。";
 
@@ -16,33 +17,38 @@ export interface ProjectListProps {
 
 export function ProjectList({headingLevel}: ProjectListProps) {
   const {projectNavigation} = useSiteContentData();
-  if (projectNavigation.length === 0) return <p>{EMPTY_PROJECTS}</p>;
+  if (projectNavigation.length === 0) {
+    return <p className={styles.emptyState}>{EMPTY_PROJECTS}</p>;
+  }
 
   const Heading = headingLevel;
   return (
-    <ul>
+    <ul className={styles.list}>
       {projectNavigation.map((project) => (
-        <li key={project.projectId}>
-          <article>
+        <li className={styles.item} key={project.projectId}>
+          <article className={styles.card}>
             <img
+              className={styles.preview}
               src={project.previewImage.publicUrl}
               width={project.previewImage.width}
               height={project.previewImage.height}
               alt={project.previewImage.alt}
+              loading="lazy"
+              decoding="async"
             />
-            <Heading>
+            <Heading className={styles.title}>
               <Link to={project.canonicalPath}>{project.title}</Link>
             </Heading>
-            <p>项目状态：{PROJECT_STATUS[project.status]}</p>
+            <p className={styles.status}>项目状态：{PROJECT_STATUS[project.status]}</p>
             {project.publicationStatus === "archived"
-              ? <p>公开状态：已归档</p>
+              ? <p className={styles.status}>公开状态：已归档</p>
               : null}
-            <p>{project.summary}</p>
-            <p>
+            <p className={styles.summary}>{project.summary}</p>
+            <p className={styles.updated}>
               最近更新：
               <time dateTime={project.updatedAt}>{project.updatedAt}</time>
             </p>
-            <p>
+            <p className={styles.actions}>
               <Link to={project.canonicalPath}>查看项目</Link>
               {project.repositoryUrl === undefined
                 ? null

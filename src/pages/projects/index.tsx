@@ -1,6 +1,7 @@
 import Layout from "@theme/Layout";
 import {ProjectList} from "../../components/ProjectList";
 import {SeoMetadata} from "../../components/SeoMetadata";
+import styles from "./index.module.css";
 
 export default function ProjectsPage() {
   return (
@@ -12,8 +13,10 @@ export default function ProjectsPage() {
         canonicalPath="/projects/"
         type="website"
       />
-      <main>
-        <h1>项目</h1>
+      <main className={styles.page}>
+        <header className={styles.header}>
+          <h1>项目</h1>
+        </header>
         <ProjectList headingLevel="h2" />
       </main>
     </Layout>

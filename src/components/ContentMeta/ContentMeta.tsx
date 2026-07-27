@@ -1,6 +1,7 @@
 import Link from "@docusaurus/Link";
 import {useCurrentContentDetail} from "../SiteContentData";
 import type {SiteContentLink} from "../SiteContentData";
+import styles from "./ContentMeta.module.css";
 
 const PROJECT_STATUS = {
   active: "进行中",
@@ -38,9 +39,9 @@ export function ContentMeta() {
   if (detail.kind === "project") {
     const project = detail.item;
     return (
-      <>
-        <p>{project.summary}</p>
-        <dl aria-label="项目资料">
+      <div className={styles.meta}>
+        <p className={styles.summary}>{project.summary}</p>
+        <dl className={styles.details} aria-label="项目资料">
           <dt>项目状态</dt>
           <dd>{PROJECT_STATUS[project.status]}</dd>
           {project.publicationStatus === "archived"
@@ -68,15 +69,15 @@ export function ContentMeta() {
             links={project.relatedWriting}
           />
         </dl>
-      </>
+      </div>
     );
   }
 
   const article = detail.item;
   return (
-    <>
-      <p>{article.summary}</p>
-      <dl aria-label="文章资料">
+    <div className={styles.meta}>
+      <p className={styles.summary}>{article.summary}</p>
+      <dl className={styles.details} aria-label="文章资料">
         <dt>作者</dt>
         <dd>{article.authors.map((author) => author.displayName).join("、")}</dd>
         {article.publicationStatus === "draft"
@@ -113,6 +114,6 @@ export function ContentMeta() {
         <RelatedLinks label="相关项目" links={article.relatedProjects} />
         <RelatedLinks label="相关文章" links={article.relatedArticles} />
       </dl>
-    </>
+    </div>
   );
 }

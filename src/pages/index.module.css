@@ -1,0 +1,105 @@
+.page {
+  width: min(calc(100% - 2rem), 1120px);
+  margin-inline: auto;
+  padding-block: clamp(2.5rem, 7vw, 5.5rem) 5rem;
+}
+
+.hero {
+  max-width: 760px;
+  padding-bottom: clamp(3rem, 7vw, 5rem);
+}
+
+.hero h1 {
+  margin-bottom: 1rem;
+  color: var(--am-ink);
+  font-size: 4.5rem;
+  letter-spacing: -0.035em;
+}
+
+.lede {
+  max-width: 34em;
+  margin-bottom: 0.75rem;
+  color: var(--am-ink);
+  font-size: 1.55rem;
+  line-height: 1.55;
+}
+
+.stage {
+  max-width: 48em;
+  margin-bottom: 1.5rem;
+  color: var(--am-muted);
+}
+
+.primaryLink,
+.primaryLink:visited {
+  --ifm-link-color: var(--am-surface);
+  --ifm-link-hover-color: var(--am-surface);
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--am-accent);
+  border-radius: 8px;
+  background: var(--am-accent);
+  color: var(--am-surface);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.primaryLink:hover {
+  background: #095f55;
+  color: var(--am-surface);
+  text-decoration: none;
+}
+
+.section {
+  padding-block: clamp(2.25rem, 5vw, 4rem);
+  border-top: 1px solid var(--am-line);
+}
+
+.section h2 {
+  margin-bottom: 1.25rem;
+  color: var(--am-ink);
+  font-size: 2rem;
+}
+
+.section p {
+  max-width: 72ch;
+}
+
+.roadmap {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.roadmap li {
+  padding-top: 0.75rem;
+  border-top: 3px solid var(--am-line);
+  color: var(--am-muted);
+}
+
+@media (max-width: 767px) {
+  .page {
+    width: min(calc(100% - 2rem), 1120px);
+    padding-top: 2.5rem;
+  }
+
+  .roadmap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero h1 {
+    font-size: 2.5rem;
+  }
+
+  .lede {
+    font-size: 1.2rem;
+  }
+
+  .section h2 {
+    font-size: 1.5rem;
+  }
+}

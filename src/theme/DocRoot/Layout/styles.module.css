@@ -1,0 +1,45 @@
+.docsWrapper {
+  min-width: 0;
+}
+
+.docRoot {
+  display: flex;
+  min-width: 0;
+}
+
+.desktopDirectory {
+  display: none;
+}
+
+.docMain {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+
+.docItemWrapper {
+  width: min(100%, 1180px);
+  min-width: 0;
+  margin-inline: auto;
+  padding: 1.25rem 1.5rem 3rem;
+}
+
+@media (min-width: 1280px) {
+  .desktopDirectory {
+    display: block;
+    flex: 0 0 clamp(220px, 19vw, 280px);
+    padding: calc(var(--ifm-navbar-height) + 1.25rem) 1rem 2rem 1.5rem;
+    border-right: 1px solid var(--am-line);
+  }
+
+  .docMain {
+    flex: 1 1 auto;
+    width: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .docItemWrapper {
+    padding-inline: 1rem;
+  }
+}
