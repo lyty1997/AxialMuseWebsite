@@ -6,7 +6,7 @@
 
 ## 目标架构更新
 
-用户已确认主站使用 Git + Docusaurus 静态构建，并采用“静态主站 + 中央身份服务 + 独立评论服务 + 各项目独立服务”的演进方向。D-053 至 D-077 已固定单一 docs 内容实例、领域内容单一真相源、Docusaurus `3.10.2`、Node 24、严格 TypeScript、npm 冻结安装、目标源码边界和首次供应链准入协议。D-078 进一步把不改变产品方向、数据边界或基础设施授权的 M0 内部工程与展示细节委托给 Agent 查证、落盘并验证，D-079 增加 Node 24 测试类型直接候选；E-001 至 E-016 已固定项目结构化事实与长文职责拆分、URL 与路由闭包、内容注册表、classic/Infima 最小主题适配、静态制品交付、项目主预览 schema、发布态素材白名单、可验收草稿预览、npm 启动前隔离、确定性 SPDX、Node ESM TypeScript 测试、Docusaurus 官方结构化 frontmatter 解码、HEAD 可达完整 Git 历史门禁、同版本服务端 301、production artifact 自包含字节闭包，以及单一内容装配与零公开文档适配。D-097 至 D-099 又完成 Node 24 可信 CI 第一阶段、#12 历史门禁、#32 workflow 契约、静态白名单路径泄漏修复及普通 CI 移除 live audit 的窄幅调整，并依 D-100 的精确基点与本地提交授权纳入专题分支；该分支尚未推送或取得远端运行结论。完整约束见[主站目标架构](main-site-target-architecture.md)和[待决策问题](open-decisions.md)。
+用户已确认主站使用 Git + Docusaurus 静态构建，并采用“静态主站 + 中央身份服务 + 独立评论服务 + 各项目独立服务”的演进方向。D-053 至 D-077 已固定单一 docs 内容实例、领域内容单一真相源、Docusaurus `3.10.2`、Node 24、严格 TypeScript、npm 冻结安装、目标源码边界和首次供应链准入协议。D-078 进一步把不改变产品方向、数据边界或基础设施授权的 M0 内部工程与展示细节委托给 Agent 查证、落盘并验证，D-079 增加 Node 24 测试类型直接候选；E-001 至 E-016 已固定项目结构化事实与长文职责拆分、URL 与路由闭包、内容注册表、classic/Infima 最小主题适配、静态制品交付、项目主预览 schema、发布态素材白名单、可验收草稿预览、npm 启动前隔离、确定性 SPDX、Node ESM TypeScript 测试、Docusaurus 官方结构化 frontmatter 解码、HEAD 可达完整 Git 历史门禁、同版本服务端 301、production artifact 自包含字节闭包，以及单一内容装配与零公开文档适配。D-097 至 D-099 又完成 Node 24 可信 CI 第一阶段、#12 历史门禁、#32 workflow 契约、静态白名单路径泄漏修复及普通 CI 移除 live audit 的窄幅调整，并依 D-100 的精确基点与本地提交授权纳入专题分支；D-101 只允许把它交付到 `origin` 同名临时 ref，该 ref 不触发现有 `main`/`dev` workflow，远端运行结论仍待后续集成验收。完整约束见[主站目标架构](main-site-target-architecture.md)和[待决策问题](open-decisions.md)。
 
 本文其余部分记录当前仓库实现和 2026-07-13 形成的 M0 生产基线。凡涉及手工维护 `public/index.html`、零框架或推迟静态站点生成器的内容，均已被 D-028、D-029、D-051 先后替代；在 Docusaurus 迁移完成前，它们只描述当前状态，不代表目标实现。
 

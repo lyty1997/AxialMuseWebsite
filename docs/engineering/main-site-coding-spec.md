@@ -11,7 +11,7 @@
 
 2026-07-18 审查确认的实施契约矛盾由 GitHub Issues #5 至 #14 跟踪。E-006 至 E-016 已补齐内容所有权、主预览、发布态素材、草稿预览、npm 隔离、SPDX 确定化、Node ESM TypeScript 测试、完整 Git 历史门禁、同版本服务端 301、production job 字节所有权和单一内容装配；#9 已完成 E-010 实现、fixture 与真实双端点验收，#10 已完成 E-011 实现、真实 npm shape 与双端点全量验收，#21 已完成 D-077 的真实图闭环，#22 已在不改变依赖图的前提下完成 Docusaurus/严格 TypeScript scaffold、模块边界、受控 production build 和真实本地安装验收，#11 已完成 E-012 测试 program、runner、fixture 与远端闭环，#23 已完成统一解码、纯路径分类和项目/文章整批领域校验的远端闭环，#5 已迁移并远端关闭两份真实项目正文，#6 已完成 metadata-first 媒体清单、静态 WebP 容器/动画/尺寸/大小校验并远端闭环，#7 已由提交 `7f2115d9f1dc5396ca0c81fc9960223644d79725` 完成双模式静态素材计划与生产泄漏判定，CI run `29950131762` 成功并验收关闭；#26 也已由提交 `91dd3c7` 进入当前精确基点并完成远端闭环。#12 的 E-013 历史门禁已在本专题分支实现，作者命令接线仍由 #24 负责；#8、#13/#14 等其余任务继续跟踪。D-078 的委托和已确认上层方向继续有效，单项闭环不能替代目标内容、完整 CI 与发布闭环。
 
-D-097 已把固定 SHA 的官方 Action、Node 24 主/最低端点、完整 checkout、E-010 隔离安装、独立质量/类型/测试/构建负载、E-013 历史门禁和供应链接入 workflow。D-098 完成公开制品机器路径泄漏修复，D-099 从普通 push/PR CI 移除 live npm audit并保留静态供应链证据失败关闭，D-100 则固定本专题分支、精确基点和本地提交边界。已观测的 18 个 high 依赖节点仍是未修复风险，由 Dependabot Alerts 与人工依赖维护跟踪，不再决定普通 CI 结论。该专题分支尚未推送或取得远端 run，不等于 `main` required checks、immutable production artifact、GitHub `production` environment 或生产部署闭环。
+D-097 已把固定 SHA 的官方 Action、Node 24 主/最低端点、完整 checkout、E-010 隔离安装、独立质量/类型/测试/构建负载、E-013 历史门禁和供应链接入 workflow。D-098 完成公开制品机器路径泄漏修复，D-099 从普通 push/PR CI 移除 live npm audit并保留静态供应链证据失败关闭，D-100 则固定本专题分支、精确基点和本地提交边界。D-101 只授权非强制推送到 `origin` 同名临时 ref；该 ref 不触发现有 `main`/`dev` workflow。已观测的 18 个 high 依赖节点仍是未修复风险，由 Dependabot Alerts 与人工依赖维护跟踪，不再决定普通 CI 结论。临时 ref 交付不等于取得远端 run，也不等于 `main` required checks、immutable production artifact、GitHub `production` environment 或生产部署闭环。
 
 业务与架构行为仍直接引用原真相源及其 D-xxx 决策编号：
 
