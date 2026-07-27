@@ -1,0 +1,64 @@
+.list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  min-width: 0;
+}
+
+.card {
+  height: 100%;
+  padding: 1rem;
+  border: 1px solid var(--am-line);
+  border-radius: 8px;
+  background: var(--am-surface);
+}
+
+.preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 8 / 5;
+  margin-bottom: 1rem;
+  border: 1px solid var(--am-line);
+  border-radius: 6px;
+  background: var(--am-canvas);
+  object-fit: cover;
+}
+
+.title {
+  margin: 0 0 0.65rem;
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.status,
+.updated {
+  margin-block: 0.3rem;
+  color: var(--am-muted);
+  font-size: 0.9rem;
+}
+
+.summary {
+  margin-block: 0.9rem;
+  color: var(--am-ink);
+}
+
+.actions {
+  margin: 1rem 0 0;
+  font-weight: 650;
+}
+
+.emptyState {
+  max-width: 66ch;
+  margin: 0;
+  padding: 1rem;
+  border-left: 3px solid var(--am-line);
+  background: var(--am-surface);
+  color: var(--am-muted);
+}

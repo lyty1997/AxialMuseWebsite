@@ -60,6 +60,7 @@ function projectRecord(
   navigationOrder: number,
   publicationStatus: ProjectPublicationStatus,
   writingModules: readonly Record<string, unknown>[] = [],
+  relatedWriting: readonly string[] = [],
 ): Record<string, unknown> {
   const isPublic = publicationStatus === "published" || publicationStatus === "archived";
   return {
@@ -76,6 +77,7 @@ function projectRecord(
     productionBranch: "main",
     showcaseMode: "repository",
     writingModules,
+    ...(relatedWriting.length === 0 ? {} : {relatedWriting}),
     ...(isPublic
       ? {
           previewImage: {
@@ -212,6 +214,10 @@ function articleSource(
       description?: string;
       socialDescription?: string;
     }>;
+    relations?: Readonly<{
+      projects?: readonly string[];
+      articles?: readonly string[];
+    }>;
   }> = {},
 ): ArticleSourceInput {
   return {
@@ -235,6 +241,7 @@ function articleSource(
         topics: options.topics ?? ["architecture"],
       },
       ...(options.seo === undefined ? {} : {seo: options.seo}),
+      ...(options.relations === undefined ? {} : {relations: options.relations}),
     },
     content: "## 技术问题\n\n正文保留可复核的实现与测试证据。\n",
   };
@@ -389,7 +396,7 @@ test("CODE-013 项目与技术分享导航按显式顺序稳定派生并省略�
   const sources = createArticleSources();
   const articles = createValidatedArticles(catalog, sources);
 
-  const projects = expectSuccess(buildProjectNavigation({catalog}));
+  const projects = expectSuccess(buildProjectNavigation({catalog, articles}));
   assert.deepEqual(projects, [
     {
       projectId: "alpha-archived",
@@ -402,6 +409,7 @@ test("CODE-013 项目与技术分享导航按显式顺序稳定派生并省略�
       publicationStatus: "archived",
       updatedAt: "2026-07-20",
       repositoryUrl: "https://example.com/alpha-archived",
+      relatedWriting: [],
       previewImage: {
         publicUrl: "/assets/projects/alpha-archived/overview.webp",
         width: 1600,
@@ -420,6 +428,7 @@ test("CODE-013 项目与技术分享导航按显式顺序稳定派生并省略�
       publicationStatus: "published",
       updatedAt: "2026-07-20",
       repositoryUrl: "https://example.com/zeta-published",
+      relatedWriting: [],
       previewImage: {
         publicUrl: "/assets/projects/zeta-published/overview.webp",
         width: 1600,
@@ -438,6 +447,7 @@ test("CODE-013 项目与技术分享导航按显式顺序稳定派生并省略�
       publicationStatus: "published",
       updatedAt: "2026-07-20",
       repositoryUrl: "https://example.com/empty-published",
+      relatedWriting: [],
       previewImage: {
         publicUrl: "/assets/projects/empty-published/overview.webp",
         width: 1600,
@@ -482,6 +492,8 @@ test("CODE-013 项目与技术分享导航按显式顺序稳定派生并省略�
     description: publishedGeneral.summary,
     socialDescription: publishedGeneral.summary,
   });
+  assert.deepEqual(publishedGeneral.relatedProjects, []);
+  assert.deepEqual(publishedGeneral.relatedArticles, []);
 
   const archivedProject = production[1];
   assert.ok(archivedProject?.kind === "project");
@@ -573,6 +585,114 @@ test("CODE-013 preview 草稿仅在末组出现，有日期优先且无日期稳
   );
 });
 
+test("CODE-013 显式关联只投影当前可见目标的标题与规范路径并保留源顺序", () => {
+  const catalogInput = createCatalogInput();
+  const projectsDocument = catalogInput.projects.value as {
+    projects: Array<Record<string, unknown>>;
+  };
+  const archivedProject = projectsDocument.projects.find(
+    (project) => project.id === "alpha-archived",
+  );
+  assert.ok(archivedProject);
+  archivedProject.relatedWriting = [
+    ARTICLE_IDS.generalOlder,
+    ARTICLE_IDS.generalNewer,
+  ];
+  const catalog = expectSuccess(validateProjectCatalog(catalogInput));
+  const sources = createArticleSources();
+  const generalNewer = sources.find(
+    (source) => (
+      (source.frontMatter as Record<string, unknown>).articleId
+      === ARTICLE_IDS.generalNewer
+    ),
+  );
+  const draftUndated = sources.find(
+    (source) => (
+      (source.frontMatter as Record<string, unknown>).articleId
+      === ARTICLE_IDS.draftUndated
+    ),
+  );
+  assert.ok(generalNewer);
+  assert.ok(draftUndated);
+  (generalNewer.frontMatter as Record<string, unknown>).relations = {
+    projects: ["zeta-published", "alpha-archived"],
+    articles: [ARTICLE_IDS.generalOlder, ARTICLE_IDS.projectRoot],
+  };
+  (draftUndated.frontMatter as Record<string, unknown>).relations = {
+    projects: ["private-planned"],
+    articles: [ARTICLE_IDS.draftOlder, ARTICLE_IDS.generalOlder],
+  };
+  const articles = createValidatedArticles(catalog, sources);
+
+  const projects = expectSuccess(buildProjectNavigation({catalog, articles}));
+  assert.deepEqual(projects[0]?.relatedWriting, [
+    {
+      title: "General Older",
+      canonicalPath: "/writing/general-older/",
+    },
+    {
+      title: "General Newer",
+      canonicalPath: "/writing/general-newer/",
+    },
+  ]);
+
+  const production = expectSuccess(buildWritingNavigation({
+    mode: "production",
+    catalog,
+    articles,
+  }));
+  const projectedGeneralNewer = production
+    .flatMap((group) => group.kind === "general" ? group.articles : [])
+    .find((article) => article.articleId === ARTICLE_IDS.generalNewer);
+  assert.ok(projectedGeneralNewer);
+  assert.deepEqual(projectedGeneralNewer.relatedProjects, [
+    {
+      title: "Zeta Published",
+      canonicalPath: "/projects/zeta-published/",
+    },
+    {
+      title: "Alpha Archived",
+      canonicalPath: "/projects/alpha-archived/",
+    },
+  ]);
+  assert.deepEqual(projectedGeneralNewer.relatedArticles, [
+    {
+      title: "General Older",
+      canonicalPath: "/writing/general-older/",
+    },
+    {
+      title: "Project Root",
+      canonicalPath: "/writing/project-root/",
+    },
+  ]);
+
+  const preview = expectSuccess(buildWritingNavigation({
+    mode: "preview",
+    catalog,
+    articles,
+  }));
+  const draftGroup = preview.at(-1);
+  assert.ok(draftGroup?.kind === "draft");
+  const projectedDraft = draftGroup.articles.find(
+    (article) => article.articleId === ARTICLE_IDS.draftUndated,
+  );
+  assert.ok(projectedDraft);
+  assert.deepEqual(projectedDraft.relatedProjects, []);
+  assert.deepEqual(projectedDraft.relatedArticles, [
+    {
+      title: "Draft Older",
+      canonicalPath: "/writing/draft-older/",
+    },
+    {
+      title: "General Older",
+      canonicalPath: "/writing/general-older/",
+    },
+  ]);
+  assertDeepFrozen(projects);
+  assertDeepFrozen(production);
+  assertDeepFrozen(preview);
+});
+
 test("CODE-013 日期索引只有公开文章、字段精确且按 articleId ASCII 排序", () => {
   const catalog = createValidatedCatalog();
   const articles = createValidatedArticles(catalog);
@@ -608,8 +728,12 @@ test("E-016 catalog、文章 clone/伪造及跨 catalog 混用均按稳定 issue
   const clonedArticles = structuredClone(articles);
 
   expectFailure(
-    buildProjectNavigation({catalog: clonedCatalog}),
+    buildProjectNavigation({catalog: clonedCatalog, articles}),
     "CONTENT_NAVIGATION_CATALOG_INVALID",
+  );
+  expectFailure(
+    buildProjectNavigation({catalog, articles: clonedArticles}),
+    "CONTENT_NAVIGATION_ARTICLES_INVALID",
   );
   expectFailure(
     buildWritingNavigation({mode: "production", catalog, articles: clonedArticles}),
@@ -630,7 +754,10 @@ test("E-016 catalog、文章 clone/伪造及跨 catalog 混用均按稳定 issue
     "CONTENT_NAVIGATION_ARTICLES_INVALID",
   );
   expectFailure(
-    buildProjectNavigation({catalog: structuredClone(catalog) as ProjectCatalog}),
+    buildProjectNavigation({
+      catalog: structuredClone(catalog) as ProjectCatalog,
+      articles,
+    }),
     "CONTENT_NAVIGATION_CATALOG_INVALID",
   );
 });

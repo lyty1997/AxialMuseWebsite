@@ -213,8 +213,14 @@ export interface ArticleValidationInput {
 
 export type ContentBuildMode = "production" | "preview";
 
+export interface ContentNavigationLink {
+  readonly title: string;
+  readonly canonicalPath: string;
+}
+
 export interface ProjectNavigationInput {
   readonly catalog: ProjectCatalog;
+  readonly articles: readonly Article[];
 }
 
 export interface ProjectNavigationPreviewImage {
@@ -235,6 +241,7 @@ export interface ProjectNavigationItem {
   readonly publicationStatus: "published" | "archived";
   readonly updatedAt: string;
   readonly repositoryUrl?: string;
+  readonly relatedWriting: readonly ContentNavigationLink[];
   readonly previewImage: ProjectNavigationPreviewImage;
 }
 
@@ -271,6 +278,8 @@ export interface PublicArticleNavigationItem {
   readonly authors: readonly ArticleAuthorNavigationItem[];
   readonly topics: readonly ArticleTopicNavigationItem[];
   readonly seo: ArticleSeoNavigationInput;
+  readonly relatedProjects: readonly ContentNavigationLink[];
+  readonly relatedArticles: readonly ContentNavigationLink[];
 }
 
 export interface DraftArticleNavigationItem {
@@ -284,6 +293,8 @@ export interface DraftArticleNavigationItem {
   readonly authors: readonly ArticleAuthorNavigationItem[];
   readonly topics: readonly ArticleTopicNavigationItem[];
   readonly seo: ArticleSeoNavigationInput;
+  readonly relatedProjects: readonly ContentNavigationLink[];
+  readonly relatedArticles: readonly ContentNavigationLink[];
 }
 
 export interface GeneralWritingGroup {

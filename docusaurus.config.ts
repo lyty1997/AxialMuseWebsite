@@ -13,6 +13,7 @@ if (buildContext.mode === "preview") {
 const config: Config = {
   title: "Axial Muse",
   tagline: "个人项目与技术分享",
+  favicon: "data:,",
   url: "https://www.axialmuse.com",
   baseUrl: "/",
   trailingSlash: true,
@@ -40,7 +41,9 @@ const config: Config = {
       "./src/build/content/docusaurus-preset.ts",
       {
         blog: false,
-        theme: {},
+        theme: {
+          customCss: "./src/css/custom.css",
+        },
         sitemap: {},
       } satisfies Omit<ClassicPresetOptions, "docs">,
     ],
@@ -50,6 +53,39 @@ const config: Config = {
       defaultMode: "light",
       disableSwitch: true,
       respectPrefersColorScheme: false,
+    },
+    navbar: {
+      title: "Axial Muse",
+      items: [
+        {to: "/projects/", label: "项目", position: "left"},
+        {to: "/writing/", label: "技术分享", position: "left"},
+        {to: "/#roadmap", label: "路线", position: "left"},
+        {to: "/#about", label: "关于", position: "left"},
+        {
+          href: "https://github.com/lyty1997",
+          label: "GitHub",
+          position: "right",
+        },
+      ],
+    },
+    footer: {
+      style: "light",
+      links: [
+        {
+          title: "Axial Muse",
+          items: [
+            {
+              label: "GitHub",
+              href: "https://github.com/lyty1997",
+            },
+            {
+              label: "沪ICP备2026029086号",
+              href: "https://beian.miit.gov.cn/",
+            },
+          ],
+        },
+      ],
+      copyright: "2026 Axial Muse",
     },
   } satisfies ThemeConfig,
 };

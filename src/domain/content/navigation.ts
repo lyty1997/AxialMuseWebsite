@@ -7,6 +7,7 @@ import type {
   ArticleDateIndexInput,
   ArticleSeoNavigationInput,
   ArticleTopicNavigationItem,
+  ContentNavigationLink,
   DraftArticleNavigationItem,
   ModuleWritingGroup,
   Project,
@@ -44,11 +45,15 @@ interface ArticleDisplayProjection {
   readonly authors: readonly ArticleAuthorNavigationItem[];
   readonly topics: readonly ArticleTopicNavigationItem[];
   readonly seo: ArticleSeoNavigationInput;
+  readonly relatedProjects: readonly ContentNavigationLink[];
+  readonly relatedArticles: readonly ContentNavigationLink[];
 }
 
 interface ArticleDisplayIndexes {
   readonly authors: ReadonlyMap<string, Readonly<{id: string; displayName: string}>>;
   readonly topics: ReadonlyMap<string, Readonly<{id: string; displayName: string}>>;
+  readonly projects: ReadonlyMap<string, ContentNavigationLink>;
+  readonly articles: ReadonlyMap<string, ContentNavigationLink>;
 }
 
 function isPublicProject(project: Project): project is PublicProject {
@@ -87,9 +92,28 @@ function compareDraftArticles(left: Article, right: Article): number {
 }
 
 function createArticleDisplayIndexes(input: WritingNavigationInput): ArticleDisplayIndexes {
+  const visibleArticles = input.mode === "preview"
+    ? input.articles
+    : input.articles.filter(isPublicArticle);
   return {
     authors: new Map(input.catalog.authors.map((author) => [author.id, author])),
     topics: new Map(input.catalog.topics.map((topic) => [topic.id, topic])),
+    projects: new Map(input.catalog.projects
+      .filter(isPublicProject)
+      .map((project) => [
+        project.id,
+        {
+          title: project.title,
+          canonicalPath: canonicalProjectPath(project.slug),
+        },
+      ])),
+    articles: new Map(visibleArticles.map((article) => [
+      article.articleId,
+      {
+        title: article.title,
+        canonicalPath: canonicalArticlePath(article.slug),
+      },
+    ])),
   };
 }
 
@@ -134,6 +158,34 @@ function resolveArticleDisplayProjection(
   ) {
     return undefined;
   }
+  const relatedProjects: ContentNavigationLink[] = [];
+  for (const [index, projectId] of (article.relations?.projects ?? []).entries()) {
+    const project = indexes.projects.get(projectId);
+    if (project !== undefined) {
+      relatedProjects.push(project);
+    } else if (isPublicArticle(article)) {
+      collector.add(
+        "CONTENT_NAVIGATION_RELATION_UNAVAILABLE",
+        article.sourcePath,
+        `relations.projects.${index}`,
+        "公开文章关系目标不属于当前公开展示投影。",
+      );
+    }
+  }
+  const relatedArticles: ContentNavigationLink[] = [];
+  for (const [index, articleId] of (article.relations?.articles ?? []).entries()) {
+    const relatedArticle = indexes.articles.get(articleId);
+    if (relatedArticle !== undefined) {
+      relatedArticles.push(relatedArticle);
+    } else if (isPublicArticle(article)) {
+      collector.add(
+        "CONTENT_NAVIGATION_RELATION_UNAVAILABLE",
+        article.sourcePath,
+        `relations.articles.${index}`,
+        "公开文章关系目标不属于当前公开展示投影。",
+      );
+    }
+  }
   const description = article.seo?.description ?? article.summary;
   return {
     authors,
@@ -142,6 +194,8 @@ function resolveArticleDisplayProjection(
       description,
       socialDescription: article.seo?.socialDescription ?? description,
     },
+    relatedProjects,
+    relatedArticles,
   };
 }
 
@@ -206,14 +260,27 @@ export function buildProjectNavigation(
   input: ProjectNavigationInput,
 ): ValidationResult<readonly ProjectNavigationItem[]> {
   const collector = new IssueCollector();
-  if (!isRecord(input) || !isValidatedProjectCatalog(input.catalog)) {
+  if (!isRecord(input)) {
     addCatalogIssue(collector);
+    addArticleCollectionIssue(collector);
     return failure(collector);
   }
+  const catalogIsValid = isValidatedProjectCatalog(input.catalog);
+  if (!catalogIsValid) addCatalogIssue(collector);
+  if (!isValidatedArticleCollection(
+    input.articles,
+    catalogIsValid ? input.catalog : undefined,
+  )) {
+    addArticleCollectionIssue(collector);
+  }
+  if (collector.hasIssues()) return failure(collector);
 
   const sourceByProjectId = new Map(
     input.catalog.projectSources.map((source) => [source.projectId, source.sourcePath]),
   );
+  const publicArticlesById = new Map(input.articles
+    .filter(isPublicArticle)
+    .map((article) => [article.articleId, article]));
   const items: ProjectNavigationItem[] = [];
   for (const project of input.catalog.projects) {
     if (!isPublicProject(project)) continue;
@@ -236,6 +303,23 @@ export function buildProjectNavigation(
       );
       continue;
     }
+    const relatedWriting: ContentNavigationLink[] = [];
+    for (const [index, articleId] of project.relatedWriting.entries()) {
+      const article = publicArticlesById.get(articleId);
+      if (article === undefined) {
+        collector.add(
+          "CONTENT_PROJECT_NAVIGATION_RELATION_UNAVAILABLE",
+          PROJECTS_PATH,
+          `projectsById.${project.id}.relatedWriting.${index}`,
+          "公开项目相关技术分享不属于当前公开展示投影。",
+        );
+        continue;
+      }
+      relatedWriting.push({
+        title: article.title,
+        canonicalPath: canonicalArticlePath(article.slug),
+      });
+    }
     items.push({
       projectId: project.id,
       sourcePath,
@@ -247,6 +331,7 @@ export function buildProjectNavigation(
       publicationStatus: project.publicationStatus,
       updatedAt: project.updatedAt,
       ...(project.repositoryUrl === undefined ? {} : {repositoryUrl: project.repositoryUrl}),
+      relatedWriting,
       previewImage: {
         publicUrl: `/assets/${project.previewImage.sourcePath}`,
         width: project.previewImage.width,

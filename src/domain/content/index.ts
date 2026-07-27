@@ -26,6 +26,7 @@ export type {
   ArticleTopicNavigationItem,
   ArticleValidationInput,
   Author,
+  ContentNavigationLink,
   ContentBuildMode,
   ContentIssue,
   ContentPathClassification,

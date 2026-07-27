@@ -64,7 +64,19 @@ const SOURCE_ROOTS = new Set([
 ]);
 const PRESENTATION_ROOTS = new Set(["components", "pages", "theme"]);
 const NODE_ESM_LAYERS = new Set(["build", "domain", "test-build", "test-domain"]);
-const OFFICIAL_PRESENTATION_ALIASES = Object.freeze(["@generated/", "@theme/"]);
+const OFFICIAL_PRESENTATION_IMPORTS = new Set([
+  "@docusaurus/Head",
+  "@docusaurus/Link",
+  "@docusaurus/plugin-content-docs/client",
+  "@docusaurus/router",
+  "@docusaurus/useDocusaurusContext",
+  "@docusaurus/useGlobalData",
+]);
+const OFFICIAL_PRESENTATION_ALIAS_PREFIXES = Object.freeze([
+  "@generated/",
+  "@theme/",
+  "@theme-original/",
+]);
 const APPROVED_FRAMEWORK_TYPE_IMPORTS = new Set([
   "@docusaurus/plugin-content-docs",
 ]);
@@ -154,6 +166,10 @@ const BUILD_INTERNAL_TEST_IMPORTS = Object.freeze({
     "src/build/content/docs-adapter.ts",
     "src/build/content/docusaurus-preset-factory.ts",
   ])),
+  "tests/build/presentation-contract.test.ts": Object.freeze(new Set([
+    "src/components/SeoMetadata/contract.ts",
+    "src/components/SiteContentData/contract.ts",
+  ])),
   "tests/build/static-assets-input.test.ts": Object.freeze(new Set([
     "src/build/static-assets/plain-data.ts",
   ])),
@@ -163,6 +179,21 @@ const BUILD_INTERNAL_TEST_IMPORTS = Object.freeze({
     "src/build/static-assets/plan.ts",
   ])),
 });
+const ZERO_DEPENDENCY_PRESENTATION_CONTRACTS = Object.freeze(new Set([
+  "src/components/SeoMetadata/contract.ts",
+  "src/components/SiteContentData/contract.ts",
+]));
+const FORBIDDEN_PRESENTATION_CONTRACT_GLOBALS = Object.freeze(new Set([
+  "document",
+  "fetch",
+  "history",
+  "localStorage",
+  "location",
+  "navigator",
+  "sessionStorage",
+  "window",
+  "XMLHttpRequest",
+]));
 
 function toPosix(path) {
   return path.split(sep).join("/");
@@ -2598,6 +2629,27 @@ function extractModuleReferences(source, relativePath, issues) {
     const specifier = findStatementSpecifier(tokens, index + 1);
     if (specifier !== null) specifiers.push({specifier, typeOnly: false});
   }
+  if (ZERO_DEPENDENCY_PRESENTATION_CONTRACTS.has(relativePath)) {
+    if (specifiers.length > 0) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_PRESENTATION_CONTRACT_DEPENDENCY",
+        relativePath,
+        "展示防御契约必须保持零 import，供 Linux Node 测试直接执行。",
+      );
+    }
+    if (tokens.some((token) => (
+      token.type === "identifier"
+      && FORBIDDEN_PRESENTATION_CONTRACT_GLOBALS.has(token.value)
+    ))) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_PRESENTATION_CONTRACT_BROWSER",
+        relativePath,
+        "展示防御契约不得依赖浏览器运行时全局。",
+      );
+    }
+  }
   return {defaultExport, specifiers};
 }
 
@@ -2689,7 +2741,10 @@ function validatePackageImport({
     }
     return;
   }
-  if (OFFICIAL_PRESENTATION_ALIASES.some((prefix) => specifier.startsWith(prefix))) {
+  if (
+    OFFICIAL_PRESENTATION_IMPORTS.has(specifier)
+    || OFFICIAL_PRESENTATION_ALIAS_PREFIXES.some((prefix) => specifier.startsWith(prefix))
+  ) {
     if (importerLayer !== "presentation") {
       addIssue(
         issues,
@@ -2697,13 +2752,23 @@ function validatePackageImport({
         relativePath,
         "Docusaurus 展示别名只能在展示层使用。",
       );
+    } else if (specifier.startsWith("@theme-original/")) {
+      const themePath = /^src\/theme\/(.+)\/index\.tsx?$/u.exec(relativePath)?.[1];
+      if (themePath === undefined || specifier !== `@theme-original/${themePath}`) {
+        addIssue(
+          issues,
+          "MODULE_BOUNDARY_OFFICIAL_ALIAS",
+          relativePath,
+          "@theme-original 只能由同路径主题包装消费。",
+        );
+      }
     }
     return;
   }
   const packageName = packageNameFromSpecifier(specifier);
   if (
     !packageNames.has(packageName)
-    && !APPROVED_FRAMEWORK_TYPE_IMPORTS.has(packageName)
+    && !APPROVED_FRAMEWORK_TYPE_IMPORTS.has(specifier)
   ) {
     addIssue(
       issues,
@@ -2779,6 +2844,35 @@ function validateSpecifier({
       packageNames,
       issues,
     });
+    return;
+  }
+  if (specifier.endsWith(".css")) {
+    const target = resolve(dirname(importerPath), specifier);
+    const relativeTarget = relative(root, target);
+    let isOrdinaryFile = false;
+    try {
+      const metadata = lstatSync(target);
+      isOrdinaryFile = metadata.isFile() && !metadata.isSymbolicLink();
+    } catch {
+      isOrdinaryFile = false;
+    }
+    if (
+      importerLayer !== "presentation"
+      || typeOnly
+      || !specifier.startsWith("./")
+      || !specifier.endsWith(".module.css")
+      || dirname(target) !== dirname(importerPath)
+      || relativeTarget.startsWith("..")
+      || isAbsolute(relativeTarget)
+      || !isOrdinaryFile
+    ) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_CSS_MODULE",
+        relativePath,
+        "CSS Modules 只能由展示层通过同目录 ./<name>.module.css 普通文件导入。",
+      );
+    }
     return;
   }
   const approvedDecoderDeclaration = CONTENT_DECODER_TYPE_IMPORTS[relativePath]?.[specifier];
@@ -2885,7 +2979,16 @@ function validateSpecifier({
     "test-domain": new Set(["test-domain", "domain"]),
     "test-build": new Set(["test-build", "build", "domain"]),
   };
-  if (!allowedLayers[importerLayer]?.has(targetLayer)) {
+  const approvedInternalTestImport = BUILD_INTERNAL_TEST_IMPORTS[relativePath]
+    ?.has(targetRelativePath) === true;
+  if (
+    !allowedLayers[importerLayer]?.has(targetLayer)
+    && !(
+      importerLayer === "test-build"
+      && targetLayer === "presentation"
+      && approvedInternalTestImport
+    )
+  ) {
     addIssue(
       issues,
       "MODULE_BOUNDARY_LAYER_DIRECTION",
@@ -2896,7 +2999,7 @@ function validateSpecifier({
   }
   if (
     importerLayer !== targetLayer
-    && !BUILD_INTERNAL_TEST_IMPORTS[relativePath]?.has(targetRelativePath)
+    && !approvedInternalTestImport
     && !/\/index\.tsx?$/u.test(targetRelativePath)
   ) {
     addIssue(

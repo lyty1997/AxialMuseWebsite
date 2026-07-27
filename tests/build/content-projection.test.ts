@@ -39,6 +39,7 @@ const ARTICLE_IDS = Object.freeze({
 interface FixtureOptions {
   readonly draftPreview?: boolean;
   readonly duplicateArticleRoute?: boolean;
+  readonly emptyPublicContent?: boolean;
 }
 
 type LoadedContent = Awaited<ReturnType<typeof loadValidatedContent>>;
@@ -101,9 +102,10 @@ function projectRecord(
   id: string,
   title: string,
   navigationOrder: number,
-  publicationStatus: "draft" | "published" | "archived",
+  publicationStatus: "draft" | "planned" | "published" | "archived",
   writingModules: readonly Record<string, unknown>[] = [],
   hasPreview = publicationStatus === "published" || publicationStatus === "archived",
+  relatedWriting: readonly string[] = [],
 ): Record<string, unknown> {
   return {
     id,
@@ -111,7 +113,7 @@ function projectRecord(
     slug: id,
     navigationOrder,
     summary: `Traceable project summary for ${id} with sufficient fixture evidence.`,
-    status: publicationStatus === "archived" ? "archived" : "active",
+    status: publicationStatus === "archived" ? "completed" : "active",
     publicationStatus,
     startedAt: "2026-01",
     updatedAt: "2026-07-20",
@@ -119,6 +121,7 @@ function projectRecord(
     productionBranch: "main",
     showcaseMode: "repository",
     writingModules,
+    ...(relatedWriting.length === 0 ? {} : {relatedWriting}),
     ...(hasPreview
       ? {
           previewImage: {
@@ -143,6 +146,10 @@ function articleFrontMatter(
     updatedAt?: string;
     project?: string;
     module?: string;
+    relations?: Readonly<{
+      projects?: readonly string[];
+      articles?: readonly string[];
+    }>;
   }> = {},
 ): string {
   const frontMatter = {
@@ -159,6 +166,7 @@ function articleFrontMatter(
       ...(options.module === undefined ? {} : {module: options.module}),
       topics: ["architecture"],
     },
+    ...(options.relations === undefined ? {} : {relations: options.relations}),
   };
   return `---
 ${JSON.stringify(frontMatter)}
@@ -212,13 +220,29 @@ function createFixture(options: FixtureOptions = {}): string {
         [],
         options.draftPreview === true,
       ),
-      projectRecord("published-project", "Published Project", 20, "published", [{
-        id: "architecture-module",
-        displayName: "架构模块",
-        navigationOrder: 10,
-        status: "active",
-      }]),
-      projectRecord("archived-project", "Archived Project", 10, "archived"),
+      projectRecord(
+        "published-project",
+        "Published Project",
+        20,
+        options.emptyPublicContent === true ? "planned" : "published",
+        [{
+          id: "architecture-module",
+          displayName: "架构模块",
+          navigationOrder: 10,
+          status: "active",
+        }],
+      ),
+      projectRecord(
+        "archived-project",
+        "Archived Project",
+        10,
+        options.emptyPublicContent === true ? "planned" : "archived",
+        [],
+        options.emptyPublicContent !== true,
+        options.emptyPublicContent === true
+          ? []
+          : [ARTICLE_IDS.published, ARTICLE_IDS.archived],
+      ),
     ],
   });
   writeJson(repositoryRoot, "docs/contracts/authors.json", {
@@ -275,46 +299,56 @@ function createFixture(options: FixtureOptions = {}): string {
       `## ${projectId}\n\n项目正文提供稳定且可复核的实现证据。\n`,
     );
   }
-  writeText(
-    repositoryRoot,
-    "site-content/writing/published-article/index.md",
-    articleFrontMatter(
-      ARTICLE_IDS.published,
-      "Published Article",
-      "/writing/published-article",
-      "published",
-      {publishedAt: "2026-07-10", updatedAt: "2026-07-20"},
-    ),
-  );
-  writeText(
-    repositoryRoot,
-    "site-content/writing/archived-article/index.md",
-    articleFrontMatter(
-      ARTICLE_IDS.archived,
-      "Archived Article",
-      "/writing/archived-article",
-      "archived",
-      {
-        publishedAt: "2026-07-11",
-        updatedAt: "2026-07-19",
-        project: "published-project",
-        module: "architecture-module",
-      },
-    ),
-  );
-  writeText(
-    repositoryRoot,
-    "site-content/writing/draft-article/index.md",
-    articleFrontMatter(
-      ARTICLE_IDS.draft,
-      "Draft Article",
-      options.duplicateArticleRoute === true
-        ? "/writing/published-article"
-        : "/writing/draft-article",
-      "draft",
-      {updatedAt: "2026-07-21", project: "draft-project"},
-    ),
-  );
+  if (options.emptyPublicContent !== true) {
+    writeText(
+      repositoryRoot,
+      "site-content/writing/published-article/index.md",
+      articleFrontMatter(
+        ARTICLE_IDS.published,
+        "Published Article",
+        "/writing/published-article",
+        "published",
+        {
+          publishedAt: "2026-07-10",
+          updatedAt: "2026-07-20",
+          relations: {
+            projects: ["archived-project"],
+            articles: [ARTICLE_IDS.archived],
+          },
+        },
+      ),
+    );
+    writeText(
+      repositoryRoot,
+      "site-content/writing/archived-article/index.md",
+      articleFrontMatter(
+        ARTICLE_IDS.archived,
+        "Archived Article",
+        "/writing/archived-article",
+        "archived",
+        {
+          publishedAt: "2026-07-11",
+          updatedAt: "2026-07-19",
+          project: "published-project",
+          module: "architecture-module",
+          relations: {articles: [ARTICLE_IDS.published]},
+        },
+      ),
+    );
+    writeText(
+      repositoryRoot,
+      "site-content/writing/draft-article/index.md",
+      articleFrontMatter(
+        ARTICLE_IDS.draft,
+        "Draft Article",
+        options.duplicateArticleRoute === true
+          ? "/writing/published-article"
+          : "/writing/draft-article",
+        "draft",
+        {updatedAt: "2026-07-21", project: "draft-project"},
+      ),
+    );
+  }
   return repositoryRoot;
 }
 
@@ -530,11 +564,275 @@ function artifactSidebarHtml(
     + `<ul class="theme-doc-sidebar-menu menu__list">${menu}</ul></nav></aside>`;
 }
 
-function artifactPageHtml(route: string, sidebar = ""): string {
-  return "<!doctype html><html><head>"
+interface ArtifactArticleProjection {
+  readonly articleId: string;
+  readonly sourcePath: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly canonicalPath: string;
+  readonly publicationStatus: "published" | "archived";
+  readonly publishedAt: string;
+  readonly updatedAt: string;
+  readonly authors: readonly Readonly<{id: string; displayName: string}>[];
+  readonly topics: readonly Readonly<{id: string; displayName: string}>[];
+  readonly seo: Readonly<{description: string; socialDescription: string}>;
+  readonly relatedProjects: readonly Readonly<{
+    title: string;
+    canonicalPath: string;
+  }>[];
+  readonly relatedArticles: readonly Readonly<{
+    title: string;
+    canonicalPath: string;
+  }>[];
+}
+
+interface ArtifactPageParts {
+  readonly title: string;
+  readonly description: string;
+  readonly socialDescription: string;
+  readonly openGraphType: "article" | "website";
+  readonly main: string;
+  readonly openGraphImage?: string;
+}
+
+const ARTIFACT_PROJECT_STATUS_LABELS = Object.freeze({
+  active: "进行中",
+  paused: "已暂停",
+  completed: "已完成",
+  archived: "已归档",
+});
+
+const ARTIFACT_ARTICLE_STATUS_LABELS = Object.freeze({
+  archived: "已归档",
+  published: "已发布",
+});
+
+function artifactArticles(content: LoadedContent): readonly ArtifactArticleProjection[] {
+  return content.writingNavigation.flatMap((group) => {
+    if (group.kind === "general") return group.articles;
+    if (group.kind === "draft") return [];
+    return [
+      ...group.rootArticles,
+      ...group.modules.flatMap((module) => module.articles),
+    ];
+  });
+}
+
+function artifactGlobalChrome(): string {
+  return '<header><nav class="navbar navbar--fixed-top">'
+    + '<a href="/">Axial Muse</a>'
+    + '<a href="/projects/">项目</a>'
+    + '<a href="/writing/">技术分享</a>'
+    + '<a href="/#roadmap">路线</a>'
+    + '<a href="/#about">关于</a>'
+    + '<a href="https://github.com/lyty1997">GitHub</a>'
+    + "</nav></header>";
+}
+
+function artifactFooterHtml(): string {
+  return "<footer><p>2026 Axial Muse</p>"
+    + '<a href="https://github.com/lyty1997">GitHub</a>'
+    + '<a href="https://beian.miit.gov.cn/">沪ICP备2026029086号</a>'
+    + "</footer>";
+}
+
+function artifactRelatedList(
+  label: "相关技术分享" | "相关项目" | "相关文章",
+  links: readonly Readonly<{title: string; canonicalPath: string}>[],
+): string {
+  if (links.length === 0) return "";
+  return `<dt>${label}</dt><dd><ul aria-label="${label}">`
+    + links.map((link) => (
+      `<li><a href="${escapeFixtureHtml(link.canonicalPath)}">`
+      + `${escapeFixtureHtml(link.title)}</a></li>`
+    )).join("")
+    + "</ul></dd>";
+}
+
+function artifactProjectCard(
+  project: LoadedContent["projectNavigation"][number],
+): string {
+  return "<article>"
+    + `<img src="${escapeFixtureHtml(project.previewImage.publicUrl)}" `
+    + `alt="${escapeFixtureHtml(project.previewImage.alt)}" `
+    + `width="${project.previewImage.width}" height="${project.previewImage.height}">`
+    + `<h3><a href="${escapeFixtureHtml(project.canonicalPath)}">`
+    + `${escapeFixtureHtml(project.title)}</a></h3>`
+    + `<p>项目状态：${ARTIFACT_PROJECT_STATUS_LABELS[project.status]}</p>`
+    + (project.publicationStatus === "archived"
+      ? "<p>公开状态：已归档</p>"
+      : "")
+    + `<p>${escapeFixtureHtml(project.summary)}</p>`
+    + `<p>最近更新：<time datetime="${project.updatedAt}">${project.updatedAt}</time></p>`
+    + `<p><a href="${escapeFixtureHtml(project.canonicalPath)}">查看项目</a>`
+    + (project.repositoryUrl === undefined
+      ? ""
+      : ` · <a href="${escapeFixtureHtml(project.repositoryUrl)}">查看源码</a>`)
+    + "</p></article>";
+}
+
+function artifactArticleCard(article: ArtifactArticleProjection): string {
+  return "<article>"
+    + `<h3><a href="${escapeFixtureHtml(article.canonicalPath)}">`
+    + `${escapeFixtureHtml(article.title)}</a></h3>`
+    + `<p>${escapeFixtureHtml(article.summary)}</p>`
+    + `<p>作者：${article.authors.map((author) => escapeFixtureHtml(author.displayName)).join("、")}</p>`
+    + `<p>发布于 <time datetime="${article.publishedAt}">${article.publishedAt}</time>`
+    + ` · 更新于 <time datetime="${article.updatedAt}">${article.updatedAt}</time>`
+    + (article.publicationStatus === "archived" ? " · 已归档" : "")
+    + "</p>"
+    + `<p>主题：${article.topics.map((topic) => escapeFixtureHtml(topic.displayName)).join("、")}</p>`
+    + "</article>";
+}
+
+function artifactHeadHtml(route: string, parts: ArtifactPageParts): string {
+  return `<title>${escapeFixtureHtml(parts.title)}</title>`
+    + `<meta name="description" content="${escapeFixtureHtml(parts.description)}">`
     + `<link rel="canonical" href="https://www.axialmuse.com${route}">`
-    + `</head><body><a href="/unrelated/">全页无关链接</a>${sidebar}`
-    + "<main>fixture</main></body></html>";
+    + `<meta property="og:title" content="${escapeFixtureHtml(parts.title)}">`
+    + `<meta property="og:description" content="${escapeFixtureHtml(parts.socialDescription)}">`
+    + `<meta property="og:url" content="https://www.axialmuse.com${route}">`
+    + `<meta property="og:type" content="${parts.openGraphType}">`
+    + (parts.openGraphImage === undefined
+      ? ""
+      : `<meta property="og:image" content="${escapeFixtureHtml(parts.openGraphImage)}">`);
+}
+
+function artifactWritingGroups(content: LoadedContent): string {
+  return content.writingNavigation.map((group) => {
+    if (group.kind === "draft") return "";
+    const groupArticles = group.kind === "general"
+      ? group.articles
+      : [
+          ...group.rootArticles,
+          ...group.modules.flatMap((module) => module.articles),
+        ];
+    const modules = group.kind === "project"
+      ? group.modules.map((module) => `<h3>${escapeFixtureHtml(module.label)}</h3>`).join("")
+      : "";
+    return `<section><h2>${escapeFixtureHtml(group.label)}</h2>${modules}`
+      + `${groupArticles.map(artifactArticleCard).join("")}</section>`;
+  }).join("");
+}
+
+function artifactPageHtml(
+  route: string,
+  sidebar = "",
+  parts: ArtifactPageParts = {
+    title: "Fixture | Axial Muse",
+    description: "Fixture description with sufficient production artifact evidence.",
+    socialDescription: "Fixture description with sufficient production artifact evidence.",
+    openGraphType: "website",
+    main: "<h1>Fixture</h1><p>fixture</p>",
+  },
+): string {
+  return "<!doctype html><html lang=\"zh-CN\"><head>"
+    + artifactHeadHtml(route, parts)
+    + `</head><body>${artifactGlobalChrome()}${sidebar}`
+    + `<main>${parts.main}</main>${artifactFooterHtml()}</body></html>`;
+}
+
+function artifactExpectedPageHtml(
+  route: string,
+  content: LoadedContent,
+  sidebar: string,
+): string {
+  const articles = artifactArticles(content);
+  if (route === "/") {
+    const projects = content.projectNavigation.length === 0
+      ? "<p>当前还没有完成公开审核的项目。项目资料通过事实、隐私和视觉证据检查后会在这里出现。</p>"
+      : content.projectNavigation.map(artifactProjectCard).join("");
+    const writing = articles.length === 0
+      ? "<p>技术分享正在从项目记录中整理。首批内容发布后会在这里提供可核验的原始资料与实现细节。</p>"
+      : artifactWritingGroups(content);
+    return artifactPageHtml(route, sidebar, {
+      title: "Axial Muse | 个人项目与技术分享",
+      description: "Axial Muse 记录个人项目的设计、实现、技术取舍与复盘，公开可核验的源码与工程资料。",
+      socialDescription: "Axial Muse 记录个人项目的设计、实现、技术取舍与复盘，公开可核验的源码与工程资料。",
+      openGraphType: "website",
+      main: "<h1>Axial Muse</h1>"
+        + "<p>围绕个人项目，记录设计、实现、技术取舍与复盘。</p>"
+        + "<p>首版先公开可核验的项目资料和工程记录。产品服务会在边界明确并真实可用后再提供入口。</p>"
+        + '<a href="/projects/">浏览项目</a>'
+        + `<section><h2>项目</h2>${projects}</section>`
+        + `<section><h2>技术分享</h2>${writing}</section>`
+        + '<section id="roadmap"><h2>路线<a href="#roadmap">\u200b</a></h2>'
+        + "<p>当前：建立可信主站</p><p>下一步：形成技术分享</p><p>探索：产品服务</p></section>"
+        + '<section id="about"><h2>关于<a href="#about">\u200b</a></h2>'
+        + "<p>我关注 AI 工程、知识工作流、开发规范和个人产品构建。本站公开项目、技术取舍与复盘，不公开私人联系方式、凭证或私有仓库。</p>"
+        + "</section>",
+    });
+  }
+  if (route === "/projects/") {
+    const projects = content.projectNavigation.length === 0
+      ? "<p>当前还没有完成公开审核的项目。项目资料通过事实、隐私和视觉证据检查后会在这里出现。</p>"
+      : content.projectNavigation.map(artifactProjectCard).join("");
+    return artifactPageHtml(route, sidebar, {
+      title: "项目 | Axial Muse",
+      description: "浏览 Axial Muse 中已完成公开审核的个人项目，查看问题、实现、技术取舍与源码资料。",
+      socialDescription: "浏览 Axial Muse 中已完成公开审核的个人项目，查看问题、实现、技术取舍与源码资料。",
+      openGraphType: "website",
+      main: `<h1>项目</h1>${projects}`,
+    });
+  }
+  if (route === "/writing/") {
+    const writing = articles.length === 0
+      ? "<p>技术分享正在从项目记录中整理。首批内容发布后会在这里提供可核验的原始资料与实现细节。</p>"
+      : artifactWritingGroups(content);
+    return artifactPageHtml(route, sidebar, {
+      title: "技术分享 | Axial Muse",
+      description: "浏览 Axial Muse 的技术分享，查看来自真实项目的工程问题、实现取舍与复盘记录。",
+      socialDescription: "浏览 Axial Muse 的技术分享，查看来自真实项目的工程问题、实现取舍与复盘记录。",
+      openGraphType: "website",
+      main: `<h1>技术分享</h1>${writing}`,
+    });
+  }
+  const project = content.projectNavigation.find((item) => item.canonicalPath === route);
+  if (project !== undefined) {
+    return artifactPageHtml(route, sidebar, {
+      title: `${project.title} | Axial Muse`,
+      description: project.summary,
+      socialDescription: project.summary,
+      openGraphType: "website",
+      openGraphImage: `https://www.axialmuse.com${project.previewImage.publicUrl}`,
+      main: `<h1>${escapeFixtureHtml(project.title)}</h1>`
+        + `<p>${escapeFixtureHtml(project.summary)}</p>`
+        + `<p>项目状态：${ARTIFACT_PROJECT_STATUS_LABELS[project.status]}</p>`
+        + (project.publicationStatus === "archived"
+          ? "<p>公开状态 已归档</p>"
+          : "")
+        + `<time datetime="${project.updatedAt}">${project.updatedAt}</time>`
+        + `<a href="${escapeFixtureHtml(project.canonicalPath)}">项目资料</a>`
+        + (project.repositoryUrl === undefined
+          ? ""
+          : `<a href="${escapeFixtureHtml(project.repositoryUrl)}">查看源码</a>`)
+        + `<img src="${escapeFixtureHtml(project.previewImage.publicUrl)}" `
+        + `alt="${escapeFixtureHtml(project.previewImage.alt)}" `
+        + `width="${project.previewImage.width}" height="${project.previewImage.height}">`
+        + (project.relatedWriting.length === 0
+          ? ""
+          : `<dl>${artifactRelatedList("相关技术分享", project.relatedWriting)}</dl>`),
+    });
+  }
+  const article = articles.find((item) => item.canonicalPath === route);
+  assert.ok(article);
+  return artifactPageHtml(route, sidebar, {
+    title: `${article.title} | Axial Muse`,
+    description: article.seo.description,
+    socialDescription: article.seo.socialDescription,
+    openGraphType: "article",
+    main: `<h1>${escapeFixtureHtml(article.title)}</h1>`
+      + `<p>${ARTIFACT_ARTICLE_STATUS_LABELS[article.publicationStatus]}</p>`
+      + `<p>${article.authors.map((author) => escapeFixtureHtml(author.displayName)).join("、")}</p>`
+      + `<time datetime="${article.publishedAt}">${article.publishedAt}</time>`
+      + `<time datetime="${article.updatedAt}">${article.updatedAt}</time>`
+      + `<p>${article.topics.map((topic) => escapeFixtureHtml(topic.displayName)).join("、")}</p>`
+      + (article.relatedProjects.length + article.relatedArticles.length === 0
+        ? ""
+        : `<dl>${artifactRelatedList("相关项目", article.relatedProjects)}`
+          + `${artifactRelatedList("相关文章", article.relatedArticles)}</dl>`)
+      + "<h2>技术问题</h2><p>公开正文。</p>",
+  });
 }
 
 function artifactHtmlPath(route: string): string {
@@ -563,7 +861,11 @@ function createArtifactFixture(
       : writingSidebar.some((link) => link.href === route)
         ? artifactSidebarHtml(writingSidebar, "技术分享")
         : "";
-    writeText(buildDirectory, artifactHtmlPath(route), artifactPageHtml(route, sidebar));
+    writeText(
+      buildDirectory,
+      artifactHtmlPath(route),
+      artifactExpectedPageHtml(route, content, sidebar),
+    );
   }
   writeText(buildDirectory, "404.html", "<!doctype html><html><body>404</body></html>");
   const expectedUrls = [...pageRoutes, ...detailRoutes]
@@ -577,11 +879,12 @@ function createArtifactFixture(
     )).join("")}</urlset>\n`,
   );
   const published = content.articleDateIndex[0];
-  assert.ok(published);
   writeText(
     buildDirectory,
     "assets/js/main.fixture.js",
-    `self.normalArticle={articleId:"${published.articleId}",title:"Normal detail",slug:"${published.slug}",summary:"public",publicationStatus:"published",publishedAt:"${published.publishedAt}",updatedAt:"${published.updatedAt}",classification:{topics:[]}};\n`,
+    published === undefined
+      ? "self.normalArticle=true;\n"
+      : `self.normalArticle={articleId:"${published.articleId}",title:"Normal detail",slug:"${published.slug}",summary:"public",publicationStatus:"published",publishedAt:"${published.publishedAt}",updatedAt:"${published.updatedAt}",classification:{topics:[]}};\n`,
   );
   const generatedFilesDirectory = resolve(repositoryRoot, ".docusaurus");
   mkdirSync(resolve(generatedFilesDirectory, "axial-muse"), {
@@ -1754,7 +2057,7 @@ test("CODE-003 production artifact 稳定读取保留 operation 与 close 双故
   }
 });
 
-test("E-016 production artifact 只验收内容详情 canonical/sidebar 并保持页面元数据下游边界", async () => {
+test("E-016 production artifact 验收全部公开页面 canonical 并保持 sidebar 与终态 seal", async () => {
   await withFixture(async (repositoryRoot) => {
     const content = await loadFixtureContent({repositoryRoot, mode: "production"});
     const fixture = createArtifactFixture(repositoryRoot, content);
@@ -1767,13 +2070,13 @@ test("E-016 production artifact 只验收内容详情 canonical/sidebar 并保�
       ).replace("</html>", ""),
       {encoding: "utf8", mode: 0o600},
     );
-    assert.deepEqual(
-      await invokeArtifactCheck(
+    await assert.rejects(
+      () => invokeArtifactCheck(
         content,
         fixture.buildDirectory,
         fixture.generatedFilesDirectory,
       ),
-      {sealAssertions: 2, staticAssertions: 2, disposals: 1},
+      assertBuildError("CONTENT_ARTIFACT_CANONICAL"),
     );
   });
 
@@ -1882,6 +2185,753 @@ test("E-016 production artifact 只验收内容详情 canonical/sidebar 并保�
         fixture.generatedFilesDirectory,
       ),
       assertBuildError("CONTENT_ARTIFACT_SIDEBAR_STRUCTURE"),
+    );
+  });
+});
+
+test("I-14 production artifact 同时验收公开 fixture 与真实零内容空状态", async () => {
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    assert.deepEqual(
+      await invokeArtifactCheck(
+        content,
+        fixture.buildDirectory,
+        fixture.generatedFilesDirectory,
+      ),
+      {sealAssertions: 2, staticAssertions: 2, disposals: 1},
+    );
+  });
+
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    assert.equal(content.projectNavigation.length, 0);
+    assert.equal(artifactArticles(content).length, 0);
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    assert.deepEqual(
+      await invokeArtifactCheck(
+        content,
+        fixture.buildDirectory,
+        fixture.generatedFilesDirectory,
+      ),
+      {sealAssertions: 2, staticAssertions: 2, disposals: 1},
+    );
+  }, {emptyPublicContent: true});
+});
+
+test("I-14 production artifact 不把展示模式枚举误判为公开字段名泄漏", async () => {
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    assert.equal(content.projectNavigation.length, 0);
+    const unpublishedProject = content.catalog.projects.find((project) => (
+      project.publicationStatus === "planned"
+      && project.repositoryUrl !== undefined
+    ));
+    assert.ok(unpublishedProject?.repositoryUrl);
+    const scriptPath = resolve(fixture.buildDirectory, "assets/js/main.fixture.js");
+    writeFileSync(
+      scriptPath,
+      "self.safeProjection={repositoryUrl:undefined};\n",
+      {encoding: "utf8", mode: 0o600},
+    );
+    assert.deepEqual(
+      await invokeArtifactCheck(
+        content,
+        fixture.buildDirectory,
+        fixture.generatedFilesDirectory,
+      ),
+      {sealAssertions: 2, staticAssertions: 2, disposals: 1},
+    );
+
+    writeFileSync(
+      scriptPath,
+      `self.leakedRepository=${JSON.stringify(unpublishedProject.repositoryUrl)};\n`,
+      {encoding: "utf8", mode: 0o600},
+    );
+    await assert.rejects(
+      () => invokeArtifactCheck(
+        content,
+        fixture.buildDirectory,
+        fixture.generatedFilesDirectory,
+      ),
+      assertBuildError("CONTENT_ARTIFACT_UNPUBLISHED"),
+    );
+  }, {emptyPublicContent: true});
+});
+
+test("I-14 production artifact 拒绝任一页面缺失、重复或伪造统一 SEO metadata", async () => {
+  const mutations: readonly ((input: string) => string)[] = [
+    (input) => input.replace(
+      "<title>Axial Muse | 个人项目与技术分享</title>",
+      "",
+    ),
+    (input) => input.replace(
+      '<meta name="description" content="Axial Muse 记录个人项目的设计、实现、技术取舍与复盘，公开可核验的源码与工程资料。">',
+      '<meta name="description" content="错误"><meta name="description" content="Axial Muse 记录个人项目的设计、实现、技术取舍与复盘，公开可核验的源码与工程资料。">',
+    ),
+    (input) => input.replace(
+      '<meta property="og:title" content="Axial Muse | 个人项目与技术分享">',
+      '<meta property="og:title" content="错误">',
+    ),
+    (input) => input.replace(
+      '<meta property="og:description" content="Axial Muse 记录个人项目的设计、实现、技术取舍与复盘，公开可核验的源码与工程资料。">',
+      '<meta property="og:description" content="错误">',
+    ),
+    (input) => input.replace(
+      '<meta property="og:url" content="https://www.axialmuse.com/">',
+      '<meta property="og:url" content="https://wrong.example/">',
+    ),
+    (input) => input.replace(
+      '<meta property="og:type" content="website">',
+      '<meta property="og:type" content="article">',
+    ),
+    (input) => input.replace(
+      "</head>",
+      '<meta property="og:image" content="https://placeholder.invalid/og.webp"></head>',
+    ),
+    (input) => input.replace(
+      "<title>Axial Muse | 个人项目与技术分享</title>",
+      "<!--<title>Axial Muse | 个人项目与技术分享</title>-->",
+    ),
+    (input) => input.replace(
+      "<title>Axial Muse | 个人项目与技术分享</title>",
+      '<script type="application/json"><title>Axial Muse | 个人项目与技术分享</title></script>',
+    ),
+  ];
+  for (const mutate of mutations) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const rootPath = resolve(fixture.buildDirectory, "index.html");
+      const input = readFileSync(rootPath, "utf8");
+      const output = mutate(input);
+      assert.notEqual(output, input);
+      writeFileSync(rootPath, output, {encoding: "utf8", mode: 0o600});
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_METADATA"),
+      );
+    });
+  }
+
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    const project = content.projectNavigation[0];
+    assert.ok(project);
+    assert.equal(project.status, "completed");
+    assert.equal(project.publicationStatus, "archived");
+    const projectPath = resolve(
+      fixture.buildDirectory,
+      artifactHtmlPath(project.canonicalPath),
+    );
+    const expectedImage = `<meta property="og:image" content="https://www.axialmuse.com${project.previewImage.publicUrl}">`;
+    const input = readFileSync(projectPath, "utf8");
+    assert.ok(input.includes(expectedImage));
+    writeFileSync(projectPath, input.replace(expectedImage, ""), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    await assert.rejects(
+      () => invokeArtifactCheck(
+        content,
+        fixture.buildDirectory,
+        fixture.generatedFilesDirectory,
+      ),
+      assertBuildError("CONTENT_ARTIFACT_METADATA"),
+    );
+  });
+});
+
+test("I-14 production artifact 固定 zh-CN、单一 H1、全站导航页脚与公开文案", async () => {
+  const mutations = [
+    {
+      code: "CONTENT_ARTIFACT_LANGUAGE",
+      mutate: (input: string) => input.replace('lang="zh-CN"', 'lang="en"'),
+    },
+    {
+      code: "CONTENT_ARTIFACT_H1",
+      mutate: (input: string) => input.replace("</main>", "<h1>重复标题</h1></main>"),
+    },
+    {
+      code: "CONTENT_ARTIFACT_NAVIGATION",
+      mutate: (input: string) => input.replace('href="/#roadmap">路线', 'href="/roadmap/">路线'),
+    },
+    {
+      code: "CONTENT_ARTIFACT_DISPLAY_PROJECTION",
+      mutate: (input: string) => input.replace(
+        "围绕个人项目，记录设计、实现、技术取舍与复盘。",
+        "错误首屏文案",
+      ),
+    },
+    {
+      code: "CONTENT_ARTIFACT_PUBLIC_COPY",
+      mutate: (input: string) => input.replace(
+        "</footer>",
+        "<span>公网安备待核验</span></footer>",
+      ),
+    },
+  ] as const;
+  for (const mutation of mutations) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const rootPath = resolve(fixture.buildDirectory, "index.html");
+      const input = readFileSync(rootPath, "utf8");
+      const output = mutation.mutate(input);
+      assert.notEqual(output, input);
+      writeFileSync(rootPath, output, {encoding: "utf8", mode: 0o600});
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError(mutation.code),
+      );
+    });
+  }
+});
+
+test("I-14 production artifact 锁定项目图片与项目文章安全显示字段", async () => {
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    const project = content.projectNavigation[0];
+    assert.ok(project);
+    const projectPath = resolve(
+      fixture.buildDirectory,
+      artifactHtmlPath(project.canonicalPath),
+    );
+    const image = `<img src="${project.previewImage.publicUrl}" alt="${project.previewImage.alt}" width="${project.previewImage.width}" height="${project.previewImage.height}">`;
+    const input = readFileSync(projectPath, "utf8");
+    assert.ok(input.includes(image));
+    assert.ok(input.includes("项目状态：已完成"));
+    assert.ok(input.includes("公开状态 已归档"));
+    writeFileSync(projectPath, input.replace(image, `${image}${image}`), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    await assert.rejects(
+      () => invokeArtifactCheck(
+        content,
+        fixture.buildDirectory,
+        fixture.generatedFilesDirectory,
+      ),
+      assertBuildError("CONTENT_ARTIFACT_PROJECT_IMAGE"),
+    );
+  });
+
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    const article = artifactArticles(content)[0];
+    assert.ok(article);
+    const articlePath = resolve(
+      fixture.buildDirectory,
+      artifactHtmlPath(article.canonicalPath),
+    );
+    const input = readFileSync(articlePath, "utf8");
+    writeFileSync(
+      articlePath,
+      input.replace("</main>", `<p>${article.articleId}</p></main>`),
+      {encoding: "utf8", mode: 0o600},
+    );
+    await assert.rejects(
+      () => invokeArtifactCheck(
+        content,
+        fixture.buildDirectory,
+        fixture.generatedFilesDirectory,
+      ),
+      assertBuildError("CONTENT_ARTIFACT_DISPLAY_PROJECTION"),
+    );
+  });
+});
+
+test("I-14 production artifact 精确闭合详情关联列表并省略空关系列表", async () => {
+  const mutationNames = ["missing", "href", "title", "order"] as const;
+  for (const mutationName of mutationNames) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const project = content.projectNavigation.find(
+        (item) => item.relatedWriting.length > 1,
+      );
+      assert.ok(project);
+      const projectPath = resolve(
+        fixture.buildDirectory,
+        artifactHtmlPath(project.canonicalPath),
+      );
+      const input = readFileSync(projectPath, "utf8");
+      const relationList = artifactRelatedList(
+        "相关技术分享",
+        project.relatedWriting,
+      );
+      const first = project.relatedWriting[0];
+      assert.ok(first);
+      const mutatedList = mutationName === "missing"
+        ? ""
+        : mutationName === "href"
+          ? relationList.replace(
+              `href="${first.canonicalPath}"`,
+              'href="/writing/wrong-target/"',
+            )
+          : mutationName === "title"
+            ? relationList.replace(
+                `>${escapeFixtureHtml(first.title)}</a>`,
+                ">错误标题</a>",
+              )
+            : artifactRelatedList(
+                "相关技术分享",
+                [...project.relatedWriting].reverse(),
+              );
+      const output = input.replace(relationList, mutatedList);
+      assert.notEqual(output, input, mutationName);
+      writeFileSync(projectPath, output, {encoding: "utf8", mode: 0o600});
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_DISPLAY_PROJECTION"),
+      );
+    });
+  }
+
+  for (const label of ["相关项目", "相关文章"] as const) {
+    for (const mutationName of ["missing", "href"] as const) {
+      await withFixture(async (repositoryRoot) => {
+        const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+        const fixture = createArtifactFixture(repositoryRoot, content);
+        const article = artifactArticles(content).find((item) => (
+          label === "相关项目"
+            ? item.relatedProjects.length > 0
+            : item.relatedArticles.length > 0
+        ));
+        assert.ok(article);
+        const links = label === "相关项目"
+          ? article.relatedProjects
+          : article.relatedArticles;
+        const first = links[0];
+        assert.ok(first);
+        const articlePath = resolve(
+          fixture.buildDirectory,
+          artifactHtmlPath(article.canonicalPath),
+        );
+        const relationList = artifactRelatedList(label, links);
+        const mutatedList = mutationName === "missing"
+          ? ""
+          : relationList.replace(
+              `href="${first.canonicalPath}"`,
+              'href="/wrong-relation-target/"',
+            );
+        const input = readFileSync(articlePath, "utf8");
+        const output = input.replace(relationList, mutatedList);
+        assert.notEqual(output, input);
+        writeFileSync(articlePath, output, {encoding: "utf8", mode: 0o600});
+        await assert.rejects(
+          () => invokeArtifactCheck(
+            content,
+            fixture.buildDirectory,
+            fixture.generatedFilesDirectory,
+          ),
+          assertBuildError("CONTENT_ARTIFACT_DISPLAY_PROJECTION"),
+        );
+      });
+    }
+  }
+
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    const project = content.projectNavigation.find(
+      (item) => item.relatedWriting.length === 0,
+    );
+    assert.ok(project);
+    const projectHtml = readFileSync(
+      resolve(fixture.buildDirectory, artifactHtmlPath(project.canonicalPath)),
+      "utf8",
+    );
+    assert.equal(projectHtml.includes('aria-label="相关技术分享"'), false);
+    assert.equal(projectHtml.includes("<dl>"), false);
+    assert.deepEqual(
+      await invokeArtifactCheck(
+        content,
+        fixture.buildDirectory,
+        fixture.generatedFilesDirectory,
+      ),
+      {sealAssertions: 2, staticAssertions: 2, disposals: 1},
+    );
+  });
+});
+
+test("I-14 production artifact 拒绝活动交互表面与未上线项目动作", async () => {
+  const activeMutations = [
+    "<form></form>",
+    '<input type="file">',
+    '<iframe src="https://example.invalid/"></iframe>',
+    '<video src="/demo.mp4"></video>',
+    '<object data="/demo.mp4"></object>',
+    '<embed src="/demo.mp4">',
+    '<a href="/demo/">在线体验</a>',
+    '<a href="/not-an-action/" title="查看演示">图标入口</a>',
+    "<button>上传文件</button>",
+    "<button>上传文档</button>",
+    "<button>登录</button>",
+    "<button>登录系统</button>",
+    "<button>观看视频</button>",
+    "<button>观看产品演示</button>",
+    '<button aria-label="上传文件"></button>',
+  ];
+  for (const addition of activeMutations) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const rootPath = resolve(fixture.buildDirectory, "index.html");
+      const input = readFileSync(rootPath, "utf8");
+      writeFileSync(
+        rootPath,
+        input.replace("</main>", `${addition}</main>`),
+        {encoding: "utf8", mode: 0o600},
+      );
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_INTERACTIVE"),
+      );
+    });
+  }
+
+  for (const inertAddition of [
+    "<!--<form><input></form>-->",
+    '<script type="application/json"><iframe></iframe><video></video></script>',
+  ]) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const rootPath = resolve(fixture.buildDirectory, "index.html");
+      writeFileSync(
+        rootPath,
+        readFileSync(rootPath, "utf8").replace(
+          "</main>",
+          `${inertAddition}</main>`,
+        ),
+        {encoding: "utf8", mode: 0o600},
+      );
+      assert.deepEqual(
+        await invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        {sealAssertions: 2, staticAssertions: 2, disposals: 1},
+      );
+    });
+  }
+});
+
+test("I-14 production artifact 对公开卡片数量、顺序、标题和链接精确闭包", async () => {
+  const mutations: readonly Readonly<{
+    code: "CONTENT_ARTIFACT_CARD_SET" | "CONTENT_ARTIFACT_PUBLIC_COPY";
+    name: string;
+    mutate(input: string, content: LoadedContent): string;
+  }>[] = [
+    {
+      code: "CONTENT_ARTIFACT_CARD_SET",
+      name: "semantic fake article",
+      mutate(input: string): string {
+        return input.replace(
+          "</main>",
+          '<article><h3><a href="https://example.invalid/fake">虚构文章</a></h3></article></main>',
+        );
+      },
+    },
+    {
+      code: "CONTENT_ARTIFACT_PUBLIC_COPY",
+      name: "non-semantic fake article",
+      mutate(input: string): string {
+        return input.replace(
+          "</main>",
+          "<section><h2>即将发布：虚构文章</h2><p>敬请期待</p></section></main>",
+        );
+      },
+    },
+    {
+      code: "CONTENT_ARTIFACT_CARD_SET",
+      name: "extra heading in real card",
+      mutate(input: string, content: LoadedContent): string {
+        const article = artifactArticles(content)[0];
+        assert.ok(article);
+        const card = artifactArticleCard(article);
+        return input.replace(
+          card,
+          card.replace("</article>", "<h3>虚构文章</h3></article>"),
+        );
+      },
+    },
+    {
+      code: "CONTENT_ARTIFACT_CARD_SET",
+      name: "reordered article cards",
+      mutate(input: string, content: LoadedContent): string {
+        const articles = artifactArticles(content);
+        const first = articles[0];
+        const second = articles[1];
+        assert.ok(first);
+        assert.ok(second);
+        const firstCard = artifactArticleCard(first);
+        const secondCard = artifactArticleCard(second);
+        const placeholder = "<!--AXIAL-MUSE-CARD-SWAP-->";
+        return input
+          .replace(firstCard, placeholder)
+          .replace(secondCard, firstCard)
+          .replace(placeholder, secondCard);
+      },
+    },
+  ];
+  for (const mutation of mutations) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const writingPath = resolve(fixture.buildDirectory, "writing/index.html");
+      const input = readFileSync(writingPath, "utf8");
+      const output = mutation.mutate(input, content);
+      assert.notEqual(output, input, mutation.name);
+      writeFileSync(writingPath, output, {encoding: "utf8", mode: 0o600});
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError(mutation.code),
+      );
+    });
+  }
+});
+
+test("I-14 production artifact 对 navbar 与 footer 链接集合精确闭包", async () => {
+  for (const mutation of [
+    (input: string) => input.replace(
+      "</nav>",
+      '<a href="/contact/">联系</a></nav>',
+    ),
+    (input: string) => input.replace(
+      "</footer>",
+      '<a href="/blog/">博客</a></footer>',
+    ),
+  ]) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const rootPath = resolve(fixture.buildDirectory, "index.html");
+      const input = readFileSync(rootPath, "utf8");
+      const output = mutation(input);
+      assert.notEqual(output, input);
+      writeFileSync(rootPath, output, {encoding: "utf8", mode: 0o600});
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_NAVIGATION"),
+      );
+    });
+  }
+});
+
+test("I-14 production artifact 在 navbar、footer 与 writing 表面拒绝可访问动作", async () => {
+  const mutations = [
+    (input: string) => input.replace(
+      "</nav>",
+      '<button aria-label="登录账户"></button></nav>',
+    ),
+    (input: string) => input.replace(
+      "</footer>",
+      '<button title="上传文件"></button></footer>',
+    ),
+    (input: string) => input.replace(
+      "</main>",
+      '<a href="/try/">查看演示</a></main>',
+    ),
+  ];
+  for (const [index, mutation] of mutations.entries()) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const pagePath = resolve(
+        fixture.buildDirectory,
+        index === 2 ? "writing/index.html" : "index.html",
+      );
+      const input = readFileSync(pagePath, "utf8");
+      const output = mutation(input);
+      assert.notEqual(output, input);
+      writeFileSync(pagePath, output, {encoding: "utf8", mode: 0o600});
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_INTERACTIVE"),
+      );
+    });
+  }
+});
+
+test("I-14 production artifact 从行内格式、图片替代文本与修饰短语识别未上线动作", async () => {
+  const additions = [
+    '<a href="https://example.invalid/try"><strong>在线</strong>体验</a>',
+    '<a href="https://example.invalid/try"><img data-action-image alt="在线体验"></a>',
+    '<a href="https://example.invalid/try"><img data-action-image alt="在线">体验</a>',
+    '<a href="https://example.invalid/try">立即在线体验 DocRestore</a>',
+    '<a href="https://example.invalid/try">查看在线演示</a>',
+    '<a href="https://example.invalid/try" aria-label="在线&#x200b;体验">项目说明</a>',
+  ];
+  for (const addition of additions) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const article = artifactArticles(content)[0];
+      const project = content.projectNavigation[0];
+      assert.ok(article);
+      assert.ok(project);
+      const articlePath = resolve(
+        fixture.buildDirectory,
+        artifactHtmlPath(article.canonicalPath),
+      );
+      const input = readFileSync(articlePath, "utf8");
+      const renderedAddition = addition.replace(
+        "data-action-image",
+        `src="${project.previewImage.publicUrl}"`,
+      );
+      writeFileSync(
+        articlePath,
+        input.replace("</main>", `${renderedAddition}</main>`),
+        {encoding: "utf8", mode: 0o600},
+      );
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_INTERACTIVE"),
+      );
+    });
+  }
+});
+
+test("I-14 production artifact 拒绝 planned experience 中性链接及 DNS 根点旁路", async () => {
+  for (const hostname of [
+    "published-project.axialmuse.com",
+    "published-project.axialmuse.com.",
+  ]) {
+    await withFixture(async (repositoryRoot) => {
+      const projectsPath = resolve(repositoryRoot, "docs/contracts/projects.json");
+      const projectsDocument = JSON.parse(readFileSync(projectsPath, "utf8")) as {
+        projects: Array<Record<string, unknown>>;
+      };
+      const project = projectsDocument.projects.find(
+        (candidate) => candidate.id === "published-project",
+      );
+      assert.ok(project);
+      project.experienceRegistryId = "published-project";
+      writeJson(repositoryRoot, "docs/contracts/projects.json", projectsDocument);
+
+      const experiencesPath = resolve(
+        repositoryRoot,
+        "docs/contracts/project-experiences.json",
+      );
+      const experiencesDocument = JSON.parse(
+        readFileSync(experiencesPath, "utf8"),
+      ) as {experiences: Array<Record<string, unknown>>};
+      experiencesDocument.experiences.push({
+        id: "published-project",
+        projectId: "published-project",
+        hostname: "published-project.axialmuse.com",
+        status: "planned",
+        dnsProvisioning: "disabled",
+        deliveryMode: "static",
+        deploymentSource: {
+          kind: "project-repository",
+          workingDirectory: "frontend",
+        },
+        qualityCommands: ["npm test"],
+        buildCommand: "npm run build",
+        artifactDirectory: "frontend/dist",
+        healthPath: "/",
+        indexing: "noindex",
+        dataBoundary: "docs/projects/published-project-experience.md",
+        owner: "project-owner",
+      });
+      writeJson(
+        repositoryRoot,
+        "docs/contracts/project-experiences.json",
+        experiencesDocument,
+      );
+
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const writingPath = resolve(fixture.buildDirectory, "writing/index.html");
+      const input = readFileSync(writingPath, "utf8");
+      writeFileSync(
+        writingPath,
+        input.replace(
+          "</main>",
+          `<a href="https://${hostname}/">打开项目</a></main>`,
+        ),
+        {encoding: "utf8", mode: 0o600},
+      );
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_INTERACTIVE"),
+      );
+    });
+  }
+});
+
+test("I-14 production artifact 允许技术正文讨论登录、视频编码与用户体验", async () => {
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    const article = artifactArticles(content)[0];
+    assert.ok(article);
+    const articlePath = resolve(
+      fixture.buildDirectory,
+      artifactHtmlPath(article.canonicalPath),
+    );
+    const input = readFileSync(articlePath, "utf8");
+    writeFileSync(
+      articlePath,
+      input.replace(
+        "</main>",
+        '<p><a href="https://example.invalid/login-design">登录流程设计</a>'
+          + '<a href="https://example.invalid/encoding">视频编码取舍</a>'
+          + '<a href="https://example.invalid/ux">用户体验复盘</a></p></main>',
+      ),
+      {encoding: "utf8", mode: 0o600},
+    );
+    assert.deepEqual(
+      await invokeArtifactCheck(
+        content,
+        fixture.buildDirectory,
+        fixture.generatedFilesDirectory,
+      ),
+      {sealAssertions: 2, staticAssertions: 2, disposals: 1},
     );
   });
 });
@@ -2344,6 +3394,58 @@ test("E-016 production artifact 跨任意文件拒绝 draft/planned 身份、摘
         assertBuildError("CONTENT_ARTIFACT_UNPUBLISHED"),
       );
     });
+  }
+
+  for (const leak of [
+    "project-id",
+    "project-path",
+    "project-title",
+    "project-summary",
+    "project-contract-source",
+    "project-source-path",
+    "project-body",
+  ] as const) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      assert.equal(content.projectNavigation.length, 0);
+      const plannedProject = content.catalog.projects.find((project) => (
+        project.publicationStatus === "planned"
+      ));
+      assert.ok(plannedProject);
+      const projectSource = content.sources.find((source) => (
+        source.kind === "project" && source.projectId === plannedProject.id
+      ));
+      assert.ok(projectSource);
+      const contractSource = plannedProject.source[0];
+      assert.ok(contractSource);
+      const bodyMarker = projectSource.content.split(/\r?\n/u).find((line) => (
+        line.includes(plannedProject.id)
+      ));
+      assert.ok(bodyMarker);
+      const leakValues = {
+        "project-id": plannedProject.id,
+        "project-path": `/projects/${plannedProject.slug}/`,
+        "project-title": plannedProject.title,
+        "project-summary": plannedProject.summary,
+        "project-contract-source": contractSource,
+        "project-source-path": projectSource.sourcePath,
+        "project-body": bodyMarker,
+      } as const;
+      writeText(
+        fixture.buildDirectory,
+        `assets/data/unpublished-${leak}.txt`,
+        `${leakValues[leak]}\n`,
+      );
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_UNPUBLISHED"),
+      );
+    }, {emptyPublicContent: true});
   }
 
   for (const transformed of [
