@@ -50,6 +50,7 @@ export interface StaticAssetManifest {
 export interface StaticAssetPlan {
   readonly manifest: StaticAssetManifest;
   materialize(buildContext: BuildContext): StaticAssetManifest;
+  publish(buildContext: BuildContext, buildDirectory: string): void;
   assertProductionBuild(buildDirectory: string): void;
   dispose(): void;
 }

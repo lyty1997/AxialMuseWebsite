@@ -3,6 +3,7 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -13,6 +14,15 @@ import {
   readBuildContext,
   revalidateBuildContext,
 } from "../../src/build/site-config/index.js";
+
+test("D-098 根配置显式关闭可序列化静态目录路径", () => {
+  const source = readFileSync(resolve(process.cwd(), "docusaurus.config.ts"), "utf8");
+  assert.equal(
+    source.match(/\bstaticDirectories\s*:\s*\[\s*\]/gu)?.length,
+    1,
+  );
+  assert.equal(source.includes("buildContext.staticDirectory"), false);
+});
 
 test("E-012 合法 .js 公共入口可由 Node ESM 直接执行且完整封存上下文", () => {
   const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-build-"));

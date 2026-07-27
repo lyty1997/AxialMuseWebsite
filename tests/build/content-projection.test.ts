@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import fs, {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -618,6 +620,9 @@ async function invokeArtifactCheck(
     manifest: Object.freeze({mode: "production", files: [], excludedFiles: []}),
     materialize() {
       throw new Error("artifact fixture must not materialize");
+    },
+    publish() {
+      throw new Error("artifact fixture must not publish");
     },
     assertProductionBuild(actual: string) {
       assert.equal(actual, buildDirectory);
@@ -1577,14 +1582,20 @@ test("E-016 日期索引只在 postBuild 原子写入私有 generated files", as
     mkdirSync(outputDirectory, {mode: 0o700});
     mkdirSync(generatedFilesDirectory, {mode: 0o700});
     let sealWrites = 0;
+    const postBuildOrder: string[] = [];
     const session = Object.freeze({
       content,
       docsAdapterSession: Object.freeze({}),
       outputDirectory,
       phase: "build" as const,
       staticPlan: Object.freeze({}),
+      publishStaticAssets(actual: string) {
+        assert.equal(actual, outputDirectory);
+        postBuildOrder.push("static");
+      },
       writeBuildSeal() {
         sealWrites += 1;
+        postBuildOrder.push("seal");
       },
       assertBuildSeal() {
         throw new Error("build fixture must not assert seal");
@@ -1629,6 +1640,49 @@ test("E-016 日期索引只在 postBuild 原子写入私有 generated files", as
     assert.equal(privateIndex, `${JSON.stringify(content.articleDateIndex, null, 2)}\n`);
     assert.equal(privateIndex.includes(ARTICLE_IDS.draft), false);
     assert.equal(sealWrites, 1);
+    assert.deepEqual(postBuildOrder, ["static", "seal"]);
+  });
+});
+
+test("D-098 postBuild 静态白名单发布失败时不写私有索引或 seal", async () => {
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const outputDirectory = resolve(repositoryRoot, "artifact-build");
+    const generatedFilesDirectory = resolve(repositoryRoot, ".docusaurus");
+    mkdirSync(outputDirectory, {mode: 0o700});
+    mkdirSync(generatedFilesDirectory, {mode: 0o700});
+    const publishError = new Error("fixture static publish failure");
+    let sealWrites = 0;
+    const session = Object.freeze({
+      content,
+      docsAdapterSession: Object.freeze({}),
+      outputDirectory,
+      phase: "build" as const,
+      staticPlan: Object.freeze({}),
+      publishStaticAssets() {
+        throw publishError;
+      },
+      writeBuildSeal() {
+        sealWrites += 1;
+      },
+      assertBuildSeal() {
+        throw new Error("build fixture must not assert seal");
+      },
+    });
+    const pluginModule = createContentDataPluginForTest(session as never);
+    const plugin = await pluginModule(
+      {generatedFilesDir: generatedFilesDirectory} as never,
+      undefined,
+    );
+    await assert.rejects(
+      async () => plugin?.postBuild?.({outDir: outputDirectory} as never),
+      (error) => error === publishError,
+    );
+    assert.equal(
+      existsSync(resolve(generatedFilesDirectory, ARTICLE_DATE_INDEX_SOURCE_PATH)),
+      false,
+    );
+    assert.equal(sealWrites, 0);
   });
 });
 
@@ -1641,12 +1695,17 @@ test("CODE-003 私有日期索引写入保留 operation 与 cleanup 双故障 ca
       mkdirSync(outputDirectory, {mode: 0o700});
       mkdirSync(generatedFilesDirectory, {mode: 0o700});
       let sealWrites = 0;
+      let staticPublishes = 0;
       const session = Object.freeze({
         content,
         docsAdapterSession: Object.freeze({}),
         outputDirectory,
         phase: "build" as const,
         staticPlan: Object.freeze({}),
+        publishStaticAssets(actual: string) {
+          assert.equal(actual, outputDirectory);
+          staticPublishes += 1;
+        },
         writeBuildSeal() {
           sealWrites += 1;
         },
@@ -1693,6 +1752,7 @@ test("CODE-003 私有日期索引写入保留 operation 与 cleanup 双故障 ca
       });
       assert.equal(cleanupCalls, 1);
       assert.equal(sealWrites, 0);
+      assert.equal(staticPublishes, 1);
     });
   }
 });
@@ -1883,6 +1943,117 @@ test("E-016 production artifact 只验收内容详情 canonical/sidebar 并保�
       ),
       assertBuildError("CONTENT_ARTIFACT_SIDEBAR_STRUCTURE"),
     );
+  });
+});
+
+test("D-098 production artifact 拒绝服务端绝对路径且不泛化禁止普通 /tmp 文本", async () => {
+  const managedTemporaryRoot = realpathSync(tmpdir());
+  const leakValues: readonly ((
+    repositoryRoot: string,
+    buildDirectory: string,
+    generatedFilesDirectory: string,
+  ) => string)[] = [
+    (repositoryRoot: string, _buildDirectory: string, _generatedFilesDirectory: string) => (
+      repositoryRoot
+    ),
+    (_repositoryRoot: string, buildDirectory: string, _generatedFilesDirectory: string) => (
+      buildDirectory
+    ),
+    (_repositoryRoot: string, _buildDirectory: string, generatedFilesDirectory: string) => (
+      generatedFilesDirectory
+    ),
+    () => resolve(managedTemporaryRoot, "axial-muse-build-fixture", "static"),
+    () => resolve(managedTemporaryRoot, "axial-muse-build-transaction-fixture"),
+  ];
+  for (const leak of leakValues) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      writeText(
+        fixture.buildDirectory,
+        "assets/js/machine-path.fixture.js",
+        `self.machinePath=${JSON.stringify(leak(
+          repositoryRoot,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ))};\n`,
+      );
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_MACHINE_PATH"),
+      );
+    });
+  }
+
+  const encodedRepositoryPaths: readonly ((value: string) => string)[] = [
+    (value: string) => value.replaceAll("/", "\\/"),
+    (value: string) => value.replaceAll("/", "\\u002f"),
+    (value: string) => encodeURIComponent(value),
+    (value: string) => {
+      let index = 0;
+      return encodeURIComponent(value).replace(/%2F/gu, () => {
+        const replacement = index % 2 === 0 ? "%2f" : "%2F";
+        index += 1;
+        return replacement;
+      });
+    },
+    (value: string) => {
+      let index = 0;
+      return encodeURIComponent(encodeURIComponent(value)).replace(/%252F/gu, () => {
+        const replacement = index % 2 === 0 ? "%252f" : "%252F";
+        index += 1;
+        return replacement;
+      });
+    },
+    (value: string) => Buffer.from(value, "utf8").toString("base64"),
+    (value: string) => Buffer.from(value, "utf8").toString("hex"),
+    (value: string) => Buffer.from(value, "utf8").toString("hex").toUpperCase(),
+    (value: string) => {
+      let uppercase = false;
+      return Buffer.from(value, "utf8").toString("hex").replace(/[a-f]/gu, (digit) => {
+        uppercase = !uppercase;
+        return uppercase ? digit.toUpperCase() : digit;
+      });
+    },
+  ];
+  for (const [representationIndex, encode] of encodedRepositoryPaths.entries()) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      writeText(
+        fixture.buildDirectory,
+        "assets/js/encoded-machine-path.fixture.js",
+        `self.machinePath=${JSON.stringify(encode(repositoryRoot))};\n`,
+      );
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_MACHINE_PATH"),
+        `encoded machine path representation ${representationIndex}`,
+      );
+    });
+  }
+
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    writeText(
+      fixture.buildDirectory,
+      "assets/js/portable-example.fixture.js",
+      "self.portableExample='/tmp/cache';\n",
+    );
+    await assert.doesNotReject(() => invokeArtifactCheck(
+      content,
+      fixture.buildDirectory,
+      fixture.generatedFilesDirectory,
+    ));
   });
 });
 

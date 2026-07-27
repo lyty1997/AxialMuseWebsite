@@ -7,6 +7,7 @@ import fs, {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -69,7 +70,7 @@ const DRAFT_ARTICLE_URL = "/writing/draft-entry/assets/private-diagram.png";
 
 type FileSystemOverrides = Partial<Pick<
   typeof fs,
-  "closeSync" | "readSync"
+  "closeSync" | "fchmodSync" | "readSync" | "readdirSync"
 >>;
 
 let fileSystemOverridesActive = false;
@@ -81,7 +82,9 @@ function withFileSystemOverrides<T>(
   assert.equal(fileSystemOverridesActive, false);
   const originals: Required<FileSystemOverrides> = {
     closeSync: fs.closeSync,
+    fchmodSync: fs.fchmodSync,
     readSync: fs.readSync,
+    readdirSync: fs.readdirSync,
   };
   fileSystemOverridesActive = true;
   try {
@@ -437,6 +440,7 @@ function materializedProduction(
   input: PrepareStaticAssetPlanInput = planInput(root, "production"),
 ): Readonly<{
   plan: StaticAssetPlan;
+  context: BuildContext;
   contextRoot: string;
   staticRoot: string;
 }> {
@@ -445,6 +449,7 @@ function materializedProduction(
   plan.materialize(buildContext.context);
   return {
     plan,
+    context: buildContext.context,
     contextRoot: buildContext.root,
     staticRoot: buildContext.context.staticDirectory,
   };
@@ -1397,6 +1402,261 @@ test("I-12 production 素材泄漏检查正常路径通过", () => {
     rmSync(materialized.contextRoot, {recursive: true, force: true});
     rmSync(buildRoot, {recursive: true, force: true});
   }
+});
+
+test("D-098 不同私有临时根只经服务端复制同一白名单到候选制品", () => {
+  const repositoryRoot = createRepositoryFixture();
+  const publishedTrees: Array<ReadonlyMap<string, Buffer>> = [];
+  const contextRoots: string[] = [];
+  const buildRoots: string[] = [];
+  try {
+    for (let index = 0; index < 2; index += 1) {
+      const materialized = materializedProduction(repositoryRoot);
+      const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+      chmodSync(buildRoot, 0o700);
+      contextRoots.push(materialized.contextRoot);
+      buildRoots.push(buildRoot);
+      writeFixture(buildRoot, "assets/js/main.fixture.js", "self.fixture=true;\n");
+      materialized.plan.publish(materialized.context, buildRoot);
+      writeSsrHtml(buildRoot, publicPreviewUrls(materialized.plan));
+      assert.doesNotThrow(() => materialized.plan.assertProductionBuild(buildRoot));
+      const published = new Map<string, Buffer>();
+      for (const file of materialized.plan.manifest.files) {
+        published.set(file.targetPath, readFileSync(resolve(buildRoot, file.targetPath)));
+      }
+      publishedTrees.push(published);
+      assert.throws(
+        () => materialized.plan.publish(materialized.context, buildRoot),
+        hasStaticAssetCode("STATIC_ASSET_PUBLISH_CONSUMED"),
+      );
+    }
+    assert.notEqual(contextRoots[0], contextRoots[1]);
+    const first = publishedTrees[0];
+    const second = publishedTrees[1];
+    assert.ok(first);
+    assert.ok(second);
+    assert.deepEqual(
+      [...first.keys()],
+      [...second.keys()],
+    );
+    for (const [path, bytes] of first) {
+      assert.deepEqual(second.get(path), bytes);
+    }
+  } finally {
+    rmSync(repositoryRoot, {recursive: true, force: true});
+    for (const root of contextRoots) rmSync(root, {recursive: true, force: true});
+    for (const root of buildRoots) rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("D-098 静态白名单发布拒绝源漂移、目标碰撞与上下文重叠", async (t) => {
+  await t.test("私有白名单树漂移", () => {
+    const repositoryRoot = createRepositoryFixture();
+    const materialized = materializedProduction(repositoryRoot);
+    const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+    chmodSync(buildRoot, 0o700);
+    try {
+      writeFileSync(
+        resolve(materialized.staticRoot, "robots.txt"),
+        "drifted\n",
+        {mode: 0o600},
+      );
+      assert.throws(
+        () => materialized.plan.publish(materialized.context, buildRoot),
+        hasStaticAssetCode("STATIC_ASSET_TARGET_SET"),
+      );
+    } finally {
+      rmSync(repositoryRoot, {recursive: true, force: true});
+      rmSync(materialized.contextRoot, {recursive: true, force: true});
+      rmSync(buildRoot, {recursive: true, force: true});
+    }
+  });
+
+  await t.test("候选叶子已存在", () => {
+    const repositoryRoot = createRepositoryFixture();
+    const materialized = materializedProduction(repositoryRoot);
+    const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+    chmodSync(buildRoot, 0o700);
+    writeFixture(buildRoot, "assets/brand/logo.svg", "sentinel\n");
+    try {
+      assert.throws(
+        () => materialized.plan.publish(materialized.context, buildRoot),
+        hasStaticAssetCode("STATIC_ASSET_PUBLISH_COLLISION"),
+      );
+      assert.equal(
+        readFileSync(resolve(buildRoot, "assets/brand/logo.svg"), "utf8"),
+        "sentinel\n",
+      );
+    } finally {
+      rmSync(repositoryRoot, {recursive: true, force: true});
+      rmSync(materialized.contextRoot, {recursive: true, force: true});
+      rmSync(buildRoot, {recursive: true, force: true});
+    }
+  });
+
+  await t.test("候选祖先为符号链接", () => {
+    const repositoryRoot = createRepositoryFixture();
+    const materialized = materializedProduction(repositoryRoot);
+    const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+    const outside = mkdtempSync(join(tmpdir(), "axial-muse-publish-outside-"));
+    chmodSync(buildRoot, 0o700);
+    mkdirSync(resolve(buildRoot, "assets"), {mode: 0o755});
+    symlinkSync(outside, resolve(buildRoot, "assets/brand"));
+    try {
+      assert.throws(
+        () => materialized.plan.publish(materialized.context, buildRoot),
+        hasStaticAssetCode("STATIC_ASSET_BUILD_FILE_TYPE"),
+      );
+      assert.deepEqual(readdirSync(outside), []);
+    } finally {
+      rmSync(repositoryRoot, {recursive: true, force: true});
+      rmSync(materialized.contextRoot, {recursive: true, force: true});
+      rmSync(buildRoot, {recursive: true, force: true});
+      rmSync(outside, {recursive: true, force: true});
+    }
+  });
+
+  await t.test("候选根在预检后被同字节新 inode 替换", () => {
+    const repositoryRoot = createRepositoryFixture();
+    const materialized = materializedProduction(repositoryRoot);
+    const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+    const displacedRoot = `${buildRoot}-displaced`;
+    const realReaddirSync = fs.readdirSync;
+    let replaced = false;
+    chmodSync(buildRoot, 0o700);
+    try {
+      assert.throws(
+        () => withFileSystemOverrides({
+          readdirSync: ((...arguments_: unknown[]) => {
+            const path = arguments_[0];
+            if (
+              !replaced
+              && typeof path === "string"
+              && /^\/proc\/self\/fd\/[0-9]+$/u.test(path)
+            ) {
+              replaced = true;
+              renameSync(buildRoot, displacedRoot);
+              mkdirSync(buildRoot, {mode: 0o700});
+              chmodSync(buildRoot, 0o700);
+            }
+            return Reflect.apply(
+              realReaddirSync,
+              fs,
+              arguments_,
+            ) as ReturnType<typeof fs.readdirSync>;
+          }) as typeof fs.readdirSync,
+        }, () => materialized.plan.publish(materialized.context, buildRoot)),
+        hasStaticAssetCode("STATIC_ASSET_PUBLISH_ROOT_IDENTITY"),
+      );
+      assert.equal(replaced, true);
+      assert.deepEqual(readdirSync(buildRoot), []);
+      assert.deepEqual(readdirSync(displacedRoot), []);
+    } finally {
+      rmSync(repositoryRoot, {recursive: true, force: true});
+      rmSync(materialized.contextRoot, {recursive: true, force: true});
+      rmSync(buildRoot, {recursive: true, force: true});
+      rmSync(displacedRoot, {recursive: true, force: true});
+    }
+  });
+
+  await t.test("叶子打开后路径替换不改变外部 victim", () => {
+    const repositoryRoot = createRepositoryFixture();
+    const materialized = materializedProduction(repositoryRoot);
+    const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+    const outside = mkdtempSync(join(tmpdir(), "axial-muse-publish-victim-"));
+    const victim = resolve(outside, "victim.txt");
+    const first = materialized.plan.manifest.files[0];
+    assert.ok(first);
+    const target = resolve(buildRoot, first.targetPath);
+    const displacedTarget = `${target}.race-original`;
+    const realFchmodSync = fs.fchmodSync;
+    let replaced = false;
+    chmodSync(buildRoot, 0o700);
+    writeFileSync(victim, "private victim\n", {mode: 0o600});
+    chmodSync(victim, 0o600);
+    try {
+      assert.throws(
+        () => withFileSystemOverrides({
+          fchmodSync: ((descriptor: number, mode: fs.Mode) => {
+            if (!replaced && mode === 0o644) {
+              replaced = true;
+              renameSync(target, displacedTarget);
+              symlinkSync(victim, target);
+            }
+            return realFchmodSync(descriptor, mode);
+          }) as typeof fs.fchmodSync,
+        }, () => materialized.plan.publish(materialized.context, buildRoot)),
+        hasStaticAssetCode("STATIC_ASSET_PUBLISH_FILE_IDENTITY"),
+      );
+      assert.equal(replaced, true);
+      assert.equal(readFileSync(victim, "utf8"), "private victim\n");
+      assert.equal(Number(lstatSync(victim, {bigint: true}).mode & 0o777n), 0o600);
+      assert.deepEqual(readdirSync(outside), ["victim.txt"]);
+    } finally {
+      rmSync(repositoryRoot, {recursive: true, force: true});
+      rmSync(materialized.contextRoot, {recursive: true, force: true});
+      rmSync(buildRoot, {recursive: true, force: true});
+      rmSync(outside, {recursive: true, force: true});
+    }
+  });
+
+  await t.test("发布操作与 root descriptor 关闭双故障保持顺序", () => {
+    const repositoryRoot = createRepositoryFixture();
+    const materialized = materializedProduction(repositoryRoot);
+    const buildRoot = mkdtempSync(join(tmpdir(), "axial-muse-production-build-"));
+    const first = materialized.plan.manifest.files[0];
+    assert.ok(first);
+    const closeError = new Error("fixture publish root close failure");
+    const realCloseSync = fs.closeSync;
+    let closeFailureInjected = false;
+    chmodSync(buildRoot, 0o700);
+    writeFixture(buildRoot, first.targetPath, "collision\n");
+    try {
+      const error = captureStaticAssetError(() => withFileSystemOverrides({
+        closeSync: ((descriptor: number) => {
+          let descriptorPath: string | undefined;
+          try {
+            descriptorPath = realpathSync(`/proc/self/fd/${descriptor}`);
+          } catch {
+            // 其他门禁可能已摘离其私有 descriptor；只匹配仍绑定候选根的 fd。
+          }
+          realCloseSync(descriptor);
+          if (!closeFailureInjected && descriptorPath === buildRoot) {
+            closeFailureInjected = true;
+            throw closeError;
+          }
+        }) as typeof fs.closeSync,
+      }, () => materialized.plan.publish(materialized.context, buildRoot)));
+      assert.equal(closeFailureInjected, true);
+      assert.equal(error.code, "STATIC_ASSET_PUBLISH_CLOSE");
+      assert.ok(error.cause instanceof AggregateError);
+      const [operation, closure] = error.cause.errors;
+      assert.ok(operation instanceof StaticAssetError);
+      assert.equal(operation.code, "STATIC_ASSET_PUBLISH_COLLISION");
+      assert.strictEqual(closure, closeError);
+    } finally {
+      rmSync(repositoryRoot, {recursive: true, force: true});
+      rmSync(materialized.contextRoot, {recursive: true, force: true});
+      rmSync(buildRoot, {recursive: true, force: true});
+    }
+  });
+
+  await t.test("候选根与私有上下文重叠", () => {
+    const repositoryRoot = createRepositoryFixture();
+    const materialized = materializedProduction(repositoryRoot);
+    try {
+      assert.throws(
+        () => materialized.plan.publish(
+          materialized.context,
+          materialized.context.staticDirectory,
+        ),
+        hasStaticAssetCode("STATIC_ASSET_PUBLISH_ROOT"),
+      );
+    } finally {
+      rmSync(repositoryRoot, {recursive: true, force: true});
+      rmSync(materialized.contextRoot, {recursive: true, force: true});
+    }
+  });
 });
 
 test("I-12 同名未发布素材的相同 path/content token 稳定去重", () => {

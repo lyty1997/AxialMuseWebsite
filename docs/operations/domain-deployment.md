@@ -1,7 +1,7 @@
 # 域名与生产发布设计
 
 状态：draft
-最近更新：2026-07-18
+最近更新：2026-07-27
 适用范围：M0 腾讯云域名、DNS、轻量应用服务器、HTTPS、自动发布与回滚
 
 ## 目的
@@ -176,7 +176,7 @@ M0-P 实施时按以下路径纳入仓库；表中路径是设计契约，文件
 
 生产 workflow 仅由 canonical repository 的 `main` push，或明确选择 `refs/heads/main` 的人工 `workflow_dispatch` 触发，并满足：
 
-- `website-quality`、`node-minimum`、`diagrams` 和 `supply-chain` 对精确 `GITHUB_SHA` 运行各自发布必需门禁；任一 failure、cancelled 或 skipped 都阻止最终 job，禁止 `always()` 或 `continue-on-error` 绕过。
+- `website-quality`、`node-minimum`、`diagrams` 和 `supply-chain` 对精确 `GITHUB_SHA` 运行各自发布必需门禁；任一 failure、cancelled 或 skipped 都阻止最终 job，禁止 `always()` 或 `continue-on-error` 绕过。D-099 后 `supply-chain` 的普通 CI 结论只来自失败关闭的静态供应链证据，live audit 保留给显式依赖准入/重准入，不属于生产 prerequisite。
 - 非 matrix `production-artifact` 在 fresh runner 对同一 SHA 完整 checkout，使用 E-010 为本次 job 新建且不复用的私有 npm cache 冻结安装并重新执行主端点完整 `quality`，实际生成并重验唯一 production `build/`；它不下载或复用 `website-quality` 的 job-local build，不配置 `actions/setup-node` cache、不调用 cache restore/save Action、不读取任何共享或复用的依赖/build cache，也不接受 preview 或本地旧目录 fallback。
 - 完整 `quality` 后立即按 CODE-015/CODE-019/CODE-020 将同一 `build/` 封装为 `payload/`，从同一 payload 路由和源注册表派生 `runtime-redirects.json`、`nginx/redirects.conf`，并附 source build tree、精确提交标识与逐文件 SHA-256 `metadata/`；独立复验后只上传一次精确 `dist/release/`。
 - Artifact 展示名含 SHA、run ID 和 run attempt；deploy 只消费 `production-artifact` 输出的唯一 artifact ID、外层 `artifactDigest`、上传前独立计算且不写入 artifact 的 `releaseContentSha256`、repository、run 和 SHA，不按名称、pattern、latest、URL 或跨 run 查询。

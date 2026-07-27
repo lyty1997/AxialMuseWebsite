@@ -7,6 +7,10 @@ on:
       - main
       - dev
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -14,15 +18,20 @@ jobs:
   website-quality:
     name: Website quality gates
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Node
-        uses: actions/setup-node@v5
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          node-version: "22"
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up primary Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: ".nvmrc"
+          package-manager-cache: false
 
       - name: Materialize private Node runtime
         shell: bash
@@ -54,27 +63,116 @@ jobs:
           chmod -R go-w -- "${target_prefix}"
           printf '%s\n' "${target_prefix}/bin" >> "${GITHUB_PATH}"
 
+      - name: Frozen dependency install
+        run: node scripts/quality/run-isolated-npm.mjs ci
+
       - name: Quality gates
-        run: node scripts/quality/run-quality.mjs
+        run: node scripts/quality/run-isolated-npm.mjs run-script quality
+
+      - name: Type check
+        run: node scripts/quality/run-isolated-npm.mjs run-script typecheck
+
+      - name: Tests
+        run: node scripts/quality/run-isolated-npm.mjs run-script test
+
+      - name: Production build
+        run: node scripts/quality/run-isolated-npm.mjs run-script build
+
+  node-minimum:
+    name: Minimum Node compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up minimum Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "24.16.0"
+          package-manager-cache: false
+
+      - name: Materialize private Node runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          source_node="$(readlink -f "$(command -v node)")"
+          source_bin="${source_node%/*}"
+          source_prefix="${source_bin%/*}"
+          source_parent="${source_prefix%/*}"
+          source_root="${source_parent%/*}"
+          tool_cache="$(readlink -f "${RUNNER_TOOL_CACHE}")"
+          runner_temp="$(readlink -f "${RUNNER_TEMP}")"
+          target_prefix="${runner_temp}/axial-muse-node-runtime"
+          if [[ "${source_node}" != "${source_prefix}/bin/node" ]]; then
+            echo "Current Node executable is not rooted in its distribution prefix." >&2
+            exit 1
+          fi
+          if [[ "${source_root}" != "${tool_cache}/node" ]]; then
+            echo "Current Node distribution is outside RUNNER_TOOL_CACHE/node." >&2
+            exit 1
+          fi
+          if [[ -e "${target_prefix}" ]]; then
+            echo "Private Node runtime target already exists." >&2
+            exit 1
+          fi
+          mkdir --mode=700 -- "${target_prefix}"
+          cp -R -- "${source_prefix}/." "${target_prefix}/"
+          chmod -R go-w -- "${target_prefix}"
+          printf '%s\n' "${target_prefix}/bin" >> "${GITHUB_PATH}"
+
+      - name: Frozen dependency install
+        run: node scripts/quality/run-isolated-npm.mjs ci
+
+      - name: Quality gates
+        run: node scripts/quality/run-isolated-npm.mjs run-script quality
+
+      - name: Type check
+        run: node scripts/quality/run-isolated-npm.mjs run-script typecheck
+
+      - name: Tests
+        run: node scripts/quality/run-isolated-npm.mjs run-script test
+
+      - name: Production build
+        run: node scripts/quality/run-isolated-npm.mjs run-script build
 
   diagrams:
     name: Diagram compile check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       PUML_VERSION: "1.2026.1"
       PUML_SHA256: "89c116168a2a0f7cf5292e11617ba22abd743f891914f1fec5bc9c7d257b3092"
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Node
-        uses: actions/setup-node@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          node-version: "22"
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up primary Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: ".nvmrc"
+          package-manager-cache: false
+
+      - name: Assert primary Node runtime
+        run: |
+          node -e '
+            const {readFileSync} = require("node:fs");
+            if (readFileSync(".nvmrc", "utf8") !== process.versions.node + "\n") {
+              throw new Error("Current Node does not exactly match .nvmrc.");
+            }
+          '
 
       - name: Set up Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
           distribution: temurin
           java-version: "21"
@@ -89,3 +187,54 @@ jobs:
         run: node scripts/quality/check-diagrams.mjs
         env:
           PUML_JAR: ${{ github.workspace }}/plantuml.jar
+
+  supply-chain:
+    name: Supply chain evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up primary Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: ".nvmrc"
+          package-manager-cache: false
+
+      - name: Materialize private Node runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          source_node="$(readlink -f "$(command -v node)")"
+          source_bin="${source_node%/*}"
+          source_prefix="${source_bin%/*}"
+          source_parent="${source_prefix%/*}"
+          source_root="${source_parent%/*}"
+          tool_cache="$(readlink -f "${RUNNER_TOOL_CACHE}")"
+          runner_temp="$(readlink -f "${RUNNER_TEMP}")"
+          target_prefix="${runner_temp}/axial-muse-node-runtime"
+          if [[ "${source_node}" != "${source_prefix}/bin/node" ]]; then
+            echo "Current Node executable is not rooted in its distribution prefix." >&2
+            exit 1
+          fi
+          if [[ "${source_root}" != "${tool_cache}/node" ]]; then
+            echo "Current Node distribution is outside RUNNER_TOOL_CACHE/node." >&2
+            exit 1
+          fi
+          if [[ -e "${target_prefix}" ]]; then
+            echo "Private Node runtime target already exists." >&2
+            exit 1
+          fi
+          mkdir --mode=700 -- "${target_prefix}"
+          cp -R -- "${source_prefix}/." "${target_prefix}/"
+          chmod -R go-w -- "${target_prefix}"
+          printf '%s\n' "${target_prefix}/bin" >> "${GITHUB_PATH}"
+
+      - name: Static supply chain evidence
+        run: node scripts/quality/check-supply-chain.mjs

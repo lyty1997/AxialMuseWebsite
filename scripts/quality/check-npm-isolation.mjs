@@ -239,6 +239,8 @@ function assertQualityTopology(root, hookPath) {
     .length;
   const requiredTestCommands = [
     "--test tests/build/run-isolated-npm.test.mjs",
+    "--test tests/build/ci-workflow.test.mjs",
+    "--test tests/build/content-history.test.mjs",
     "--test tests/build/deterministic-spdx.test.mjs",
     "--test tests/build/supply-chain-audit-report.test.mjs",
     "--test tests/build/supply-chain-audit.test.mjs",

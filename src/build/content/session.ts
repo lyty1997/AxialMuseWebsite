@@ -38,6 +38,7 @@ export interface ContentBuildSession {
   readonly phase: ContentBuildPhase;
   readonly outputDirectory: string;
   readonly docsAdapterSession: DocusaurusDocsAdapterSession;
+  publishStaticAssets(buildDirectory: string): void;
   writeBuildSeal(): void;
   assertBuildSeal(): void;
 }
@@ -261,6 +262,19 @@ export async function createContentBuildSession(
       phase,
       outputDirectory,
       docsAdapterSession: createDocsAdapterSession(content),
+      publishStaticAssets(buildDirectory: string): void {
+        if (
+          phase !== "build"
+          || resolve(buildDirectory) !== outputDirectory
+        ) {
+          failContentBuild(
+            "CONTENT_STATIC_PUBLISH_PHASE",
+            "静态白名单只允许发布到当前 build 候选。",
+            {sourcePath: "build"},
+          );
+        }
+        staticPlan.publish(buildContext, outputDirectory);
+      },
       writeBuildSeal: sealController.write,
       assertBuildSeal: sealController.assert,
     });

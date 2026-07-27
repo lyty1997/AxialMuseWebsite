@@ -4,6 +4,15 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-27 — D-097 至 D-100 可信 CI、#12 与 #32（本地专题分支，待远端验收）
+
+- **主题与授权边界**：用户确认按“可信 CI → `main` required checks/合并门禁 → immutable production artifact 与 GitHub `production` environment/审批 → TAT/Nginx 部署、回滚、公网冒烟和定时检查”推进；D-100 进一步授权从精确基点 `9df4ba5678fc251d4882df5d5867e6d4990789e7` 创建 `codex/ci-issues-12-32` 并本地提交当前 CI、#12、#32 闭环，不授权 fetch/pull/rebase/merge、push、PR、Issue 写操作或任何远端/生产变更。
+- **工作区实现**：`.github/workflows/ci.yml` 已形成失败关闭的 `website-quality`、`node-minimum`、`diagrams`、`supply-chain` 四个 job；三个 GitHub 官方 Action 以已核验 commit SHA 固定，Node `24.18.0`/npm `11.16.0` 与 Node `24.16.0`/npm `11.13.0` 两个构建 job 使用完整 checkout、关闭凭证持久化、E-010 隔离冻结安装，并独立执行 `quality`、`typecheck`、`test`、production `build`。工作区同时新增 workflow 字节级契约/逐 job 反例、E-013 HEAD 可达历史检查器/真实 Git DAG fixture 和失败关闭的静态供应链证据；`diagrams` 会在 Java/下载/编译前精确断言实际 Node 等于 `.nvmrc`。
+- **当前验证证据**：CI 契约检查已通过，识别 4 个 job 与 9 个固定 Action；#32 workflow fixture 14/14、E-013 真实 Git DAG fixture 37/37、JavaScript 语法检查、E-010 接线检查、`git diff --check` 和 1,225 项供应链静态闭包均通过。D-098 的两个全新任务私有副本分别以 Node `24.18.0`/npm `11.16.0` 与 Node `24.16.0`/npm `11.13.0` 经 E-010 只连接官方 npm registry、使用独立 HOME/config/cache、禁用安装脚本完成同一 lockfile 的冻结安装，各安装 1,298 个包；两端随后均通过完整 `quality`、严格 `typecheck`、13 个 TypeScript source 的 223/223 测试和 production `build`。D-099 修改后又在独立主端点副本完成同样的 1,298 包冻结安装并通过最新完整 `quality`，其中 CI 契约 14/14、内容历史 37/37、E-010 58/58；安装前后 `package.json` 与 lockfile SHA-256 精确不变，仓库根未生成 `node_modules/` 或构建制品。
+- **D-098 处置结果**：公开路径泄漏的根因是 `docusaurus.config.ts` 曾把 E-008 私有绝对 `staticDirectory` 交给固定 Docusaurus 3.10.2，而框架会把完整 `siteConfig` 生成到浏览器模块。方案 1 已实现：保留私有随机白名单树，根配置固定 `staticDirectories: []`，由仅服务端的既有内容插件在 `postBuild` 中逐文件安全复制到候选制品，随后才写私有日期索引与输入 seal；最终 checker 独立拒绝仓库根、generated files、候选输出和受控构建/事务临时路径。两个不同私有根的真实 build 各生成 9 个文件，均无上述路径；本次两端逐文件 SHA-256 恰好一致，但该观察不升级为跨 runner 或长期完整制品可复现保证。
+- **联网 audit 事实与 D-099 处置**：官方 npm live audit 已真实执行；当前 1,345 个依赖节点中为 18 个 high、0 个 critical。严格报告只发现一条结构化 advisory（`brace-expansion` 的 `GHSA-mh99-v99m-4gvg`），经 `minimatch`、`serve-handler` 扩散到 Docusaurus 依赖节点；直接受影响根为 `@docusaurus/core` 与 `@docusaurus/preset-classic`，本次 npm 报告对二者均给出 `fixAvailable: false`。原始响应和 receipt 保存在权限 `0700`/`0600` 的任务私有临时目录，普通日志只输出聚合结果。用户随后要求普通 CI 不被 live audit 阻断；D-099 据此把该联网步骤从普通 push/PR workflow 直接移除，没有使用 `continue-on-error` 或改变审计脚本、漏洞阈值。上述 18 个 high 仍是未修复风险，由 Dependabot Alerts 与人工依赖维护跟踪；依赖首次准入或图变化后的重准入仍按 D-077 失败关闭审计。
+- **Git 与后续门禁**：专题分支尚未 push，GitHub 没有对应的新远端 run；本地提交不替代远端验收。D-099 不修改 manifest、lockfile、admissions 或供应链制品，也不执行依赖更新；第一阶段仍须以未来获得授权后的真实 GitHub run 验收，随后才能另行决策第二阶段 required checks/ruleset。第三阶段 immutable artifact/上传 Action/`production` environment/审批，以及第四阶段 TAT/Nginx deploy、回滚、公网 smoke 与 scheduled checks 均未实施；preview 不属于本阶段。
+
 ## 2026-07-24 — #46 逐项收口与远端闭环（完成）
 
 - **主题**：逐项实现、复核并验收 #46 的原生子 Issue；不把 #8 或相邻未列风险暗中并入本轮。

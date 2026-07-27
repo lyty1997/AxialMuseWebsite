@@ -1,7 +1,7 @@
 # 主站体验与内容架构
 
 状态：active
-最近更新：2026-07-22
+最近更新：2026-07-27
 适用范围：M0-M2 主站定位、信息架构、内容模型、页面体验与 SEO
 
 ## 目的
@@ -31,9 +31,9 @@ Axial Muse 是一个以个人项目为线索的技术分享主站。首版承担
 
 ## 信息架构
 
-### 迁移前的单页骨架
+### 迁移前的单页骨架（历史）
 
-当前仓库尚未迁移到 Docusaurus，公开骨架仍只有 `/`，并使用页面内锚点形成最小闭环：
+以下结构只记录迁移前 `public/` 单页骨架的历史职责，不描述当前 Docusaurus 源码或 production build 状态：
 
 1. **首屏**：品牌名、简短定位、一个主要浏览入口。
 2. **项目** `#projects`：展示 2-4 个有事实依据的项目条目。
@@ -237,7 +237,7 @@ sources:
 
 `articleId`、完整 `slug`、`publishedAt` 与 `updatedAt` 保存在同一个唯一正文入口中，形成唯一可编辑绑定。UUIDv7 时间字段只记录生成器在分配 ID 时采用的 Unix 毫秒时间源值，可用于 UUID 值的技术排序与未来存储索引局部性，但不保证真实业务事件顺序，也不是文章创建、发布或更新日期；未来日期筛选或索引只能读取显式 `publishedAt` 与 `updatedAt`。M0 从 `published` 与 `archived` 文章派生仅包含这四个字段的日期索引，按 articleId 确定性排序；它只存在于构建内存和 Docusaurus generated files 中，不提交、不进入 `static/`、不形成公开路由或浏览器数据，draft 不进入索引。当前不新增 `createdAt`，也不批准站内搜索、日期筛选 UI、搜索插件或归档路由。
 
-新文章由作者在获准的 Linux 执行环境显式运行仓库内 `node scripts/author/create-article.mjs` 建立。命令显式接收 source-name、title、完整 slug、summary、至少一个 author 和 topic，以及可选 project/module；M0 只创建 Markdown，不提供 MDX 快捷入口。它在创建唯一正文入口时使用 Node 24.16.0 起提供的原生 `node:crypto.randomUUIDv7()` 生成并一次写入 articleId，正常作者入口必须运行在与仓库 `.nvmrc` 精确一致的 Node 上，结果保留在 Linux 作者工作区供 Git diff 审查。最低版本兼容任务只验证共享负载，不得触发文章创建。命令先完整校验并取得作者锁，在锁内复核工作区并在内存生成 UUID；E-013 的候选历史检查通过后，才在 `site-content/.author-staging-*` 写出完整 draft，flush 后把整个临时目录原子 rename 为目标。失败清理本次结果，质量、预览和构建发现锁或残留 staging 时失败，不读取半成品。命令不从 UUID 推导源码名、slug、分类或日期，不自动暂存、提交、推送或发布。Git hook、CI、Docusaurus 与生产只读校验，不生成或修复；E-013 的同一实现从完整非浅 HEAD 可达 DAG 和当前工作区候选检查 UUID、source-name 与稳定注册表 ID，浅历史、缺失对象、改绑或删除后重引都失败关闭。原生后端不保证严格递增，且不引入 UUID npm 包。命令与检查尚未实现，因此这不是当前已可使用的编辑器功能、CMS 或公开页面能力。
+新文章由作者在获准的 Linux 执行环境显式运行仓库内 `node scripts/author/create-article.mjs` 建立。命令显式接收 source-name、title、完整 slug、summary、至少一个 author 和 topic，以及可选 project/module；M0 只创建 Markdown，不提供 MDX 快捷入口。它在创建唯一正文入口时使用 Node 24.16.0 起提供的原生 `node:crypto.randomUUIDv7()` 生成并一次写入 articleId，正常作者入口必须运行在与仓库 `.nvmrc` 精确一致的 Node 上，结果保留在 Linux 作者工作区供 Git diff 审查。最低版本兼容任务只验证共享负载，不得触发文章创建。命令先完整校验并取得作者锁，在锁内复核工作区并在内存生成 UUID；E-013 的候选历史检查通过后，才在 `site-content/.author-staging-*` 写出完整 draft，flush 后把整个临时目录原子 rename 为目标。失败清理本次结果，质量、预览和构建发现锁或残留 staging 时失败，不读取半成品。命令不从 UUID 推导源码名、slug、分类或日期，不自动暂存、提交、推送或发布。Git hook、CI、Docusaurus 与生产只读校验，不生成或修复；E-013 的同一实现从完整非浅 HEAD 可达 DAG 和当前工作区候选检查 UUID、source-name 与稳定注册表 ID，浅历史、缺失对象、改绑或删除后重引都失败关闭。原生后端不保证严格递增，且不引入 UUID npm 包。E-013 历史质量入口与 pre-write 候选 API 已由 D-097 实现，并依 D-100 纳入本专题分支；`create-article.mjs` 及其锁、staging、flush、rename 接线仍由 #24 实现，因此当前仍不是可使用的编辑器功能、CMS 或公开页面能力。
 
 ### 系列 Series
 

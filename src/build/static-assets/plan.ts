@@ -2,11 +2,19 @@ import {createHash} from "node:crypto";
 import type {Hash} from "node:crypto";
 import {
   chmodSync,
+  closeSync,
+  constants,
+  fchmodSync,
+  fstatSync,
+  fsyncSync,
   lstatSync,
   mkdirSync,
+  openSync,
+  readSync,
   readdirSync,
   realpathSync,
   rmSync,
+  writeSync,
   writeFileSync,
 } from "node:fs";
 import type {BigIntStats} from "node:fs";
@@ -49,6 +57,7 @@ import {
   scanBuildTree,
   sha256,
 } from "./file-safety.js";
+import type {BuildTreeEvidence} from "./file-safety.js";
 import {
   decodeStaticPublicRegistry,
 } from "./registry.js";
@@ -1393,7 +1402,7 @@ function cleanupStaticDirectory(
 
 function assertMaterializedTree(
   buildContext: BuildContext,
-  allowed: readonly PrivateAllowedFile[],
+  allowed: readonly AllowedFileEvidence[],
 ): void {
   const evidence = scanBuildTree(buildContext.staticDirectory, [], [], []);
   const expected = new Map(allowed.map((file) => [file.manifest.targetPath, file]));
@@ -1402,7 +1411,7 @@ function assertMaterializedTree(
     || evidence.files.some((file) => {
       const candidate = expected.get(file.relativePath);
       return candidate === undefined
-        || candidate.bytes.byteLength !== file.byteLength
+        || candidate.byteLength !== file.byteLength
         || candidate.sha256 !== file.sha256;
     })
   ) {
@@ -1410,6 +1419,744 @@ function assertMaterializedTree(
       "STATIC_ASSET_TARGET_SET",
       "物化后的临时静态树与计划白名单不一致。",
       {sourcePath: "build-context/static"},
+    );
+  }
+}
+
+function assertPublishRoot(buildDirectory: string): string {
+  if (
+    typeof buildDirectory !== "string"
+    || !isAbsolute(buildDirectory)
+    || resolve(buildDirectory) !== buildDirectory
+  ) {
+    failStaticAsset(
+      "STATIC_ASSET_PUBLISH_ROOT",
+      "静态白名单只允许发布到规范绝对候选目录。",
+      {sourcePath: "build"},
+    );
+  }
+  const metadata = stat(buildDirectory, "build");
+  if (
+    metadata.isSymbolicLink()
+    || !metadata.isDirectory()
+    || !currentUidMatches(metadata)
+    || realpathSync(buildDirectory) !== buildDirectory
+  ) {
+    failStaticAsset(
+      "STATIC_ASSET_PUBLISH_ROOT",
+      "静态白名单候选根身份不合法。",
+      {sourcePath: "build"},
+    );
+  }
+  return buildDirectory;
+}
+
+interface PublishDirectoryIdentity {
+  readonly dev: bigint;
+  readonly ino: bigint;
+  readonly mode: bigint;
+  readonly uid: bigint;
+}
+
+interface PublishDirectoryHandle {
+  readonly descriptor: number;
+  readonly entryPath: string;
+  readonly identity: PublishDirectoryIdentity;
+  readonly relativePath: string;
+}
+
+interface PublishedFileIdentity {
+  readonly ctimeNs: bigint;
+  readonly dev: bigint;
+  readonly ino: bigint;
+  readonly mode: bigint;
+  readonly mtimeNs: bigint;
+  readonly nlink: bigint;
+  readonly size: bigint;
+  readonly uid: bigint;
+}
+
+const PROC_SELF_FD_ROOT = "/proc/self/fd";
+
+function publishDescriptorPath(descriptor: number, name?: string): string {
+  const root = `${PROC_SELF_FD_ROOT}/${descriptor}`;
+  return name === undefined ? root : `${root}/${name}`;
+}
+
+function publishDirectoryIdentity(metadata: BigIntStats): PublishDirectoryIdentity {
+  return Object.freeze({
+    dev: metadata.dev,
+    ino: metadata.ino,
+    mode: metadata.mode,
+    uid: metadata.uid,
+  });
+}
+
+function hasSamePublishDirectoryIdentity(
+  metadata: BigIntStats,
+  identity: PublishDirectoryIdentity,
+): boolean {
+  return metadata.isDirectory()
+    && !metadata.isSymbolicLink()
+    && metadata.dev === identity.dev
+    && metadata.ino === identity.ino
+    && metadata.mode === identity.mode
+    && metadata.uid === identity.uid;
+}
+
+function publishedFileIdentity(metadata: BigIntStats): PublishedFileIdentity {
+  return Object.freeze({
+    ctimeNs: metadata.ctimeNs,
+    dev: metadata.dev,
+    ino: metadata.ino,
+    mode: metadata.mode,
+    mtimeNs: metadata.mtimeNs,
+    nlink: metadata.nlink,
+    size: metadata.size,
+    uid: metadata.uid,
+  });
+}
+
+function hasSamePublishedFileIdentity(
+  metadata: BigIntStats,
+  identity: PublishedFileIdentity,
+): boolean {
+  return metadata.isFile()
+    && !metadata.isSymbolicLink()
+    && metadata.ctimeNs === identity.ctimeNs
+    && metadata.dev === identity.dev
+    && metadata.ino === identity.ino
+    && metadata.mode === identity.mode
+    && metadata.mtimeNs === identity.mtimeNs
+    && metadata.nlink === identity.nlink
+    && metadata.size === identity.size
+    && metadata.uid === identity.uid;
+}
+
+function closePublishDescriptors(
+  descriptors: readonly number[],
+): unknown | undefined {
+  const errors: unknown[] = [];
+  for (const descriptor of [...descriptors].reverse()) {
+    try {
+      closeSync(descriptor);
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length === 0) return undefined;
+  return errors.length === 1 ? errors[0] : new AggregateError(errors);
+}
+
+function rethrowPublishFailure(
+  operationError: unknown,
+  closeError: unknown,
+  sourcePath: string,
+): never {
+  if (closeError !== undefined) {
+    failStaticAsset(
+      "STATIC_ASSET_PUBLISH_CLOSE",
+      "静态白名单发布描述符无法安全关闭。",
+      {
+        cause: operationError === undefined
+          ? closeError
+          : new AggregateError([operationError, closeError]),
+        sourcePath,
+      },
+    );
+  }
+  if (operationError instanceof StaticAssetError) throw operationError;
+  failStaticAsset(
+    "STATIC_ASSET_PUBLISH",
+    "静态白名单无法安全复制到候选制品。",
+    {cause: operationError, sourcePath},
+  );
+}
+
+function assertPublishRuntime(): void {
+  if (
+    process.platform !== "linux"
+    || typeof constants.O_DIRECTORY !== "number"
+    || typeof constants.O_NOFOLLOW !== "number"
+    || typeof constants.O_NONBLOCK !== "number"
+  ) {
+    failStaticAsset(
+      "STATIC_ASSET_PUBLISH_RUNTIME",
+      "当前 Linux 运行时不提供锚定发布所需的文件标志。",
+      {sourcePath: "build"},
+    );
+  }
+}
+
+function openPublishDirectory(
+  entryPath: string,
+  buildRoot: string,
+  relativePath: string,
+  sourcePath: string,
+  created: boolean,
+): PublishDirectoryHandle {
+  let descriptor: number | undefined;
+  let operationError: unknown;
+  let handle: PublishDirectoryHandle | undefined;
+  try {
+    descriptor = openSync(
+      entryPath,
+      constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+    );
+    const initialOpened = fstatSync(descriptor, {bigint: true});
+    const initialAtEntry = lstatSync(entryPath, {bigint: true});
+    if (
+      !initialOpened.isDirectory()
+      || initialOpened.isSymbolicLink()
+      || !currentUidMatches(initialOpened)
+      || !hasSamePublishDirectoryIdentity(
+        initialAtEntry,
+        publishDirectoryIdentity(initialOpened),
+      )
+    ) {
+      failStaticAsset(
+        "STATIC_ASSET_PUBLISH_DIRECTORY",
+        "静态白名单目标祖先不是候选根内的自有真实目录。",
+        {sourcePath},
+      );
+    }
+    const initialRealDescriptorPath = realpathSync(
+      publishDescriptorPath(descriptor),
+    );
+    if (
+      !isPathWithin(buildRoot, initialRealDescriptorPath)
+      || (relativePath === "" && initialRealDescriptorPath !== buildRoot)
+    ) {
+      failStaticAsset(
+        "STATIC_ASSET_PUBLISH_DIRECTORY",
+        "静态白名单目标祖先逃逸候选制品根。",
+        {sourcePath},
+      );
+    }
+    if (created) fchmodSync(descriptor, 0o755);
+    const opened = fstatSync(descriptor, {bigint: true});
+    const atEntry = lstatSync(entryPath, {bigint: true});
+    const realDescriptorPath = realpathSync(publishDescriptorPath(descriptor));
+    if (
+      !hasSamePublishDirectoryIdentity(atEntry, publishDirectoryIdentity(opened))
+      || !currentUidMatches(opened)
+      || !isPathWithin(buildRoot, realDescriptorPath)
+      || (relativePath === "" && realDescriptorPath !== buildRoot)
+    ) {
+      failStaticAsset(
+        "STATIC_ASSET_PUBLISH_DIRECTORY",
+        "静态白名单目标祖先在固定权限时发生身份漂移。",
+        {sourcePath},
+      );
+    }
+    handle = Object.freeze({
+      descriptor,
+      entryPath,
+      identity: publishDirectoryIdentity(opened),
+      relativePath,
+    });
+  } catch (error) {
+    operationError = error;
+  }
+  if (handle === undefined) {
+    const closeError = descriptor === undefined
+      ? undefined
+      : closePublishDescriptors([descriptor]);
+    rethrowPublishFailure(operationError, closeError, sourcePath);
+  }
+  return handle;
+}
+
+function assertPublishDirectoryHandle(
+  handle: PublishDirectoryHandle,
+  buildRoot: string,
+  sourcePath: string,
+): void {
+  try {
+    const opened = fstatSync(handle.descriptor, {bigint: true});
+    const atEntry = lstatSync(handle.entryPath, {bigint: true});
+    const realDescriptorPath = realpathSync(
+      publishDescriptorPath(handle.descriptor),
+    );
+    if (
+      !hasSamePublishDirectoryIdentity(opened, handle.identity)
+      || !hasSamePublishDirectoryIdentity(atEntry, handle.identity)
+      || !currentUidMatches(opened)
+      || !isPathWithin(buildRoot, realDescriptorPath)
+      || (handle.relativePath === "" && realDescriptorPath !== buildRoot)
+    ) {
+      failStaticAsset(
+        handle.relativePath === ""
+          ? "STATIC_ASSET_PUBLISH_ROOT_IDENTITY"
+          : "STATIC_ASSET_PUBLISH_DIRECTORY_IDENTITY",
+        "静态白名单发布目录身份发生漂移。",
+        {sourcePath},
+      );
+    }
+  } catch (error) {
+    if (error instanceof StaticAssetError) throw error;
+    failStaticAsset(
+      handle.relativePath === ""
+        ? "STATIC_ASSET_PUBLISH_ROOT_IDENTITY"
+        : "STATIC_ASSET_PUBLISH_DIRECTORY_IDENTITY",
+      "静态白名单发布目录身份无法复核。",
+      {cause: error, sourcePath},
+    );
+  }
+}
+
+function openPublishRoot(buildDirectory: string): PublishDirectoryHandle {
+  assertPublishRuntime();
+  const buildRoot = assertPublishRoot(buildDirectory);
+  return openPublishDirectory(
+    buildRoot,
+    buildRoot,
+    "",
+    "build",
+    false,
+  );
+}
+
+function publishTargetSegments(
+  targetPath: string,
+  sourcePath: string,
+): readonly string[] {
+  const segments = targetPath.split("/");
+  if (
+    segments.length === 0
+    || segments.some((segment) => segment === "" || segment === "." || segment === "..")
+  ) {
+    failStaticAsset(
+      "STATIC_ASSET_PUBLISH_PATH",
+      "静态白名单目标路径不合法。",
+      {sourcePath},
+    );
+  }
+  return segments;
+}
+
+function exactPublishEntryExists(
+  parent: PublishDirectoryHandle,
+  name: string,
+  sourcePath: string,
+): boolean {
+  const caseMatches = readdirSync(
+    publishDescriptorPath(parent.descriptor),
+  ).filter((candidate) => (
+    candidate.toLowerCase() === name.toLowerCase()
+  ));
+  if (
+    caseMatches.length > 1
+    || (caseMatches.length === 1 && caseMatches[0] !== name)
+  ) {
+    failStaticAsset(
+      "STATIC_ASSET_PUBLISH_COLLISION",
+      "静态白名单目标与候选制品存在大小写冲突。",
+      {sourcePath},
+    );
+  }
+  return caseMatches.length === 1;
+}
+
+function openPublishChildDirectory(
+  parent: PublishDirectoryHandle,
+  name: string,
+  buildRoot: string,
+  relativePath: string,
+  sourcePath: string,
+  created: boolean,
+): PublishDirectoryHandle {
+  assertPublishDirectoryHandle(parent, buildRoot, sourcePath);
+  return openPublishDirectory(
+    publishDescriptorPath(parent.descriptor, name),
+    buildRoot,
+    relativePath,
+    sourcePath,
+    created,
+  );
+}
+
+function assertPublishTargetAvailable(
+  root: PublishDirectoryHandle,
+  buildRoot: string,
+  targetPath: string,
+  sourcePath: string,
+): void {
+  const segments = publishTargetSegments(targetPath, sourcePath);
+  const descriptors: number[] = [];
+  let operationError: unknown;
+  try {
+    let parent = root;
+    const parentSegments: string[] = [];
+    let hasCompleteParent = true;
+    for (const segment of segments.slice(0, -1)) {
+      assertPublishDirectoryHandle(parent, buildRoot, sourcePath);
+      if (!exactPublishEntryExists(parent, segment, sourcePath)) {
+        hasCompleteParent = false;
+        break;
+      }
+      parentSegments.push(segment);
+      parent = openPublishChildDirectory(
+        parent,
+        segment,
+        buildRoot,
+        parentSegments.join("/"),
+        sourcePath,
+        false,
+      );
+      descriptors.push(parent.descriptor);
+    }
+    const leaf = segments.at(-1);
+    if (
+      hasCompleteParent
+      && (
+        leaf === undefined
+        || exactPublishEntryExists(parent, leaf, sourcePath)
+      )
+    ) {
+      failStaticAsset(
+        "STATIC_ASSET_PUBLISH_COLLISION",
+        "静态白名单目标叶子已被候选制品占用。",
+        {sourcePath},
+      );
+    }
+  } catch (error) {
+    operationError = error;
+  }
+  const closeError = closePublishDescriptors(descriptors);
+  if (operationError !== undefined || closeError !== undefined) {
+    rethrowPublishFailure(operationError, closeError, sourcePath);
+  }
+}
+
+function rememberPublishDirectory(
+  handle: PublishDirectoryHandle,
+  expected: Map<string, PublishDirectoryIdentity>,
+  sourcePath: string,
+): void {
+  const previous = expected.get(handle.relativePath);
+  if (
+    previous !== undefined
+    && (
+      previous.dev !== handle.identity.dev
+      || previous.ino !== handle.identity.ino
+      || previous.mode !== handle.identity.mode
+      || previous.uid !== handle.identity.uid
+    )
+  ) {
+    failStaticAsset(
+      "STATIC_ASSET_PUBLISH_DIRECTORY_IDENTITY",
+      "静态白名单目标祖先身份与本次发布证据不一致。",
+      {sourcePath},
+    );
+  }
+  expected.set(handle.relativePath, handle.identity);
+}
+
+function openPublishTargetParent(
+  root: PublishDirectoryHandle,
+  buildRoot: string,
+  targetPath: string,
+  sourcePath: string,
+  expectedDirectories: Map<string, PublishDirectoryIdentity>,
+  createMissing: boolean,
+): Readonly<{
+  descriptors: readonly number[];
+  leaf: string;
+  parent: PublishDirectoryHandle;
+}> {
+  const segments = publishTargetSegments(targetPath, sourcePath);
+  const leaf = segments.at(-1);
+  if (leaf === undefined) {
+    failStaticAsset(
+      "STATIC_ASSET_PUBLISH_PATH",
+      "静态白名单目标路径不合法。",
+      {sourcePath},
+    );
+  }
+  const descriptors: number[] = [];
+  let operationError: unknown;
+  let parent: PublishDirectoryHandle = root;
+  try {
+    const parentSegments: string[] = [];
+    for (const segment of segments.slice(0, -1)) {
+      assertPublishDirectoryHandle(parent, buildRoot, sourcePath);
+      parentSegments.push(segment);
+      const relativePath = parentSegments.join("/");
+      const exists = exactPublishEntryExists(parent, segment, sourcePath);
+      if (!exists && !createMissing) {
+        failStaticAsset(
+          "STATIC_ASSET_PUBLISH_DIRECTORY_IDENTITY",
+          "静态白名单目标祖先在终态复核时缺失。",
+          {sourcePath},
+        );
+      }
+      if (!exists) {
+        mkdirSync(
+          publishDescriptorPath(parent.descriptor, segment),
+          {mode: 0o755},
+        );
+      }
+      parent = openPublishChildDirectory(
+        parent,
+        segment,
+        buildRoot,
+        relativePath,
+        sourcePath,
+        !exists,
+      );
+      descriptors.push(parent.descriptor);
+      rememberPublishDirectory(parent, expectedDirectories, sourcePath);
+    }
+  } catch (error) {
+    operationError = error;
+  }
+  if (operationError !== undefined) {
+    const closeError = closePublishDescriptors(descriptors);
+    rethrowPublishFailure(operationError, closeError, sourcePath);
+  }
+  return Object.freeze({
+    descriptors: Object.freeze(descriptors),
+    leaf,
+    parent,
+  });
+}
+
+function assertPublishedFileMetadata(
+  metadata: BigIntStats,
+  byteLength: number,
+  sourcePath: string,
+): void {
+  if (
+    metadata.isSymbolicLink()
+    || !metadata.isFile()
+    || metadata.nlink !== 1n
+    || metadata.size !== BigInt(byteLength)
+    || (metadata.mode & 0o777n) !== 0o644n
+    || !currentUidMatches(metadata)
+  ) {
+    failStaticAsset(
+      "STATIC_ASSET_PUBLISH_FILE",
+      "候选制品中的静态白名单文件身份、权限或大小不合法。",
+      {sourcePath},
+    );
+  }
+}
+
+function publishFileSnapshot(
+  parent: PublishDirectoryHandle,
+  buildRoot: string,
+  leaf: string,
+  snapshot: Uint8Array,
+  expectedSha256: string,
+  sourcePath: string,
+): PublishedFileIdentity {
+  const entryPath = publishDescriptorPath(parent.descriptor, leaf);
+  let descriptor: number | undefined;
+  let operationError: unknown;
+  let identity: PublishedFileIdentity | undefined;
+  let published: Uint8Array | undefined;
+  try {
+    assertPublishDirectoryHandle(parent, buildRoot, sourcePath);
+    if (exactPublishEntryExists(parent, leaf, sourcePath)) {
+      failStaticAsset(
+        "STATIC_ASSET_PUBLISH_COLLISION",
+        "静态白名单目标叶子已被候选制品占用。",
+        {sourcePath},
+      );
+    }
+    descriptor = openSync(
+      entryPath,
+      constants.O_CREAT
+        | constants.O_EXCL
+        | constants.O_NOFOLLOW
+        | constants.O_RDWR,
+      0o600,
+    );
+    let written = 0;
+    while (written < snapshot.byteLength) {
+      const count = writeSync(
+        descriptor,
+        snapshot,
+        written,
+        snapshot.byteLength - written,
+        written,
+      );
+      if (count <= 0) {
+        failStaticAsset(
+          "STATIC_ASSET_PUBLISH_WRITE",
+          "候选制品中的静态白名单文件写入不完整。",
+          {sourcePath},
+        );
+      }
+      written += count;
+    }
+    fchmodSync(descriptor, 0o644);
+    fsyncSync(descriptor);
+    const opened = fstatSync(descriptor, {bigint: true});
+    assertPublishedFileMetadata(opened, snapshot.byteLength, sourcePath);
+    const atEntry = lstatSync(entryPath, {bigint: true});
+    const expectedIdentity = publishedFileIdentity(opened);
+    if (!hasSamePublishedFileIdentity(atEntry, expectedIdentity)) {
+      failStaticAsset(
+        "STATIC_ASSET_PUBLISH_FILE_IDENTITY",
+        "候选制品中的静态白名单文件路径身份发生漂移。",
+        {sourcePath},
+      );
+    }
+    published = new Uint8Array(snapshot.byteLength);
+    let read = 0;
+    while (read < published.byteLength) {
+      const count = readSync(
+        descriptor,
+        published,
+        read,
+        published.byteLength - read,
+        read,
+      );
+      if (count <= 0) {
+        failStaticAsset(
+          "STATIC_ASSET_PUBLISH_READ",
+          "候选制品中的静态白名单文件回读不完整。",
+          {sourcePath},
+        );
+      }
+      read += count;
+    }
+    if (sha256(published) !== expectedSha256) {
+      failStaticAsset(
+        "STATIC_ASSET_PUBLISH_BYTES",
+        "候选制品中的静态白名单文件字节漂移。",
+        {sourcePath},
+      );
+    }
+    assertPublishDirectoryHandle(parent, buildRoot, sourcePath);
+    identity = expectedIdentity;
+  } catch (error) {
+    operationError = error;
+  } finally {
+    published?.fill(0);
+  }
+  const closeError = descriptor === undefined
+    ? undefined
+    : closePublishDescriptors([descriptor]);
+  if (
+    operationError !== undefined
+    || closeError !== undefined
+    || identity === undefined
+  ) {
+    rethrowPublishFailure(operationError, closeError, sourcePath);
+  }
+  try {
+    const atEntry = lstatSync(entryPath, {bigint: true});
+    if (!hasSamePublishedFileIdentity(atEntry, identity)) {
+      failStaticAsset(
+        "STATIC_ASSET_PUBLISH_FILE_IDENTITY",
+        "候选制品中的静态白名单文件关闭后身份发生漂移。",
+        {sourcePath},
+      );
+    }
+  } catch (error) {
+    if (error instanceof StaticAssetError) throw error;
+    failStaticAsset(
+      "STATIC_ASSET_PUBLISH_FILE_IDENTITY",
+      "候选制品中的静态白名单文件关闭后无法复核。",
+      {cause: error, sourcePath},
+    );
+  }
+  return identity;
+}
+
+function assertPublishedFileIdentity(
+  parent: PublishDirectoryHandle,
+  buildRoot: string,
+  leaf: string,
+  expected: PublishedFileIdentity,
+  sourcePath: string,
+): void {
+  const entryPath = publishDescriptorPath(parent.descriptor, leaf);
+  let descriptor: number | undefined;
+  let operationError: unknown;
+  try {
+    assertPublishDirectoryHandle(parent, buildRoot, sourcePath);
+    descriptor = openSync(
+      entryPath,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    );
+    const opened = fstatSync(descriptor, {bigint: true});
+    const atEntry = lstatSync(entryPath, {bigint: true});
+    if (
+      !hasSamePublishedFileIdentity(opened, expected)
+      || !hasSamePublishedFileIdentity(atEntry, expected)
+      || !currentUidMatches(opened)
+    ) {
+      failStaticAsset(
+        "STATIC_ASSET_PUBLISH_FILE_IDENTITY",
+        "候选制品中的静态白名单文件终态身份发生漂移。",
+        {sourcePath},
+      );
+    }
+  } catch (error) {
+    operationError = error;
+  }
+  const closeError = descriptor === undefined
+    ? undefined
+    : closePublishDescriptors([descriptor]);
+  if (operationError !== undefined || closeError !== undefined) {
+    rethrowPublishFailure(operationError, closeError, sourcePath);
+  }
+  try {
+    const atEntry = lstatSync(entryPath, {bigint: true});
+    if (!hasSamePublishedFileIdentity(atEntry, expected)) {
+      failStaticAsset(
+        "STATIC_ASSET_PUBLISH_FILE_IDENTITY",
+        "候选制品中的静态白名单文件终态关闭后发生漂移。",
+        {sourcePath},
+      );
+    }
+  } catch (error) {
+    if (error instanceof StaticAssetError) throw error;
+    failStaticAsset(
+      "STATIC_ASSET_PUBLISH_FILE_IDENTITY",
+      "候选制品中的静态白名单文件终态无法复核。",
+      {cause: error, sourcePath},
+    );
+  }
+}
+
+function assertPublishedTree(
+  before: BuildTreeEvidence,
+  after: BuildTreeEvidence,
+  allowed: readonly AllowedFileEvidence[],
+): void {
+  const expected = new Map(before.files.map((file) => [file.relativePath, file]));
+  for (const file of allowed) {
+    if (expected.has(file.manifest.targetPath)) {
+      failStaticAsset(
+        "STATIC_ASSET_PUBLISH_COLLISION",
+        "静态白名单目标叶子已被候选制品占用。",
+        {sourcePath: file.manifest.sourcePath},
+      );
+    }
+    expected.set(file.manifest.targetPath, Object.freeze({
+      relativePath: file.manifest.targetPath,
+      byteLength: file.byteLength,
+      sha256: file.sha256,
+    }));
+  }
+  if (
+    after.files.length !== expected.size
+    || after.files.some((file) => {
+      const candidate = expected.get(file.relativePath);
+      return candidate === undefined
+        || candidate.byteLength !== file.byteLength
+        || candidate.sha256 !== file.sha256;
+    })
+  ) {
+    failStaticAsset(
+      "STATIC_ASSET_PUBLISH_TREE",
+      "静态白名单发布期间候选制品集合或字节发生漂移。",
+      {sourcePath: "build"},
     );
   }
 }
@@ -1428,6 +2175,7 @@ class PreparedStaticAssetPlan implements StaticAssetPlan {
   readonly #excluded: readonly PrivateExcludedFile[];
   #pendingFiles: readonly PrivateAllowedFile[];
   #materialized = false;
+  #publishConsumed = false;
   #consumed = false;
   #disposed = false;
 
@@ -1517,7 +2265,7 @@ class PreparedStaticAssetPlan implements StaticAssetPlan {
         chmodSync(target, 0o600);
         assertWrittenFile(target, file.bytes.byteLength, file.manifest.sourcePath);
       }
-      assertMaterializedTree(verifiedContext, this.#pendingFiles);
+      assertMaterializedTree(verifiedContext, this.#allowed);
       this.#materialized = true;
     } catch (error) {
       operationError = error;
@@ -1538,6 +2286,195 @@ class PreparedStaticAssetPlan implements StaticAssetPlan {
       );
     }
     return this.manifest;
+  }
+
+  publish(buildContext: BuildContext, buildDirectory: string): void {
+    if (this.#disposed) {
+      failStaticAsset(
+        "STATIC_ASSET_PLAN_CONSUMED",
+        "已释放的静态素材计划不能发布白名单。",
+        {sourcePath: "build"},
+      );
+    }
+    if (!this.#materialized) {
+      failStaticAsset(
+        "STATIC_ASSET_PLAN_NOT_MATERIALIZED",
+        "静态白名单发布前必须先物化同一计划。",
+        {sourcePath: "build"},
+      );
+    }
+    if (this.#publishConsumed) {
+      failStaticAsset(
+        "STATIC_ASSET_PUBLISH_CONSUMED",
+        "同一静态素材计划只能发布一次。",
+        {sourcePath: "build"},
+      );
+    }
+    this.#publishConsumed = true;
+    let root: PublishDirectoryHandle | undefined;
+    let operationError: unknown;
+    try {
+      const verifiedContext = revalidateBuildContext(buildContext);
+      if (verifiedContext.mode !== this.#mode) {
+        failStaticAsset(
+          "STATIC_ASSET_MODE_MISMATCH",
+          "静态素材计划与构建上下文模式不一致。",
+          {sourcePath: "build-context/static"},
+        );
+      }
+      root = openPublishRoot(buildDirectory);
+      const buildRoot = buildDirectory;
+      if (
+        isPathWithin(verifiedContext.buildRoot, buildRoot)
+        || isPathWithin(buildRoot, verifiedContext.buildRoot)
+      ) {
+        failStaticAsset(
+          "STATIC_ASSET_PUBLISH_ROOT",
+          "候选制品根不得与私有构建上下文重叠。",
+          {sourcePath: "build"},
+        );
+      }
+      assertPublishDirectoryHandle(root, buildRoot, "build");
+      const before = scanBuildTree(buildRoot, [], [], []);
+      assertPublishDirectoryHandle(root, buildRoot, "build");
+      assertMaterializedTree(verifiedContext, this.#allowed);
+      for (const expected of this.#allowed) {
+        assertPublishTargetAvailable(
+          root,
+          buildRoot,
+          expected.manifest.targetPath,
+          expected.manifest.sourcePath,
+        );
+      }
+      assertPublishDirectoryHandle(root, buildRoot, "build");
+      const expectedDirectories = new Map<string, PublishDirectoryIdentity>();
+      const expectedPublishedFiles = new Map<string, PublishedFileIdentity>();
+      for (const expected of this.#allowed) {
+        const sourcePath = expected.manifest.sourcePath;
+        const source = resolve(
+          verifiedContext.staticDirectory,
+          expected.manifest.targetPath,
+        );
+        const snapshot = readPrivateFileSnapshot({
+          absolutePath: source,
+          realRoot: verifiedContext.staticDirectory,
+          sourcePath,
+          maximumBytes: expected.byteLength,
+        });
+        try {
+          if (
+            snapshot.byteLength !== expected.byteLength
+            || sha256(snapshot) !== expected.sha256
+          ) {
+            failStaticAsset(
+              "STATIC_ASSET_PUBLISH_SOURCE",
+              "私有静态白名单树在发布前发生字节漂移。",
+              {sourcePath},
+            );
+          }
+          const target = openPublishTargetParent(
+            root,
+            buildRoot,
+            expected.manifest.targetPath,
+            sourcePath,
+            expectedDirectories,
+            true,
+          );
+          let targetOperationError: unknown;
+          try {
+            const identity = publishFileSnapshot(
+              target.parent,
+              buildRoot,
+              target.leaf,
+              snapshot,
+              expected.sha256,
+              sourcePath,
+            );
+            expectedPublishedFiles.set(
+              expected.manifest.targetPath,
+              identity,
+            );
+          } catch (error) {
+            targetOperationError = error;
+          }
+          const targetCloseError = closePublishDescriptors(target.descriptors);
+          if (
+            targetOperationError !== undefined
+            || targetCloseError !== undefined
+          ) {
+            rethrowPublishFailure(
+              targetOperationError,
+              targetCloseError,
+              sourcePath,
+            );
+          }
+        } finally {
+          snapshot.fill(0);
+        }
+        assertPublishDirectoryHandle(root, buildRoot, "build");
+      }
+      assertMaterializedTree(verifiedContext, this.#allowed);
+      for (const expected of this.#allowed) {
+        const sourcePath = expected.manifest.sourcePath;
+        const target = openPublishTargetParent(
+          root,
+          buildRoot,
+          expected.manifest.targetPath,
+          sourcePath,
+          expectedDirectories,
+          false,
+        );
+        let targetOperationError: unknown;
+        try {
+          const identity = expectedPublishedFiles.get(
+            expected.manifest.targetPath,
+          );
+          if (identity === undefined) {
+            failStaticAsset(
+              "STATIC_ASSET_PUBLISH_FILE_IDENTITY",
+              "静态白名单目标缺少本次发布身份。",
+              {sourcePath},
+            );
+          }
+          assertPublishedFileIdentity(
+            target.parent,
+            buildRoot,
+            target.leaf,
+            identity,
+            sourcePath,
+          );
+        } catch (error) {
+          targetOperationError = error;
+        }
+        const targetCloseError = closePublishDescriptors(target.descriptors);
+        if (
+          targetOperationError !== undefined
+          || targetCloseError !== undefined
+        ) {
+          rethrowPublishFailure(
+            targetOperationError,
+            targetCloseError,
+            sourcePath,
+          );
+        }
+      }
+      assertPublishDirectoryHandle(root, buildRoot, "build");
+      const after = scanBuildTree(buildRoot, [], [], []);
+      assertPublishDirectoryHandle(root, buildRoot, "build");
+      assertPublishedTree(
+        before,
+        after,
+        this.#allowed,
+      );
+    } catch (error) {
+      operationError = error;
+    }
+    const closeError = root === undefined
+      ? undefined
+      : closePublishDescriptors([root.descriptor]);
+    if (operationError !== undefined || closeError !== undefined) {
+      rethrowPublishFailure(operationError, closeError, "build");
+    }
   }
 
   assertProductionBuild(buildDirectory: string): void {
