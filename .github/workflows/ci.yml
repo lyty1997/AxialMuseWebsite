@@ -69,6 +69,9 @@ jobs:
       - name: Quality gates
         run: node scripts/quality/run-isolated-npm.mjs run-script quality
 
+      - name: Content history
+        run: node scripts/quality/run-content-history.mjs
+
       - name: Type check
         run: node scripts/quality/run-isolated-npm.mjs run-script typecheck
 
@@ -131,6 +134,9 @@ jobs:
 
       - name: Quality gates
         run: node scripts/quality/run-isolated-npm.mjs run-script quality
+
+      - name: Content history
+        run: node scripts/quality/run-content-history.mjs
 
       - name: Type check
         run: node scripts/quality/run-isolated-npm.mjs run-script typecheck

@@ -256,7 +256,7 @@ test("E-010 setup-node cache and shared cache Actions are rejected", () => {
   }
 });
 
-test("D-097 isolated install and all four shared workloads are mandatory", () => {
+test("D-102 isolated install, zero-dependency quality, history and shared workloads are mandatory", () => {
   for (const jobName of BUILD_JOB_NAMES) {
     for (const [command, replacement] of [
       [
@@ -266,6 +266,10 @@ test("D-097 isolated install and all four shared workloads are mandatory", () =>
       [
         "node scripts/quality/run-isolated-npm.mjs run-script quality",
         "node scripts/quality/run-quality.mjs",
+      ],
+      [
+        "node scripts/quality/run-content-history.mjs",
+        "node scripts/quality/check-content-history.mjs",
       ],
       [
         "node scripts/quality/run-isolated-npm.mjs run-script typecheck",

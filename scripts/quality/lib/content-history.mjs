@@ -8,7 +8,10 @@ import {
 import {registerHooks} from "node:module";
 import {isAbsolute, join, relative, resolve} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
-import {decodeFrontMatter} from "../../content/frontmatter.mjs";
+import {
+  ContentDecodeError,
+  decodeFrontMatter,
+} from "../../content/frontmatter.mjs";
 import {decodeJsonDocument} from "../../content/json.mjs";
 
 const ARTICLE_PATH_PATTERN = /^site-content\/writing\/([a-z0-9]+(?:-[a-z0-9]+)*)\/index\.(?:md|mdx)$/u;
@@ -881,7 +884,16 @@ async function parseArticles(articleEntries, context) {
         filePath: entry.filePath,
         sourcePath: entry.sourcePath,
       });
-    } catch {
+    } catch (error) {
+      if (
+        error instanceof ContentDecodeError
+        && error.code === "CONTENT_FRONTMATTER_DEPENDENCY"
+      ) {
+        fail("CONTENT_HISTORY_DEPENDENCY", {
+          ...context,
+          sourcePath: entry.sourcePath,
+        });
+      }
       fail("CONTENT_HISTORY_FRONTMATTER", {
         ...context,
         sourcePath: entry.sourcePath,
@@ -978,10 +990,14 @@ function projectValidatedCurrentSnapshot(content) {
 
 function rethrowCurrentContentError(error) {
   let code;
+  let upstreamCode;
   let sourcePath = UNKNOWN_SOURCE_PATH;
   try {
     if (error !== null && typeof error === "object") {
       if (typeof error.code === "string") code = error.code;
+      if (typeof error.upstreamCode === "string") {
+        upstreamCode = error.upstreamCode;
+      }
       if (isSafeDiagnosticPath(error.sourcePath)) {
         sourcePath = error.sourcePath;
       }
@@ -991,6 +1007,12 @@ function rethrowCurrentContentError(error) {
   }
 
   const details = {commit: WORKTREE_ID, sourcePath};
+  if (
+    code === "CONTENT_LOAD_DECODE"
+    && upstreamCode === "CONTENT_FRONTMATTER_DEPENDENCY"
+  ) {
+    fail("CONTENT_HISTORY_DEPENDENCY", details);
+  }
   if (
     code === "CONTENT_LOAD_DECODE"
     && ARTICLE_PATH_PATTERN.test(sourcePath)

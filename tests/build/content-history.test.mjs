@@ -15,7 +15,7 @@ import {
 } from "node:fs";
 import {dirname, join, resolve} from "node:path";
 import test from "node:test";
-import {fileURLToPath} from "node:url";
+import {fileURLToPath, pathToFileURL} from "node:url";
 import {
   buildContentHistoryGitEnvironment,
   checkContentHistory,
@@ -65,6 +65,41 @@ function runHistoryCli(root, arguments_ = []) {
     maxBuffer: 16 * 1024 * 1024,
     windowsHide: true,
   });
+}
+
+function runHistoryCliWithoutFrozenParser(root) {
+  const hookPath = join(root, "block-frozen-frontmatter-parser.mjs");
+  writeFileSync(
+    hookPath,
+    [
+      'import {registerHooks} from "node:module";',
+      "registerHooks({",
+      "  resolve(specifier, context, nextResolve) {",
+      '    if (specifier === "@docusaurus/utils") {',
+      '      throw new Error("blocked frozen parser");',
+      "    }",
+      "    return nextResolve(specifier, context);",
+      "  },",
+      "});",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  return spawnSync(
+    process.execPath,
+    [
+      "--import",
+      pathToFileURL(hookPath).href,
+      CONTENT_HISTORY_CLI,
+    ],
+    {
+      cwd: root,
+      encoding: "utf8",
+      env: process.env,
+      maxBuffer: 16 * 1024 * 1024,
+      windowsHide: true,
+    },
+  );
 }
 
 function writeJson(root, sourcePath, value) {
@@ -1011,6 +1046,51 @@ test("E-013 结构化 frontmatter 合法嵌套通过且非法 YAML 在历史与�
     assert.match(
       currentResult.stderr,
       /^\[CONTENT_HISTORY_FRONTMATTER\].*source=site-content\/writing\/invalid-current\/index\.md commit=WORKTREE\n$/u,
+    );
+    assert.equal(currentResult.stderr.includes(current.root), false);
+  } finally {
+    destroyFixture(historical);
+    destroyFixture(current);
+  }
+});
+
+test("E-013 冻结 frontmatter 依赖缺失在历史与当前路径同样失败", () => {
+  const historical = createFixture({
+    article: {articleId: ARTICLE_A, sourceName: "historical-dependency"},
+  });
+  const current = createFixture();
+  try {
+    const historicalHead = runGit(
+      historical.root,
+      ["rev-parse", "HEAD"],
+    ).stdout.trim();
+    writeArticle(
+      current.root,
+      "current-dependency",
+      ARTICLE_A,
+    );
+
+    const historicalResult = runHistoryCliWithoutFrozenParser(
+      historical.root,
+    );
+    assert.equal(historicalResult.error, undefined);
+    assert.equal(historicalResult.signal, null);
+    assert.equal(historicalResult.status, 1);
+    assert.equal(historicalResult.stdout, "");
+    assert.equal(
+      historicalResult.stderr,
+      `[CONTENT_HISTORY_DEPENDENCY] 内容身份历史门禁未通过；source=site-content/writing/historical-dependency/index.md commit=${historicalHead}\n`,
+    );
+    assert.equal(historicalResult.stderr.includes(historical.root), false);
+
+    const currentResult = runHistoryCliWithoutFrozenParser(current.root);
+    assert.equal(currentResult.error, undefined);
+    assert.equal(currentResult.signal, null);
+    assert.equal(currentResult.status, 1);
+    assert.equal(currentResult.stdout, "");
+    assert.equal(
+      currentResult.stderr,
+      "[CONTENT_HISTORY_DEPENDENCY] 内容身份历史门禁未通过；source=site-content/writing/current-dependency/index.md commit=WORKTREE\n",
     );
     assert.equal(currentResult.stderr.includes(current.root), false);
   } finally {

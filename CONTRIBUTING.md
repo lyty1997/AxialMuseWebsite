@@ -4,7 +4,7 @@
 
 ## 开始之前
 
-1. 在获准运行本站 Node.js 的 Linux 工作区，先按 D-080 一次性安装固定的用户级 nvm 与 `.nvmrc` 精确 Node，再执行一次 `git config core.hooksPath .githooks` 启用本地提交门禁；hook 会在自己的子进程内自动选择该版本并通过 E-010 隔离入口运行统一质量负载，不改变系统或父 shell 的默认 Node。缺少精确运行时时门禁失败且不联网安装。Ubuntu CI 在合入与发布前执行统一验证。
+1. 在获准运行本站 Node.js 的 Linux 工作区，先按 D-080 一次性安装固定的用户级 nvm 与 `.nvmrc` 精确 Node，再执行一次 `git config core.hooksPath .githooks` 启用本地提交门禁；hook 会在自己的子进程内自动选择该版本并通过 E-010 隔离入口运行不要求 `node_modules/` 的统一质量负载，不改变系统或父 shell 的默认 Node，也不联网安装依赖。缺少精确运行时时门禁失败。Ubuntu CI 在冻结安装后另行执行 E-013 历史门禁、类型检查、测试和构建。
 2. 动手前先读 [docs/README.md](docs/README.md) 确认设计真相源，再读本次任务相关的 [codex-rules/](codex-rules/global-AGENTS.md) 规则。
 3. 编码任务再读 [主站编码规范 Spec](docs/engineering/main-site-coding-spec.md)，按规则编号说明实现依据；该 Spec 不替代上层设计或用户决策门禁。
 
@@ -21,7 +21,7 @@
 
 ## 提交前自检
 
-- 在获准的 Linux 执行环境运行 `bash .githooks/pre-commit`，确认自动选择 `.nvmrc` 精确版本并通过完整质量负载；Ubuntu CI 在合入与发布前执行同一质量负载。
+- 在获准的 Linux 执行环境运行 `bash .githooks/pre-commit`，确认自动选择 `.nvmrc` 精确版本并通过零第三方依赖 `quality`；需要本地复核 E-013 时，先按 E-010 完成冻结安装，再运行 `node scripts/quality/run-content-history.mjs`。Ubuntu CI 在合入与发布前执行两者以及独立类型检查、测试和构建。
 - UI 改动做实际渲染或截图验证；纯静态页面至少检查入口文件、资源引用和关键链接。
 - 结束时更新 [docs/progress.md](docs/progress.md)；解决 bug 后把原因与方案追加到 [codex-rules/known-issues.md](codex-rules/known-issues.md)。
 

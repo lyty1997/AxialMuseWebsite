@@ -16,15 +16,6 @@ function bytes(text) {
   return ENCODER.encode(text);
 }
 
-function hasFrozenFrontMatterParser() {
-  try {
-    import.meta.resolve("@docusaurus/utils");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function assertDecodeError(error, code, sourcePath) {
   assert.ok(error instanceof ContentDecodeError);
   assert.equal(error.code, code);
@@ -78,63 +69,6 @@ test("I-06 frontmatter 注入解析器只调用一次并返回唯一结构化结
     },
   });
   assert.deepEqual(Object.keys(result).sort(), ["content", "frontMatter"]);
-});
-
-test("I-06 默认解析器缺失时失败关闭，存在时保留带引号日期并拒绝 timestamp", async () => {
-  const filePath = "/private/work/site-content/writing/example/index.mdx";
-  const sourcePath = "site-content/writing/example/index.mdx";
-  const quotedInput = {
-    fileContent: [
-      "---",
-      "publishedAt: \"2026-07-22\"",
-      "metadata:",
-      "  language: zh-CN",
-      "---",
-      "",
-      "# 正文",
-      "",
-    ].join("\n"),
-    filePath,
-    sourcePath,
-  };
-  if (!hasFrozenFrontMatterParser()) {
-    await assert.rejects(
-      decodeFrontMatter(quotedInput),
-      (error) => assertDecodeError(
-        error,
-        "CONTENT_FRONTMATTER_DEPENDENCY",
-        sourcePath,
-      ),
-    );
-    return;
-  }
-
-  const quoted = await decodeFrontMatter(quotedInput);
-
-  assert.equal(quoted.frontMatter.publishedAt, "2026-07-22");
-  assert.deepEqual(quoted.frontMatter.metadata, {language: "zh-CN"});
-  assert.ok(Object.isFrozen(quoted.frontMatter));
-  assert.ok(Object.isFrozen(quoted.frontMatter.metadata));
-
-  await assert.rejects(
-    decodeFrontMatter({
-      fileContent: [
-        "---",
-        "publishedAt: 2026-07-22",
-        "---",
-        "",
-        "# 正文",
-        "",
-      ].join("\n"),
-      filePath,
-      sourcePath,
-    }),
-    (error) => assertDecodeError(
-      error,
-      "CONTENT_FRONTMATTER_SHAPE",
-      sourcePath,
-    ),
-  );
 });
 
 test("I-06 frontmatter 解析器异常被稳定分类并完整脱敏", async () => {

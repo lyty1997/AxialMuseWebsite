@@ -166,6 +166,10 @@ const JOBS = Object.freeze({
         "node scripts/quality/run-isolated-npm.mjs run-script quality",
       ),
       runStep(
+        "Content history",
+        "node scripts/quality/run-content-history.mjs",
+      ),
+      runStep(
         "Type check",
         "node scripts/quality/run-isolated-npm.mjs run-script typecheck",
       ),
@@ -197,6 +201,10 @@ const JOBS = Object.freeze({
       runStep(
         "Quality gates",
         "node scripts/quality/run-isolated-npm.mjs run-script quality",
+      ),
+      runStep(
+        "Content history",
+        "node scripts/quality/run-content-history.mjs",
       ),
       runStep(
         "Type check",

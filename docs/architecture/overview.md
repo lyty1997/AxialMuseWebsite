@@ -143,7 +143,7 @@ Acme --> Nginx : HTTP-01 与证书续期
 3. 本地与 CI 校验内容模型、路由、链接、资源、Secret、依赖、类型、测试和静态制品。
 4. 真实浏览器按 E-004 完成桌面、平板、移动端和键盘验收，证据随 PR 评审。
 5. `dev` 集成验证通过后创建 `dev -> main` PR；合入 `main` 后，`website-quality`、`node-minimum`、`diagrams` 和 `supply-chain` 对精确 `GITHUB_SHA` 执行各自发布必需门禁。
-6. 四项全部成功后，非 matrix `production-artifact` 在 fresh runner 对同一 SHA 完整 checkout，以全新隔离 cache 冻结安装并重新执行主端点完整 `quality`，生成且重验唯一 production `build/`；不下载或复用 `website-quality` 的 job-local build。
+6. 四项全部成功后，非 matrix `production-artifact` 在 fresh runner 对同一 SHA 完整 checkout，以全新隔离 cache 冻结安装并重新执行主端点的零依赖 `quality`、独立 E-013 历史入口、`typecheck`、`test` 与 production `build`，生成且重验唯一 production `build/`；不下载或复用 `website-quality` 的 job-local build。
 7. 同一 job 紧接着由封装器在临时 `dist/release/` 中把该 `build/` 逐文件复制为 `payload/`，从同一 payload 公开路由和 `redirects.json` 派生 `metadata/runtime-redirects.json`、`metadata/nginx/redirects.conf`，并生成绑定 source build tree、payload 和规则的 `metadata/release.json` 与稳定 `metadata/files.sha256`。独立校验通过后，从 exact release 全文件树计算不写入 artifact 的 `releaseContentSha256`，随即只上传该目录一次，输出唯一 artifact ID、外层 `artifactDigest` 与前述独立摘要。
 8. `deploy-production` 先以只读 GitHub 权限复核 canonical `main` 仍等于本次 SHA，并核对当前 run/artifact/head SHA/外层 digest；concurrency 只承担互斥，不替代新鲜度检查。通过后才引用最小权限 CAM 调用固定 TAT command，只传 workflow run/artifact 标识、提交 SHA、`artifactDigest` 和 `releaseContentSha256`；deploy 不按名称、最新版本或跨 run 搜索 artifact。
 9. 服务器依次验证 GitHub artifact 元数据与外层 `artifactDigest`、从安全解包后的 exact release 独立重算 artifact 外传入的 `releaseContentSha256`、内部 release/file/route/redirect 摘要、提交 SHA 和归档路径安全，把已验证 payload 与两个可部署派生文件安装到同一 `releases/<sha>/payload/`、`config/`；root-owned 脚本先用只追加 URL 暴露账本证明历史 source/target 仍收敛到同一当前 200，再生成只引用该 SHA 的 Nginx 包装。候选的全部规范路由和新增或改指的 registered 边在 reload 前预写；只有通过更新后账本的 fallback 才可自动回滚，否则默认停止或经生产授权进入 forward-only。
