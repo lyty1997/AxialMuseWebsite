@@ -17,7 +17,7 @@ export default function ProjectsPage() {
         <header className={styles.header}>
           <h1>项目</h1>
         </header>
-        <ProjectList headingLevel="h2" />
+        <ProjectList headingLevel="h2" prioritizeFirstPreview />
       </main>
     </Layout>
   );

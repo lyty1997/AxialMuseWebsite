@@ -1,7 +1,7 @@
 # 自动化维护与运行手册
 
 状态：draft
-最近更新：2026-07-21
+最近更新：2026-07-27
 适用范围：M0 腾讯云主站与项目体验子域名的自动发布、监测、备份、安全维护与故障处理
 
 ## 目的
@@ -63,7 +63,7 @@ D-053 已固定 Docusaurus 官方静态能力、现有 PlantUML、Nginx/Certbot�
 - PlantUML 编译与静态 SVG 制品检查。
 - 许可证准入（未知或未获批即失败）、传递依赖、第三方声明或 SBOM、漏洞和 Secret 检查。
 - 构建制品外部请求 allowlist，以及依据真实制品验证的 CSP。
-- 桌面端和移动端真实浏览器、关键链接和可访问性检查。
+- 桌面端和移动端真实浏览器、关键链接和可访问性检查。#28 的主题回归复用 E-012 中的真实 production 内容 fixture，由系统已有 Chromium 通过 DevTools Protocol 探测固定视口、精确断点、computed style、200% 根文本、reduced motion、hydration、console、network、overflow 与截图摘要；不下载浏览器、不新增 npm 依赖，浏览器缺失或任一探针失败时不得跳过。该测试当前属于 Node 24 本地测试程序；迁移前 workflow 尚未调用 `run-tests.mjs`，在 #32 完成接线前不得把 GitHub Actions success 表述为浏览器回归已在 CI 运行。
 - 发布后 HTTPS、逐条单跳 301、唯一 `Location`、查询保留、目标 200、关键页面和资源冒烟。
 
 D-077 已固定 npm 原生能力加零第三方依赖策略脚本、SPDX JSON、NOTICE 生成、漏洞阈值、脚本默认拒绝和审计失败关闭边界；E-010/E-011 已进一步固定并实现隔离入口、项目 `.npmrc` schema、临时环境、官方 registry 预检、lock 来源扫描、SPDX 规范化和稳定 evidence。#21 已完成固定策略与 admission schema、真实候选审查、精确 tarball 下载/解析、NOTICE 与 evidence、audit v2 严格解析、正式三制品发布、静态闭包、最终证据持有、双端点冻结安装和 composite receipt 的真实图本地验收。首版仍不引入第三方许可证扫描器、SBOM 生成器或 GitHub Dependency Review Action。

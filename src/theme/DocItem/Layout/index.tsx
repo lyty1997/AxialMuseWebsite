@@ -14,13 +14,21 @@ export interface DocItemLayoutProps {
   readonly children: ReactNode;
 }
 
+const TOC_MIN_HEADING_LEVEL = 2;
+const TOC_MAX_HEADING_LEVEL = 3;
+
 export default function DocItemLayout({children}: DocItemLayoutProps) {
   const {frontMatter, metadata, toc} = useDoc();
-  const hasToc = frontMatter.hide_table_of_contents !== true && toc.length > 0;
+  const filteredToc = toc.filter(({level}) => (
+    level >= TOC_MIN_HEADING_LEVEL && level <= TOC_MAX_HEADING_LEVEL
+  ));
+  const hasToc = (
+    frontMatter.hide_table_of_contents !== true && filteredToc.length > 0
+  );
   const tocProps = {
-    toc,
-    minHeadingLevel: frontMatter.toc_min_heading_level,
-    maxHeadingLevel: frontMatter.toc_max_heading_level,
+    toc: filteredToc,
+    minHeadingLevel: TOC_MIN_HEADING_LEVEL,
+    maxHeadingLevel: TOC_MAX_HEADING_LEVEL,
   };
 
   return (

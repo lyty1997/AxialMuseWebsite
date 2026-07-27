@@ -1,7 +1,7 @@
 # 架构概览
 
 状态：active  
-最近更新：2026-07-23
+最近更新：2026-07-27
 适用范围：M0 静态网站、工程规范与生产发布基线
 
 ## 目标架构更新
@@ -210,7 +210,7 @@ Acme --> Nginx : HTTP-01 与证书续期
 ## 架构验收
 
 - 当前 `public/` 是迁移前静态骨架；目标 release 来自 GitHub Actions 对 `main` 精确 SHA 生成的 `payload/` + `metadata/` artifact，其中 `payload/` 是 Docusaurus 默认 `build/` 的逐文件复制，运行清单和 Nginx 配置从同一 payload 与源注册表确定派生。服务器校验两层摘要后安装同 SHA payload/config，只有 payload 进入 Web Root；生产请求不依赖 Node.js、数据库或第三方 API。
-- D-078/D-079/E-001 至 E-016 已关闭项目内容职责、路由闭包、注册表、主题响应式、输出目录、制品交付、主预览、发布态素材白名单、草稿预览、npm 隔离、确定性 SPDX、Node ESM 测试、完整 Git 历史、同版本服务端 301、production artifact 字节所有权和固定版本唯一 docs 适配设计；#9/#10/#22/#11/#23/#5/#6/#7/#26/#27 已实现并远端关闭各自基础能力，#28、#8、#12 至 #14 继续跟踪主题验收、预览、历史、release 及其 fixture。
+- D-078/D-079/E-001 至 E-016 已关闭项目内容职责、路由闭包、注册表、主题响应式、输出目录、制品交付、主预览、发布态素材白名单、草稿预览、npm 隔离、确定性 SPDX、Node ESM 测试、完整 Git 历史、同版本服务端 301、production artifact 字节所有权和固定版本唯一 docs 适配设计；#9/#10/#22/#11/#23/#5/#6/#7/#26/#27/#28 已实现并远端关闭各自基础能力，#8、#12 至 #14 继续跟踪预览、历史、release 及其 fixture。
 - 首次候选 lockfile、真实传递图最终准入与主/最低端点临时冻结安装已由 #21 闭环；#22 又在任务临时副本完成站点冻结安装与最小 build，仓库根仍不保存 `node_modules`。后续依赖变更、Action 与凭证配置、服务器和云资源操作仍受各自门禁。D-080 只改变本地作者 hook 的 Node 24 子进程，系统默认与现有 CI 仍为 Node 22；尚未迁移的 workflow 不能表述为目标能力已经部署。
 - 项目列表、项目侧栏和项目详情元数据从 `projects.json` 同一结构化事实投影；项目长文、文章、作者、主题、模块和重定向没有并行可编辑副本。
 - 从 contract 变更到页面、门禁、PR、`main` SHA、TAT invocation 和 release 的链路可追溯。

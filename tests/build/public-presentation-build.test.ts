@@ -22,6 +22,7 @@ import {
 } from "node:path";
 import {spawnSync} from "node:child_process";
 import test from "node:test";
+import {runThemeBrowserRegression} from "./browser-regression.js";
 
 const REAL_STATIC_VP8L_BASE64 = "UklGRmYAAABXRUJQVlA4TFkAAAAvP8b5AAdQkEIUpv8BAEX6/58i+p/63//+97///e9///vf//73v//973//+9///ve///3vf//73//+97///e9///vf//73v//973//+9///ve///3vf/+7BQA=";
 const PROJECT_EMPTY_STATE = "当前还没有完成公开审核的项目。项目资料通过事实、隐私和视觉证据检查后会在这里出现。";
@@ -213,7 +214,7 @@ function materializePublicContentFixture(root: string): Uint8Array {
         description: "以真实 Docusaurus 构建证明通用文章列表、详情和 SEO 投影保持一致。",
         socialDescription: "真实公开文章 fixture 覆盖首页、技术分享目录、详情页和主题包装层。",
       },
-    }, "## Fixture 通用文章正文与异常边界\n\n### 固有尺寸与失败状态\n\n真实文章正文指纹：PUBLIC-ARTICLE-BODY-27。\n"),
+    }, "## Fixture 通用文章正文与异常边界\n\n### 固有尺寸与失败状态\n\n正文证据链接：[查看 fixture 项目](/projects/archived-fixture-project/)。\n\n真实文章正文指纹：PUBLIC-ARTICLE-BODY-27。\n"),
   );
   writeText(
     root,
@@ -237,7 +238,7 @@ function materializePublicContentFixture(root: string): Uint8Array {
         description: "以真实 Docusaurus 构建证明归档文章的列表、详情与 SEO 投影一致。",
         socialDescription: "真实归档文章 fixture 覆盖项目分组、模块分组、详情元数据和归档标记。",
       },
-    }, "真实归档正文指纹：ARCHIVED-ARTICLE-BODY-27。此页面没有 H2/H3，不应制造标题导航控件。\n"),
+    }, "#### 只有 H4 的边界标题\n\n真实归档正文指纹：ARCHIVED-ARTICLE-BODY-27。此页面没有 H2/H3，不应制造标题导航控件。\n"),
   );
 
   const previewBytes = Uint8Array.from(
@@ -298,7 +299,7 @@ function sanitizedBuildDiagnostic(
     .slice(-8_000);
 }
 
-test("I-14 真实 production build 渲染公开项目、文章与同路径主题包装层", () => {
+test("I-14/I-15 真实 production build 与 Chromium 回归覆盖公开展示和主题", async () => {
   assert.equal(process.platform, "linux", "真实 Docusaurus fixture 只允许在 Linux 运行");
   const repositoryRoot = assertOrdinaryDirectory(realpathSync(process.cwd()), "仓库根");
   const temporaryParent = realpathSync(tmpdir());
@@ -387,6 +388,10 @@ test("I-14 真实 production build 渲染公开项目、文章与同路径主题
       resolve(buildRoot, "writing/archived-fixture-article/index.html"),
       "utf8",
     );
+    assert.match(
+      home,
+      /<link(?=[^>]*\brel=(?:"icon"|icon)(?=[\t\n\f\r >]))(?=[^>]*\bhref=(?:"data:,"|data:,)(?=[\t\n\f\r >]))[^>]*>/u,
+    );
 
     assert.equal(articleElementCount(home), 3);
     assert.equal(articleElementCount(projects), 1);
@@ -450,6 +455,7 @@ test("I-14 真实 production build 渲染公开项目、文章与同路径主题
       "已归档",
       "相关文章",
       LONG_ARTICLE_TITLE,
+      "只有 H4 的边界标题",
       "ARCHIVED-ARTICLE-BODY-27",
       "https://www.axialmuse.com/writing/archived-fixture-article/",
     ]);
@@ -481,12 +487,14 @@ test("I-14 真实 production build 渲染公开项目、文章与同路径主题
       projectDetail,
       /aria-current=(?:"page"|page)(?=[\t\n\f\r >])/u,
     );
-    for (const listPage of [home, projects]) {
-      assert.match(
-        listPage,
-        /<img(?=[^>]*\bloading=(?:"lazy"|lazy)(?=[\t\n\f\r />]))(?=[^>]*\bdecoding=(?:"async"|async)(?=[\t\n\f\r />]))[^>]*>/u,
-      );
-    }
+    assert.match(
+      home,
+      /<img(?=[^>]*\bloading=(?:"lazy"|lazy)(?=[\t\n\f\r />]))(?=[^>]*\bdecoding=(?:"async"|async)(?=[\t\n\f\r />]))[^>]*>/u,
+    );
+    assert.match(
+      projects,
+      /<img(?=[^>]*\bloading=(?:"eager"|eager)(?=[\t\n\f\r />]))(?=[^>]*\bfetchpriority=(?:"high"|high)(?=[\t\n\f\r />]))(?=[^>]*\bdecoding=(?:"async"|async)(?=[\t\n\f\r />]))[^>]*>/iu,
+    );
     assert.match(
       projectDetail,
       /aria-label=(?:"项目资料"|项目资料)(?=[\t\n\f\r >])/u,
@@ -545,6 +553,10 @@ test("I-14 真实 production build 渲染公开项目、文章与同路径主题
       "https://www.axialmuse.com/writing/published-fixture-article/",
       "https://www.axialmuse.com/writing/archived-fixture-article/",
     ]);
+    const browserReceipt = await runThemeBrowserRegression({buildRoot});
+    console.log(
+      `I-15 browser regression receipt: ${JSON.stringify(browserReceipt)}`,
+    );
   } catch (error) {
     operationError = error;
   } finally {

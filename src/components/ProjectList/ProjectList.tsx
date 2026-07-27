@@ -13,9 +13,13 @@ const PROJECT_STATUS = {
 
 export interface ProjectListProps {
   readonly headingLevel: "h2" | "h3";
+  readonly prioritizeFirstPreview: boolean;
 }
 
-export function ProjectList({headingLevel}: ProjectListProps) {
+export function ProjectList({
+  headingLevel,
+  prioritizeFirstPreview,
+}: ProjectListProps) {
   const {projectNavigation} = useSiteContentData();
   if (projectNavigation.length === 0) {
     return <p className={styles.emptyState}>{EMPTY_PROJECTS}</p>;
@@ -24,44 +28,48 @@ export function ProjectList({headingLevel}: ProjectListProps) {
   const Heading = headingLevel;
   return (
     <ul className={styles.list}>
-      {projectNavigation.map((project) => (
-        <li className={styles.item} key={project.projectId}>
-          <article className={styles.card}>
-            <img
-              className={styles.preview}
-              src={project.previewImage.publicUrl}
-              width={project.previewImage.width}
-              height={project.previewImage.height}
-              alt={project.previewImage.alt}
-              loading="lazy"
-              decoding="async"
-            />
-            <Heading className={styles.title}>
-              <Link to={project.canonicalPath}>{project.title}</Link>
-            </Heading>
-            <p className={styles.status}>项目状态：{PROJECT_STATUS[project.status]}</p>
-            {project.publicationStatus === "archived"
-              ? <p className={styles.status}>公开状态：已归档</p>
-              : null}
-            <p className={styles.summary}>{project.summary}</p>
-            <p className={styles.updated}>
-              最近更新：
-              <time dateTime={project.updatedAt}>{project.updatedAt}</time>
-            </p>
-            <p className={styles.actions}>
-              <Link to={project.canonicalPath}>查看项目</Link>
-              {project.repositoryUrl === undefined
-                ? null
-                : (
-                  <>
-                    {" · "}
-                    <a href={project.repositoryUrl}>查看源码</a>
-                  </>
-                )}
-            </p>
-          </article>
-        </li>
-      ))}
+      {projectNavigation.map((project, index) => {
+        const isPriorityPreview = prioritizeFirstPreview && index === 0;
+        return (
+          <li className={styles.item} key={project.projectId}>
+            <article className={styles.card}>
+              <img
+                className={styles.preview}
+                src={project.previewImage.publicUrl}
+                width={project.previewImage.width}
+                height={project.previewImage.height}
+                alt={project.previewImage.alt}
+                loading={isPriorityPreview ? "eager" : "lazy"}
+                fetchPriority={isPriorityPreview ? "high" : undefined}
+                decoding="async"
+              />
+              <Heading className={styles.title}>
+                <Link to={project.canonicalPath}>{project.title}</Link>
+              </Heading>
+              <p className={styles.status}>项目状态：{PROJECT_STATUS[project.status]}</p>
+              {project.publicationStatus === "archived"
+                ? <p className={styles.status}>公开状态：已归档</p>
+                : null}
+              <p className={styles.summary}>{project.summary}</p>
+              <p className={styles.updated}>
+                最近更新：
+                <time dateTime={project.updatedAt}>{project.updatedAt}</time>
+              </p>
+              <p className={styles.actions}>
+                <Link to={project.canonicalPath}>查看项目</Link>
+                {project.repositoryUrl === undefined
+                  ? null
+                  : (
+                    <>
+                      {" · "}
+                      <a href={project.repositoryUrl}>查看源码</a>
+                    </>
+                  )}
+              </p>
+            </article>
+          </li>
+        );
+      })}
     </ul>
   );
 }

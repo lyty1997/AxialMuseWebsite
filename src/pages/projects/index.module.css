@@ -16,7 +16,6 @@
   margin: 0;
   color: var(--am-ink);
   font-size: 3.25rem;
-  letter-spacing: -0.025em;
 }
 
 @media (max-width: 767px) {

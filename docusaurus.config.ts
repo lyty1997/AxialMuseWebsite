@@ -13,6 +13,7 @@ if (buildContext.mode === "preview") {
 const config: Config = {
   title: "Axial Muse",
   tagline: "个人项目与技术分享",
+  favicon: "data:,",
   url: "https://www.axialmuse.com",
   baseUrl: "/",
   trailingSlash: true,

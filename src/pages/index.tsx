@@ -26,7 +26,7 @@ export default function IndexPage() {
 
         <section className={styles.section} aria-labelledby="projects-heading">
           <h2 id="projects-heading">项目</h2>
-          <ProjectList headingLevel="h3" />
+          <ProjectList headingLevel="h3" prioritizeFirstPreview={false} />
         </section>
 
         <section className={styles.section} aria-labelledby="writing-heading">
