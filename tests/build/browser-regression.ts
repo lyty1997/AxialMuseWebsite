@@ -130,6 +130,23 @@ function sanitizeBrowserProduct(value: unknown): string {
   return value;
 }
 
+function sanitizeExternalUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    return `${url.protocol}//${url.host}/<redacted>`;
+  } catch {
+    return "invalid-url";
+  }
+}
+
+function sanitizeBrowserDiagnostic(value: string, origin: string): string {
+  return value
+    .replaceAll(origin, "<fixture>")
+    .replace(/https?:\/\/[^\s"'<>]+/gu, (url) => sanitizeExternalUrl(url))
+    .replace(/file:\/\/\/[^\s"'<>]+/gu, "file:///<redacted>")
+    .slice(0, 500);
+}
+
 function executableFromPath(name: string): string | undefined {
   const pathValue = process.env.PATH;
   if (pathValue === undefined) return undefined;
@@ -535,9 +552,10 @@ function createObservation(
           .join(" ")
         : "";
       observation.consoleErrors.push(
-        `${String(parameters.type)}: ${argumentsValue}`
-          .replaceAll(origin, "<fixture>")
-          .slice(0, 500),
+        sanitizeBrowserDiagnostic(
+          `${String(parameters.type)}: ${argumentsValue}`,
+          origin,
+        ),
       );
     }
   });
@@ -552,9 +570,10 @@ function createObservation(
         ? entry.url.replace(origin, "<fixture>")
         : "";
       observation.consoleErrors.push(
-        `${String(entry.level)}: ${text} ${source}`.trim()
-          .replaceAll(origin, "<fixture>")
-          .slice(0, 500),
+        sanitizeBrowserDiagnostic(
+          `${String(entry.level)}: ${text} ${source}`.trim(),
+          origin,
+        ),
       );
     }
   });
@@ -574,8 +593,9 @@ function createObservation(
       );
     }
     try {
-      if (new URL(request.url).origin !== origin) {
-        observation.unexpectedRequests.push(request.url);
+      const parsedUrl = new URL(request.url);
+      if (parsedUrl.origin !== origin) {
+        observation.unexpectedRequests.push(sanitizeExternalUrl(request.url));
       }
     } catch {
       observation.unexpectedRequests.push("invalid-url");
@@ -592,12 +612,21 @@ function createObservation(
     }
   });
   connection.on("Network.loadingFailed", (parameters) => {
+    const requestUrl = typeof parameters.requestId === "string"
+      ? observation.inFlightRequests.get(parameters.requestId) ?? "unknown"
+      : "unknown";
     if (typeof parameters.requestId === "string") {
       observation.inFlightRequests.delete(parameters.requestId);
     }
-    observation.failedRequests.push(
-      typeof parameters.errorText === "string" ? parameters.errorText : "unknown",
-    );
+    const failureReason = (
+      typeof parameters.errorText === "string"
+      && parameters.errorText.length > 0
+    )
+      ? parameters.errorText
+      : typeof parameters.blockedReason === "string"
+        ? `blocked:${parameters.blockedReason}`
+        : "unknown";
+    observation.failedRequests.push(`${requestUrl}:${failureReason}`);
   });
   connection.on("Network.responseReceived", (parameters) => {
     if (typeof parameters.requestId === "string") {
@@ -606,7 +635,7 @@ function createObservation(
     const response = isJsonRecord(parameters.response) ? parameters.response : {};
     if (typeof response.status === "number" && response.status >= 400) {
       const url = typeof response.url === "string"
-        ? response.url.replace(origin, "<fixture>")
+        ? sanitizeBrowserDiagnostic(response.url, origin)
         : "unknown";
       observation.responseErrors.push(`${String(response.status)}:${url}`);
     }
@@ -664,6 +693,25 @@ function assertObservationClean(observation: BrowserObservation): void {
   assert.deepEqual(observation.unexpectedRequests, [], "浏览器发起了非本站请求");
 }
 
+function assertExpectedLocalFailures(
+  observation: BrowserObservation,
+  resourcePattern: RegExp,
+  errorPattern: RegExp,
+): void {
+  assert.ok(observation.failedRequests.length > 0, "预期资源失败没有发生");
+  for (const failure of observation.failedRequests) {
+    assert.match(failure, /^<fixture>\//u);
+    assert.match(failure, resourcePattern);
+    assert.match(failure, errorPattern);
+  }
+  for (const message of observation.consoleErrors) {
+    assert.match(message, /(?:Failed to load resource|ERR_)/u);
+  }
+  assert.deepEqual(observation.inFlightRequests, new Map());
+  assert.deepEqual(observation.responseErrors, [], "预期失败不得产生 HTTP 错误响应");
+  assert.deepEqual(observation.unexpectedRequests, [], "预期失败不得发起非本站请求");
+}
+
 async function evaluate<T>(
   connection: DevToolsConnection,
   expression: string,
@@ -678,24 +726,24 @@ async function evaluate<T>(
   return result.value as T;
 }
 
-async function navigate(
+async function isolatePage(connection: DevToolsConnection): Promise<void> {
+  const currentUrl = await evaluate<string>(connection, "location.href");
+  if (currentUrl === "about:blank") return;
+  const blankLoaded = connection.waitForEvent("Page.loadEventFired");
+  const blankResult = await connection.send("Page.navigate", {
+    url: "about:blank",
+  });
+  assert.equal(blankResult.errorText, undefined, "浏览器隔离导航失败");
+  await blankLoaded;
+  await delay(50);
+}
+
+async function setViewport(
   connection: DevToolsConnection,
-  observation: BrowserObservation,
-  url: string,
   width: number,
   height: number,
-  reducedMotion = false,
+  reducedMotion: boolean,
 ): Promise<void> {
-  const currentUrl = await evaluate<string>(connection, "location.href");
-  if (currentUrl !== "about:blank") {
-    const blankLoaded = connection.waitForEvent("Page.loadEventFired");
-    const blankResult = await connection.send("Page.navigate", {
-      url: "about:blank",
-    });
-    assert.equal(blankResult.errorText, undefined, "浏览器隔离导航失败");
-    await blankLoaded;
-    await delay(50);
-  }
   await connection.send("Emulation.setDeviceMetricsOverride", {
     deviceScaleFactor: 1,
     height,
@@ -709,6 +757,19 @@ async function navigate(
     }],
     media: "screen",
   });
+}
+
+async function navigate(
+  connection: DevToolsConnection,
+  observation: BrowserObservation,
+  url: string,
+  width: number,
+  height: number,
+  reducedMotion = false,
+  requireHydration = true,
+): Promise<void> {
+  await isolatePage(connection);
+  await setViewport(connection, width, height, reducedMotion);
   resetObservation(observation);
   const loaded = connection.waitForEvent("Page.loadEventFired");
   const result = await connection.send("Page.navigate", {url});
@@ -718,7 +779,7 @@ async function navigate(
   await evaluate(connection, `new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(resolve));
   })`);
-  await waitForHydration(connection);
+  if (requireHydration) await waitForHydration(connection);
   assert.equal(
     await evaluate(connection, "document.readyState"),
     "complete",
@@ -792,6 +853,40 @@ const DETAIL_SNAPSHOT_EXPRESSION = `(() => {
       .filter(isVisible).length,
   };
 })()`;
+
+const PROJECT_IMAGE_LAYOUT_EXPRESSION = `(() => {
+  const image = document.querySelector("main img");
+  const title = document.querySelector("main article h2");
+  const imageRect = image.getBoundingClientRect();
+  const titleRect = title.getBoundingClientRect();
+  return {
+    complete: image.complete,
+    heightAttribute: image.getAttribute("height") ?? "",
+    imageBottom: imageRect.bottom,
+    imageHeight: imageRect.height,
+    imageTop: imageRect.top,
+    imageWidth: imageRect.width,
+    naturalWidth: image.naturalWidth,
+    pageOverflows: document.documentElement.scrollWidth
+      > document.documentElement.clientWidth + 1
+      || document.body.scrollWidth > document.body.clientWidth + 1,
+    titleTop: titleRect.top,
+    widthAttribute: image.getAttribute("width") ?? "",
+  };
+})()`;
+
+interface ProjectImageLayoutSnapshot {
+  readonly complete: boolean;
+  readonly heightAttribute: string;
+  readonly imageBottom: number;
+  readonly imageHeight: number;
+  readonly imageTop: number;
+  readonly imageWidth: number;
+  readonly naturalWidth: number;
+  readonly pageOverflows: boolean;
+  readonly titleTop: number;
+  readonly widthAttribute: string;
+}
 
 function rectanglesOverlap(
   left: ElementRectangle,
@@ -890,6 +985,250 @@ async function dispatchEnter(connection: DevToolsConnection): Promise<void> {
     windowsVirtualKeyCode: 13,
   });
   await evaluate(connection, `new Promise((resolve) => requestAnimationFrame(resolve))`);
+}
+
+async function dispatchEscape(connection: DevToolsConnection): Promise<void> {
+  await connection.send("Input.dispatchKeyEvent", {
+    code: "Escape",
+    key: "Escape",
+    nativeVirtualKeyCode: 27,
+    type: "keyDown",
+    windowsVirtualKeyCode: 27,
+  });
+  await connection.send("Input.dispatchKeyEvent", {
+    code: "Escape",
+    key: "Escape",
+    nativeVirtualKeyCode: 27,
+    type: "keyUp",
+    windowsVirtualKeyCode: 27,
+  });
+  await evaluate(connection, `new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  })`);
+}
+
+async function probeDelayedFailedProjectImage(
+  connection: DevToolsConnection,
+  observation: BrowserObservation,
+  url: string,
+  origin: string,
+): Promise<void> {
+  await isolatePage(connection);
+  await setViewport(connection, 1440, 900, false);
+  resetObservation(observation);
+  let pausedRequestId: string | undefined;
+  let requestReleased = false;
+  await connection.send("Fetch.enable", {
+    patterns: [{
+      requestStage: "Request",
+      urlPattern: "*.webp",
+    }],
+  });
+  try {
+    const paused = connection.waitForEvent("Fetch.requestPaused");
+    const domContentLoaded = connection.waitForEvent("Page.domContentEventFired");
+    const loaded = connection.waitForEvent("Page.loadEventFired");
+    const result = await connection.send("Page.navigate", {url});
+    assert.equal(result.errorText, undefined, "图片延迟探针导航失败");
+    const pausedRequest = await paused;
+    const request = isJsonRecord(pausedRequest.request)
+      ? pausedRequest.request
+      : {};
+    if (typeof pausedRequest.requestId !== "string") {
+      assert.fail("图片延迟探针缺少 Fetch requestId");
+    }
+    pausedRequestId = pausedRequest.requestId;
+    if (typeof request.url !== "string") {
+      assert.fail("图片延迟探针缺少资源 URL");
+    }
+    const requestUrl = new URL(request.url);
+    assert.equal(requestUrl.origin, origin);
+    assert.match(requestUrl.pathname, /\.webp$/u);
+    await domContentLoaded;
+    await waitForHydration(connection);
+    await evaluate(connection, `new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    })`);
+    const delayed = await evaluate<ProjectImageLayoutSnapshot>(
+      connection,
+      PROJECT_IMAGE_LAYOUT_EXPRESSION,
+    );
+    assert.equal(delayed.complete, false, "延迟图片在放行前不应完成");
+    assert.equal(delayed.naturalWidth, 0);
+    assert.equal(delayed.widthAttribute, "1600");
+    assert.equal(delayed.heightAttribute, "1000");
+    assert.ok(delayed.imageWidth > 100);
+    assert.ok(Math.abs((delayed.imageWidth / delayed.imageHeight) - 1.6) < 0.01);
+    assert.ok(delayed.titleTop >= delayed.imageBottom);
+    assert.equal(delayed.pageOverflows, false);
+
+    await connection.send("Fetch.failRequest", {
+      errorReason: "Failed",
+      requestId: pausedRequestId,
+    });
+    requestReleased = true;
+    await loaded;
+    await waitForNetworkIdle(observation);
+    await evaluate(connection, `new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    })`);
+    const failed = await evaluate<ProjectImageLayoutSnapshot>(
+      connection,
+      PROJECT_IMAGE_LAYOUT_EXPRESSION,
+    );
+    assert.equal(failed.complete, true, "失败图片应进入稳定完成状态");
+    assert.equal(failed.naturalWidth, 0);
+    assert.equal(failed.widthAttribute, "1600");
+    assert.equal(failed.heightAttribute, "1000");
+    assert.equal(failed.pageOverflows, false);
+    assert.ok(Math.abs(failed.imageTop - delayed.imageTop) <= 0.5);
+    assert.ok(Math.abs(failed.imageHeight - delayed.imageHeight) <= 0.5);
+    assert.ok(Math.abs(failed.titleTop - delayed.titleTop) <= 0.5);
+    assertExpectedLocalFailures(
+      observation,
+      /\.webp:/u,
+      /ERR_FAILED/u,
+    );
+  } finally {
+    if (pausedRequestId !== undefined && !requestReleased) {
+      try {
+        await connection.send("Fetch.failRequest", {
+          errorReason: "Failed",
+          requestId: pausedRequestId,
+        });
+      } catch {
+        // Fetch.disable 和浏览器清理仍会收口未完成导航。
+      }
+    }
+    await connection.send("Fetch.disable");
+  }
+}
+
+async function probeNoHydrationStaticContent(
+  connection: DevToolsConnection,
+  observation: BrowserObservation,
+  origin: string,
+  detailRoute: string,
+): Promise<void> {
+  await connection.send("Network.setBlockedURLs", {urls: ["*.js"]});
+  try {
+    await navigate(
+      connection,
+      observation,
+      `${origin}/`,
+      360,
+      800,
+      false,
+      false,
+    );
+    const home = await evaluate<Readonly<{
+      actionHref: string;
+      actionVisible: boolean;
+      h1: string;
+      h1Visible: boolean;
+      hasHydrated: boolean;
+      pageOverflows: boolean;
+    }>>(connection, `(() => {
+      const h1 = document.querySelector("h1");
+      const action = [...document.querySelectorAll("main a")].find(
+        (element) => element.textContent?.trim() === "浏览项目",
+      );
+      return {
+        actionHref: action?.getAttribute("href") ?? "",
+        actionVisible: (action?.getBoundingClientRect().height ?? 0) > 0,
+        h1: h1?.textContent?.trim() ?? "",
+        h1Visible: (h1?.getBoundingClientRect().height ?? 0) > 0,
+        hasHydrated: document.documentElement.dataset.hasHydrated === "true",
+        pageOverflows: document.documentElement.scrollWidth
+          > document.documentElement.clientWidth + 1
+          || document.body.scrollWidth > document.body.clientWidth + 1,
+      };
+    })()`);
+    assert.deepEqual(home, {
+      actionHref: "/projects/",
+      actionVisible: true,
+      h1: "Axial Muse",
+      h1Visible: true,
+      hasHydrated: false,
+      pageOverflows: false,
+    });
+    assertExpectedLocalFailures(
+      observation,
+      /\.js:/u,
+      /(?:ERR_BLOCKED_BY_(?:CLIENT|INSPECTOR)|blocked:inspector)/u,
+    );
+
+    await navigate(
+      connection,
+      observation,
+      `${origin}${detailRoute}`,
+      360,
+      800,
+      false,
+      false,
+    );
+    const detail = await evaluate<Readonly<{
+      articleVisible: boolean;
+      hasHydrated: boolean;
+      nativeDetailsClosed: boolean;
+      nativeDetailsVisible: boolean;
+      pageOverflows: boolean;
+    }>>(connection, `(() => {
+      const details = [...document.querySelectorAll("details")].filter(
+        (element) => ["浏览本栏目", "本页目录"].includes(
+          element.querySelector(":scope > summary")?.textContent?.trim() ?? "",
+        ),
+      );
+      return {
+        articleVisible: (document.querySelector("article")
+          ?.getBoundingClientRect().height ?? 0) > 0,
+        hasHydrated: document.documentElement.dataset.hasHydrated === "true",
+        nativeDetailsClosed: details.length === 2
+          && details.every((element) => element.open === false),
+        nativeDetailsVisible: details.length === 2
+          && details.every((element) => {
+            const rect = element.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+          }),
+        pageOverflows: document.documentElement.scrollWidth
+          > document.documentElement.clientWidth + 1
+          || document.body.scrollWidth > document.body.clientWidth + 1,
+      };
+    })()`);
+    assert.deepEqual(detail, {
+      articleVisible: true,
+      hasHydrated: false,
+      nativeDetailsClosed: true,
+      nativeDetailsVisible: true,
+      pageOverflows: false,
+    });
+    assert.equal(
+      await evaluate<boolean>(connection, `(() => {
+        const summary = [...document.querySelectorAll("summary")].find(
+          (element) => element.textContent?.trim() === "本页目录",
+        );
+        summary?.focus();
+        return document.activeElement === summary;
+      })()`),
+      true,
+      "无 hydration 时原生目录无法获得焦点",
+    );
+    await dispatchEnter(connection);
+    assert.equal(
+      await evaluate<boolean>(connection, `([...document.querySelectorAll("details")]
+        .find((element) => element.querySelector(":scope > summary")
+          ?.textContent?.trim() === "本页目录")?.open) === true`),
+      true,
+      "无 hydration 时原生目录无法由 Enter 展开",
+    );
+    assertExpectedLocalFailures(
+      observation,
+      /\.js:/u,
+      /(?:ERR_BLOCKED_BY_(?:CLIENT|INSPECTOR)|blocked:inspector)/u,
+    );
+  } finally {
+    await connection.send("Network.setBlockedURLs", {urls: []});
+  }
 }
 
 async function closeBrowser(
@@ -1097,6 +1436,19 @@ export async function runThemeBrowserRegression({
     );
     assertObservationClean(observation);
 
+    await probeDelayedFailedProjectImage(
+      connection,
+      observation,
+      `${server.origin}/projects/`,
+      server.origin,
+    );
+    await probeNoHydrationStaticContent(
+      connection,
+      observation,
+      server.origin,
+      detailRoute,
+    );
+
     await navigate(
       connection,
       observation,
@@ -1177,6 +1529,52 @@ export async function runThemeBrowserRegression({
       360,
       800,
     );
+    const navbarToggleFocused = await evaluate<boolean>(connection, `(() => {
+      const toggle = document.querySelector(".navbar__toggle");
+      toggle?.focus();
+      return document.activeElement === toggle;
+    })()`);
+    assert.equal(navbarToggleFocused, true, "小屏导航按钮无法获得键盘焦点");
+    await dispatchEnter(connection);
+    const openedNavbar = await evaluate<Readonly<{
+      closeButtonVisible: boolean;
+      drawerOpen: boolean;
+      expanded: string;
+    }>>(connection, `(() => {
+      const closeButton = document.querySelector(".navbar-sidebar__close");
+      const closeRect = closeButton?.getBoundingClientRect();
+      return {
+        closeButtonVisible: closeRect !== undefined
+          && closeRect.width > 0
+          && closeRect.height > 0,
+        drawerOpen: document.querySelector(".navbar-sidebar--show") !== null,
+        expanded: document.querySelector(".navbar__toggle")
+          ?.getAttribute("aria-expanded") ?? "",
+      };
+    })()`);
+    assert.deepEqual(openedNavbar, {
+      closeButtonVisible: true,
+      drawerOpen: true,
+      expanded: "true",
+    });
+    await dispatchEscape(connection);
+    const closedNavbar = await evaluate<Readonly<{
+      drawerOpen: boolean;
+      expanded: string;
+      focusReturned: boolean;
+    }>>(connection, `(() => {
+      const toggle = document.querySelector(".navbar__toggle");
+      return {
+        drawerOpen: document.querySelector(".navbar-sidebar--show") !== null,
+        expanded: toggle?.getAttribute("aria-expanded") ?? "",
+        focusReturned: document.activeElement === toggle,
+      };
+    })()`);
+    assert.deepEqual(closedNavbar, {
+      drawerOpen: false,
+      expanded: "false",
+      focusReturned: true,
+    });
     for (const label of ["浏览本栏目", "本页目录"]) {
       const focused: boolean = await evaluate<boolean>(connection, `(() => {
         const summary = [...document.querySelectorAll("summary")].find(
@@ -1276,9 +1674,12 @@ export async function runThemeBrowserRegression({
       fixedViewports: Object.freeze(fixedViewports),
       probes: Object.freeze([
         "320px-overflow",
+        "failed-project-image-layout",
         "h4-only-empty-toc",
         "hydration-ready",
         "keyboard-details",
+        "keyboard-navbar-escape",
+        "no-hydration-static-content",
         "priority-project-image",
         "prose-link-decoration",
         "reduced-motion",

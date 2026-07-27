@@ -186,7 +186,7 @@
 - 主站静态内容必须能在无运行时 API 的构建路径中完成渲染；页面不得靠客户端 fetch 才获得文章、项目或导航主体。
 - 模块初始化和静态渲染阶段不得直接访问 `window`、`document`、浏览器存储或其他仅客户端对象。
 - 获批的客户端行为必须放在明确的客户端边界内，并在 hydration 后执行；不得把第三方请求、数据采集或业务状态藏入通用布局组件。
-- 按 E-004 优先使用 Docusaurus 官方配置、Infima 和 CSS；默认不 Swizzle、不 eject。#28 的 fit-gap 已按 E-004 证明默认 docs 左栏断点、全局抽屉归属与移动标题目录无法表达 D-034，因此只允许当前同路径 `DocRoot/Layout`、`DocItem/Layout` 两个最小包装；扩大包装集合、读取第二内容源或增加客户端目录状态必须重新证明必要性。包装继续复用框架 breadcrumbs、正文、页脚和 paginator，并由构建契约与真实浏览器回归覆盖。
+- 按 E-004 优先使用 Docusaurus 官方配置、Infima 和 CSS；默认不 Swizzle、不 eject。#28 的 fit-gap 已按 E-004 证明默认 docs 左栏断点、全局抽屉归属与移动标题目录无法表达 D-034，因此允许同路径 `DocRoot/Layout`、`DocItem/Layout` 两个最小布局包装；关闭后复核又由实现前真实基线和锁定 Docusaurus `3.10.2` 源码共同证明 `Navbar/Layout` 没有 Escape 关闭路径，故只增加同路径最小包装，在 hydration 后监听 Escape、调用框架原关闭按钮并把焦点归还原 toggle，不复制导航结构或状态。扩大包装集合、读取第二内容源、增加客户端目录状态或改变框架导航状态机必须重新证明必要性。包装继续复用框架 breadcrumbs、正文、页脚和 paginator，并由构建契约与真实浏览器回归覆盖。
 
 来源：D-027、D-029、D-051、D-053；[主站体验与内容架构](../product/site-experience.md)。
 
@@ -215,7 +215,7 @@
 - production 白名单由完整 `static-public/` 和 `published`/`archived` 项目的登记预览组成；preview 白名单由完整 `static-public/` 和所有状态中已登记的预览组成。映射固定为 `site-assets/<sourcePath>` 到临时 `assets/<sourcePath>`，最终为 `/assets/<sourcePath>`；`static/`、`public/`、`site-assets/` 原目录都不得出现在目标 `staticDirectories`。
 - 本地资源必须使用可由构建和质量门禁解析的路径；运行时第三方字体、图片、脚本、播放器或远程资源必须先完成依赖、许可、隐私和网络请求决策。
 - UI 代码必须满足产品文档中的语义 HTML、键盘、文本缩放、动效和无重叠要求；验收值直接引用产品文档，不在本文复制。
-- #28 的真实浏览器回归必须复用 `tests/build/public-presentation-build.test.ts` 创建的 production 公开内容 fixture，并在同一冻结依赖、同一构建制品上调用运行环境已有的 Chromium DevTools Protocol；不新增 npm 浏览器依赖、远程浏览器服务或下载回退。入口必须覆盖产品 Spec 的固定视口和 `995/996`、`1279/1280` 边界，实际读取 DOM、computed style、console、network、页面级 overflow 与截图字节；另以 H4-only 页面、正文链接、项目目录首图、`prefers-reduced-motion: reduce` 和 200% 根文本验证对应反例。浏览器不可发现、调试连接失败、非本站请求、资源错误或任一断言不满足时均以非零状态失败，不能静默跳过；成功回执只输出浏览器产品/版本、稳定测量与截图 SHA-256，不输出本机路径、临时目录或环境值。
+- #28 的真实浏览器回归必须复用 `tests/build/public-presentation-build.test.ts` 创建的 production 公开内容 fixture，并在同一冻结依赖、同一构建制品上调用运行环境已有的 Chromium DevTools Protocol；不新增 npm 浏览器依赖、远程浏览器服务或下载回退。入口必须覆盖产品 Spec 的固定视口和 `995/996`、`1279/1280` 边界，实际读取 DOM、computed style、console、network、页面级 overflow 与截图字节；另以 H4-only 页面、正文链接、项目目录首图、图片请求暂停后失败、禁用 JavaScript 的无 hydration 静态内容、全站导航键盘 Enter/Escape 与焦点归还、原生目录键盘路径、`prefers-reduced-motion: reduce` 和 200% 根文本验证对应反例。浏览器不可发现、调试连接失败、非本站请求、非预期资源错误或任一断言不满足时均以非零状态失败，不能静默跳过；刻意注入的本地图片/脚本失败必须精确限定资源类型与错误码，并证明未产生布局位移、外部请求或 HTTP 错误。成功回执只输出浏览器产品/版本、稳定测量与截图 SHA-256，不输出本机路径、临时目录或环境值；失败诊断同样必须脱敏 URL 路径和本地环境。
 
 来源：D-025、D-034、D-052、E-007、E-008；[主站体验与内容架构](../product/site-experience.md)。
 

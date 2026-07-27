@@ -182,3 +182,26 @@ test("D-034 详情主题覆盖固定三档布局并使用原生内容目录折�
   assert.equal(directory.includes("window"), false);
   assert.equal(directory.includes("document"), false);
 });
+
+test("D-034 小屏导航包装只补 Escape 关闭与焦点归还", () => {
+  const navbarLayout = source("src/theme/Navbar/Layout/index.tsx");
+  assert.match(
+    navbarLayout,
+    /import OriginalNavbarLayout from "@theme-original\/Navbar\/Layout";/u,
+  );
+  assert.match(navbarLayout, /event\.key !== "Escape"/u);
+  assert.match(
+    navbarLayout,
+    /document\.addEventListener\("keydown", closeOnEscape\)/u,
+  );
+  assert.match(navbarLayout, /closeButton\.click\(\);/u);
+  assert.match(
+    navbarLayout,
+    /requestAnimationFrame\(\(\) => toggleButton\.focus\(\)\);/u,
+  );
+  assert.match(
+    navbarLayout,
+    /document\.removeEventListener\("keydown", closeOnEscape\)/u,
+  );
+  assert.equal(navbarLayout.includes("@docusaurus/theme-common/internal"), false);
+});
