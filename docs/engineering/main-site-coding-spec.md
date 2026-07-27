@@ -1,7 +1,7 @@
 # 主站编码规范 Spec
 
 状态：active
-完整度：M0-design-closed（#9/#10/#21/#22/#11/#23/#5/#6/#7/#26 已完成各自实现与远端验收；#27 当前实现页面与公开表达，#28、#8、#12 至 #14 继续跟踪）
+完整度：M0-design-closed（#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27 已完成各自实现与远端验收；#28 当前接管主题、响应式与可访问性，#8、#12 至 #14 继续跟踪）
 最近更新：2026-07-26
 适用范围：本站仓库内的主站页面与组件、Docusaurus 构建期适配、作者工具、质量脚本，以及这些代码之间的依赖边界
 
@@ -9,7 +9,7 @@
 
 本文是从上层设计进入实现的工程入口。它只拥有“代码如何组织、依赖和验证”的规则，不复制内容字段、页面结果、基础设施或发布流程的完整语义。
 
-2026-07-18 审查确认的实施契约矛盾由 GitHub Issues #5 至 #14 跟踪。E-006 至 E-016 已补齐内容所有权、主预览、发布态素材、草稿预览、npm 隔离、SPDX 确定化、Node ESM TypeScript 测试、完整 Git 历史门禁、同版本服务端 301、production job 字节所有权和单一内容装配；#9 已完成 E-010 实现、fixture 与真实双端点验收，#10 已完成 E-011 实现、真实 npm shape 与双端点全量验收，#21 已完成 D-077 的真实图闭环，#22 已在不改变依赖图的前提下完成 Docusaurus/严格 TypeScript scaffold、模块边界、受控 production build 和真实本地安装验收，#11 已完成 E-012 测试 program、runner、fixture 与远端闭环，#23 已完成统一解码、纯路径分类和项目/文章整批领域校验的远端闭环，#5 已迁移并远端关闭两份真实项目正文，#6 已完成 metadata-first 媒体清单、静态 WebP 容器/动画/尺寸/大小校验并远端闭环，#7 已由提交 `7f2115d9f1dc5396ca0c81fc9960223644d79725` 完成双模式静态素材计划与生产泄漏判定，CI run `29950131762` 成功并验收关闭。#26 已由提交 `91dd3c7d4b8553910418119d7ee8e677974fe01a` 完成 production 内容装配和唯一 docs 实例，精确 CI run `29970675298` 成功并验收关闭；#27 当前实现页面与公开表达，#28、#8、#12 至 #14 继续跟踪其余实现。D-078 的委托和已确认上层方向继续有效；单项闭环不能替代目标内容、完整 CI 与发布闭环。
+2026-07-18 审查确认的实施契约矛盾由 GitHub Issues #5 至 #14 跟踪。E-006 至 E-016 已补齐内容所有权、主预览、发布态素材、草稿预览、npm 隔离、SPDX 确定化、Node ESM TypeScript 测试、完整 Git 历史门禁、同版本服务端 301、production job 字节所有权和单一内容装配；#9 已完成 E-010 实现、fixture 与真实双端点验收，#10 已完成 E-011 实现、真实 npm shape 与双端点全量验收，#21 已完成 D-077 的真实图闭环，#22 已在不改变依赖图的前提下完成 Docusaurus/严格 TypeScript scaffold、模块边界、受控 production build 和真实本地安装验收，#11 已完成 E-012 测试 program、runner、fixture 与远端闭环，#23 已完成统一解码、纯路径分类和项目/文章整批领域校验的远端闭环，#5 已迁移并远端关闭两份真实项目正文，#6 已完成 metadata-first 媒体清单、静态 WebP 容器/动画/尺寸/大小校验并远端闭环，#7 已由提交 `7f2115d9f1dc5396ca0c81fc9960223644d79725` 完成双模式静态素材计划与生产泄漏判定，CI run `29950131762` 成功并验收关闭。#26 已由提交 `91dd3c7d4b8553910418119d7ee8e677974fe01a` 完成 production 内容装配和唯一 docs 实例，精确 CI run `29970675298` 成功并验收关闭；#27 已完成页面与公开表达远端闭环，并由关闭后审查修复 `0fb38b20b8b576e53b238ab65f4ed964b52f0728` 通过精确 CI 与独立 Linux/浏览器补验。#28 当前接管主题、响应式与可访问性，#8、#12 至 #14 继续跟踪其余实现。D-078 的委托和已确认上层方向继续有效；单项闭环不能替代目标内容、完整 CI 与发布闭环。
 
 业务与架构行为仍直接引用原真相源及其 D-xxx 决策编号：
 
@@ -46,7 +46,7 @@
 | D-076、D-079 | 首轮 React/MDX/TypeScript、Node 测试类型直接依赖、官方根 `tsconfig` 继承和本站收紧规则 | 依赖清单、锁文件、生产/测试 TypeScript program 与配置漂移检查 | 首轮依赖图与生产配置已由 #21/#22 完成；#11 已完成测试 program、runner 与配置漂移检查，目标 CI 迁移仍由后续任务接管 |
 | D-077、E-010、E-011 | 官方 registry-only、启动前 npm 隔离、无脚本 tarball 证据、许可证与脚本处置、确定性 SPDX/NOTICE、漏洞阈值、双端点冻结安装和依赖事实防漂移 | 候选解析、隔离配置、供应链证据、人工准入、派生制品、显式审计与双端点检查 | E-010/E-011 与 #21 首次真实依赖图已完成本地闭环；1,225 项 admissions、正式三制品、audit 全零、D-082 决定及两个 Node 24 端点均已验证，目标 CI 尚未接线 |
 | D-030 至 D-034、D-058、E-002、E-004、E-014 | 路由配置、文档站布局、主题与响应式适配、同版本服务端 301 | 路由制品、Nginx 派生配置、发布冒烟与真实浏览器 | M0 路由与 301 契约已固定，实现与浏览器 fit-gap 尚未完成 |
-| D-035 至 D-050、D-078、E-001、E-003、E-006、E-007 | 领域 schema、注册表、作者与分类引用、项目主预览、日期、可见性和 SEO 页面适配 | 领域契约、媒体字节、构建制品与浏览器 head | #23 已完成四份注册表、项目/文章和主预览引用的纯领域校验，#6 已完成媒体清单与静态 WebP 字节门禁并远端闭环，#7 已完成目的限定的真实扫描，#26 已远端闭环只读投影与制品检查；#27 当前实现页面元数据组件 |
+| D-035 至 D-050、D-078、E-001、E-003、E-006、E-007 | 领域 schema、注册表、作者与分类引用、项目主预览、日期、可见性和 SEO 页面适配 | 领域契约、媒体字节、构建制品与浏览器 head | #23 已完成四份注册表、项目/文章和主预览引用的纯领域校验，#6 已完成媒体清单与静态 WebP 字节门禁并远端闭环，#7 已完成目的限定的真实扫描，#26 已远端闭环只读投影与制品检查，#27 已远端闭环页面元数据、公开关系链接与制品精确闭包 |
 | D-053、E-008 | 按构建模式生成临时静态白名单树，并从生产制品排除未发布素材 | 源路径、白名单、制品字节和泄漏 fixture | #22 已实现空静态树的受控 production 基线；#7 已完成真实素材白名单与泄漏检查并远端关闭，#26 已远端闭环正文素材闭包 |
 | D-072、E-009 | 在 Linux 对精确远端提交构建含 draft/noindex 的静态候选，并原子切换局域网预览 | Docusaurus 3.10.2 fixture、候选制品、失败保留与真实浏览器 | 预览设计已收口；当前脚本仍直接服务 `public/`，尚未实现 |
 | D-054 至 D-060、D-078、D-079、E-006、E-012、E-016 | 单一 docs 实例、唯一判型、校验先行、只读内存投影与公共 API | 临时编译后的 Node ESM 纯逻辑测试和 Docusaurus 集成测试 | #11 已完成 Node ESM runner/fixture，#23/#6 已完成内容与媒体纯领域测试；#26 已远端闭环真实扫描、只读投影与 Docusaurus 集成 |
@@ -210,7 +210,7 @@
 - `previewImage` 只包含 `sourcePath`、`width`、`height`、`alt`；不得加入可派生公开路径、主图布尔值、顺序、审核状态或哈希。校验器必须核对项目状态、固定路径、文件签名、非动画 WebP、精确 1600 x 1000、最多 300,000 bytes、登记尺寸、替代文本以及一对一引用；未知字段失败关闭。
 - `scripts/build/build-site.mjs` 是 Docusaurus production/preview 的唯一受控入口。它接受封闭枚举模式，在进程创建的全新系统临时目录生成静态白名单树，并只把规范化绝对路径通过专用环境变量传给 `docusaurus.config.ts`；配置在模式、目录、所有权标记或路径边界缺失时抛错，不回退到仓库 `static/`。入口退出时清理临时树，preview 的持久候选制品由 #8 另行拥有。
 - I-04 最初只启用上述入口的 `production` 基线：入口验证当前 Node 是 `.nvmrc` 主端点或 `engines.node` 下界，经本地已冻结的 Docusaurus CLI 构建默认 `build/`，并创建任务私有、同用户、非宽写的临时根、空 `static/` 与随机所有权标记；`src/build/site-config/index.ts` 是根配置读取和验证该上下文的唯一公共入口。直接调用 Docusaurus、缺少或伪造环境、非临时路径、标记或 inode/权限漂移均不得回退。#7 后续已远端闭环 production/preview 模式解析、静态素材计划与受控构建上下文；#26 已远端闭环真实 Markdown/MDX 扫描、production 内容投影与唯一 docs 实例。因此 `BUILD_PIPELINE_INCOMPLETE` 只保留为 #7 及更早阶段的历史 fail-loud 证据，不是当前 production 正常路径。`preview` Docusaurus 在 #8 接管 `build --dev`、`noindex`/sitemap 和持久候选前继续以稳定 `BUILD_MODE_UNAVAILABLE` 失败；不得把 #27 完成误报为 preview 已可用。
-- I-04 的根配置固定消费上述构建上下文，使用 canonical `url`/`baseUrl`、`trailingSlash: true`、`onBrokenLinks`/`onBrokenAnchors`/`onDuplicateRoutes: 'throw'`、`future.v4: true` 与稳定的 `future.faster: true`；显式 `blog: false`，保留 classic theme 与 sitemap，不配置搜索、分析、外部脚本或远程资源。#22 迁移基线曾因 Docusaurus 3.10.2 的 docs 插件拒绝零公开文档而显式使用 `docs: false`；#26 已按 E-016 以 classic-derived preset 远端闭环该历史配置替换，根 `sidebars.ts` 现参与唯一 docs 实例。preset 必须从精确 classic 返回值识别唯一官方 docs 插件配置并保留其 validator 与生命周期：只在已证明 production 公开 docs 精确为空时跳过有缺陷的 `contentLoaded`；production 有公开 docs 时只对参数链做受控浅投影，保留公开 docs、actions、其余 version 字段和 lifecycle `this` 身份但把克隆版本 `drafts` 置空，防止官方 global data 产生浏览器 `draftIds`；preview 原样委托。委托前后必须重验原对象图、投影图和当前批次。唯一 docs 的 `path` 精确为仓库根 `site-content/`、`routeBasePath` 为 `/`、`sidebarPath` 为根 `sidebars.ts`，current-only 选项精确为 `includeCurrentVersion: true`、`onlyIncludeVersions: ["current"]`、`tags: false`；不得使用 `disableVersioning: true`，Docusaurus 3.10.2 在没有版本清单时会拒绝该选项。扫描器拒绝 version roots、localized 第二内容根和 category metadata；配置不得保留条件 `docs:false`、占位 Markdown、隐式默认、第二实例、并行内容根、`unlisted` 或直接传递依赖导入。固定版本会在 `.docusaurus/client-modules.js` 生成有序 CommonJS `require()` 以加载 CSS，因此根 `package.json` 不声明会把该 `.js` 改判为 ESM 的 `type` 字段；仓库 Node 入口继续通过显式 `.mjs` 保持 ESM，E-012 测试 emit 继续使用独立临时 ESM 边界。构建子进程显式禁用 Docusaurus persistent cache，不能复用 `node_modules/.cache`。#22 创建的最小 `src/pages/index.tsx` 只服务迁移基线；#27 当前接管首页、目录页、导航、页脚与统一 SEO，#28 接管视觉令牌和响应式最终验收。语言上下文固定输出 `lang="zh-CN"`。
+- I-04 的根配置固定消费上述构建上下文，使用 canonical `url`/`baseUrl`、`trailingSlash: true`、`onBrokenLinks`/`onBrokenAnchors`/`onDuplicateRoutes: 'throw'`、`future.v4: true` 与稳定的 `future.faster: true`；显式 `blog: false`，保留 classic theme 与 sitemap，不配置搜索、分析、外部脚本或远程资源。#22 迁移基线曾因 Docusaurus 3.10.2 的 docs 插件拒绝零公开文档而显式使用 `docs: false`；#26 已按 E-016 以 classic-derived preset 远端闭环该历史配置替换，根 `sidebars.ts` 现参与唯一 docs 实例。preset 必须从精确 classic 返回值识别唯一官方 docs 插件配置并保留其 validator 与生命周期：只在已证明 production 公开 docs 精确为空时跳过有缺陷的 `contentLoaded`；production 有公开 docs 时只对参数链做受控浅投影，保留公开 docs、actions、其余 version 字段和 lifecycle `this` 身份但把克隆版本 `drafts` 置空，防止官方 global data 产生浏览器 `draftIds`；preview 原样委托。委托前后必须重验原对象图、投影图和当前批次。唯一 docs 的 `path` 精确为仓库根 `site-content/`、`routeBasePath` 为 `/`、`sidebarPath` 为根 `sidebars.ts`，current-only 选项精确为 `includeCurrentVersion: true`、`onlyIncludeVersions: ["current"]`、`tags: false`；不得使用 `disableVersioning: true`，Docusaurus 3.10.2 在没有版本清单时会拒绝该选项。扫描器拒绝 version roots、localized 第二内容根和 category metadata；配置不得保留条件 `docs:false`、占位 Markdown、隐式默认、第二实例、并行内容根、`unlisted` 或直接传递依赖导入。固定版本会在 `.docusaurus/client-modules.js` 生成有序 CommonJS `require()` 以加载 CSS，因此根 `package.json` 不声明会把该 `.js` 改判为 ESM 的 `type` 字段；仓库 Node 入口继续通过显式 `.mjs` 保持 ESM，E-012 测试 emit 继续使用独立临时 ESM 边界。构建子进程显式禁用 Docusaurus persistent cache，不能复用 `node_modules/.cache`。#22 创建的最小 `src/pages/index.tsx` 只服务迁移基线；#27 已完成首页、目录页、导航、页脚与统一 SEO，#28 当前接管视觉令牌和响应式最终验收。语言上下文固定输出 `lang="zh-CN"`。
 - production 白名单由完整 `static-public/` 和 `published`/`archived` 项目的登记预览组成；preview 白名单由完整 `static-public/` 和所有状态中已登记的预览组成。映射固定为 `site-assets/<sourcePath>` 到临时 `assets/<sourcePath>`，最终为 `/assets/<sourcePath>`；`static/`、`public/`、`site-assets/` 原目录都不得出现在目标 `staticDirectories`。
 - 本地资源必须使用可由构建和质量门禁解析的路径；运行时第三方字体、图片、脚本、播放器或远程资源必须先完成依赖、许可、隐私和网络请求决策。
 - UI 代码必须满足产品文档中的语义 HTML、键盘、文本缩放、动效和无重叠要求；验收值直接引用产品文档，不在本文复制。
@@ -411,19 +411,19 @@
 
 ## 实施前置清单
 
-下列内容影响目标源码结构，必须在依赖代码创建前完成事实查证并写入对应设计。#9/#10/#21/#22/#11/#23/#5/#6/#7/#26 已完成各自实现与远端闭环；#27 当前实现页面与公开表达，#28、#8、#12 至 #14 与后续任务继续跟踪其余实现。D-078 委托范围内的工程细节由 Agent 形成可验证决定，不再逐项请求用户确认；D-078 排除的后续外部操作或依赖变更、数据与基础设施事项仍执行用户门禁：
+下列内容影响目标源码结构，必须在依赖代码创建前完成事实查证并写入对应设计。#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27 已完成各自实现与远端闭环；#28 当前接管主题、响应式与可访问性，#8、#12 至 #14 与后续任务继续跟踪其余实现。D-078 委托范围内的工程细节由 Agent 形成可验证决定，不再逐项请求用户确认；D-078 排除的后续外部操作或依赖变更、数据与基础设施事项仍执行用户门禁：
 
 Roadmap 的实现所有权固定为：I-01 / #9 在隔离入口同一任务中创建 D-067 的 `.nvmrc`、`engines.node` 兼容边界，并以 D-073 主/最低随附 npm 完成离线真实 CLI 验收；I-03 / #21 消费该版本契约完成真实依赖准入；I-04 / #22 不再创建或选择版本文件，只在已验收版本与依赖图上建立 Docusaurus scaffold、严格 TypeScript、模块边界、typecheck 与 build。该调整只消除任务产物倒置，不改变上层版本治理或外部操作授权。
 
 1. **已完成**：消费 E-010/E-011，在 D-081/D-082 边界内完成真实 lock、1,225 项 admissions、正式 SBOM/NOTICE/evidence、audit 全零、最终决定与双端点 composite receipt。
 2. **已完成**：按 CODE-002 至 CODE-005 创建并机器校验生产 `tsconfig`、首轮公共入口、命名和模块边界脚本；真实 `typecheck` 与最小 production build 在全新冻结安装上通过，制品未发现远程资源、分析或 Cookie。
 3. **已完成**：#11 按 D-079/E-012 接入临时编译后的 Node ESM 测试 program、runner 和 fixture，只消费 #22 的独立 `tsc --noEmit`、Docusaurus build、生产配置与模块边界；主/最低 Node 同负载、约定反例和远端 CI 已通过。formatter、lint、真实浏览器与可访问性工具继续依据 D-078 选择；新增第三方包或 Action 必须先通过 D-077，不因工具选择已委托而跳过实际准入。
-4. **部分完成**：#6 已按 E-007/CODE-008 实现主预览媒体清单、metadata-first 文件事实、静态 WebP 容器/动画/尺寸/大小门禁与公共投影并远端闭环；#7 已建立 production/preview 双模式静态素材计划、受控构建上下文和目的限定的 production 泄漏检查并远端关闭，#26 已远端闭环共享双模式内容扫描/投影 API、唯一 docs 实例基础装配与 production Docusaurus 独占事务接线。#27 当前实现 React 页面与公开表达，#28 再完成 Infima、CSS Modules、令牌和浏览器 fit-gap；#8 消费同一投影和 #7 的 preview 计划，接管 preview Docusaurus、持久候选与原子激活。
+4. **部分完成**：#6 已按 E-007/CODE-008 实现主预览媒体清单、metadata-first 文件事实、静态 WebP 容器/动画/尺寸/大小门禁与公共投影并远端闭环；#7 已建立 production/preview 双模式静态素材计划、受控构建上下文和目的限定的 production 泄漏检查并远端关闭，#26 已远端闭环共享双模式内容扫描/投影 API、唯一 docs 实例基础装配与 production Docusaurus 独占事务接线，#27 已远端闭环 React 页面、公开表达与安全关系链接。#28 当前完成 Infima、CSS Modules、令牌和浏览器 fit-gap；#8 消费同一投影和 #7 的 preview 计划，接管 preview Docusaurus、持久候选与原子激活。
 5. **部分完成**：#23 已按 E-006/E-007、产品字段表和 CODE-003/CODE-004 实现并远端关闭统一解码、项目/文章领域 schema、注册表、纯路径分类和稳定错误，#5 已迁移两份真实项目正文并远端关闭，#7 已完成媒体安全扫描与迁移，#26 已远端闭环扫描装配、投影和构建。再按 E-013/CODE-018 实现完整历史 ledger、CI checkout 和 fixture，完成后才按 CODE-014 接线作者命令。公开业务事实和素材仍须由用户提供或确认。
-6. #26 已远端闭环 CODE-013 的日期索引、侧栏与列表模型；#27 当前完成 SEO 标签合并。再按 E-014/CODE-019 实现服务端 301 规则、确定性派生文件、release 摘要和 fixture，并按 E-015/CODE-020 实现 production job 自包含重建、字节摘要和最终 artifact 身份。不授权实际发布或基础设施操作。
+6. #26 已远端闭环 CODE-013 的日期索引、侧栏与列表模型，#27 已完成 SEO 标签合并。再按 E-014/CODE-019 实现服务端 301 规则、确定性派生文件、release 摘要和 fixture，并按 E-015/CODE-020 实现 production job 自包含重建、字节摘要和最终 artifact 身份。不授权实际发布或基础设施操作。
 7. 按 E-013/E-015 接线 Ubuntu nvm 与 Action 固定、Node 24 两个版本入口、共享负载、required check、完整历史、production artifact 和迁移顺序。
 
-#23 与 #5 已远端关闭并解除 #6/#7 的前置阻塞；#6 已完成 I-11 的提交、精确 SHA CI 与 Issue 关闭，#7 也已由提交 `7f2115d9f1dc5396ca0c81fc9960223644d79725`、CI run `29950131762` 和验收评论完成远端闭环。#26 已由提交 `91dd3c7d4b8553910418119d7ee8e677974fe01a`、CI run `29970675298` 和验收评论完成远端闭环；#27 当前只声明实施中。其余事项未完成时，不得对外宣称目标内容、完整 CI、发布或生产门禁已经实现。
+#23 与 #5 已远端关闭并解除 #6/#7 的前置阻塞；#6 已完成 I-11 的提交、精确 SHA CI 与 Issue 关闭，#7 也已由提交 `7f2115d9f1dc5396ca0c81fc9960223644d79725`、CI run `29950131762` 和验收评论完成远端闭环。#26 已由提交 `91dd3c7d4b8553910418119d7ee8e677974fe01a`、CI run `29970675298` 和验收评论完成远端闭环；#27 已由实现提交 `4d436c1ea53c957f66f147565bcc96b6c98f8b36`、关闭后审查修复 `0fb38b20b8b576e53b238ab65f4ed964b52f0728`、两次精确 CI 和验收评论完成远端闭环。其余事项未完成时，不得对外宣称目标内容、完整 CI、发布或生产门禁已经实现。
 
 ## 可执行覆盖矩阵
 
@@ -448,7 +448,7 @@ Roadmap 的实现所有权固定为：I-01 / #9 在隔离入口同一任务中�
 | HEAD 可达完整 Git 历史与稳定 ID | E-013、CODE-018 | 设计已确认，检查器、临时 Git DAG fixture、作者集成与 CI checkout 均未实现 |
 | 服务端 301 与同版本 release | E-014、CODE-015/CODE-019 | 设计已确认，生成器、派生配置、摘要、Nginx 冒烟和回滚兼容检查均未实现 |
 | Production build 与最终 artifact | E-015、CODE-015/CODE-016/CODE-020 | 设计已确认，自包含重建、树摘要、workflow 门禁、上传和 deploy 输出校验均未实现 |
-| Docusaurus/React/内容/制品/浏览器契约 | D-078、E-001 至 E-016、CODE-003 至 CODE-020 | #22 已完成无真实内容/素材的 Docusaurus build 基线，#23/#5 已完成内容领域核心与真实项目正文，#6/#7 已完成媒体与目的限定安全扫描并远端闭环，#26 已远端闭环单一 docs 内容投影、侧栏、日期索引和 production 制品检查；#27 当前实现页面，主题与浏览器最终验收由 #28 接管 |
+| Docusaurus/React/内容/制品/浏览器契约 | D-078、E-001 至 E-016、CODE-003 至 CODE-020 | #22 已完成无真实内容/素材的 Docusaurus build 基线，#23/#5 已完成内容领域核心与真实项目正文，#6/#7 已完成媒体与目的限定安全扫描并远端闭环，#26 已远端闭环单一 docs 内容投影、侧栏、日期索引和 production 制品检查，#27 已远端闭环页面与公开表达；主题、响应式与浏览器最终验收由 #28 接管 |
 | Node 24 精确与最低端点 | `.nvmrc`、`engines.node`、E-010 双端点离线 CLI | 本地契约与真实 CLI 已验收；目标 Ubuntu jobs 由后续任务接线 |
 
 ## 本 Spec 验收
