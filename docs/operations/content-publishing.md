@@ -54,7 +54,7 @@ Docusaurus 内部不把 articleId 当作框架 ID：首版文章不填写原生 
 
 `summary` 是目录摘要、正文导语、默认 meta description 和默认分享描述的单一来源。只有普通摘要无法满足时才填写 `seo.description` 或 `seo.socialDescription`；后者按自身、`seo.description`、`summary` 的顺序回退。禁止新增 `excerpt`、从正文自动截取、在页面组件硬编码第二份摘要，或提交空白及与回退值完全相同的冗余覆盖。新增覆盖必须在评审中说明原因，正文、标题或摘要发生实质修改时必须复核已有覆盖。
 
-`publishedAt` 与 `updatedAt` 使用 `YYYY-MM-DD`。`draft` 不得填写 `publishedAt`，可选 `updatedAt` 且不公开；`published` 和 `archived` 必须同时填写，首次发布时两个日期相同，之后 `publishedAt` 保持不变。发布辅助命令是独立于 D-065 文章创建命令的作者操作，按 `Asia/Shanghai` 写入源文件，修改随正文进入 Git diff；创建命令不自动调用发布命令，也不从 UUID 时间填写日期或自动发布。CI、Docusaurus 和生产服务器只读校验，不在构建或部署时注入时间。公开文章跨日期发生可见修改时必须更新 `updatedAt`，迁移旧文章可在提交前手工填写真实历史日期。UUIDv7 的 UTC 技术时间不得覆盖、补齐或校验这两个显式日期；未来按日期查询或排序也只能消费这两个领域字段。
+`publishedAt` 与 `updatedAt` 使用 `YYYY-MM-DD`。`draft` 不得填写 `publishedAt`，可选 `updatedAt` 且不公开；`published` 和 `archived` 必须同时填写，首次发布时两个日期相同，之后 `publishedAt` 保持不变。D-106 将发布辅助入口固定为独立于 D-065 创建命令的 `node scripts/author/set-article-dates.mjs --source-name <name> --action publish|revise`，不提供 npm alias：publish 只为作者已手工切换到 published 且两个日期均缺失的文章写入一次 `Asia/Shanghai` 当日，revise 保留历史首次日期并只在跨日时更新 `updatedAt`；同日 revise 完整校验后不写文件，时钟回退、draft、archived 和部分日期失败。创建命令不自动调用日期命令，也不从 UUID 时间填写日期或自动发布。CI、Docusaurus 和生产服务器只读校验，不在构建或部署时注入时间；E-013 以 HEAD 可达历史拒绝既有 `publishedAt` 被删除、修改或在平行分支建立为不同值。公开文章跨日期发生可见修改时必须更新 `updatedAt`，迁移旧文章可在提交前手工填写真实历史日期。UUIDv7 的 UTC 技术时间不得覆盖、补齐或校验这两个显式日期；未来按日期查询或排序也只能消费这两个领域字段。当前临时分支已完成命令与本地验收，但尚未提交、推送、取得远端 CI 或 Issue 验收；在其进入共享分支前仍不能把示例当作已发布能力。
 
 技术文章不使用通用主分类。组织字段只存放在必填的 `classification` 对象中：`classification.project` 和 `classification.module` 均可为空且各最多一个；`classification.module` 只能与 `classification.project` 同时存在，并必须引用该项目所属模块。只有项目的文章进入项目根级，两者均为空的文章进入独立通用分组。`classification.topics` 必填 1-5 个受控主题 ID。跨项目文章只选择一个主项目，其他项目关系不得使文章在多个项目侧栏重复出现。项目、模块和主题的稳定 ID 引用 Git 注册表，显示名称与 ID 分离；这些关系不进入 URL，重分类也不修改 URL。
 
@@ -137,7 +137,7 @@ Docusaurus schema、错误契约、文章命令、Node 24 门禁、路径检查�
 2. **创建文章**：由作者在获准的 Linux 作者环境中使用与仓库 `.nvmrc` 精确一致的 Node，显式运行 CODE-014 固定的 `node scripts/author/create-article.mjs ...`，并一次性提供 source-name、title、完整 slug、summary、1-4 个已登记 author、1-5 个已登记 topic 及可选 project/module。成功后先确认 Git diff 只新增目标文章目录及唯一 `index.md`，再继续编辑；最低版本兼容任务不能代替正常作者入口。当前实现仍未提交，且真实 topic 注册表为空，所以首次真实使用前还必须先按内容决策登记获批主题，不能复制临时 fixture ID 或手工模拟模板。
 3. **起草**：修改正文与作者确定的领域字段；事实、观点、计划和未知信息使用不同表达，不从 articleId 推导 slug、分类或日期。
 4. **自检**：检查真实姓名、联系方式、截图、日志、路径和示例数据，移除密钥与隐私信息。
-5. **准备发布**：D-047 发布辅助命令实现后，首次公开或公开修订时由作者在获准的 Linux 执行环境独立触发该日期操作并审查日期 diff。当前不得把未实现的命令写成可用工具，文章创建命令也不承担该步骤。
+5. **准备发布**：作者先手工把已审核文章改为 `publicationStatus: published`，且不手工填写首次日期；#25 进入共享分支后，在获准 Linux 环境以 `.nvmrc` 精确 Node 显式运行 `node scripts/author/set-article-dates.mjs --source-name <name> --action publish`，确认 Git diff 只增加两个相等日期。后续公开修订使用 `--action revise`，确认 `publishedAt` 未变且只有跨日修订更新 `updatedAt`。当前临时分支的实现已通过本地验收但尚未提交、推送或取得远端证据，因此本工作区之外仍不得把示例当作已发布能力；创建命令、CI、构建和发布自动化也不承担该步骤。
 6. **验证**：完成 Docusaurus 迁移后，在完整非浅 Git worktree 的 Linux 环境或 Ubuntu CI 中分别通过 E-010 `run-script` profile 运行 `quality`、D-074 的独立 `tsc --noEmit`、E-012 的 Node ESM 测试、E-013 的完整历史门禁和 Docusaurus build，再启动预览并通过浏览器检查桌面端、平板端、移动端、链接和资源；涉及既有 slug 时还要证明 E-014 注册表能从同一 production build 派生唯一 301、目标页面存在且 source 没有静态 HTML。预览、类型检查、测试、历史检查、静态构建与 release 检查互不替代。D-097 至 D-099 已在当前工作区把 `quality`、`typecheck`、Node ESM 测试、完整历史与 production build 接入 Node 24 主/最低端点并通过本地 fresh 验收；预览、真实浏览器、release/production artifact、远端 CI 与部署检查仍未闭环，不得从本地门禁通过推导生产就绪。
 7. **创建 PR**：说明设计文档依据、公开内容变化、来源、截图和验证结果。
 8. **预览审核**：使用分支预览确认排版、导航、SEO 元数据、图片和索引策略。
@@ -169,6 +169,7 @@ Docusaurus schema、错误契约、文章命令、Node 24 门禁、路径检查�
 
 - articleId、slug、标题、摘要、发布状态和日期符合已确认的内容模型；E-013 从完整非浅 HEAD 可达历史证明 articleId 与 source-name 未改绑或删除后重引，稳定注册表 ID 也未删除后重引。
 - 新文章由作者在获准的 Linux 作者环境显式运行仓库内创建命令建立，创建结果经 Git diff 审查；Git hook、CI、构建和发布没有生成、修复、暂存或提交 articleId。
+- 首次公开与公开修订只在日期命令实现并通过验收后由作者显式触发；diff 没有改变 `publicationStatus`、历史 `publishedAt`、正文或其他 frontmatter，Git hook、CI、构建和发布也没有间接调用该写命令。
 - `classification.project`、`classification.module` 和 `classification.topics` 中的 ID 均能在对应注册表中解析。
 - `classification.module` 只在 `classification.project` 存在时填写，并且隶属所选项目。
 - `classification.topics` 存在且包含 1-5 个主题 ID。

@@ -23,10 +23,17 @@ const QUALITY_ENTRY_COMMANDS = Object.freeze([
   "node scripts/quality/run-quality.mjs",
   "node scripts/quality/run-isolated-npm.mjs run-script quality",
 ]);
-const AUTHOR_CREATION_MARKERS = Object.freeze([
-  "scripts/author/create-article.mjs",
-  "scripts/author/run-create-article-tests.mjs",
-  "tests/build/create-article",
+const AUTHOR_MUTATION_MARKERS = Object.freeze([
+  "article-date-edit.test.mjs",
+  "create-article.integration.test.mjs",
+  "create-article.mjs",
+  "create-article.test.mjs",
+  "run-create-article-tests.mjs",
+  "run-set-article-dates-tests.mjs",
+  "run-set-article-dates-tests.test.mjs",
+  "set-article-dates.integration.test.mjs",
+  "set-article-dates.mjs",
+  "set-article-dates.test.mjs",
 ]);
 
 export const OPERATIONAL_NPM_BOUNDARY_PATHS = Object.freeze([
@@ -236,12 +243,12 @@ function hasTopLevelRuntimeOverride(text) {
   });
 }
 
-function containsAuthorCreationMarker(value) {
+function containsAuthorMutationMarker(value) {
   return typeof value === "string"
-    && AUTHOR_CREATION_MARKERS.some((marker) => value.includes(marker));
+    && AUTHOR_MUTATION_MARKERS.some((marker) => value.includes(marker));
 }
 
-function assertAuthorCreationIsExplicit({
+function assertAuthorMutationIsExplicit({
   contentHistoryCommands,
   hookRoot,
   manifest,
@@ -263,22 +270,22 @@ function assertAuthorCreationIsExplicit({
     resolve(root, "scripts/quality/run-tests.mjs"),
     resolve(root, "scripts/quality/run-content-history.mjs"),
   ];
-  const fileInvokesCreation = protectedFiles.some((path) => (
+  const fileInvokesMutation = protectedFiles.some((path) => (
     existsSync(path)
-    && containsAuthorCreationMarker(readFileSync(path, "utf8"))
+    && containsAuthorMutationMarker(readFileSync(path, "utf8"))
   ));
-  const manifestInvokesCreation = Object.values(manifest.scripts)
-    .some(containsAuthorCreationMarker);
-  const commandSetInvokesCreation = commandSets
+  const manifestInvokesMutation = Object.values(manifest.scripts)
+    .some(containsAuthorMutationMarker);
+  const commandSetInvokesMutation = commandSets
     .flat()
-    .some(containsAuthorCreationMarker);
+    .some(containsAuthorMutationMarker);
   if (
-    fileInvokesCreation
-    || manifestInvokesCreation
-    || commandSetInvokesCreation
+    fileInvokesMutation
+    || manifestInvokesMutation
+    || commandSetInvokesMutation
   ) {
     throw new Error(
-      "作者创建 CLI 与其真实验收只能由主 Node 本地显式入口调用，CI、hook、package script、quality、共享 test 和历史门禁均不得隐式触发。",
+      "作者写命令及其真实验收只能由主 Node 本地显式入口调用，CI、hook、package script、quality、共享 test 和历史门禁均不得隐式触发。",
     );
   }
 }
@@ -295,12 +302,8 @@ function assertQualityTopology(root, hookPath, manifest, workflowTargets) {
       command.join(" ") === "--test tests/build/author-transaction.test.mjs"
     ))
     .length;
-  const invokesAuthorCreation = QUALITY_COMMANDS.some((command) => (
-    command.some((argument) => (
-      argument.includes("scripts/author/create-article.mjs")
-      || argument.includes("scripts/author/run-create-article-tests.mjs")
-      || argument.includes("tests/build/create-article")
-    ))
+  const invokesAuthorMutation = QUALITY_COMMANDS.some((command) => (
+    command.some(containsAuthorMutationMarker)
   ));
   const checkerCount = QUALITY_COMMANDS
     .filter((command) => command.length === 1 && command[0] === "scripts/quality/check-npm-isolation.mjs")
@@ -331,14 +334,14 @@ function assertQualityTopology(root, hookPath, manifest, workflowTargets) {
   if (
     authorTransactionCheckerCount !== 1
     || authorTransactionTestCount !== 1
-    || invokesAuthorCreation
+    || invokesAuthorMutation
     || checkerCount !== 1
     || supplyChainCheckerCount !== 1
     || !hasExactRequiredTests
   ) {
     throw new Error("质量聚合入口必须只读检查作者事务残留，并精确包含 npm 隔离、E-010、E-011 和全部 #21 离线供应链测试入口。");
   }
-  assertAuthorCreationIsExplicit({
+  assertAuthorMutationIsExplicit({
     contentHistoryCommands: CONTENT_HISTORY_COMMANDS,
     hookRoot: resolve(root, ".githooks"),
     manifest,

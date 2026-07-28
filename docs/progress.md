@@ -4,6 +4,13 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-28 — #25 显式文章日期命令（本地实现与 fresh checkout 验收完成）
+
+- **接口与状态机**：已依 D-106/CODE-014 实现 `node scripts/author/set-article-dates.mjs --source-name <name> --action publish|revise`，不增加 npm alias。publish 只接受作者已手工切到 published 且两个日期完全缺失的窄过渡态，以一次 `Asia/Shanghai` 时钟写入相同日期；revise 永不改 `publishedAt`，同日完整校验后保持字节与 mode 不变，跨日只改 `updatedAt`。draft、archived、部分日期、时钟回退、非规范定点布局与自动化环境全部失败关闭。
+- **历史与原子事务**：E-013 已增加按 articleId 保存首次规范 `publishedAt` 的 HEAD 可达 DAG ledger，覆盖建立后删除/改值、平行分支冲突、单侧继承和严格日期候选 API。日期写入复用作者/build 双锁和同文件系统 staging；完整 loader 前精确清理受控 staging，后续失败会重建可恢复原件并原子回滚。HEAD、目标、build/author lock、effect-then-throw rename、回滚父目录 flush 与所有权任一无法证明时保留阻断性现场并按 operation-first `AggregateError` 报 `AUTHOR_ROLLBACK`。
+- **本地证据**：在只叠加当前完整补丁并复制同一 lockfile 冻结依赖的 fresh checkout 中，显式作者 runner 通过纯日期编辑 7/7、事务故障注入 16/16 与真实临时 Git CLI 1/1；安装后历史入口通过真实 `HEAD` 61 个提交、48/48 DAG fixture 和 2/2 frontmatter 集成；零依赖 `quality`、`typecheck`、共享 `test`（16 个 TypeScript 源、250 个测试）、production `build`、JavaScript 明列语法检查、npm 隔离反例与 `git diff --check` 均通过。真实集成逐阶段证明 publish、同日 revise、跨日 revise、完整历史、精确 Git diff、CI 拒绝和零 residue。
+- **交付边界**：当前改动尚未提交或推送，也未取得远端 CI、PR 或 Issue #25 关闭证据；临时分支本地通过不能替代共享分支与远端验收。本轮未增加依赖、第三方服务、浏览器外部请求或用户数据处理。
+
 ## 2026-07-28 — #24 作者文章创建事务（临时分支交付，待远端 CI/Issue 验收）
 
 - **主题与入口**：按用户“推进 #24”的要求，在既有 #12/E-013 候选 API 上实现 CODE-014。当前文档真相源把入口固定为 `node scripts/author/create-article.mjs ...`，并由 CODE-016 封闭 package scripts；GitHub #24 旧正文中的 `npm run content:new` 与之冲突，本轮遵循更新后的 docs，不新增 npm alias，也未写回远端 Issue。

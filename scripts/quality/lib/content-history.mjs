@@ -75,6 +75,27 @@ function isKebabId(value) {
     && KEBAB_ID_PATTERN.test(value);
 }
 
+function daysInMonth(year, month) {
+  if (month === 2) {
+    const isLeap = year % 4 === 0
+      && (year % 100 !== 0 || year % 400 === 0);
+    return isLeap ? 29 : 28;
+  }
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+}
+
+function isDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
+    return false;
+  }
+  const [year, month, day] = value.split("-").map(Number);
+  return year >= 1
+    && month >= 1
+    && month <= 12
+    && day >= 1
+    && day <= daysInMonth(year, month);
+}
+
 function sameBytes(left, right) {
   if (left.byteLength !== right.byteLength) return false;
   for (let index = 0; index < left.byteLength; index += 1) {
@@ -857,6 +878,8 @@ function parseRegistries(registries, context) {
 async function parseArticles(articleEntries, context) {
   const articleBySource = new Map();
   const sourceByArticle = new Map();
+  const sourcePathByArticle = new Map();
+  const publishedAtByArticle = new Map();
   for (const entry of articleEntries) {
     if (entry.bytes.byteLength === 0 || entry.bytes.byteLength > MAX_ARTICLE_BYTES) {
       fail("CONTENT_HISTORY_ARTICLE_BYTES", {
@@ -909,8 +932,26 @@ async function parseArticles(articleEntries, context) {
       },
       context,
     );
+    sourcePathByArticle.set(decoded.frontMatter.articleId, entry.sourcePath);
+    if (Object.hasOwn(decoded.frontMatter, "publishedAt")) {
+      if (!isDate(decoded.frontMatter.publishedAt)) {
+        fail("CONTENT_HISTORY_PUBLISHED_AT", {
+          ...context,
+          sourcePath: entry.sourcePath,
+        });
+      }
+      publishedAtByArticle.set(
+        decoded.frontMatter.articleId,
+        decoded.frontMatter.publishedAt,
+      );
+    }
   }
-  return Object.freeze({articleBySource, sourceByArticle});
+  return Object.freeze({
+    articleBySource,
+    publishedAtByArticle,
+    sourceByArticle,
+    sourcePathByArticle,
+  });
 }
 
 async function createSnapshot({
@@ -922,7 +963,9 @@ async function createSnapshot({
   return Object.freeze({
     articleBySource: articles.articleBySource,
     articleIds: new Set(articles.sourceByArticle.keys()),
+    publishedAtByArticle: articles.publishedAtByArticle,
     registryIds: parseRegistries(registries, {commit}),
+    sourcePathByArticle: articles.sourcePathByArticle,
   });
 }
 
@@ -941,6 +984,8 @@ function projectValidatedCurrentSnapshot(content) {
 
   const articleBySource = new Map();
   const sourceByArticle = new Map();
+  const sourcePathByArticle = new Map();
+  const publishedAtByArticle = new Map();
   for (const article of content.articles) {
     const sourcePath = isPlainRecord(article) && isSafeDiagnosticPath(article.sourcePath)
       ? article.sourcePath
@@ -955,6 +1000,16 @@ function projectValidatedCurrentSnapshot(content) {
       },
       context,
     );
+    sourcePathByArticle.set(article.articleId, sourcePath);
+    if (isPlainRecord(article) && article.publishedAt !== undefined) {
+      if (!isDate(article.publishedAt)) {
+        fail("CONTENT_HISTORY_PUBLISHED_AT", {
+          ...context,
+          sourcePath,
+        });
+      }
+      publishedAtByArticle.set(article.articleId, article.publishedAt);
+    }
   }
 
   const registryIds = new Set();
@@ -984,7 +1039,9 @@ function projectValidatedCurrentSnapshot(content) {
   return Object.freeze({
     articleBySource,
     articleIds: new Set(sourceByArticle.keys()),
+    publishedAtByArticle,
     registryIds,
+    sourcePathByArticle,
   });
 }
 
@@ -1056,6 +1113,24 @@ function mergeOrigins(parentStates, field, code, commit) {
   return merged;
 }
 
+function mergePublishedAtLedger(parentStates, commit) {
+  const merged = new Map();
+  for (const parent of parentStates) {
+    for (const [articleId, publishedAt] of parent.publishedAtLedger) {
+      const existing = merged.get(articleId);
+      if (existing !== undefined && existing !== publishedAt) {
+        fail("CONTENT_HISTORY_DATE_LINEAGE_CONFLICT", {commit});
+      }
+      merged.set(articleId, publishedAt);
+    }
+  }
+  return merged;
+}
+
+function articleSourcePath(snapshot, articleId) {
+  return snapshot.sourcePathByArticle.get(articleId) ?? UNKNOWN_SOURCE_PATH;
+}
+
 function transitionState(commit, snapshot, parentStates) {
   const reservedSources = mergeReservedSources(parentStates, commit);
   const articleOrigins = mergeOrigins(
@@ -1070,6 +1145,7 @@ function transitionState(commit, snapshot, parentStates) {
     "CONTENT_HISTORY_REGISTRY_LINEAGE_CONFLICT",
     commit,
   );
+  const publishedAtLedger = mergePublishedAtLedger(parentStates, commit);
 
   for (const [sourceName, articleId] of snapshot.articleBySource) {
     const reservedArticleId = reservedSources.get(sourceName);
@@ -1113,8 +1189,31 @@ function transitionState(commit, snapshot, parentStates) {
     }
   }
 
+  for (const [articleId, publishedAt] of publishedAtLedger) {
+    if (!snapshot.articleIds.has(articleId)) continue;
+    const currentPublishedAt = snapshot.publishedAtByArticle.get(articleId);
+    if (currentPublishedAt === undefined) {
+      fail("CONTENT_HISTORY_DATE_REMOVED", {
+        commit,
+        sourcePath: articleSourcePath(snapshot, articleId),
+      });
+    }
+    if (currentPublishedAt !== publishedAt) {
+      fail("CONTENT_HISTORY_DATE_CHANGED", {
+        commit,
+        sourcePath: articleSourcePath(snapshot, articleId),
+      });
+    }
+  }
+  for (const [articleId, publishedAt] of snapshot.publishedAtByArticle) {
+    if (!publishedAtLedger.has(articleId)) {
+      publishedAtLedger.set(articleId, publishedAt);
+    }
+  }
+
   return Object.freeze({
     articleOrigins,
+    publishedAtLedger,
     registryOrigins,
     reservedSources,
     snapshot,
@@ -1224,6 +1323,53 @@ function readCandidateOptions(options) {
   });
 }
 
+function readArticleDateCandidateOptions(options) {
+  let descriptors;
+  try {
+    if (!isPlainRecord(options)) fail("CONTENT_HISTORY_DATE_CANDIDATE");
+    descriptors = Object.getOwnPropertyDescriptors(options);
+  } catch (error) {
+    if (error instanceof ContentHistoryError) throw error;
+    fail("CONTENT_HISTORY_DATE_CANDIDATE");
+  }
+
+  const expectedKeys = ["action", "articleId", "publishedAt", "sourceName"];
+  const keys = Reflect.ownKeys(descriptors);
+  if (
+    keys.length !== expectedKeys.length
+    || expectedKeys.some((key) => !keys.includes(key))
+    || keys.some((key) => typeof key !== "string")
+  ) {
+    fail("CONTENT_HISTORY_DATE_CANDIDATE");
+  }
+  for (const key of keys) {
+    const descriptor = descriptors[key];
+    if (
+      !Object.hasOwn(descriptor, "value")
+      || !descriptor.enumerable
+    ) {
+      fail("CONTENT_HISTORY_DATE_CANDIDATE");
+    }
+  }
+
+  const candidate = {
+    action: descriptors.action.value,
+    articleId: descriptors.articleId.value,
+    publishedAt: descriptors.publishedAt.value,
+    sourceName: descriptors.sourceName.value,
+  };
+  if (
+    !["publish", "revise"].includes(candidate.action)
+    || typeof candidate.articleId !== "string"
+    || !UUID_V7_PATTERN.test(candidate.articleId)
+    || !isDate(candidate.publishedAt)
+    || !isKebabId(candidate.sourceName)
+  ) {
+    fail("CONTENT_HISTORY_DATE_CANDIDATE");
+  }
+  return Object.freeze(candidate);
+}
+
 function addCandidateToSnapshot(snapshot, candidate) {
   const articleBySource = new Map(snapshot.articleBySource);
   const sourceByArticle = new Map(
@@ -1240,14 +1386,18 @@ function addCandidateToSnapshot(snapshot, candidate) {
     {...candidate, sourcePath},
     {commit: WORKTREE_ID},
   );
+  const sourcePathByArticle = new Map(snapshot.sourcePathByArticle);
+  sourcePathByArticle.set(candidate.articleId, sourcePath);
   return Object.freeze({
     articleBySource,
     articleIds: new Set(sourceByArticle.keys()),
+    publishedAtByArticle: new Map(snapshot.publishedAtByArticle),
     registryIds: new Set(snapshot.registryIds),
+    sourcePathByArticle,
   });
 }
 
-async function runContentHistoryCheck(candidate = null) {
+async function readHeadHistory() {
   const environment = buildContentHistoryGitEnvironment();
   const repository = inspectRepository(process.cwd(), environment);
   const dag = readDag(repository, environment);
@@ -1271,6 +1421,21 @@ async function runContentHistoryCheck(candidate = null) {
 
   const headState = states.get(repository.head);
   if (headState === undefined) fail("CONTENT_HISTORY_DAG");
+  return Object.freeze({
+    dag,
+    environment,
+    headState,
+    repository,
+  });
+}
+
+async function runContentHistoryCheck(candidate = null) {
+  const {
+    dag,
+    environment,
+    headState,
+    repository,
+  } = await readHeadHistory();
   const currentSnapshot = await readCurrentSnapshot(repository);
   const currentState = transitionState(
     WORKTREE_ID,
@@ -1293,6 +1458,65 @@ async function runContentHistoryCheck(candidate = null) {
   });
 }
 
+async function runArticleDateHistoryCandidate(candidate) {
+  const {
+    dag,
+    environment,
+    headState,
+    repository,
+  } = await readHeadHistory();
+  const sourcePath = `site-content/writing/${candidate.sourceName}`;
+  const reservedArticleId = headState.reservedSources.get(candidate.sourceName);
+  if (
+    reservedArticleId !== undefined
+    && reservedArticleId !== candidate.articleId
+  ) {
+    fail("CONTENT_HISTORY_SOURCE_REUSED", {
+      commit: WORKTREE_ID,
+      sourcePath,
+    });
+  }
+  if (
+    headState.articleOrigins.has(candidate.articleId)
+    && !headState.snapshot.articleIds.has(candidate.articleId)
+  ) {
+    fail("CONTENT_HISTORY_ARTICLE_REINTRODUCED", {
+      commit: WORKTREE_ID,
+      sourcePath,
+    });
+  }
+
+  const historicalPublishedAt = headState.publishedAtLedger.get(
+    candidate.articleId,
+  );
+  if (candidate.action === "publish") {
+    if (historicalPublishedAt !== undefined) {
+      fail("CONTENT_HISTORY_DATE_STATE", {
+        commit: WORKTREE_ID,
+        sourcePath,
+      });
+    }
+  } else if (historicalPublishedAt === undefined) {
+    fail("CONTENT_HISTORY_DATE_STATE", {
+      commit: WORKTREE_ID,
+      sourcePath,
+    });
+  } else if (historicalPublishedAt !== candidate.publishedAt) {
+    fail("CONTENT_HISTORY_DATE_CHANGED", {
+      commit: WORKTREE_ID,
+      sourcePath,
+    });
+  }
+  assertHeadUnchanged(repository, environment);
+
+  return Object.freeze({
+    articleCount: headState.snapshot.articleIds.size,
+    commitCount: dag.length,
+    head: repository.head,
+    registryIdentityCount: headState.snapshot.registryIds.size,
+  });
+}
+
 export async function checkContentHistory(options = {}) {
   readCheckOptions(options);
   return runContentHistoryCheck();
@@ -1300,6 +1524,12 @@ export async function checkContentHistory(options = {}) {
 
 export async function checkContentHistoryCandidate(options) {
   return runContentHistoryCheck(readCandidateOptions(options));
+}
+
+export async function checkArticleDateHistoryCandidate(options) {
+  return runArticleDateHistoryCandidate(
+    readArticleDateCandidateOptions(options),
+  );
 }
 
 export function formatContentHistoryError(error) {
