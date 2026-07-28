@@ -4,6 +4,14 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-28 — #24 作者文章创建事务（临时分支交付，待远端 CI/Issue 验收）
+
+- **主题与入口**：按用户“推进 #24”的要求，在既有 #12/E-013 候选 API 上实现 CODE-014。当前文档真相源把入口固定为 `node scripts/author/create-article.mjs ...`，并由 CODE-016 封闭 package scripts；GitHub #24 旧正文中的 `npm run content:new` 与之冲突，本轮遵循更新后的 docs，不新增 npm alias，也未写回远端 Issue。
+- **实现**：新增精确 Linux `.nvmrc` 主端点、完整非交互参数、注册表引用、原生 UUIDv7、确定性 Markdown draft 模板与冻结 frontmatter 回读。事务使用根 `.axial-muse-author.lock`、同文件系统 `.author-staging-<owner>`、文件/目录 flush、整目录 rename、目标实际字节的 I-06/E-013 终态读回和 lock 删除 commit point；正常失败只清理重新证明属于本事务的 inode/bytes，无法证明时保留 lock 并报 `AUTHOR_ROLLBACK`，阻断消费者而不猜测删除现场。
+- **并发与消费者边界**：零依赖只读 residue checker 已接入统一 `quality` 和 production build；build 在取得自身 lock 后再次确认作者 residue，作者命令在取得作者 lock 前后拒绝 build lock，关闭双方 preflight 后的内容读写竞争。CI、hook、package script、统一 quality、共享 test 与安装后历史 runner 的静态门禁均拒绝隐式调用真实创建 CLI 或其显式验收 runner。未来 #8 preview 仍须复用同一 checker。
+- **验收**：无 `node_modules/` 的根工作区统一 `quality` 已通过；任务专用冻结依赖副本以 Node `24.18.0` 通过作者 runner 自测与单元/故障测试 33/33、真实完整 Git fixture 2/2、安装后历史 fixture 38/38 与冻结解析器 2/2、严格 `typecheck`、13 个 TypeScript source 的 223/223 共享测试及真实 production build。正常 fixture 证明唯一 Git delta、真实 production loader/E-013 读回和静默成功；删除后 source-name 复用由真实历史拒绝。反例覆盖参数/顺序/边界、未知引用、四种既有目标、preflight 与真实并发 lock、build lock 双向竞态、残留 staging、注册表漂移、部分/完整 write、file flush、source 与 destination 目录 flush、rename、终态与 lock release 回滚，以及回滚所有权失效后的 fail-closed residue/operation-first `AggregateError`。系统 Node `22.22.0` 在随机数、lock 和写入前稳定报 `AUTHOR_RUNTIME_NODE`，无绝对路径或堆栈。
+- **边界与遗留**：真实 `topics.json` 仍为空，本轮只在临时 Git fixture 登记测试 author/topic；未修改公开注册表、未创建真实文章、未新增依赖/第三方服务/浏览器请求或用户数据处理。D-103 已授权把完整 #24 补丁作为单一提交普通非强制推送到当前专题分支的同名临时 ref；该 ref 不触发现有 CI，#12/#24 的远端 CI/Issue 闭环仍未取得，也未授权同步远端 Issue 文本或状态。
+
 ## 2026-07-27 — D-097 至 D-102 可信 CI、#12 与 #32（临时分支交付，待远端 CI 验收）
 
 - **主题与授权边界**：用户确认按“可信 CI → `main` required checks/合并门禁 → immutable production artifact 与 GitHub `production` environment/审批 → TAT/Nginx 部署、回滚、公网冒烟和定时检查”推进；D-100 进一步授权从精确基点 `9df4ba5678fc251d4882df5d5867e6d4990789e7` 创建 `codex/ci-issues-12-32` 并本地提交当前 CI、#12、#32 闭环。D-101 又窄幅授权把该分支普通非强制 push 到 `origin` 同名临时 ref 并设置 upstream；仍不授权 fetch/pull/rebase/merge/force push、PR、Issue 写操作、`main`/`dev` 变更或任何其他远端/生产操作。

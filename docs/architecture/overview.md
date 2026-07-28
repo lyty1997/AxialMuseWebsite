@@ -28,7 +28,7 @@ AxialMuseWebsite 的首版目标是建立一个可维护的个人技术分享网
 | 发布 | GitHub Actions `production-artifact` 在 prerequisite 成功后对 `main` 精确 SHA fresh rebuild + full quality，将同一 `build/` 与派生 301 配置封装为不可变 `payload/` + `metadata/` artifact -> main HEAD 新鲜度检查 -> CAM -> TAT 固定命令 -> 整版 release | 不跨 job 传递 build；最终 artifact 绑定 repository/run/ID/SHA、外层 `artifactDigest`、artifact 外 `releaseContentSha256`、build tree、payload、运行清单、Nginx 配置与逐文件 SHA-256；服务器安装同 SHA payload/config，不安装 Node、不拉源码、不执行仓库脚本 |
 | 数据与隐私 | 无应用数据层、无 Cookie、无第三方运行时请求 | M0 没有已确认的数据收集需求 |
 
-当前有效的选择、取舍和实施门禁见[主站目标架构](main-site-target-architecture.md)。[M0 主站实现 Spec](../product/m0-main-site-spec.md)已按 D-078 与 E-001 至 E-016 收敛为 Docusaurus 多页面实现基线；内部实现细节不再逐项请求用户选择。#9、#10、#21、#22、#11、#23、#5、#6、#7 与 #26 已闭环各自实现和远端验收；D-097 至 D-099 的双端点 CI、#12 历史门禁与 #32 workflow 契约依 D-100 纳入当前专题分支，尚待未来获得授权后的精确 SHA 远端 CI 与 Issue 验收，#8、#13/#14、#24 等任务继续推进。Git push、远端 CI 与 Issue 状态必须以 GitHub 实际记录单独验收，不能由本地闭环推导；基础设施、公开事实、数据与未来动态能力仍执行原门禁，后续依赖变化也必须重新准入。
+当前有效的选择、取舍和实施门禁见[主站目标架构](main-site-target-architecture.md)。[M0 主站实现 Spec](../product/m0-main-site-spec.md)已按 D-078 与 E-001 至 E-016 收敛为 Docusaurus 多页面实现基线；内部实现细节不再逐项请求用户选择。#9、#10、#21、#22、#11、#23、#5、#6、#7 与 #26 已闭环各自实现和远端验收；D-097 至 D-099 的双端点 CI、#12 历史门禁与 #32 workflow 契约依 D-100 纳入当前专题分支，#24 作者创建入口也已完成本地验收并依 D-103 获准纳入当前专题分支提交及同名临时 ref，#8、#13/#14 等任务继续推进。前述专题分支工作仍待精确 SHA 的远端 CI 与 Issue 验收；Git push 成功不等于远端 CI 或 Issue 闭环，必须以 GitHub 实际记录单独验收。基础设施、公开事实、数据与未来动态能力仍执行原门禁，后续依赖变化也必须重新准入。
 
 ## 当前实现
 
@@ -210,7 +210,7 @@ Acme --> Nginx : HTTP-01 与证书续期
 ## 架构验收
 
 - 当前 `public/` 是迁移前静态骨架；目标 release 来自 GitHub Actions 对 `main` 精确 SHA 生成的 `payload/` + `metadata/` artifact，其中 `payload/` 是 Docusaurus 默认 `build/` 的逐文件复制，运行清单和 Nginx 配置从同一 payload 与源注册表确定派生。服务器校验两层摘要后安装同 SHA payload/config，只有 payload 进入 Web Root；生产请求不依赖 Node.js、数据库或第三方 API。
-- D-078/D-079/E-001 至 E-016 已关闭项目内容职责、路由闭包、注册表、主题响应式、输出目录、制品交付、主预览、发布态素材白名单、草稿预览、npm 隔离、确定性 SPDX、Node ESM 测试、完整 Git 历史、同版本服务端 301、production artifact 字节所有权和固定版本唯一 docs 适配设计；#9/#10/#22/#11/#23/#5/#6/#7/#26 已实现并远端关闭各自基础能力，#12 历史门禁已在当前专题分支实现，#8、#13/#14、#24 等任务继续跟踪其余实现和 fixture。
+- D-078/D-079/E-001 至 E-016 已关闭项目内容职责、路由闭包、注册表、主题响应式、输出目录、制品交付、主预览、发布态素材白名单、草稿预览、npm 隔离、确定性 SPDX、Node ESM 测试、完整 Git 历史、同版本服务端 301、production artifact 字节所有权和固定版本唯一 docs 适配设计；#9/#10/#22/#11/#23/#5/#6/#7/#26 已实现并远端关闭各自基础能力，#12 历史门禁已在当前专题分支实现，#24 作者创建入口也已完成本地验收并依 D-103 获准纳入当前专题分支提交及同名临时 ref，#8、#13/#14 等任务继续跟踪其余实现和 fixture。
 - 首次候选 lockfile、真实传递图最终准入与主/最低端点临时冻结安装已由 #21 闭环；#22 又在任务临时副本完成站点冻结安装与最小 build，仓库根仍不保存 `node_modules`。D-097 至 D-099 已在工作区完成固定 Action SHA、Node 24 主/最低端点、完整历史和静态供应链门禁接线并通过本地验收；系统默认仍为 Node 22，GitHub 远端 workflow 是否成功必须等提交后实际运行。后续依赖变化、required checks、凭证、服务器和云资源操作仍受各自门禁。
 - 项目列表、项目侧栏和项目详情元数据从 `projects.json` 同一结构化事实投影；项目长文、文章、作者、主题、模块和重定向没有并行可编辑副本。
 - 从 contract 变更到页面、门禁、PR、`main` SHA、TAT invocation 和 release 的链路可追溯。

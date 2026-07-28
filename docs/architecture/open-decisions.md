@@ -1,7 +1,7 @@
 # 待决策问题
 
 状态：active  
-最近更新：2026-07-27
+最近更新：2026-07-28
 
 ## 已由用户确认
 
@@ -102,6 +102,7 @@
 - **D-100 / 2026-07-27**：用户授权以本地精确提交 `9df4ba5678fc251d4882df5d5867e6d4990789e7` 为基点创建并切换到 `codex/ci-issues-12-32`，保留当前工作区已有改动，在该分支完成并本地提交 D-097 至 D-099 的可信 CI 第一阶段、#12 的 E-013/CODE-018 完整 Git 历史身份门禁，以及 #32 的四个固定 Action prerequisite jobs 与静态 workflow 契约。D-098 为使同一双端点 production build 不泄漏私有绝对路径而形成的窄范围构建修复属于本提交闭环；不得借此改变公开 URL、内容可见性、依赖图、浏览器请求、用户数据或生产边界。用户指定的精确提交是本分支唯一集成基线；本分支不宣称包含该基点之后的任何远端提交或 #27/#28 实现，未来若需整合须在保持双方已验收语义的前提下另行授权。提交前必须复核工作区范围，并在 Node `24.18.0` 主端点与 Node `24.16.0` 最低端点按既定 E-010 隔离边界验证相关 `quality`、`typecheck`、`test` 与 production `build`；至少保留 #12 的正常/反例 DAG、#32 的 workflow mutation、D-098 的路径泄漏反例和 `git diff --check` 证据。本授权不允许 fetch、pull、rebase、merge、改写或删除分支，也不包含 push、PR、Issue 评论/关闭、GitHub Actions 实跑、required checks/ruleset、artifact、environment、凭证、服务器、TAT、DNS、TLS 或其他生产操作；这些远端和基础设施动作仍须分别授权。
 - **D-101 / 2026-07-27**：用户在 D-100 的本地提交完成后，单独授权把当前 `codex/ci-issues-12-32` 以普通非强制 push 推送到 `origin` 的同名临时分支，并为本地分支设置该远端 ref 为 upstream。推送前必须保持工作区干净、确认 CI/#12/#32 实现提交 `11a41aae24baad9ddd4a4c9be68ff8ce02e063d0` 的唯一父节点仍为 D-100 精确基点 `9df4ba5678fc251d4882df5d5867e6d4990789e7`，并把本授权记录作为该实现提交的纯文档后继纳入待推送 tip；推送后以 Git 返回成功、本地 upstream 关系及 `git ls-remote --heads origin refs/heads/codex/ci-issues-12-32` 精确等于本地 `HEAD` 共同验收。现有 workflow 的 `push` 触发器只包含 `main` 与 `dev`，因此同名临时 ref 交付本身不产生该提交的 GitHub Actions run，也不等于 #12/#32 远端验收、required checks 或合并闭环。本授权仅窄幅替代 D-100 的 push 禁止，不授权 fetch、pull、rebase、merge、force push、删除或改写分支，不触碰 `main`/`dev`，也不包含 PR、Issue 写操作、GitHub 设置、Actions 重跑、artifact、environment、凭证、服务器、TAT、DNS、TLS 或其他生产操作。
 - **D-102 / 2026-07-27**：#12 的实现评审确认，D-097 把依赖冻结的 E-013 历史 CLI 及其 fixture 直接加入 `quality` 后，干净克隆在没有 `node_modules/` 时会由 `@docusaurus/utils@3.10.2` 缺失而阻断既有零第三方依赖质量入口与 pre-commit；CI 因先执行 E-010 冻结安装而未暴露该回归。本站保留 CODE-004/E-013 的同一 Docusaurus 公共结构化解析器，不另写 YAML、逐行或正则解析器，也不让 hook 自动联网安装依赖；改为从 `quality` 聚合中移出历史 CLI/fixture，并以独立 `scripts/quality/run-content-history.mjs` 在 E-010 冻结安装后依次执行真实工作区门禁、完整 DAG fixture 与冻结解析器集成 fixture。`website-quality` 与 `node-minimum` 都必须在 `quality` 后、`typecheck`/`test`/`build` 前运行该独立入口，继续保持完整 checkout、失败关闭、双端点、38 个历史 fixture 和 2 个解析器集成 fixture 覆盖；本地 pre-commit 只承担原有零依赖 `quality`，需要本地运行 E-013 时由作者先显式完成既定冻结安装再调用独立入口。历史提交与当前工作区缺少冻结解析器时均以稳定 `CONTENT_HISTORY_DEPENDENCY` 失败，runner 对子进程启动错误、信号和任一非零退出均首错即停。该决定只修正 D-097/D-100 的门禁编排以及 E-015 中“历史属于 quality 内部”的表述，不降低 #12 的解析、历史或 CI 验收语义，不改变依赖图、公开内容、浏览器请求、用户数据或生产边界。用户明确授权完成本修复后形成聚焦提交，并普通非强制 push 到当前 `codex/ci-issues-12-32` 同名远端临时分支；不授权 PR、merge、Issue 写操作、`main`/`dev` 变更或其他远端与生产操作。
+- **D-103 / 2026-07-28**：用户明确授权把当前 #24 的直接 Node 作者入口、UUIDv7 模板、E-013 候选与终态历史检查、原子目录事务、作者/build 双锁、消费者残留门禁、显式作者验收 runner、测试和同步文档作为一个聚焦提交，提交到现有 `codex/ci-issues-12-32`，随后普通非强制 push 到 `origin` 同名临时 ref。提交前必须证明 8 个新增源码/测试文件与 17 个消费者、门禁、测试和文档修改处于同一完整补丁，并在从当前 `HEAD` 仅应用该补丁的 fresh checkout 中通过无 `node_modules/` 的 E-010 `run-script quality`、使用同一 lockfile 冻结依赖的作者验收与 production build，以及 `git diff --check`；push 后以 Git 返回成功、本地 upstream 和远端同名 ref 精确等于本地 `HEAD` 验收。该临时 ref 不在现有 `main`/`dev` push 触发范围内，因此本授权不构成远端 CI 或 Issue 验收，也不授权 fetch、pull、rebase、merge、force push、PR、Issue 写操作、`main`/`dev` 变更、GitHub 设置、凭证、服务器或其他生产操作。
 
 ## 依 D-078 形成的 M0 工程决定
 
@@ -212,7 +213,7 @@
 
 ## 后续技术选型
 
-- Docusaurus、Node/npm、TypeScript、内容模型、路由、主题、注册表、Linux/Ubuntu-only 执行边界、供应链协议、默认 `build/` 产物、production job 字节所有权及 GitHub Actions/TAT 交付方向已经确定。内部脚本、API、schema、测试和 CI 接线属于 D-078 委托范围；#9/#10/#21/#22/#11/#23/#5/#6/#7/#26 已完成各自实现与远端闭环，其中 #7 精确提交为 `7f2115d9f1dc5396ca0c81fc9960223644d79725`、#26 实现提交为 `91dd3c7`。D-097 至 D-099 的可信 CI 第一阶段、#12 历史门禁与 #32 workflow 契约已依 D-100 纳入当前专题分支，本地提交不等于远端闭环；#8、#13/#14、#24 与 #33 按各自依赖继续跟踪预览、作者集成和 release 实现。后续依赖变化、新增外部工具、artifact/upload Action 与凭证、Git 发布和基础设施操作仍保留对应门禁。
+- Docusaurus、Node/npm、TypeScript、内容模型、路由、主题、注册表、Linux/Ubuntu-only 执行边界、供应链协议、默认 `build/` 产物、production job 字节所有权及 GitHub Actions/TAT 交付方向已经确定。内部脚本、API、schema、测试和 CI 接线属于 D-078 委托范围；#9/#10/#21/#22/#11/#23/#5/#6/#7/#26 已完成各自实现与远端闭环，其中 #7 精确提交为 `7f2115d9f1dc5396ca0c81fc9960223644d79725`、#26 实现提交为 `91dd3c7`。D-097 至 D-099 的可信 CI 第一阶段、#12 历史门禁与 #32 workflow 契约已依 D-100 纳入当前专题分支，#24 作者集成也已完成本地验收并依 D-103 获准纳入当前专题分支提交及同名临时 ref；这些本地结果均不等于远端 CI 或 Issue 闭环。#8、#13/#14 与 #33 按各自依赖继续跟踪预览和 release 实现。后续依赖变化、新增外部工具、artifact/upload Action 与凭证、Git 发布和基础设施操作仍保留对应门禁。
 - E-010 的 npm 配置与缓存隔离、官方 registry/lock 来源预检、版本闭包、旁路门禁和双端点 CLI，E-011 的确定性 SPDX 规范化与证据状态机，以及 #21 的策略/admission schema、真实候选审查、tarball/NOTICE、audit 受限报告、正式三制品、静态闭包、最终证据持有、双端点冻结安装和 composite receipt 均已通过真实图验收；#22 已消费该准入图并完成 Docusaurus/TypeScript 基线的远端闭环。D-097 至 D-099 已在工作区接通 Node 24 主/最低端点、完整历史、真实内容 production build 与静态供应链证据，并完成本地验收；普通 CI 不运行 live audit，已知 18 个 high 仍作为未修复风险跟踪。远端 CI/required checks、浏览器外部请求检查、production artifact 和受限 retention 仍由后续任务完成；任何依赖图变化都必须重新走包含 live audit 的准入闭环。
 - 内容编辑采用 Markdown 默认、MDX 受控例外；M0 不启用其他解析模式，`src/components/mdx/index.ts` 白名单初始为空。任何后续 MDX 组件、浏览器行为或外部请求都必须按新增能力重新准入。
 - M0 路由职责、尾斜杠、保留路径、冲突与重定向、项目内容来源、注册表、“通用技术”、跨项目关系、三栏断点和不生成的系列/主题/作者/归档路由已经由 E-001 至 E-004 固定。

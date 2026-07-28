@@ -22,6 +22,7 @@ import {basename, dirname, join, relative, resolve} from "node:path";
 import {pathToFileURL} from "node:url";
 import {createHash, randomBytes} from "node:crypto";
 import {spawnSync} from "node:child_process";
+import {assertNoAuthorTransactionResidue} from "../author/lib/transaction-state.mjs";
 import {projectRoot} from "../quality/lib/files.mjs";
 import {buildQualityChildEnvironment} from "../quality/lib/process-environment.mjs";
 import {
@@ -141,6 +142,18 @@ function assertCanonicalRoot(root) {
     }
   } catch (error) {
     fail("BUILD_ROOT", "仓库根不是规范真实目录。", {cause: error});
+  }
+}
+
+function assertAuthorTransactionClear(root) {
+  try {
+    assertNoAuthorTransactionResidue({root});
+  } catch (cause) {
+    fail(
+      "BUILD_AUTHOR_TRANSACTION",
+      "作者事务仍在进行或存在未核对残留，production build 已在内容读取前停止。",
+      {cause},
+    );
   }
 }
 
@@ -449,6 +462,7 @@ function validateTestHooks(value) {
     fail("BUILD_TEST_HOOKS", "构建事务测试钩子结构不合法。");
   }
   const allowed = new Set([
+    "afterBuildLockAcquired",
     "afterCandidateActivation",
     "beforeCandidateActivation",
     "beforeLockRelease",
@@ -953,14 +967,19 @@ export function publishCandidateBuild({
   }
 }
 
-export function runProductionBuild({root = ROOT} = {}) {
+export function runProductionBuild({root = ROOT, testHooks} = {}) {
   assertCanonicalRoot(root);
+  assertAuthorTransactionClear(root);
   assertSupportedNodeVersion({root});
-  const cliPath = resolveDocusaurusCli(root);
   const owner = randomBytes(32).toString("hex");
   let transaction;
   try {
-    transaction = beginBuildTransaction({root, owner});
+    transaction = beginBuildTransaction({root, owner, testHooks});
+    // 与作者命令形成双锁交叉复核：build 持锁后再次确认作者锁不存在，
+    // 作者命令也会在持有作者锁后拒绝本 build lock。
+    transactionState(transaction).hooks.afterBuildLockAcquired?.();
+    assertAuthorTransactionClear(root);
+    const cliPath = resolveDocusaurusCli(root);
     runDocusaurusPhase({
       root,
       cliPath,

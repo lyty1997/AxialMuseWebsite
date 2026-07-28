@@ -633,6 +633,7 @@ test("E-010 npm isolation contract", async (t) => {
 
   await t.test("keeps zero-dependency checks in quality and history in its installed gate", () => {
     assert.deepEqual(QUALITY_COMMANDS, [
+      ["scripts/quality/check-author-transaction.mjs"],
       ["scripts/quality/check-javascript.mjs"],
       ["scripts/quality/check-module-boundaries.mjs"],
       ["scripts/quality/check-npm-isolation.mjs"],
@@ -661,6 +662,7 @@ test("E-010 npm isolation contract", async (t) => {
       ["--test", "tests/build/module-boundaries.test.mjs"],
       ["--test", "tests/build/content-decoders.test.mjs"],
       ["--test", "tests/build/build-site.test.mjs"],
+      ["--test", "tests/build/author-transaction.test.mjs"],
     ]);
     assert.deepEqual(CONTENT_HISTORY_COMMANDS, [
       ["scripts/quality/check-content-history.mjs"],
@@ -674,6 +676,47 @@ test("E-010 npm isolation contract", async (t) => {
       assert.equal(checkNpmIsolation(valid.root), undefined);
     } finally {
       destroyFixture(valid);
+    }
+
+    for (const mutation of [
+      {
+        path: ".github/workflows/ci.yml",
+        text: "jobs:\n  website-quality:\n    steps:\n      - run: node scripts/quality/run-quality.mjs\n      - run: node scripts/author/create-article.mjs\n",
+      },
+      {
+        path: ".githooks/pre-commit",
+        text: "#!/bin/sh\nnode scripts/quality/run-quality.mjs\nnode scripts/author/run-create-article-tests.mjs\n",
+      },
+      {
+        path: "scripts/quality/run-quality.mjs",
+        text: "const forbidden = \"scripts/author/create-article.mjs\";\n",
+      },
+      {
+        path: "scripts/quality/run-isolated-npm.mjs",
+        text: "const forbidden = \"scripts/author/run-create-article-tests.mjs\";\n",
+      },
+      {
+        path: "scripts/quality/run-tests.mjs",
+        text: "const forbidden = \"tests/build/create-article.test.mjs\";\n",
+      },
+      {
+        path: "scripts/quality/run-content-history.mjs",
+        text: "const forbidden = \"tests/build/create-article.integration.test.mjs\";\n",
+      },
+    ]) {
+      const implicitAuthor = createFixture();
+      try {
+        writeControlledQualityPaths(implicitAuthor);
+        const target = join(implicitAuthor.root, mutation.path);
+        mkdirSync(dirname(target), {recursive: true});
+        writeFileSync(target, mutation.text, "utf8");
+        assert.throws(
+          () => checkNpmIsolation(implicitAuthor.root),
+          /作者创建 CLI 与其真实验收只能由主 Node 本地显式入口调用/u,
+        );
+      } finally {
+        destroyFixture(implicitAuthor);
+      }
     }
 
     const missingRuntimeSource = createFixture();

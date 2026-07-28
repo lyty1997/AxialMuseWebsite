@@ -15,12 +15,18 @@ import {
 import { formatIsolationError } from "./lib/supply-chain/errors.mjs";
 import { readAndValidateLockfile } from "./lib/supply-chain/lockfile.mjs";
 import { projectRoot } from "./lib/files.mjs";
+import { CONTENT_HISTORY_COMMANDS } from "./run-content-history.mjs";
 import { QUALITY_COMMANDS } from "./run-quality.mjs";
 
 const ROOT = projectRoot();
 const QUALITY_ENTRY_COMMANDS = Object.freeze([
   "node scripts/quality/run-quality.mjs",
   "node scripts/quality/run-isolated-npm.mjs run-script quality",
+]);
+const AUTHOR_CREATION_MARKERS = Object.freeze([
+  "scripts/author/create-article.mjs",
+  "scripts/author/run-create-article-tests.mjs",
+  "tests/build/create-article",
 ]);
 
 export const OPERATIONAL_NPM_BOUNDARY_PATHS = Object.freeze([
@@ -230,7 +236,72 @@ function hasTopLevelRuntimeOverride(text) {
   });
 }
 
-function assertQualityTopology(root, hookPath) {
+function containsAuthorCreationMarker(value) {
+  return typeof value === "string"
+    && AUTHOR_CREATION_MARKERS.some((marker) => value.includes(marker));
+}
+
+function assertAuthorCreationIsExplicit({
+  contentHistoryCommands,
+  hookRoot,
+  manifest,
+  qualityCommands,
+  root,
+  workflowTargets,
+}) {
+  const commandSets = [
+    ...qualityCommands,
+    ...contentHistoryCommands,
+  ];
+  const protectedFiles = [
+    ...workflowTargets.map(({path}) => path),
+    ...readdirSync(hookRoot, {withFileTypes: true})
+      .filter((entry) => entry.isFile())
+      .map((entry) => resolve(hookRoot, entry.name)),
+    resolve(root, "scripts/quality/run-quality.mjs"),
+    resolve(root, "scripts/quality/run-isolated-npm.mjs"),
+    resolve(root, "scripts/quality/run-tests.mjs"),
+    resolve(root, "scripts/quality/run-content-history.mjs"),
+  ];
+  const fileInvokesCreation = protectedFiles.some((path) => (
+    existsSync(path)
+    && containsAuthorCreationMarker(readFileSync(path, "utf8"))
+  ));
+  const manifestInvokesCreation = Object.values(manifest.scripts)
+    .some(containsAuthorCreationMarker);
+  const commandSetInvokesCreation = commandSets
+    .flat()
+    .some(containsAuthorCreationMarker);
+  if (
+    fileInvokesCreation
+    || manifestInvokesCreation
+    || commandSetInvokesCreation
+  ) {
+    throw new Error(
+      "作者创建 CLI 与其真实验收只能由主 Node 本地显式入口调用，CI、hook、package script、quality、共享 test 和历史门禁均不得隐式触发。",
+    );
+  }
+}
+
+function assertQualityTopology(root, hookPath, manifest, workflowTargets) {
+  const authorTransactionCheckerCount = QUALITY_COMMANDS
+    .filter((command) => (
+      command.length === 1
+      && command[0] === "scripts/quality/check-author-transaction.mjs"
+    ))
+    .length;
+  const authorTransactionTestCount = QUALITY_COMMANDS
+    .filter((command) => (
+      command.join(" ") === "--test tests/build/author-transaction.test.mjs"
+    ))
+    .length;
+  const invokesAuthorCreation = QUALITY_COMMANDS.some((command) => (
+    command.some((argument) => (
+      argument.includes("scripts/author/create-article.mjs")
+      || argument.includes("scripts/author/run-create-article-tests.mjs")
+      || argument.includes("tests/build/create-article")
+    ))
+  ));
   const checkerCount = QUALITY_COMMANDS
     .filter((command) => command.length === 1 && command[0] === "scripts/quality/check-npm-isolation.mjs")
     .length;
@@ -257,9 +328,24 @@ function assertQualityTopology(root, hookPath) {
   const hasExactRequiredTests = requiredTestCommands.every((expected) => (
     QUALITY_COMMANDS.filter((command) => command.join(" ") === expected).length === 1
   ));
-  if (checkerCount !== 1 || supplyChainCheckerCount !== 1 || !hasExactRequiredTests) {
-    throw new Error("质量聚合入口必须精确包含 npm 隔离门禁、E-010、E-011 和全部 #21 离线供应链测试入口。");
+  if (
+    authorTransactionCheckerCount !== 1
+    || authorTransactionTestCount !== 1
+    || invokesAuthorCreation
+    || checkerCount !== 1
+    || supplyChainCheckerCount !== 1
+    || !hasExactRequiredTests
+  ) {
+    throw new Error("质量聚合入口必须只读检查作者事务残留，并精确包含 npm 隔离、E-010、E-011 和全部 #21 离线供应链测试入口。");
   }
+  assertAuthorCreationIsExplicit({
+    contentHistoryCommands: CONTENT_HISTORY_COMMANDS,
+    hookRoot: resolve(root, ".githooks"),
+    manifest,
+    qualityCommands: QUALITY_COMMANDS,
+    root,
+    workflowTargets,
+  });
 
   const ciPath = resolve(root, ".github/workflows/ci.yml");
   const ciText = existsSync(ciPath) ? readFileSync(ciPath, "utf8") : null;
@@ -303,7 +389,7 @@ export function checkNpmIsolation(root) {
       scan: findOperationalPackageManagerCommands,
     });
   }
-  assertQualityTopology(root, hookPath);
+  assertQualityTopology(root, hookPath, manifest, workflowTargets);
 
   const findings = [];
   for (const target of targets) {

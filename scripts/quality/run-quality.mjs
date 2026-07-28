@@ -7,6 +7,7 @@ import { buildQualityChildEnvironment } from "./lib/process-environment.mjs";
 const ROOT = projectRoot();
 const CHILD_ENVIRONMENT = buildQualityChildEnvironment();
 export const QUALITY_COMMANDS = Object.freeze([
+  ["scripts/quality/check-author-transaction.mjs"],
   ["scripts/quality/check-javascript.mjs"],
   ["scripts/quality/check-module-boundaries.mjs"],
   ["scripts/quality/check-npm-isolation.mjs"],
@@ -35,6 +36,7 @@ export const QUALITY_COMMANDS = Object.freeze([
   ["--test", "tests/build/module-boundaries.test.mjs"],
   ["--test", "tests/build/content-decoders.test.mjs"],
   ["--test", "tests/build/build-site.test.mjs"],
+  ["--test", "tests/build/author-transaction.test.mjs"],
 ].map((command) => Object.freeze(command)));
 
 export function runQuality() {
