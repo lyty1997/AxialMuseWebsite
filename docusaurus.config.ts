@@ -16,7 +16,6 @@ const config: Config = {
   baseUrl: "/",
   trailingSlash: true,
   noIndex: isPreview,
-  generatedFilesDir: buildContext.generatedFilesDirectory,
   onBrokenLinks: "throw",
   onBrokenAnchors: "throw",
   onDuplicateRoutes: "throw",

@@ -397,6 +397,10 @@ function runDocusaurusPhase({
 }) {
   let result;
   let phaseError;
+  const generatedFilesDirectory = resolve(
+    transactionRoot,
+    GENERATED_FILES_DIRECTORY,
+  );
   try {
     result = spawnSync(process.execPath, [cliPath, ...arguments_], {
       cwd: root,
@@ -404,12 +408,10 @@ function runDocusaurusPhase({
         ...buildQualityChildEnvironment(),
         NODE_ENV: "production",
         DOCUSAURUS_NO_PERSISTENT_CACHE: "1",
+        DOCUSAURUS_GENERATED_FILES_DIR_NAME: generatedFilesDirectory,
         AXIAL_MUSE_BUILD_MODE: context.mode,
         AXIAL_MUSE_BUILD_ROOT: context.buildRoot,
-        AXIAL_MUSE_BUILD_GENERATED_FILES: resolve(
-          transactionRoot,
-          GENERATED_FILES_DIRECTORY,
-        ),
+        AXIAL_MUSE_BUILD_GENERATED_FILES: generatedFilesDirectory,
         AXIAL_MUSE_BUILD_OWNER: context.owner,
         AXIAL_MUSE_BUILD_PHASE: phase,
         AXIAL_MUSE_BUILD_OUTPUT: outputPath,

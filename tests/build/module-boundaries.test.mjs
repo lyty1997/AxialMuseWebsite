@@ -370,6 +370,7 @@ test("E-009 根配置以唯一 preview 判据绑定索引与 sitemap", () => {
     "const buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode !== \"preview\";\nconst config = {\n  noIndex: isPreview,\n        sitemap: isPreview ? false : {},\n};\nexport default config;\n",
     "const buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode === \"preview\";\nconst config = {\n  noIndex: !isPreview,\n        sitemap: isPreview ? false : {},\n};\nexport default config;\n",
     "const buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode === \"preview\";\nconst config = {\n  noIndex: isPreview,\n        sitemap: {},\n};\nexport default config;\n",
+    "const buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode === \"preview\";\nconst config = {\n  noIndex: isPreview,\n  generatedFilesDir: \"fixture\",\n        sitemap: isPreview ? false : {},\n};\nexport default config;\n",
   ]) {
     withFixture((root) => {
       writeFixture(root, "docusaurus.config.ts", source);

@@ -267,18 +267,22 @@ function validateRootContracts(root, issues) {
     ) ?? [];
     const allRootIndexingDeclarations = configSource.match(/\bnoIndex\s*:/gu) ?? [];
     const allSitemapDeclarations = configSource.match(/\bsitemap\s*:/gu) ?? [];
+    const unsupportedGeneratedDirectoryDeclarations = configSource.match(
+      /\bgeneratedFilesDir\s*:/gu,
+    ) ?? [];
     if (
       previewModeBindings.length !== 1
       || rootIndexingBindings.length !== 1
       || sitemapBindings.length !== 1
       || allRootIndexingDeclarations.length !== 1
       || allSitemapDeclarations.length !== 1
+      || unsupportedGeneratedDirectoryDeclarations.length !== 0
     ) {
       addIssue(
         issues,
         "MODULE_BOUNDARY_INDEXING_CONTRACT",
         "docusaurus.config.ts",
-        "根配置必须由唯一 preview 判据同时绑定 production 可索引、preview noindex 与禁 sitemap。",
+        "根配置必须由唯一 preview 判据同时绑定 production 可索引、preview noindex 与禁 sitemap，且不得声明框架不支持的 generatedFilesDir。",
       );
     }
   } catch {
