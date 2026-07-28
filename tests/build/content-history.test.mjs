@@ -18,6 +18,7 @@ import test from "node:test";
 import {fileURLToPath, pathToFileURL} from "node:url";
 import {
   buildContentHistoryGitEnvironment,
+  checkArticleDateHistoryCandidate,
   checkContentHistory,
   checkContentHistoryCandidate,
   ContentHistoryError,
@@ -235,16 +236,34 @@ function articleText(
   sourceName,
   body = "可复核的 fixture 正文。",
 ) {
+  return articleStateText(articleId, sourceName, {body});
+}
+
+function articleStateText(
+  articleId,
+  sourceName,
+  {
+    body = "可复核的 fixture 正文。",
+    publicationStatus = "draft",
+    publishedAt,
+    updatedAt = publicationStatus === "draft" ? "2026-07-20" : publishedAt,
+  } = {},
+) {
   return [
     "---",
     `articleId: "${articleId}"`,
     `title: "Fixture ${sourceName}"`,
     `slug: "/writing/${sourceName}"`,
     `summary: "A traceable technical article for ${sourceName} with sufficient fixture evidence."`,
-    'publicationStatus: "draft"',
+    `publicationStatus: "${publicationStatus}"`,
+    ...(publishedAt === undefined
+      ? []
+      : [`publishedAt: "${publishedAt}"`]),
+    ...(updatedAt === undefined
+      ? []
+      : [`updatedAt: "${updatedAt}"`]),
     "authors:",
     '  - "example-author"',
-    'updatedAt: "2026-07-20"',
     "classification:",
     "  topics:",
     '    - "architecture"',
@@ -267,6 +286,22 @@ function writeArticle(root, sourceName, articleId, body) {
   );
   mkdirSync(dirname(path), {recursive: true});
   writeFileSync(path, articleText(articleId, sourceName, body), "utf8");
+}
+
+function writeArticleState(root, sourceName, articleId, options) {
+  const path = join(
+    root,
+    "site-content",
+    "writing",
+    sourceName,
+    "index.md",
+  );
+  mkdirSync(dirname(path), {recursive: true});
+  writeFileSync(
+    path,
+    articleStateText(articleId, sourceName, options),
+    "utf8",
+  );
 }
 
 function writeMinimalArticle(root, sourceName, articleId) {
@@ -382,6 +417,16 @@ async function checkCandidateFixture(root, candidate) {
   process.chdir(root);
   try {
     return await checkContentHistoryCandidate(candidate);
+  } finally {
+    process.chdir(previousCwd);
+  }
+}
+
+async function checkDateCandidateFixture(root, candidate) {
+  const previousCwd = process.cwd();
+  process.chdir(root);
+  try {
+    return await checkArticleDateHistoryCandidate(candidate);
   } finally {
     process.chdir(previousCwd);
   }
@@ -832,6 +877,444 @@ test("E-013 候选 API 在当前工作区已有错误时先失败", async () => 
     );
   } finally {
     destroyFixture(fixture);
+  }
+});
+
+test("E-013 publishedAt 建立后允许同值修订与 source-name 改名", async () => {
+  const fixture = createFixture({
+    article: {articleId: ARTICLE_A, sourceName: "dated-original"},
+  });
+  try {
+    writeArticleState(
+      fixture.root,
+      "dated-original",
+      ARTICLE_A,
+      {
+        publicationStatus: "published",
+        publishedAt: "2026-07-20",
+      },
+    );
+    commit(fixture.root, "publish dated article");
+    renameSync(
+      join(fixture.root, "site-content/writing/dated-original"),
+      join(fixture.root, "site-content/writing/dated-renamed"),
+    );
+    writeArticleState(
+      fixture.root,
+      "dated-renamed",
+      ARTICLE_A,
+      {
+        body: "改名后的修订正文。",
+        publicationStatus: "published",
+        publishedAt: "2026-07-20",
+        updatedAt: "2026-07-21",
+      },
+    );
+    commit(fixture.root, "revise and rename dated article");
+
+    const result = await checkFixture(fixture.root);
+    assert.equal(result.articleCount, 1);
+    assert.equal(result.commitCount, 3);
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-013 存活文章不得修改或删除 publishedAt", async () => {
+  const changed = createFixture({
+    article: {articleId: ARTICLE_A, sourceName: "changed-date"},
+  });
+  try {
+    writeArticleState(changed.root, "changed-date", ARTICLE_A, {
+      publicationStatus: "published",
+      publishedAt: "2026-07-20",
+    });
+    commit(changed.root, "establish date before change");
+    writeArticleState(changed.root, "changed-date", ARTICLE_A, {
+      publicationStatus: "published",
+      publishedAt: "2026-07-21",
+    });
+    commit(changed.root, "change first publication date");
+    await expectHistoryError(
+      changed.root,
+      "CONTENT_HISTORY_DATE_CHANGED",
+      "site-content/writing/changed-date/index.md",
+    );
+  } finally {
+    destroyFixture(changed);
+  }
+
+  const removed = createFixture({
+    article: {articleId: ARTICLE_B, sourceName: "removed-date"},
+  });
+  try {
+    writeArticleState(removed.root, "removed-date", ARTICLE_B, {
+      publicationStatus: "published",
+      publishedAt: "2026-07-20",
+    });
+    commit(removed.root, "establish date before removal");
+    writeArticle(
+      removed.root,
+      "removed-date",
+      ARTICLE_B,
+      "删除日期但保留文章。",
+    );
+    commit(removed.root, "remove first publication date");
+    await expectHistoryError(
+      removed.root,
+      "CONTENT_HISTORY_DATE_REMOVED",
+      "site-content/writing/removed-date/index.md",
+    );
+  } finally {
+    destroyFixture(removed);
+  }
+});
+
+test("E-013 整篇文章删除不误报 publishedAt 删除", async () => {
+  const fixture = createFixture({
+    article: {articleId: ARTICLE_A, sourceName: "deleted-dated-article"},
+  });
+  try {
+    writeArticleState(
+      fixture.root,
+      "deleted-dated-article",
+      ARTICLE_A,
+      {
+        publicationStatus: "published",
+        publishedAt: "2026-07-20",
+      },
+    );
+    commit(fixture.root, "publish before whole deletion");
+    rmSync(
+      join(
+        fixture.root,
+        "site-content",
+        "writing",
+        "deleted-dated-article",
+      ),
+      {recursive: true, force: true},
+    );
+    commit(fixture.root, "delete whole dated article");
+
+    const result = await checkFixture(fixture.root);
+    assert.equal(result.articleCount, 0);
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-013 历史快照拒绝非规范 publishedAt", async () => {
+  const fixture = createFixture({
+    article: {articleId: ARTICLE_A, sourceName: "invalid-date"},
+  });
+  try {
+    writeArticleState(fixture.root, "invalid-date", ARTICLE_A, {
+      publicationStatus: "published",
+      publishedAt: "2026-02-30",
+    });
+    commit(fixture.root, "invalid historical date");
+    await expectHistoryError(
+      fixture.root,
+      "CONTENT_HISTORY_PUBLISHED_AT",
+      "site-content/writing/invalid-date/index.md",
+    );
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-013 merge 父历史中相同 publishedAt 通过", async () => {
+  const fixture = createFixture({
+    article: {articleId: ARTICLE_A, sourceName: "same-merge-date"},
+  });
+  try {
+    const base = runGit(fixture.root, ["rev-parse", "HEAD"]).stdout.trim();
+    runGit(fixture.root, ["checkout", "--quiet", "-b", "left", base]);
+    writeArticleState(fixture.root, "same-merge-date", ARTICLE_A, {
+      body: "左分支发布。",
+      publicationStatus: "published",
+      publishedAt: "2026-07-20",
+    });
+    commit(fixture.root, "left same publication date");
+
+    runGit(fixture.root, ["checkout", "--quiet", "-b", "right", base]);
+    writeArticleState(fixture.root, "same-merge-date", ARTICLE_A, {
+      body: "右分支发布。",
+      publicationStatus: "published",
+      publishedAt: "2026-07-20",
+    });
+    commit(fixture.root, "right same publication date");
+
+    runGit(fixture.root, ["checkout", "--quiet", "left"]);
+    runGit(fixture.root, [
+      "merge",
+      "--quiet",
+      "--no-ff",
+      "-s",
+      "ours",
+      "right",
+      "-m",
+      "merge same publication date",
+    ]);
+    const result = await checkFixture(fixture.root);
+    assert.equal(result.articleCount, 1);
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-013 merge 一侧无日期时继承另一侧 publishedAt", async () => {
+  const fixture = createFixture({
+    article: {articleId: ARTICLE_A, sourceName: "inherited-merge-date"},
+  });
+  try {
+    const base = runGit(fixture.root, ["rev-parse", "HEAD"]).stdout.trim();
+    runGit(fixture.root, ["checkout", "--quiet", "-b", "left", base]);
+    writeArticleState(fixture.root, "inherited-merge-date", ARTICLE_A, {
+      publicationStatus: "published",
+      publishedAt: "2026-07-20",
+    });
+    commit(fixture.root, "left establishes publication date");
+
+    runGit(fixture.root, ["checkout", "--quiet", "-b", "right", base]);
+    writeArticle(
+      fixture.root,
+      "inherited-merge-date",
+      ARTICLE_A,
+      "右分支仍为草稿。",
+    );
+    commit(fixture.root, "right remains unpublished");
+
+    runGit(fixture.root, ["checkout", "--quiet", "left"]);
+    runGit(fixture.root, [
+      "merge",
+      "--quiet",
+      "--no-ff",
+      "-s",
+      "ours",
+      "right",
+      "-m",
+      "merge published and unpublished parents",
+    ]);
+    const result = await checkFixture(fixture.root);
+    assert.equal(result.articleCount, 1);
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-013 merge 父历史中不同 publishedAt 失败", async () => {
+  const fixture = createFixture({
+    article: {articleId: ARTICLE_A, sourceName: "conflicting-merge-date"},
+  });
+  try {
+    const base = runGit(fixture.root, ["rev-parse", "HEAD"]).stdout.trim();
+    runGit(fixture.root, ["checkout", "--quiet", "-b", "left", base]);
+    writeArticleState(fixture.root, "conflicting-merge-date", ARTICLE_A, {
+      publicationStatus: "published",
+      publishedAt: "2026-07-20",
+    });
+    commit(fixture.root, "left conflicting publication date");
+
+    runGit(fixture.root, ["checkout", "--quiet", "-b", "right", base]);
+    writeArticleState(fixture.root, "conflicting-merge-date", ARTICLE_A, {
+      publicationStatus: "published",
+      publishedAt: "2026-07-21",
+    });
+    commit(fixture.root, "right conflicting publication date");
+
+    runGit(fixture.root, ["checkout", "--quiet", "left"]);
+    runGit(fixture.root, [
+      "merge",
+      "--quiet",
+      "--no-ff",
+      "-s",
+      "ours",
+      "right",
+      "-m",
+      "merge conflicting publication dates",
+    ]);
+    await expectHistoryError(
+      fixture.root,
+      "CONTENT_HISTORY_DATE_LINEAGE_CONFLICT",
+    );
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-013 日期候选 API 区分 publish 与 revise 且不读取窄暂态", async () => {
+  const fixture = createFixture({
+    article: {articleId: ARTICLE_A, sourceName: "date-candidate"},
+  });
+  try {
+    writeArticleState(fixture.root, "date-candidate", ARTICLE_A, {
+      publicationStatus: "published",
+      publishedAt: undefined,
+      updatedAt: undefined,
+    });
+    const publishResult = await checkDateCandidateFixture(fixture.root, {
+      action: "publish",
+      articleId: ARTICLE_A,
+      publishedAt: "2026-07-20",
+      sourceName: "date-candidate",
+    });
+    assert.equal(publishResult.articleCount, 1);
+    await assert.rejects(
+      checkDateCandidateFixture(fixture.root, {
+        action: "revise",
+        articleId: ARTICLE_A,
+        publishedAt: "2026-07-20",
+        sourceName: "date-candidate",
+      }),
+      (error) => (
+        error instanceof ContentHistoryError
+        && error.code === "CONTENT_HISTORY_DATE_STATE"
+      ),
+    );
+
+    writeArticleState(fixture.root, "date-candidate", ARTICLE_A, {
+      publicationStatus: "published",
+      publishedAt: "2026-07-20",
+    });
+    commit(fixture.root, "establish candidate publication date");
+    await checkDateCandidateFixture(fixture.root, {
+      action: "revise",
+      articleId: ARTICLE_A,
+      publishedAt: "2026-07-20",
+      sourceName: "date-candidate",
+    });
+    await assert.rejects(
+      checkDateCandidateFixture(fixture.root, {
+        action: "revise",
+        articleId: ARTICLE_A,
+        publishedAt: "2026-07-21",
+        sourceName: "date-candidate",
+      }),
+      (error) => (
+        error instanceof ContentHistoryError
+        && error.code === "CONTENT_HISTORY_DATE_CHANGED"
+      ),
+    );
+    await assert.rejects(
+      checkDateCandidateFixture(fixture.root, {
+        action: "publish",
+        articleId: ARTICLE_A,
+        publishedAt: "2026-07-20",
+        sourceName: "date-candidate",
+      }),
+      (error) => (
+        error instanceof ContentHistoryError
+        && error.code === "CONTENT_HISTORY_DATE_STATE"
+      ),
+    );
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-013 日期候选 API 复用身份保留与删除后重引规则", async () => {
+  const fixture = createFixture({
+    article: {articleId: ARTICLE_A, sourceName: "reserved-date-candidate"},
+  });
+  try {
+    rmSync(
+      join(
+        fixture.root,
+        "site-content",
+        "writing",
+        "reserved-date-candidate",
+      ),
+      {recursive: true, force: true},
+    );
+    commit(fixture.root, "remove date candidate identity");
+    await assert.rejects(
+      checkDateCandidateFixture(fixture.root, {
+        action: "publish",
+        articleId: ARTICLE_A,
+        publishedAt: "2026-07-20",
+        sourceName: "replacement-date-candidate",
+      }),
+      (error) => (
+        error instanceof ContentHistoryError
+        && error.code === "CONTENT_HISTORY_ARTICLE_REINTRODUCED"
+      ),
+    );
+    await assert.rejects(
+      checkDateCandidateFixture(fixture.root, {
+        action: "publish",
+        articleId: ARTICLE_B,
+        publishedAt: "2026-07-20",
+        sourceName: "reserved-date-candidate",
+      }),
+      (error) => (
+        error instanceof ContentHistoryError
+        && error.code === "CONTENT_HISTORY_SOURCE_REUSED"
+      ),
+    );
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-013 日期候选 API 拒绝额外字段、访问器、action 与日期", async () => {
+  await assert.rejects(
+    checkArticleDateHistoryCandidate({
+      action: "publish",
+      articleId: ARTICLE_A,
+      publishedAt: "2026-07-20",
+      sourceName: "extra-date-candidate",
+      parser() {},
+    }),
+    (error) => (
+      error instanceof ContentHistoryError
+      && error.code === "CONTENT_HISTORY_DATE_CANDIDATE"
+    ),
+  );
+
+  let accessed = false;
+  const accessor = {
+    action: "publish",
+    articleId: ARTICLE_A,
+    publishedAt: "2026-07-20",
+  };
+  Object.defineProperty(accessor, "sourceName", {
+    enumerable: true,
+    get() {
+      accessed = true;
+      return "accessor-date-candidate";
+    },
+  });
+  await assert.rejects(
+    checkArticleDateHistoryCandidate(accessor),
+    (error) => (
+      error instanceof ContentHistoryError
+      && error.code === "CONTENT_HISTORY_DATE_CANDIDATE"
+    ),
+  );
+  assert.equal(accessed, false);
+
+  for (const invalid of [
+    {
+      action: "archive",
+      articleId: ARTICLE_A,
+      publishedAt: "2026-07-20",
+      sourceName: "invalid-action",
+    },
+    {
+      action: "publish",
+      articleId: ARTICLE_A,
+      publishedAt: "2026-02-30",
+      sourceName: "invalid-date",
+    },
+  ]) {
+    await assert.rejects(
+      checkArticleDateHistoryCandidate(invalid),
+      (error) => (
+        error instanceof ContentHistoryError
+        && error.code === "CONTENT_HISTORY_DATE_CANDIDATE"
+      ),
+    );
   }
 });
 

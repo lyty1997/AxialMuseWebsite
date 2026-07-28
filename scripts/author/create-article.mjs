@@ -290,7 +290,7 @@ export function parseCreateArticleArguments(arguments_) {
   });
 }
 
-function fileIdentity(metadata) {
+export function fileIdentity(metadata) {
   return Object.freeze({
     device: metadata.dev,
     inode: metadata.ino,
@@ -304,7 +304,7 @@ function fileIdentity(metadata) {
   });
 }
 
-function sameFileIdentity(left, right) {
+export function sameFileIdentity(left, right) {
   return left.device === right.device
     && left.inode === right.inode
     && left.mode === right.mode
@@ -316,13 +316,13 @@ function sameFileIdentity(left, right) {
     && left.changedAtNanoseconds === right.changedAtNanoseconds;
 }
 
-function sameObjectIdentity(left, right) {
+export function sameObjectIdentity(left, right) {
   return left.device === right.device
     && left.inode === right.inode
     && left.owner === right.owner;
 }
 
-function assertOwnedOrdinaryFile(metadata) {
+export function assertOwnedOrdinaryFile(metadata) {
   if (
     metadata.isSymbolicLink()
     || !metadata.isFile()
@@ -336,7 +336,7 @@ function assertOwnedOrdinaryFile(metadata) {
   }
 }
 
-function assertOwnedDirectory(metadata) {
+export function assertOwnedDirectory(metadata) {
   if (
     metadata.isSymbolicLink()
     || !metadata.isDirectory()
@@ -349,7 +349,7 @@ function assertOwnedDirectory(metadata) {
   }
 }
 
-function readStableFile(path, sourcePath, errorCode = "AUTHOR_WORKTREE") {
+export function readStableFile(path, sourcePath, errorCode = "AUTHOR_WORKTREE") {
   let descriptor;
   try {
     descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -385,7 +385,7 @@ function readStableFile(path, sourcePath, errorCode = "AUTHOR_WORKTREE") {
   }
 }
 
-function inspectDirectory(path, sourcePath) {
+export function inspectDirectory(path, sourcePath) {
   try {
     const canonical = realpathSync(path);
     const metadata = lstatSync(path, {bigint: true});
@@ -401,7 +401,7 @@ function inspectDirectory(path, sourcePath) {
   }
 }
 
-function inspectWorkspace(root) {
+export function inspectWorkspace(root) {
   if (typeof root !== "string" || root.length === 0 || root.includes("\0")) {
     fail("AUTHOR_WORKTREE");
   }
@@ -433,7 +433,7 @@ function inspectWorkspace(root) {
   });
 }
 
-function assertAuthorRuntime(workspace) {
+export function assertAuthorRuntime(workspace) {
   if (process.platform !== "linux") fail("AUTHOR_RUNTIME_PLATFORM");
   const runtime = readStableFile(
     resolve(workspace.root, ".nvmrc"),
@@ -679,7 +679,7 @@ function invokeHook(hooks, name, code, details) {
   }
 }
 
-function assertNoForeignStaging(workspace) {
+export function assertNoForeignStaging(workspace) {
   const residue = findAuthorTransactionResidue({root: workspace.root})
     .filter((sourcePath) => sourcePath !== AUTHOR_LOCK_FILE);
   if (residue.length > 0) {
@@ -690,7 +690,7 @@ function assertNoForeignStaging(workspace) {
   }
 }
 
-function assertNoBuildTransaction(workspace) {
+export function assertNoBuildTransaction(workspace) {
   const path = resolve(workspace.root, BUILD_LOCK_FILE);
   try {
     lstatSync(path);
@@ -706,7 +706,7 @@ function assertNoBuildTransaction(workspace) {
   }
 }
 
-function acquireAuthorLock(workspace, owner) {
+export function acquireAuthorLock(workspace, owner) {
   const path = resolve(workspace.root, AUTHOR_LOCK_FILE);
   let descriptor;
   let created = false;
@@ -792,7 +792,7 @@ function acquireAuthorLock(workspace, owner) {
   }
 }
 
-function assertAuthorLock(lock) {
+export function assertAuthorLock(lock) {
   try {
     if (lock.unlinked || lock.descriptor === undefined) {
       throw new TypeError("author lock is not held");
@@ -830,7 +830,7 @@ function assertAuthorLock(lock) {
   }
 }
 
-function syncDirectory(path) {
+export function syncDirectory(path) {
   let descriptor;
   try {
     descriptor = openSync(
@@ -843,7 +843,7 @@ function syncDirectory(path) {
   }
 }
 
-function releaseAuthorLock(lock, dependencies) {
+export function releaseAuthorLock(lock, dependencies) {
   assertAuthorLock(lock);
   try {
     dependencies.releaseLockBoundary(lock);
@@ -865,7 +865,7 @@ function releaseAuthorLock(lock, dependencies) {
   }
 }
 
-function captureObjectIdentity(path, kind) {
+export function captureObjectIdentity(path, kind) {
   const metadata = lstatSync(path, {bigint: true});
   if (kind === "directory") assertOwnedDirectory(metadata);
   else assertOwnedOrdinaryFile(metadata);

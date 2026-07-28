@@ -703,6 +703,30 @@ test("E-010 npm isolation contract", async (t) => {
         path: "scripts/quality/run-content-history.mjs",
         text: "const forbidden = \"tests/build/create-article.integration.test.mjs\";\n",
       },
+      {
+        path: ".github/workflows/ci.yml",
+        text: "jobs:\n  website-quality:\n    steps:\n      - run: node scripts/quality/run-quality.mjs\n      - run: node scripts/author/set-article-dates.mjs --source-name fixture --action publish\n",
+      },
+      {
+        path: ".githooks/pre-commit",
+        text: "#!/bin/sh\nnode scripts/quality/run-quality.mjs\nnode scripts/author/run-set-article-dates-tests.mjs\n",
+      },
+      {
+        path: "scripts/quality/run-quality.mjs",
+        text: "const forbidden = \"tests/build/article-date-edit.test.mjs\";\n",
+      },
+      {
+        path: "scripts/quality/run-isolated-npm.mjs",
+        text: "const forbidden = \"tests/build/set-article-dates.test.mjs\";\n",
+      },
+      {
+        path: "scripts/quality/run-tests.mjs",
+        text: "import {setArticleDates} from \"../author/set-article-dates.mjs\";\nvoid setArticleDates;\n",
+      },
+      {
+        path: "scripts/quality/run-content-history.mjs",
+        text: "const forbidden = \"tests/build/run-set-article-dates-tests.test.mjs\";\n",
+      },
     ]) {
       const implicitAuthor = createFixture();
       try {
@@ -712,7 +736,7 @@ test("E-010 npm isolation contract", async (t) => {
         writeFileSync(target, mutation.text, "utf8");
         assert.throws(
           () => checkNpmIsolation(implicitAuthor.root),
-          /作者创建 CLI 与其真实验收只能由主 Node 本地显式入口调用/u,
+          /作者写命令及其真实验收只能由主 Node 本地显式入口调用/u,
         );
       } finally {
         destroyFixture(implicitAuthor);
