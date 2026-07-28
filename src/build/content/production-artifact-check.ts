@@ -129,7 +129,7 @@ interface PublicArticleProjection {
   }>[];
 }
 
-function expectedPageRoutes(repositoryRoot: string): readonly string[] {
+export function expectedPageRoutes(repositoryRoot: string): readonly string[] {
   const pagesRoot = resolve(repositoryRoot, "src/pages");
   const routes = new Set<string>();
   const walk = (directory: string, segments: readonly string[]): void => {
@@ -186,7 +186,7 @@ function expectedRoutes(content: LoadedValidatedContent): readonly string[] {
   return Object.freeze([...routes].sort());
 }
 
-function routeFromHtmlPath(path: string): string | undefined {
+export function routeFromHtmlPath(path: string): string | undefined {
   if (path === "404.html") return undefined;
   if (path === "index.html") return "/";
   if (path.endsWith("/index.html")) return `/${path.slice(0, -"index.html".length)}`;
@@ -284,7 +284,7 @@ function readStableFileBytes(
   return value;
 }
 
-function readStableTextFile(
+export function readStableTextFile(
   absolutePath: string,
   sourcePath: string,
   expectedEvidence?: BuildFileEvidence,
@@ -466,7 +466,7 @@ function sanitizeHtmlTag(tag: string): string {
   return sanitized;
 }
 
-function activeHtmlMarkup(html: string, sourcePath: string): string {
+export function activeHtmlMarkup(html: string, sourcePath: string): string {
   let cursor = 0;
   let sanitized = "";
   let doctypeSeen = false;
@@ -670,7 +670,7 @@ function activeHtmlMarkup(html: string, sourcePath: string): string {
   return sanitized;
 }
 
-function htmlAttributes(tag: string, sourcePath: string): ReadonlyMap<string, string> {
+export function htmlAttributes(tag: string, sourcePath: string): ReadonlyMap<string, string> {
   const attributes = new Map<string, string>();
   const opening = /^<[\t\n\f\r ]*\/?[\t\n\f\r ]*[A-Za-z][A-Za-z0-9:-]*/u.exec(tag);
   if (opening === null) {
@@ -890,7 +890,7 @@ function sidebarLinkLabel(innerHtml: string, sourcePath: string): string {
   return text;
 }
 
-function extractSidebarLinks(html: string, sourcePath: string): readonly SidebarLink[] {
+export function extractSidebarLinks(html: string, sourcePath: string): readonly SidebarLink[] {
   const sidebar = extractUniqueElementByClass(
     html,
     "aside",
@@ -980,7 +980,7 @@ function extractSidebarLinks(html: string, sourcePath: string): readonly Sidebar
   return Object.freeze(links);
 }
 
-function assertCanonical(html: string, route: string, sourcePath: string): void {
+export function assertCanonical(html: string, route: string, sourcePath: string): void {
   const headOpenings = [...html.matchAll(/<head(?=[\t\n\f\r />])[^>]*>/giu)];
   const headClosings = [...html.matchAll(/<\/head[\t\n\f\r ]*>/giu)];
   const opening = headOpenings[0];
@@ -2473,7 +2473,7 @@ function privateDateIndexPath(generatedFilesDirectory: string): string {
   return target;
 }
 
-function assertPrivateDateIndex(
+export function assertPrivateDateIndex(
   content: LoadedValidatedContent,
   generatedFilesDirectory: string,
   expectedEvidence?: BuildFileEvidence,
@@ -2536,7 +2536,7 @@ function permutations<T>(values: readonly T[]): readonly (readonly T[])[] {
   ]).map((tail) => [value, ...tail]));
 }
 
-function hasPrivateDateIndexSignature(
+export function hasPrivateDateIndexSignature(
   value: string,
   content: LoadedValidatedContent,
 ): boolean {
@@ -2563,7 +2563,7 @@ function sameIndexSet(left: ReadonlySet<number>, right: ReadonlySet<number>): bo
   return left.size === right.size && [...left].every((value) => right.has(value));
 }
 
-function sameTreeEvidence(left: BuildTreeEvidence, right: BuildTreeEvidence): boolean {
+export function sameTreeEvidence(left: BuildTreeEvidence, right: BuildTreeEvidence): boolean {
   return left.hasLeakedToken === right.hasLeakedToken
     && left.hasLeakedPathToken === right.hasLeakedPathToken
     && left.hasLeakedContentToken === right.hasLeakedContentToken
@@ -2946,7 +2946,7 @@ function markdownSemanticValues(value: string): readonly string[] {
   return Object.freeze([decoded, normalized, ...lexical].filter((candidate) => candidate !== ""));
 }
 
-function visibleHtmlSemanticText(html: string): string {
+export function visibleHtmlSemanticText(html: string): string {
   const withBlockBoundaries = html.replace(
     /<\/?(?:address|article|aside|blockquote|body|br|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|html|li|main|nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul)(?=[\t\n\f\r />])[^>]*>/giu,
     " ",

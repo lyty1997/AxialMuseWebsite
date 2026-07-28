@@ -6,9 +6,7 @@ import type {
 import {readBuildContext} from "./src/build/site-config/index.js";
 
 const buildContext = readBuildContext();
-if (buildContext.mode === "preview") {
-  throw new Error("[BUILD_MODE_UNAVAILABLE] preview 的 Docusaurus --dev、noindex 与候选激活仍由 #8 接管。");
-}
+const isPreview = buildContext.mode === "preview";
 
 const config: Config = {
   title: "Axial Muse",
@@ -17,7 +15,8 @@ const config: Config = {
   url: "https://www.axialmuse.com",
   baseUrl: "/",
   trailingSlash: true,
-  noIndex: false,
+  noIndex: isPreview,
+  generatedFilesDir: buildContext.generatedFilesDirectory,
   onBrokenLinks: "throw",
   onBrokenAnchors: "throw",
   onDuplicateRoutes: "throw",
@@ -44,7 +43,7 @@ const config: Config = {
         theme: {
           customCss: "./src/css/custom.css",
         },
-        sitemap: {},
+        sitemap: isPreview ? false : {},
       } satisfies Omit<ClassicPresetOptions, "docs">,
     ],
   ],

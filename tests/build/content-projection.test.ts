@@ -30,6 +30,7 @@ import {
 import {
   createProjectPreviewRemarkPluginForTest,
 } from "../../src/build/content/project-preview-projection.js";
+import {assertPreviewIndexing} from "../../src/build/content/preview-artifact-check.js";
 
 const ARTICLE_DATE_INDEX_SOURCE_PATH = "axial-muse/article-date-index.json";
 const ARTICLE_IDS = Object.freeze({
@@ -381,6 +382,23 @@ function assertBuildError(
     return true;
   };
 }
+
+test("E-009 preview HTML 必须恰有一条 noindex, nofollow", () => {
+  assert.doesNotThrow(() => assertPreviewIndexing(
+    '<!doctype html><html><head><meta name="robots" content="nofollow, noindex"></head></html>',
+    "build/index.html",
+  ));
+  for (const html of [
+    '<meta name="robots" content="noindex">',
+    '<meta name="robots" content="noindex, nofollow"><meta name="robots" content="noindex, nofollow">',
+    "<html><head></head></html>",
+  ]) {
+    assert.throws(
+      () => assertPreviewIndexing(html, "build/index.html"),
+      assertBuildError("CONTENT_PREVIEW_NOINDEX"),
+    );
+  }
+});
 
 function assertBuildErrorCause(
   expectedCode: string,
@@ -931,6 +949,9 @@ async function invokeArtifactCheck(
       assert.equal(actual, buildDirectory);
       trace.staticAssertions += 1;
     },
+    assertPreviewBuild() {
+      throw new Error("production artifact fixture must not run preview checks");
+    },
     dispose() {
       trace.disposals += 1;
     },
@@ -954,22 +975,26 @@ async function invokeArtifactCheck(
   const pluginModule = createContentDataPluginForTest(session as never);
   const plugin = await pluginModule({generatedFilesDir: generatedFilesDirectory} as never, undefined);
   assert.ok(plugin?.extendCli);
-  let action: (() => Promise<void>) | undefined;
-  const command = {
-    description() {
-      return command;
-    },
-    action(callback: () => Promise<void>) {
-      action = callback;
-      return command;
-    },
-  };
+  const actions = new Map<string, () => Promise<void>>();
   plugin.extendCli({
     command(name: string) {
-      assert.equal(name, "axial-muse:check-production");
+      assert.ok([
+        "axial-muse:check-production",
+        "axial-muse:check-preview",
+      ].includes(name));
+      const command = {
+        description() {
+          return command;
+        },
+        action(callback: () => Promise<void>) {
+          actions.set(name, callback);
+          return command;
+        },
+      };
       return command;
     },
   } as never);
+  const action = actions.get("axial-muse:check-production");
   assert.ok(action);
   await action();
   return Object.freeze({...trace});

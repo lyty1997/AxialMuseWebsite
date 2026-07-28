@@ -105,7 +105,7 @@ function createFixture() {
   writeFixture(
     root,
     "docusaurus.config.ts",
-    "import type {Config} from \"@docusaurus/types\";\nconst config: Config = {\n  noIndex: false,\n} as Config;\nexport default config;\n",
+    "import type {Config} from \"@docusaurus/types\";\nconst buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode === \"preview\";\nconst config: Config = {\n  noIndex: isPreview,\n  presets: [[\"fixture\", {\n        sitemap: isPreview ? false : {},\n  }]],\n} as Config;\nexport default config;\n",
   );
   writeFixture(
     root,
@@ -363,10 +363,13 @@ test("CODE-013 根侧栏拒绝手写 doc ID 与额外 sidebar", () => {
   });
 });
 
-test("E-009 根配置必须显式保持 production 可索引", () => {
+test("E-009 根配置以唯一 preview 判据绑定索引与 sitemap", () => {
   for (const source of [
     "import type {Config} from \"@docusaurus/types\";\nconst config: Config = {} as Config;\nexport default config;\n",
     "import type {Config} from \"@docusaurus/types\";\nconst config: Config = {\n  noIndex: true,\n} as Config;\nexport default config;\n",
+    "const buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode !== \"preview\";\nconst config = {\n  noIndex: isPreview,\n        sitemap: isPreview ? false : {},\n};\nexport default config;\n",
+    "const buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode === \"preview\";\nconst config = {\n  noIndex: !isPreview,\n        sitemap: isPreview ? false : {},\n};\nexport default config;\n",
+    "const buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode === \"preview\";\nconst config = {\n  noIndex: isPreview,\n        sitemap: {},\n};\nexport default config;\n",
   ]) {
     withFixture((root) => {
       writeFixture(root, "docusaurus.config.ts", source);

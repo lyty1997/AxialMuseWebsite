@@ -60,6 +60,7 @@ export const JAVASCRIPT_SOURCE_FILES = Object.freeze([
   "scripts/quality/render-diagrams.mjs",
   "scripts/quality/check-module-boundaries.mjs",
   "scripts/build/build-site.mjs",
+  "scripts/dev/preview-dependencies.mjs",
   "scripts/quality/generate-supply-chain-artifacts.mjs",
   "scripts/quality/review-supply-chain-candidates.mjs",
   "scripts/quality/run-dual-endpoint-ci-worker.mjs",
@@ -99,6 +100,7 @@ export const JAVASCRIPT_SOURCE_FILES = Object.freeze([
   "tests/build/create-article.integration.test.mjs",
   "tests/build/set-article-dates.test.mjs",
   "tests/build/set-article-dates.integration.test.mjs",
+  "tests/build/preview-workflow.test.mjs",
   "tests/build/run-tests.test.mjs",
 ]);
 const CHILD_ENVIRONMENT = buildQualityChildEnvironment();

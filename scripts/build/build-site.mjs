@@ -18,7 +18,7 @@ import {
 } from "node:fs";
 import {createRequire} from "node:module";
 import {tmpdir} from "node:os";
-import {basename, dirname, join, relative, resolve} from "node:path";
+import {basename, dirname, isAbsolute, join, relative, resolve} from "node:path";
 import {pathToFileURL} from "node:url";
 import {createHash, randomBytes} from "node:crypto";
 import {spawnSync} from "node:child_process";
@@ -36,8 +36,17 @@ const OWNER_PATTERN = /^[0-9a-f]{64}$/u;
 const TRANSACTION_ROOT_PREFIX = "axial-muse-build-transaction-";
 const TRANSACTION_OWNER_FILE = ".axial-muse-build-transaction-owner";
 const INPUT_SEAL_FILE = ".axial-muse-content-input-seal";
+const GENERATED_FILES_DIRECTORY = "generated";
 const BUILD_LOCK_FILE = ".axial-muse-build.lock";
 const RETIRED_BUILD_NAME = ".axial-muse-build-retired";
+const PREVIEW_SHA_PATTERN = /^[0-9a-f]{40}$/u;
+const PREVIEW_PID_PATTERN = /^[1-9][0-9]*$/u;
+const PREVIEW_STATE_ENV = "PREVIEW_STATE_DIR";
+const PREVIEW_CANDIDATE_ENV = "AXIAL_MUSE_PREVIEW_CANDIDATE";
+const PREVIEW_SHA_ENV = "AXIAL_MUSE_PREVIEW_COMMIT_SHA";
+const PREVIEW_CONTROLLER_PID_ENV = "AXIAL_MUSE_PREVIEW_CONTROLLER_PID";
+const PREVIEW_ACCESS_HOST_ENV = "AXIAL_MUSE_PREVIEW_ACCESS_HOST";
+const PREVIEW_ACCESS_PORT_ENV = "AXIAL_MUSE_PREVIEW_ACCESS_PORT";
 const transactionStates = new WeakMap();
 
 export class BuildSiteError extends Error {
@@ -74,13 +83,7 @@ export function parseBuildArguments(arguments_) {
 }
 
 export function assertBuildModeAvailable(mode) {
-  if (mode === "preview") {
-    fail(
-      "BUILD_MODE_UNAVAILABLE",
-      "preview 的 Docusaurus --dev、noindex 与候选激活仍由 #8 接管。",
-    );
-  }
-  if (mode !== "production") {
+  if (mode !== "production" && mode !== "preview") {
     fail("BUILD_MODE", "未知构建模式。");
   }
 }
@@ -155,6 +158,107 @@ function assertAuthorTransactionClear(root) {
       {cause},
     );
   }
+}
+
+function isPathWithin(root, path) {
+  const relation = relative(root, path);
+  return relation === ""
+    || (!relation.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)
+      && relation !== ".."
+      && !isAbsolute(relation));
+}
+
+function privateDirectoryEvidence(path, code, message) {
+  try {
+    const metadata = lstatSync(path);
+    if (
+      metadata.isSymbolicLink()
+      || !metadata.isDirectory()
+      || (metadata.mode & 0o777) !== 0o700
+      || (typeof process.getuid === "function" && metadata.uid !== process.getuid())
+      || realpathSync(path) !== path
+    ) throw new TypeError("private directory identity mismatch");
+    return metadata;
+  } catch (error) {
+    fail(code, message, {cause: error});
+  }
+}
+
+export function readPreviewBuildRequest({
+  root = ROOT,
+  environment = process.env,
+  systemTemporaryRoot = realpathSync(tmpdir()),
+} = {}) {
+  assertCanonicalRoot(root);
+  const stateInput = environment[PREVIEW_STATE_ENV];
+  const candidateInput = environment[PREVIEW_CANDIDATE_ENV];
+  const commitSha = environment[PREVIEW_SHA_ENV];
+  const controllerPid = environment[PREVIEW_CONTROLLER_PID_ENV];
+  const accessHost = environment[PREVIEW_ACCESS_HOST_ENV];
+  const accessPort = environment[PREVIEW_ACCESS_PORT_ENV];
+  if (
+    typeof stateInput !== "string"
+    || !isAbsolute(stateInput)
+    || resolve(stateInput) !== stateInput
+    || typeof candidateInput !== "string"
+    || !isAbsolute(candidateInput)
+    || !PREVIEW_SHA_PATTERN.test(commitSha ?? "")
+    || !PREVIEW_PID_PATTERN.test(controllerPid ?? "")
+    || typeof accessHost !== "string"
+    || !/^[A-Za-z0-9.-]+$/u.test(accessHost)
+    || typeof accessPort !== "string"
+    || !/^[1-9][0-9]{0,4}$/u.test(accessPort)
+    || Number(accessPort) > 65_535
+  ) {
+    fail("BUILD_PREVIEW_ENV", "preview 构建请求缺少封闭的候选、提交或访问身份。");
+  }
+  const rootMetadata = privateDirectoryEvidence(
+    stateInput,
+    "BUILD_PREVIEW_STATE_IDENTITY",
+    "preview 状态根不是当前用户私有的规范目录。",
+  );
+  const stateRoot = realpathSync(stateInput);
+  const temporaryRoot = realpathSync(systemTemporaryRoot);
+  if (
+    stateRoot !== stateInput
+    || isPathWithin(root, stateRoot)
+    || isPathWithin(stateRoot, root)
+    || isPathWithin(temporaryRoot, stateRoot)
+  ) {
+    fail("BUILD_PREVIEW_STATE_PATH", "preview 状态根不得位于仓库或系统临时目录内。");
+  }
+  const directories = ["candidates", "releases", "run", "logs"].map((name) => {
+    const path = resolve(stateRoot, name);
+    const metadata = privateDirectoryEvidence(
+      path,
+      "BUILD_PREVIEW_STATE_IDENTITY",
+      "preview 状态子目录不是当前用户私有的规范目录。",
+    );
+    if (metadata.dev !== rootMetadata.dev) {
+      fail("BUILD_PREVIEW_STATE_DEVICE", "preview 状态目录必须位于同一文件系统。");
+    }
+    return path;
+  });
+  const candidatesRoot = directories[0];
+  const expectedCandidate = resolve(
+    candidatesRoot,
+    `${commitSha}.${controllerPid}`,
+  );
+  if (candidateInput !== expectedCandidate || resolve(candidateInput) !== candidateInput) {
+    fail("BUILD_PREVIEW_CANDIDATE_PATH", "preview 候选路径不属于当前提交与控制进程。");
+  }
+  if (entryExists(candidateInput)) {
+    fail("BUILD_PREVIEW_CANDIDATE_EXISTS", "preview 候选必须从不存在的空路径开始构建。");
+  }
+  return Object.freeze({
+    accessHost,
+    accessPort,
+    candidatePath: candidateInput,
+    candidatesRoot,
+    commitSha,
+    controllerPid,
+    stateRoot,
+  });
 }
 
 export function candidateOutputPath(root, owner) {
@@ -258,6 +362,12 @@ function createTransactionRoot(mode, owner) {
       mode: 0o600,
     });
     chmodSync(markerPath, 0o600);
+    const generatedFilesDirectory = resolve(
+      transactionRoot,
+      GENERATED_FILES_DIRECTORY,
+    );
+    mkdirSync(generatedFilesDirectory, {mode: 0o700});
+    chmodSync(generatedFilesDirectory, 0o700);
     return transactionRoot;
   } catch (error) {
     if (transactionRoot !== undefined) {
@@ -283,6 +393,7 @@ function runDocusaurusPhase({
   arguments: arguments_,
   failureCode,
   failureMessage,
+  previewRequest,
 }) {
   let result;
   let phaseError;
@@ -295,10 +406,24 @@ function runDocusaurusPhase({
         DOCUSAURUS_NO_PERSISTENT_CACHE: "1",
         AXIAL_MUSE_BUILD_MODE: context.mode,
         AXIAL_MUSE_BUILD_ROOT: context.buildRoot,
+        AXIAL_MUSE_BUILD_GENERATED_FILES: resolve(
+          transactionRoot,
+          GENERATED_FILES_DIRECTORY,
+        ),
         AXIAL_MUSE_BUILD_OWNER: context.owner,
         AXIAL_MUSE_BUILD_PHASE: phase,
         AXIAL_MUSE_BUILD_OUTPUT: outputPath,
         AXIAL_MUSE_BUILD_TRANSACTION_ROOT: transactionRoot,
+        ...(previewRequest === undefined
+          ? {}
+          : {
+              PREVIEW_STATE_DIR: previewRequest.stateRoot,
+              AXIAL_MUSE_PREVIEW_CANDIDATE: previewRequest.candidatePath,
+              AXIAL_MUSE_PREVIEW_COMMIT_SHA: previewRequest.commitSha,
+              AXIAL_MUSE_PREVIEW_CONTROLLER_PID: previewRequest.controllerPid,
+              AXIAL_MUSE_PREVIEW_ACCESS_HOST: previewRequest.accessHost,
+              AXIAL_MUSE_PREVIEW_ACCESS_PORT: previewRequest.accessPort,
+            }),
       },
       stdio: "inherit",
     });
@@ -509,15 +634,24 @@ function validateTransactionRoot(state) {
       || !basename(transactionRoot).startsWith(TRANSACTION_ROOT_PREFIX)
     ) throw new TypeError("transaction root identity mismatch");
     const entries = readdirSync(transactionRoot).sort();
-    const allowedEntries = [TRANSACTION_OWNER_FILE];
+    const allowedEntries = [GENERATED_FILES_DIRECTORY, TRANSACTION_OWNER_FILE];
     if (entries.includes(INPUT_SEAL_FILE)) allowedEntries.push(INPUT_SEAL_FILE);
     if (entries.join("\n") !== allowedEntries.sort().join("\n")) {
       throw new TypeError("transaction root member mismatch");
     }
     const marker = readStablePrivateFile(resolve(transactionRoot, TRANSACTION_OWNER_FILE));
-    if (marker.bytes.toString("utf8") !== `production:${state.owner}\n`) {
+    if (marker.bytes.toString("utf8") !== `${state.mode}:${state.owner}\n`) {
       throw new TypeError("transaction owner marker mismatch");
     }
+    const generatedPath = resolve(transactionRoot, GENERATED_FILES_DIRECTORY);
+    const generatedMetadata = lstatSync(generatedPath);
+    if (
+      generatedMetadata.isSymbolicLink()
+      || !generatedMetadata.isDirectory()
+      || (generatedMetadata.mode & 0o777) !== 0o700
+      || (typeof process.getuid === "function" && generatedMetadata.uid !== process.getuid())
+      || realpathSync(generatedPath) !== generatedPath
+    ) throw new TypeError("transaction generated files identity mismatch");
     if (entries.includes(INPUT_SEAL_FILE)) {
       readStablePrivateFile(resolve(transactionRoot, INPUT_SEAL_FILE));
     }
@@ -549,6 +683,7 @@ export function beginBuildTransaction({root, owner, testHooks} = {}) {
   const state = {
     root,
     owner,
+    mode: "production",
     hooks,
     lock,
     status: "starting",
@@ -594,6 +729,59 @@ export function beginBuildTransaction({root, owner, testHooks} = {}) {
     }
     if (rollbackError !== undefined) {
       fail("BUILD_TRANSACTION_BEGIN_ROLLBACK", "事务开始失败且锁或私有根回收失败。", {
+        cause: rollbackError,
+      });
+    }
+    throw error;
+  }
+}
+
+function beginPreviewBuildTransaction({root, owner, request}) {
+  assertCanonicalRoot(root);
+  assertOwner(owner);
+  if (
+    request === null
+    || typeof request !== "object"
+    || request.candidatePath !== resolve(
+      request.candidatesRoot,
+      `${request.commitSha}.${request.controllerPid}`,
+    )
+    || entryExists(request.candidatePath)
+  ) {
+    fail("BUILD_PREVIEW_CANDIDATE_PATH", "preview 候选事务输入不合法。");
+  }
+  const lock = acquireBuildLock(root, owner);
+  const state = {
+    root,
+    owner,
+    mode: "preview",
+    hooks: Object.freeze({}),
+    lock,
+    status: "starting",
+    transactionRoot: undefined,
+    request,
+  };
+  try {
+    state.transactionRoot = createTransactionRoot("preview", owner);
+    state.status = "active";
+    const transaction = Object.freeze({
+      root,
+      owner,
+      candidatePath: request.candidatePath,
+      transactionRoot: state.transactionRoot,
+    });
+    transactionStates.set(transaction, state);
+    return transaction;
+  } catch (error) {
+    let rollbackError;
+    try {
+      cleanupTransactionRoot(state);
+      releaseBuildLock(state);
+    } catch (candidateRollbackError) {
+      rollbackError = candidateRollbackError;
+    }
+    if (rollbackError !== undefined) {
+      fail("BUILD_PREVIEW_BEGIN_ROLLBACK", "preview 事务开始失败且私有状态未完整回收。", {
         cause: rollbackError,
       });
     }
@@ -746,6 +934,25 @@ function assertBuildTreeEvidence(path, root, expectedName, expected, code) {
 
 export function captureCandidateBuildEvidence(transaction) {
   const state = assertActiveTransaction(transaction);
+  if (state.mode === "preview") {
+    try {
+      if (
+        dirname(transaction.candidatePath) !== state.request.candidatesRoot
+        || basename(transaction.candidatePath)
+          !== `${state.request.commitSha}.${state.request.controllerPid}`
+        || realpathSync(transaction.candidatePath) !== transaction.candidatePath
+      ) throw new TypeError("preview candidate identity mismatch");
+      return captureBuildTree(
+        transaction.candidatePath,
+        state.request.candidatesRoot,
+        `${state.request.commitSha}.${state.request.controllerPid}`,
+      );
+    } catch (error) {
+      fail("BUILD_PREVIEW_CANDIDATE", "preview 候选制品目录无法形成稳定证据。", {
+        cause: error,
+      });
+    }
+  }
   return captureManagedBuildTree(
     transaction.candidatePath,
     state.root,
@@ -753,6 +960,62 @@ export function captureCandidateBuildEvidence(transaction) {
     "BUILD_CANDIDATE",
     "候选制品目录无法形成稳定证据。",
   );
+}
+
+function removePreviewCandidate(state) {
+  const path = state.request.candidatePath;
+  if (!entryExists(path)) return;
+  if (
+    dirname(path) !== state.request.candidatesRoot
+    || basename(path) !== `${state.request.commitSha}.${state.request.controllerPid}`
+  ) {
+    fail("BUILD_PREVIEW_CLEANUP_TARGET", "preview 候选清理目标身份不合法。");
+  }
+  assertOwnedDirectory(
+    path,
+    "BUILD_PREVIEW_CLEANUP_TARGET",
+    "preview 候选清理目标不是自有普通目录。",
+  );
+  if (realpathSync(path) !== path) {
+    fail("BUILD_PREVIEW_CLEANUP_TARGET", "preview 候选清理目标不是规范真实目录。");
+  }
+  rmSync(path, {recursive: true, force: false});
+}
+
+function abortPreviewBuildTransaction(transaction) {
+  const state = assertActiveTransaction(transaction);
+  let operationError;
+  try {
+    removePreviewCandidate(state);
+  } catch (error) {
+    operationError = error;
+  }
+  try {
+    finalizeAbortedTransaction(state);
+  } catch (error) {
+    operationError = operationError === undefined
+      ? error
+      : new AggregateError([operationError, error]);
+  }
+  if (operationError !== undefined) {
+    fail("BUILD_PREVIEW_ABORT", "preview 失败候选或私有事务未能完整回收。", {
+      cause: operationError,
+    });
+  }
+}
+
+function completePreviewBuildTransaction(transaction, expectedEvidence) {
+  const state = assertActiveTransaction(transaction);
+  if (state.mode !== "preview") {
+    fail("BUILD_PREVIEW_TRANSACTION", "production 事务不能作为 preview 候选完成。");
+  }
+  const current = captureCandidateBuildEvidence(transaction);
+  if (!sameBuildTreeEvidence(current, expectedEvidence)) {
+    fail("BUILD_PREVIEW_CANDIDATE_CHANGED", "preview 候选在独立验收后发生漂移。");
+  }
+  cleanupTransactionRoot(state);
+  releaseBuildLock(state);
+  state.status = "committed";
 }
 
 function quarantineCandidatePath(state, path) {
@@ -782,6 +1045,9 @@ function finalizeAbortedTransaction(state) {
 
 export function abortBuildTransaction(transaction) {
   const state = assertActiveTransaction(transaction);
+  if (state.mode !== "production") {
+    fail("BUILD_TRANSACTION_MODE", "preview 事务必须使用独立候选回收路径。");
+  }
   const backupPath = backupOutputPath(state.root, state.owner);
   if (entryExists(backupPath)) {
     fail("BUILD_ABORT_STATE", "发布前事务出现不应存在的 backup，拒绝猜测恢复。");
@@ -845,6 +1111,9 @@ export function publishCandidateBuild({
   verifyActivatedBuild,
 }) {
   const state = assertActiveTransaction(transaction);
+  if (state.mode !== "production") {
+    fail("BUILD_TRANSACTION_MODE", "preview 事务不得发布到仓库 build/。");
+  }
   if (typeof verifyActivatedBuild !== "function") {
     fail("BUILD_POST_SWITCH_CHECK", "发布事务缺少 post-switch fresh checker。");
   }
@@ -1044,11 +1313,71 @@ export function runProductionBuild({root = ROOT, testHooks} = {}) {
   }
 }
 
+export function runPreviewBuild({
+  root = ROOT,
+  environment = process.env,
+} = {}) {
+  assertCanonicalRoot(root);
+  assertAuthorTransactionClear(root);
+  const role = assertSupportedNodeVersion({root});
+  if (role !== "primary") {
+    fail("BUILD_PREVIEW_RUNTIME_NODE", "preview 只接受与 checkout .nvmrc 精确一致的主 Node 端点。");
+  }
+  const request = readPreviewBuildRequest({root, environment});
+  const cliPath = resolveDocusaurusCli(root);
+  const owner = randomBytes(32).toString("hex");
+  let transaction;
+  try {
+    transaction = beginPreviewBuildTransaction({root, owner, request});
+    runDocusaurusPhase({
+      root,
+      cliPath,
+      context: createBuildContext("preview", owner),
+      transactionRoot: transaction.transactionRoot,
+      outputPath: transaction.candidatePath,
+      phase: "build",
+      arguments: ["build", "--dev", "--out-dir", transaction.candidatePath],
+      failureCode: "BUILD_PREVIEW_DOCUSAURUS",
+      failureMessage: "Docusaurus preview candidate build 失败。",
+      previewRequest: request,
+    });
+    const evidence = captureCandidateBuildEvidence(transaction);
+    runDocusaurusPhase({
+      root,
+      cliPath,
+      context: createBuildContext("preview", owner),
+      transactionRoot: transaction.transactionRoot,
+      outputPath: transaction.candidatePath,
+      phase: "check",
+      arguments: ["axial-muse:check-preview"],
+      failureCode: "BUILD_PREVIEW_ARTIFACT_CHECK",
+      failureMessage: "preview candidate 独立制品验收失败。",
+      previewRequest: request,
+    });
+    completePreviewBuildTransaction(transaction, evidence);
+  } catch (error) {
+    if (
+      transaction !== undefined
+      && transactionStates.get(transaction)?.status === "active"
+    ) {
+      try {
+        abortPreviewBuildTransaction(transaction);
+      } catch (abortError) {
+        fail("BUILD_PREVIEW_ABORT", "preview 构建失败且候选/私有状态未完整回收。", {
+          cause: abortError,
+        });
+      }
+    }
+    throw error;
+  }
+}
+
 function runCli() {
   try {
     const {mode} = parseBuildArguments(process.argv.slice(2));
     assertBuildModeAvailable(mode);
-    runProductionBuild();
+    if (mode === "production") runProductionBuild();
+    else runPreviewBuild();
   } catch (error) {
     console.error(formatBuildSiteError(error));
     process.exitCode = 1;

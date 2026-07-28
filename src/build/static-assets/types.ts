@@ -52,5 +52,6 @@ export interface StaticAssetPlan {
   materialize(buildContext: BuildContext): StaticAssetManifest;
   publish(buildContext: BuildContext, buildDirectory: string): void;
   assertProductionBuild(buildDirectory: string): void;
+  assertPreviewBuild(buildDirectory: string): void;
   dispose(): void;
 }

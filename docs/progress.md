@@ -4,6 +4,14 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-28 — #8 可验收草稿预览仓库实现（进行中）
+
+- **范围**：按 E-009/CODE-017 推进 [Issue #8](https://github.com/lyty1997/AxialMuseWebsite/issues/8)，只实现远端精确 checkout 后的 Docusaurus preview 候选、制品验收、原子激活、Python 服务所有权和状态报告；不安装或更新项目依赖，不修改 workflow、生产发布、DNS、云资源或用户数据处理。用户随后授权临时安装固定作者 Node，并把通过门禁的实现提交、推送到 `dev` 触发 CI；未授权 PR、Issue 写回或基础设施操作。
+- **仓库实现**：`build-site.mjs --mode preview` 现从 worktree 外 `candidates/<sha>.<pid>` 空路径执行 `build --dev`，以独立命令重载内容并检查全 HTML 唯一 `noindex, nofollow`、无 sitemap、draft/public 路由与侧栏、生产 canonical、局域网 host/IP/port 不落盘、私有日期索引不进入 Web Root、preview 静态素材白名单和整树不漂移。Docusaurus preview 配置启用全站 `noIndex`、关闭 sitemap，并把 generated files 隔离到 owner-bound 临时事务；production 配置与既有封装边界保持独立。
+- **运行控制**：`preview.sh` 已迁移到 `PREVIEW_STATE_DIR`，支持 `start`（兼容 `serve`）、`restart`、`stop`、`status`；精确 fetch `origin/<branch>` 后 detached checkout 并拒绝脏 worktree，使用非阻塞锁，先验证主 Node 以及绑定 manifest/lock/Node/npm 和完整 `node_modules` 字节树的预备证据，再构建候选、改为只读 release、原子替换 `current`。切换前失败保留旧 current/PID，切后 localhost 冒烟失败恢复旧 current，本次新启动的服务在失败时停止；已有非活动同 SHA release 不绕过本次候选验收。状态分别报告请求分支、worktree HEAD、活动制品 SHA、模式、PID/URL 和最近失败。
+- **自动化覆盖**：新增 preview 参数/状态根、冻结依赖证据、Bash 语法、noindex 精确性、preset `versions.current.noIndex`、preview 素材字节漂移测试；真实 Docusaurus fixture 新增 draft，并在同一源码上先证明 production 排除 draft/sitemap，再构建 preview、断言草稿路由与全 HTML noindex，随后复用零新增依赖的 Chromium 回归覆盖 `360/768/1024/1440` 等视口。新 `.mjs` 与测试已接入 JavaScript 明列检查和聚合质量入口。
+- **当前验证与遗留**：`git diff --check` 与 WSL `bash -n scripts/dev/preview.sh` 已通过；Windows 工作区的 WSL Ubuntu 已按 D-080 临时安装官方 nvm `0.40.6` 和精确 Node `24.18.0`，未创建默认 alias，完整 pre-commit 质量门及其隔离 npm `run-script` profile 均 exit 0。期间修正了模块边界门禁对旧 production-only `noIndex` 形态的假定，并把冻结安装树测试改为不依赖仓库根 `node_modules` 的自包含逐字节 fixture。严格 TypeScript、完整 E-012 测试、真实 Docusaurus preview、Chromium，以及托管机实际 gitignored `PREVIEW_STATE_DIR` 迁移、冻结依赖准备和正常/失败/并发/PID/端口/回滚现场验收仍待完成，因此不能标记 #8 完成；提交、推送与精确 CI 状态以本轮后续实际结果为准，Issue 写回仍需另行授权。
+
 ## 2026-07-28 — #25 显式文章日期命令（本地实现与 fresh checkout 验收完成）
 
 - **接口与状态机**：已依 D-106/CODE-014 实现 `node scripts/author/set-article-dates.mjs --source-name <name> --action publish|revise`，不增加 npm alias。publish 只接受作者已手工切到 published 且两个日期完全缺失的窄过渡态，以一次 `Asia/Shanghai` 时钟写入相同日期；revise 永不改 `publishedAt`，同日完整校验后保持字节与 mode 不变，跨日只改 `updatedAt`。draft、archived、部分日期、时钟回退、非规范定点布局与自动化环境全部失败关闭。

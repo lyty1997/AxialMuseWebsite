@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   chmodSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   renameSync,
@@ -35,6 +36,7 @@ function createFixture(): Readonly<{
   const transactionRoot = mkdtempSync(join(tmpdir(), "axial-muse-build-transaction-"));
   chmodSync(repositoryRoot, 0o700);
   chmodSync(transactionRoot, 0o700);
+  mkdirSync(resolve(transactionRoot, "generated"), {mode: 0o700});
   writeFileSync(resolve(repositoryRoot, ".axial-muse-build.lock"), `${OWNER}\n`, {
     encoding: "utf8",
     mode: 0o600,

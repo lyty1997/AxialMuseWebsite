@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  chmodSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
@@ -21,6 +22,8 @@ import {
   parseBuildArguments,
   publishCandidateBuild,
   runProductionBuild,
+  readPreviewBuildRequest,
+  runPreviewBuild,
 } from "../../scripts/build/build-site.mjs";
 
 const PROJECT_ROOT = resolve(import.meta.dirname, "../..");
@@ -35,16 +38,77 @@ function writeFixture(root, relativePath, contents = "") {
   writeFileSync(path, contents, "utf8");
 }
 
-test("I-12 构建参数封闭解析 production/preview 且 preview 执行仍由 #8 失败关闭", () => {
+test("I-12/E-009 构建参数封闭解析 production/preview 且两种模式均可执行", () => {
   assert.deepEqual(parseBuildArguments(["--mode", "production"]), {mode: "production"});
   assert.deepEqual(parseBuildArguments(["--mode", "preview"]), {mode: "preview"});
   assert.doesNotThrow(() => assertBuildModeAvailable("production"));
-  assert.throws(() => assertBuildModeAvailable("preview"), hasBuildCode("BUILD_MODE_UNAVAILABLE"));
+  assert.doesNotThrow(() => assertBuildModeAvailable("preview"));
   assert.throws(() => parseBuildArguments([]), hasBuildCode("BUILD_ARGUMENTS"));
   assert.throws(
     () => parseBuildArguments(["--mode", "other"]),
     hasBuildCode("BUILD_MODE"),
   );
+});
+
+test("E-009 preview 请求绑定仓库外私有状态根与 sha.pid 候选", {
+  skip: process.platform !== "linux",
+}, () => {
+  const outer = mkdtempSync(join(tmpdir(), "axial-muse-preview-request-"));
+  const root = resolve(outer, "repository");
+  const systemTemporaryRoot = resolve(outer, "system-temporary");
+  const stateRoot = resolve(outer, "state");
+  const commitSha = "9".repeat(40);
+  const controllerPid = "4321";
+  try {
+    for (const path of [root, systemTemporaryRoot, stateRoot]) {
+      mkdirSync(path, {mode: 0o700});
+      chmodSync(path, 0o700);
+    }
+    for (const name of ["candidates", "releases", "run", "logs"]) {
+      const path = resolve(stateRoot, name);
+      mkdirSync(path, {mode: 0o700});
+      chmodSync(path, 0o700);
+    }
+    const candidatePath = resolve(
+      stateRoot,
+      "candidates",
+      `${commitSha}.${controllerPid}`,
+    );
+    const environment = {
+      PREVIEW_STATE_DIR: stateRoot,
+      AXIAL_MUSE_PREVIEW_CANDIDATE: candidatePath,
+      AXIAL_MUSE_PREVIEW_COMMIT_SHA: commitSha,
+      AXIAL_MUSE_PREVIEW_CONTROLLER_PID: controllerPid,
+      AXIAL_MUSE_PREVIEW_ACCESS_HOST: "192.168.0.162",
+      AXIAL_MUSE_PREVIEW_ACCESS_PORT: "8088",
+    };
+    assert.deepEqual(readPreviewBuildRequest({
+      root,
+      environment,
+      systemTemporaryRoot,
+    }), {
+      accessHost: "192.168.0.162",
+      accessPort: "8088",
+      candidatePath,
+      candidatesRoot: resolve(stateRoot, "candidates"),
+      commitSha,
+      controllerPid,
+      stateRoot,
+    });
+    assert.throws(
+      () => readPreviewBuildRequest({
+        root,
+        environment: {
+          ...environment,
+          AXIAL_MUSE_PREVIEW_CANDIDATE: resolve(stateRoot, "candidates", commitSha),
+        },
+        systemTemporaryRoot,
+      }),
+      hasBuildCode("BUILD_PREVIEW_CANDIDATE_PATH"),
+    );
+  } finally {
+    rmSync(outer, {recursive: true, force: true});
+  }
 });
 
 test("D-067 构建入口只接受主 Node 与 engines 下界", () => {
@@ -62,13 +126,17 @@ test("D-067 构建入口只接受主 Node 与 engines 下界", () => {
   );
 });
 
-test("CODE-014 production build 在读取内容前拒绝作者 lock", () => {
+test("CODE-014 production/preview build 在读取内容前拒绝作者 lock", () => {
   const root = mkdtempSync(join(tmpdir(), "axial-muse-build-author-lock-"));
   try {
     mkdirSync(resolve(root, "site-content/writing"), {recursive: true});
     writeFixture(root, ".axial-muse-author.lock", "fixture\n");
     assert.throws(
       () => runProductionBuild({root}),
+      hasBuildCode("BUILD_AUTHOR_TRANSACTION"),
+    );
+    assert.throws(
+      () => runPreviewBuild({root}),
       hasBuildCode("BUILD_AUTHOR_TRANSACTION"),
     );
   } finally {

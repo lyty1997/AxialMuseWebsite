@@ -160,6 +160,7 @@ const BUILD_INTERNAL_TEST_IMPORTS = Object.freeze({
   "tests/build/content-projection.test.ts": Object.freeze(new Set([
     "src/build/content/content-data-plugin.ts",
     "src/build/content/loader.ts",
+    "src/build/content/preview-artifact-check.ts",
     "src/build/content/project-preview-projection.ts",
   ])),
   "tests/build/docusaurus-docs-adapter.test.ts": Object.freeze(new Set([
@@ -255,15 +256,29 @@ function hasExactJsonValue(actual, expected) {
 function validateRootContracts(root, issues) {
   try {
     const configSource = readFileSync(resolve(root, "docusaurus.config.ts"), "utf8");
-    const explicitProductionIndexing = configSource.match(
-      /(?:^|\n)  noIndex: false,(?:\n|$)/gu,
+    const previewModeBindings = configSource.match(
+      /(?:^|\n)const isPreview = buildContext\.mode === "preview";(?:\n|$)/gu,
     ) ?? [];
-    if (explicitProductionIndexing.length !== 1 || /\bnoIndex\s*:\s*true\b/u.test(configSource)) {
+    const rootIndexingBindings = configSource.match(
+      /(?:^|\n)  noIndex: isPreview,(?:\n|$)/gu,
+    ) ?? [];
+    const sitemapBindings = configSource.match(
+      /(?:^|\n)        sitemap: isPreview \? false : \{\},(?:\n|$)/gu,
+    ) ?? [];
+    const allRootIndexingDeclarations = configSource.match(/\bnoIndex\s*:/gu) ?? [];
+    const allSitemapDeclarations = configSource.match(/\bsitemap\s*:/gu) ?? [];
+    if (
+      previewModeBindings.length !== 1
+      || rootIndexingBindings.length !== 1
+      || sitemapBindings.length !== 1
+      || allRootIndexingDeclarations.length !== 1
+      || allSitemapDeclarations.length !== 1
+    ) {
       addIssue(
         issues,
         "MODULE_BOUNDARY_INDEXING_CONTRACT",
         "docusaurus.config.ts",
-        "根配置必须唯一且显式声明 production noIndex: false。",
+        "根配置必须由唯一 preview 判据同时绑定 production 可索引、preview noindex 与禁 sitemap。",
       );
     }
   } catch {
