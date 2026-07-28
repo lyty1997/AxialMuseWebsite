@@ -16,6 +16,7 @@ export const QUALITY_COMMANDS = Object.freeze([
   ["scripts/quality/check-contracts.mjs"],
   ["scripts/quality/check-secrets.mjs"],
   ["scripts/quality/check-static-site.mjs"],
+  ["scripts/quality/check-runtime-redirects.mjs"],
   ["scripts/quality/check-supply-chain.mjs"],
   ["--test", "tests/build/run-isolated-npm.test.mjs"],
   ["--test", "tests/build/ci-workflow.test.mjs"],
@@ -35,6 +36,7 @@ export const QUALITY_COMMANDS = Object.freeze([
   ["--test", "tests/build/run-tests.test.mjs"],
   ["--test", "tests/build/module-boundaries.test.mjs"],
   ["--test", "tests/build/content-decoders.test.mjs"],
+  ["--test", "tests/build/runtime-redirects.test.mjs"],
   ["--test", "tests/build/build-site.test.mjs"],
   ["--test", "tests/build/author-transaction.test.mjs"],
 ].map((command) => Object.freeze(command)));

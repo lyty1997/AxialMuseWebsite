@@ -1170,3 +1170,60 @@ test("I-06 仅允许固定 fixture 以 import type 消费解码器声明", () =>
     assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_UNRESOLVED_IMPORT"));
   });
 });
+
+test("CODE-019 仅允许固定 build adapter 运行时导入相邻重定向实现与声明", () => {
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "scripts/release/lib/runtime-redirects.mjs",
+      "export const fixture = true;\n",
+    );
+    writeFixture(
+      root,
+      "scripts/release/lib/runtime-redirects.d.mts",
+      "export declare const fixture: boolean;\n",
+    );
+    writeFixture(
+      root,
+      "src/build/content/runtime-redirects.ts",
+      "import {fixture} from \"../../../scripts/release/lib/runtime-redirects.mjs\";\nexport const value = fixture;\n",
+    );
+    const issues = checkModuleBoundaries({root}).issues.filter(
+      (issue) => issue.sourcePath === "src/build/content/runtime-redirects.ts",
+    );
+    assert.deepEqual(issues, []);
+  });
+
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "scripts/release/lib/runtime-redirects.mjs",
+      "export const fixture = true;\n",
+    );
+    writeFixture(
+      root,
+      "scripts/release/lib/runtime-redirects.d.mts",
+      "export declare const fixture: boolean;\n",
+    );
+    writeFixture(
+      root,
+      "src/build/content/runtime-redirects-copy.ts",
+      "import {fixture} from \"../../../scripts/release/lib/runtime-redirects.mjs\";\nexport const value = fixture;\n",
+    );
+    assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_NODE_SPECIFIER"));
+  });
+
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "scripts/release/lib/runtime-redirects.mjs",
+      "export const fixture = true;\n",
+    );
+    writeFixture(
+      root,
+      "src/build/content/runtime-redirects.ts",
+      "import {fixture} from \"../../../scripts/release/lib/runtime-redirects.mjs\";\nexport const value = fixture;\n",
+    );
+    assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_UNRESOLVED_IMPORT"));
+  });
+});
