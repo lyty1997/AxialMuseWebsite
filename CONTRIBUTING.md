@@ -4,7 +4,7 @@
 
 ## 开始之前
 
-1. 在获准运行本站 Node.js 的 Linux 工作区，先按 D-080 一次性安装固定的用户级 nvm 与 `.nvmrc` 精确 Node，再执行一次 `git config core.hooksPath .githooks` 启用本地提交门禁；hook 会在自己的子进程内自动选择该版本并通过 E-010 隔离入口运行统一质量负载，不改变系统或父 shell 的默认 Node。缺少精确运行时时门禁失败且不联网安装。Ubuntu CI 在合入与发布前执行统一验证。
+1. 在获准运行本站 Node.js 的 Linux 工作区，先按 D-080 一次性安装固定的用户级 nvm 与 `.nvmrc` 精确 Node，再执行一次 `git config core.hooksPath .githooks` 启用本地提交门禁；hook 会在自己的子进程内自动选择该版本并通过 E-010 隔离入口运行不要求 `node_modules/` 的统一质量负载，不改变系统或父 shell 的默认 Node，也不联网安装依赖。缺少精确运行时时门禁失败。Ubuntu CI 在冻结安装后另行执行 E-013 历史门禁、类型检查、测试和构建。
 2. 动手前先读 [docs/README.md](docs/README.md) 确认设计真相源，再读本次任务相关的 [codex-rules/](codex-rules/global-AGENTS.md) 规则。
 3. 编码任务再读 [主站编码规范 Spec](docs/engineering/main-site-coding-spec.md)，按规则编号说明实现依据；该 Spec 不替代上层设计或用户决策门禁。
 
@@ -21,10 +21,10 @@
 
 ## 提交前自检
 
-- 在获准的 Linux 执行环境运行 `bash .githooks/pre-commit`，确认自动选择 `.nvmrc` 精确版本并通过完整质量负载；Ubuntu CI 在合入与发布前执行同一质量负载。
+- 在获准的 Linux 执行环境运行 `bash .githooks/pre-commit`，确认自动选择 `.nvmrc` 精确版本并通过零第三方依赖 `quality`；需要本地复核 E-013 时，先按 E-010 完成冻结安装，再运行 `node scripts/quality/run-content-history.mjs`。Ubuntu CI 在合入与发布前执行两者以及独立类型检查、测试和构建。
 - UI 改动做实际渲染或截图验证；纯静态页面至少检查入口文件、资源引用和关键链接。
 - 结束时更新 [docs/progress.md](docs/progress.md)；解决 bug 后把原因与方案追加到 [codex-rules/known-issues.md](codex-rules/known-issues.md)。
 
 ## 尚未落地的基建
 
-D-073 的 Node/npm 双端点版本契约、E-010 隔离入口、E-011 确定性 SPDX 与 #21 首次真实依赖图准入均已实现并完成本地验收。当前唯一 lock 包含 1,345 个非根物理记录、对应 1,225 个 canonical identity；D-082 的 35/11/12 补充法律证据边界、1,225 项 admissions、正式 SBOM/evidence/NOTICE、实际 audit 全零结果，以及 Node `24.18.0`/npm `11.16.0` 与 Node `24.16.0`/npm `11.13.0` 双端点冻结安装均已闭合。仓库根仍无 `node_modules/`；尚未落地的是目标 CI 拓扑、Docusaurus/TypeScript 基线及后续站点能力。新增或升级依赖仍必须先按 [待决策问题](docs/architecture/open-decisions.md) 和 [主站目标架构](docs/architecture/main-site-target-architecture.md) 重新取得准入结论；测试及其他质量工具按对应设计门禁实施。
+D-073 的 Node/npm 双端点版本契约、E-010 隔离入口、E-011 确定性 SPDX 与 #21 首次真实依赖图准入均已实现并完成本地验收。当前唯一 lock 包含 1,345 个非根物理记录、对应 1,225 个 canonical identity；D-082 的 35/11/12 补充法律证据边界、1,225 项 admissions、正式 SBOM/evidence/NOTICE、首次准入当时的 audit 全零结果，以及 Node `24.18.0`/npm `11.16.0` 与 Node `24.16.0`/npm `11.13.0` 双端点冻结安装均已闭合。2026-07-26 最新 live audit 观测到的 18 个 high 依赖节点仍是未修复风险；D-099 只将 live audit 移出普通 CI，不改变显式依赖准入/重准入阈值。Docusaurus/TypeScript 基线与 D-097 至 D-099 的 Node 24 CI 第一阶段已在当前工作区实现并通过 fresh 本地验收，尚无提交后的远端运行结论；仓库根仍无 `node_modules/`。新增或升级依赖仍必须先按 [待决策问题](docs/architecture/open-decisions.md) 和 [主站目标架构](docs/architecture/main-site-target-architecture.md) 重新取得准入结论；production artifact、release、部署及其他站点能力继续按对应设计门禁实施。

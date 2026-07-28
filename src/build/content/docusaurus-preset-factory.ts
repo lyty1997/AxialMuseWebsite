@@ -558,10 +558,19 @@ function assertSingleContentAssembly(
   const plugins = snapshotDenseArray(siteConfig.plugins?.value, "siteConfig.plugins");
   const themes = snapshotDenseArray(siteConfig.themes?.value, "siteConfig.themes");
   const presets = snapshotDenseArray(siteConfig.presets?.value, "siteConfig.presets");
-  if (plugins.length !== 0 || themes.length !== 0 || presets.length !== 1) {
+  const staticDirectories = snapshotDenseArray(
+    siteConfig.staticDirectories?.value,
+    "siteConfig.staticDirectories",
+  );
+  if (
+    plugins.length !== 0
+    || themes.length !== 0
+    || presets.length !== 1
+    || staticDirectories.length !== 0
+  ) {
     return fail(
       "DOCS_PRESET_SITE_CONFIG",
-      "根配置只能通过唯一 local preset 装配 plugins/themes/docs。",
+      "根配置只能通过唯一 local preset 装配内容且 staticDirectories 必须为空。",
     );
   }
   const preset = snapshotDenseArray(presets[0], "siteConfig.presets[0]");

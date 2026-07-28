@@ -197,6 +197,7 @@ function runPreset(
       plugins: [],
       themes: [],
       presets: [[LOCAL_PRESET_PATH, options]],
+      staticDirectories: [],
       ...siteConfigOverrides,
     },
   } as never, options);
@@ -910,6 +911,9 @@ test("E-016 根配置拒绝额外 official docs plugin 或第二 docs preset", a
         [LOCAL_PRESET_PATH, {}],
         ["@docusaurus/preset-classic", {docs: {path: "other-content"}}],
       ],
+    }],
+    ["可序列化静态目录路径", {
+      staticDirectories: ["/tmp/axial-muse-build-fixture/static"],
     }],
   ] as const) {
     await assert.rejects(

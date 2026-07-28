@@ -24,6 +24,10 @@ import {
 } from "../../scripts/quality/check-npm-isolation.mjs";
 import { projectRoot } from "../../scripts/quality/lib/files.mjs";
 import { buildQualityChildEnvironment } from "../../scripts/quality/lib/process-environment.mjs";
+import {
+  CONTENT_HISTORY_COMMANDS,
+  runContentHistoryGate,
+} from "../../scripts/quality/run-content-history.mjs";
 import { writeIsolatedNpmResult } from "../../scripts/quality/run-isolated-npm.mjs";
 import { QUALITY_COMMANDS } from "../../scripts/quality/run-quality.mjs";
 import {
@@ -627,17 +631,20 @@ test("E-010 npm isolation contract", async (t) => {
     assert.ok(!`${result.stdout}${result.stderr}`.includes(syntheticSecret));
   });
 
-  await t.test("keeps the npm isolation checker and tests in every quality entry", () => {
+  await t.test("keeps zero-dependency checks in quality and history in its installed gate", () => {
     assert.deepEqual(QUALITY_COMMANDS, [
+      ["scripts/quality/check-author-transaction.mjs"],
       ["scripts/quality/check-javascript.mjs"],
       ["scripts/quality/check-module-boundaries.mjs"],
       ["scripts/quality/check-npm-isolation.mjs"],
+      ["scripts/quality/check-ci-workflow.mjs"],
       ["scripts/quality/check-markdown.mjs"],
       ["scripts/quality/check-contracts.mjs"],
       ["scripts/quality/check-secrets.mjs"],
       ["scripts/quality/check-static-site.mjs"],
       ["scripts/quality/check-supply-chain.mjs"],
       ["--test", "tests/build/run-isolated-npm.test.mjs"],
+      ["--test", "tests/build/ci-workflow.test.mjs"],
       ["--test", "tests/build/deterministic-spdx.test.mjs"],
       ["--test", "tests/build/supply-chain-audit-report.test.mjs"],
       ["--test", "tests/build/supply-chain-audit.test.mjs"],
@@ -655,6 +662,12 @@ test("E-010 npm isolation contract", async (t) => {
       ["--test", "tests/build/module-boundaries.test.mjs"],
       ["--test", "tests/build/content-decoders.test.mjs"],
       ["--test", "tests/build/build-site.test.mjs"],
+      ["--test", "tests/build/author-transaction.test.mjs"],
+    ]);
+    assert.deepEqual(CONTENT_HISTORY_COMMANDS, [
+      ["scripts/quality/check-content-history.mjs"],
+      ["--test", "tests/build/content-history.test.mjs"],
+      ["--test", "tests/build/content-frontmatter-integration.test.mjs"],
     ]);
 
     const valid = createFixture();
@@ -663,6 +676,47 @@ test("E-010 npm isolation contract", async (t) => {
       assert.equal(checkNpmIsolation(valid.root), undefined);
     } finally {
       destroyFixture(valid);
+    }
+
+    for (const mutation of [
+      {
+        path: ".github/workflows/ci.yml",
+        text: "jobs:\n  website-quality:\n    steps:\n      - run: node scripts/quality/run-quality.mjs\n      - run: node scripts/author/create-article.mjs\n",
+      },
+      {
+        path: ".githooks/pre-commit",
+        text: "#!/bin/sh\nnode scripts/quality/run-quality.mjs\nnode scripts/author/run-create-article-tests.mjs\n",
+      },
+      {
+        path: "scripts/quality/run-quality.mjs",
+        text: "const forbidden = \"scripts/author/create-article.mjs\";\n",
+      },
+      {
+        path: "scripts/quality/run-isolated-npm.mjs",
+        text: "const forbidden = \"scripts/author/run-create-article-tests.mjs\";\n",
+      },
+      {
+        path: "scripts/quality/run-tests.mjs",
+        text: "const forbidden = \"tests/build/create-article.test.mjs\";\n",
+      },
+      {
+        path: "scripts/quality/run-content-history.mjs",
+        text: "const forbidden = \"tests/build/create-article.integration.test.mjs\";\n",
+      },
+    ]) {
+      const implicitAuthor = createFixture();
+      try {
+        writeControlledQualityPaths(implicitAuthor);
+        const target = join(implicitAuthor.root, mutation.path);
+        mkdirSync(dirname(target), {recursive: true});
+        writeFileSync(target, mutation.text, "utf8");
+        assert.throws(
+          () => checkNpmIsolation(implicitAuthor.root),
+          /作者创建 CLI 与其真实验收只能由主 Node 本地显式入口调用/u,
+        );
+      } finally {
+        destroyFixture(implicitAuthor);
+      }
     }
 
     const missingRuntimeSource = createFixture();
@@ -755,6 +809,64 @@ test("E-010 npm isolation contract", async (t) => {
       } finally {
         destroyFixture(nonExecuting);
       }
+    }
+  });
+
+  await t.test("fails the installed history gate closed and stops at the first failed command", (t) => {
+    t.mock.method(console, "error", () => {});
+    t.mock.method(console, "log", () => {});
+    const successfulResult = Object.freeze({
+      error: undefined,
+      signal: null,
+      status: 0,
+    });
+    const failures = [
+      {
+        failedAt: 0,
+        result: { error: new Error("fixture spawn failure"), signal: null, status: null },
+      },
+      {
+        failedAt: 0,
+        result: { error: undefined, signal: "SIGTERM", status: null },
+      },
+      {
+        failedAt: 1,
+        result: { error: undefined, signal: null, status: 7 },
+      },
+      {
+        failedAt: 2,
+        result: { error: undefined, signal: null, status: 7 },
+      },
+    ];
+
+    for (const { failedAt, result } of failures) {
+      let callCount = 0;
+      const status = runContentHistoryGate(() => {
+        const current = callCount;
+        callCount += 1;
+        return current === failedAt ? result : successfulResult;
+      });
+      assert.equal(status, 1);
+      assert.equal(callCount, failedAt + 1);
+    }
+
+    const calls = [];
+    assert.equal(runContentHistoryGate((executable, arguments_, options) => {
+      calls.push({ arguments_, executable, options });
+      return successfulResult;
+    }), 0);
+    assert.equal(calls.length, CONTENT_HISTORY_COMMANDS.length);
+    for (const [index, call] of calls.entries()) {
+      assert.equal(call.executable, process.execPath);
+      assert.equal(call.options.cwd, REPOSITORY_ROOT);
+      assert.equal(call.options.stdio, "inherit");
+      assert.deepEqual(call.arguments_, CONTENT_HISTORY_COMMANDS[index].map(
+        (argument) => (
+          argument.startsWith("-")
+            ? argument
+            : resolve(REPOSITORY_ROOT, argument)
+        ),
+      ));
     }
   });
 

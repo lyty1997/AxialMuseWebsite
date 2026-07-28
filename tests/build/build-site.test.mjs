@@ -20,6 +20,7 @@ import {
   captureCandidateBuildEvidence,
   parseBuildArguments,
   publishCandidateBuild,
+  runProductionBuild,
 } from "../../scripts/build/build-site.mjs";
 
 const PROJECT_ROOT = resolve(import.meta.dirname, "../..");
@@ -59,6 +60,58 @@ test("D-067 构建入口只接受主 Node 与 engines 下界", () => {
     () => assertSupportedNodeVersion({root: PROJECT_ROOT, nodeVersion: "22.22.0"}),
     hasBuildCode("BUILD_RUNTIME_NODE"),
   );
+});
+
+test("CODE-014 production build 在读取内容前拒绝作者 lock", () => {
+  const root = mkdtempSync(join(tmpdir(), "axial-muse-build-author-lock-"));
+  try {
+    mkdirSync(resolve(root, "site-content/writing"), {recursive: true});
+    writeFixture(root, ".axial-muse-author.lock", "fixture\n");
+    assert.throws(
+      () => runProductionBuild({root}),
+      hasBuildCode("BUILD_AUTHOR_TRANSACTION"),
+    );
+  } finally {
+    rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("CODE-014 production build 持有 build lock 后二次拒绝并发作者 lock", () => {
+  const root = mkdtempSync(join(tmpdir(), "axial-muse-build-author-race-"));
+  let hookCalls = 0;
+  try {
+    writeFixture(root, ".nvmrc", readFileSync(resolve(PROJECT_ROOT, ".nvmrc")));
+    writeFixture(
+      root,
+      "package.json",
+      readFileSync(resolve(PROJECT_ROOT, "package.json")),
+    );
+    mkdirSync(resolve(root, "site-content/writing"), {recursive: true});
+    assert.throws(
+      () => runProductionBuild({
+        root,
+        testHooks: {
+          afterBuildLockAcquired() {
+            hookCalls += 1;
+            assert.equal(
+              existsSync(resolve(root, ".axial-muse-build.lock")),
+              true,
+            );
+            writeFixture(root, ".axial-muse-author.lock", "fixture\n");
+          },
+        },
+      }),
+      hasBuildCode("BUILD_AUTHOR_TRANSACTION"),
+    );
+    assert.equal(hookCalls, 1);
+    assert.equal(existsSync(resolve(root, ".axial-muse-build.lock")), false);
+    assert.equal(
+      readFileSync(resolve(root, ".axial-muse-author.lock"), "utf8"),
+      "fixture\n",
+    );
+  } finally {
+    rmSync(root, {recursive: true, force: true});
+  }
 });
 
 test("E-016 候选路径由仓库根与本次 owner 唯一决定", () => {
