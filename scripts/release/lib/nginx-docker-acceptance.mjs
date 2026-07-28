@@ -1,4 +1,4 @@
-import {spawnSync} from "node:child_process";
+import {spawn} from "node:child_process";
 import {randomBytes} from "node:crypto";
 import {
   chmodSync,
@@ -142,28 +142,190 @@ function childEnvironment(home) {
   return Object.freeze(environment);
 }
 
-function rawCommand({
+function commandFailure(code, message) {
+  const error = new Error(message);
+  Object.defineProperty(error, "code", {
+    configurable: false,
+    enumerable: true,
+    value: code,
+    writable: false,
+  });
+  return error;
+}
+
+function spawnCommand(command, arguments_, {
+  cwd,
+  env,
+  maxBuffer,
+  shell,
+  signal,
+  timeout,
+  windowsHide,
+}) {
+  return new Promise((resolveCommand) => {
+    if (signal?.aborted) {
+      resolveCommand({
+        error: signal.reason,
+        signal: null,
+        status: null,
+        stderr: "",
+        stdout: "",
+      });
+      return;
+    }
+
+    let child;
+    try {
+      child = spawn(command, arguments_, {
+        cwd,
+        env,
+        shell,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide,
+      });
+    } catch (error) {
+      resolveCommand({
+        error,
+        signal: null,
+        status: null,
+        stderr: "",
+        stdout: "",
+      });
+      return;
+    }
+
+    let commandError;
+    let forceKillTimer;
+    let stderrBytes = 0;
+    let stdoutBytes = 0;
+    const stderrChunks = [];
+    const stdoutChunks = [];
+    const terminate = () => {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      child.kill("SIGTERM");
+      if (forceKillTimer === undefined) {
+        forceKillTimer = setTimeout(() => {
+          if (child.exitCode === null && child.signalCode === null) {
+            child.kill("SIGKILL");
+          }
+        }, 1_000);
+      }
+    };
+    const collect = (chunks, chunk, currentBytes) => {
+      if (!Buffer.isBuffer(chunk)) {
+        commandError ??= commandFailure(
+          "NGINX_ACCEPTANCE_COMMAND_OUTPUT",
+          "子进程输出类型不合法。",
+        );
+        terminate();
+        return currentBytes;
+      }
+      const nextBytes = currentBytes + chunk.length;
+      if (nextBytes > maxBuffer) {
+        commandError ??= commandFailure(
+          "ENOBUFS",
+          "子进程输出超过验收上限。",
+        );
+        terminate();
+        return nextBytes;
+      }
+      chunks.push(chunk);
+      return nextBytes;
+    };
+    const interrupt = () => {
+      commandError ??= signal.reason instanceof Error
+        ? signal.reason
+        : commandFailure(
+          "NGINX_ACCEPTANCE_INTERRUPTED",
+          "Nginx 验收被中断。",
+        );
+      terminate();
+    };
+    const timeoutTimer = setTimeout(() => {
+      commandError ??= commandFailure(
+        "ETIMEDOUT",
+        "子进程执行超时。",
+      );
+      terminate();
+    }, timeout);
+
+    child.stdout.on("data", (chunk) => {
+      stdoutBytes = collect(stdoutChunks, chunk, stdoutBytes);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderrBytes = collect(stderrChunks, chunk, stderrBytes);
+    });
+    child.once("error", (error) => {
+      commandError ??= error;
+    });
+    if (signal !== undefined) {
+      signal.addEventListener("abort", interrupt, {once: true});
+    }
+    child.once("close", (status, closeSignal) => {
+      clearTimeout(timeoutTimer);
+      if (forceKillTimer !== undefined) clearTimeout(forceKillTimer);
+      if (signal !== undefined) {
+        signal.removeEventListener("abort", interrupt);
+      }
+      resolveCommand({
+        error: commandError,
+        signal: closeSignal ?? null,
+        status,
+        stderr: Buffer.concat(stderrChunks).toString("utf8"),
+        stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+      });
+    });
+  });
+}
+
+function interruptionError(signal) {
+  if (
+    signal?.reason instanceof NginxDockerAcceptanceError
+    && signal.reason.code === "NGINX_ACCEPTANCE_INTERRUPTED"
+  ) {
+    return signal.reason;
+  }
+  return new NginxDockerAcceptanceError(
+    "NGINX_ACCEPTANCE_INTERRUPTED",
+    "Nginx 验收被中断。",
+  );
+}
+
+function propagateInterruption(cause) {
+  if (
+    cause instanceof NginxDockerAcceptanceError
+    && cause.code === "NGINX_ACCEPTANCE_INTERRUPTED"
+  ) {
+    throw cause;
+  }
+}
+
+async function rawCommand({
+  abortSignal,
   arguments_,
   command,
   cwd,
   environment,
   spawnProcess,
 }) {
-  const result = spawnProcess(command, arguments_, {
+  if (abortSignal?.aborted) throw interruptionError(abortSignal);
+  const result = await spawnProcess(command, arguments_, {
     cwd,
     encoding: "utf8",
     env: environment,
     maxBuffer: MAX_COMMAND_OUTPUT_BYTES,
     shell: false,
+    signal: abortSignal,
     timeout: COMMAND_TIMEOUT_MS,
     windowsHide: true,
   });
+  if (abortSignal?.aborted) throw interruptionError(abortSignal);
   return Object.freeze({
-    error: result.error,
-    signal: result.signal ?? null,
-    status: result.status,
-    stderr: typeof result.stderr === "string" ? result.stderr : "",
-    stdout: typeof result.stdout === "string" ? result.stdout : "",
+    error: result?.error,
+    signal: result?.signal ?? null,
+    status: result?.status,
+    stderr: typeof result?.stderr === "string" ? result.stderr : "",
+    stdout: typeof result?.stdout === "string" ? result.stdout : "",
   });
 }
 
@@ -184,12 +346,14 @@ function dockerGlobalArguments(dockerConfigRoot) {
 }
 
 function createDockerClient({
+  abortSignal,
   cwd,
   dockerConfigRoot,
   environment,
   spawnProcess,
 }) {
-  const invoke = (arguments_) => rawCommand({
+  const invoke = async (arguments_) => rawCommand({
+    abortSignal,
     arguments_: [
       ...dockerGlobalArguments(dockerConfigRoot),
       ...arguments_,
@@ -201,8 +365,12 @@ function createDockerClient({
   });
   return Object.freeze({
     invoke,
-    require(arguments_, code, message) {
-      return requireCommand(invoke(arguments_), code, message);
+    async require(arguments_, code, message) {
+      return requireCommand(
+        await invoke(arguments_),
+        code,
+        message,
+      );
     },
   });
 }
@@ -217,8 +385,8 @@ function dockerNotFound(result, resourceKind, name) {
   return result.stdout.trim() === "[]" && result.stderr.trim() === expected;
 }
 
-function ensureDockerResourceAbsent(docker, resourceKind, name) {
-  const result = docker.invoke([resourceKind, "inspect", name]);
+async function ensureDockerResourceAbsent(docker, resourceKind, name) {
+  const result = await docker.invoke([resourceKind, "inspect", name]);
   if (dockerNotFound(result, resourceKind, name)) return;
   if (result.status === 0) {
     fail(
@@ -233,8 +401,8 @@ function ensureDockerResourceAbsent(docker, resourceKind, name) {
   );
 }
 
-function requireDockerEngine(docker) {
-  const result = docker.require(
+async function requireDockerEngine(docker) {
+  const result = await docker.require(
     ["version", "--format", "{{json .Server.Version}}"],
     "NGINX_ACCEPTANCE_DOCKER_DAEMON",
     "无法访问固定本地 Docker Engine。",
@@ -256,8 +424,8 @@ function requireDockerEngine(docker) {
   return version;
 }
 
-function requirePinnedImage(docker) {
-  const result = docker.require(
+async function requirePinnedImage(docker) {
+  const result = await docker.require(
     ["image", "inspect", NGINX_ACCEPTANCE_IMAGE],
     "NGINX_ACCEPTANCE_IMAGE",
     "固定 Nginx 镜像未在本地缓存；验收入口不会隐式拉取。",
@@ -579,7 +747,8 @@ function ensureReadableFixtureDirectory(path) {
   chmodSync(path, 0o755);
 }
 
-function generateTlsFixture({
+async function generateTlsFixture({
+  abortSignal,
   commandEnvironment,
   repositoryRoot,
   spawnProcess,
@@ -588,7 +757,8 @@ function generateTlsFixture({
   ensureReadableFixtureDirectory(tlsRoot);
   const certificatePath = resolve(tlsRoot, "certificate.pem");
   const privateKeyPath = resolve(tlsRoot, "private-key.pem");
-  const result = rawCommand({
+  const result = await rawCommand({
+    abortSignal,
     arguments_: [
       "req",
       "-x509",
@@ -646,7 +816,8 @@ function generateTlsFixture({
   });
 }
 
-function createAcceptanceFixture({
+async function createAcceptanceFixture({
+  abortSignal,
   commandEnvironment,
   repositoryRoot,
   spawnProcess,
@@ -733,7 +904,8 @@ function createAcceptanceFixture({
       }
     }
   }
-  const tls = generateTlsFixture({
+  const tls = await generateTlsFixture({
+    abortSignal,
     commandEnvironment,
     repositoryRoot,
     spawnProcess,
@@ -771,8 +943,8 @@ function requireResourceLabel(document, labelValue, code) {
   }
 }
 
-function requireNetworkIdentity(docker, name, labelValue) {
-  const result = docker.require(
+async function requireNetworkIdentity(docker, name, labelValue) {
+  const result = await docker.require(
     ["network", "inspect", name],
     "NGINX_ACCEPTANCE_DOCKER_NETWORK",
     "无法检查隔离 Docker 网络。",
@@ -800,7 +972,7 @@ function requireNetworkIdentity(docker, name, labelValue) {
   return network;
 }
 
-function requireExclusiveNetworkMember({
+async function requireExclusiveNetworkMember({
   address,
   containerId,
   docker,
@@ -809,7 +981,11 @@ function requireExclusiveNetworkMember({
   networkName,
   serviceName,
 }) {
-  const network = requireNetworkIdentity(docker, networkName, labelValue);
+  const network = await requireNetworkIdentity(
+    docker,
+    networkName,
+    labelValue,
+  );
   const member = network.Containers?.[containerId];
   if (
     network.Id !== networkId
@@ -1074,7 +1250,7 @@ export function buildNginxAcceptanceRequestCases(ports) {
   return Object.freeze(cases);
 }
 
-function executeWgetRequest({
+async function executeWgetRequest({
   docker,
   expectation,
   host,
@@ -1083,7 +1259,7 @@ function executeWgetRequest({
   protocol,
   serviceName,
 }) {
-  const commandResult = docker.invoke([
+  const commandResult = await docker.invoke([
     "container",
     "exec",
     "--user",
@@ -1113,6 +1289,7 @@ function executeWgetRequest({
     }
     assertAcceptanceHttpResponse(response, expectation);
   } catch (cause) {
+    propagateInterruption(cause);
     fail(
       "NGINX_ACCEPTANCE_HTTP",
       "BusyBox wget 响应没有通过 HTTP 契约。",
@@ -1127,12 +1304,33 @@ function executeWgetRequest({
   return response;
 }
 
-function pause(milliseconds) {
-  const view = new Int32Array(new SharedArrayBuffer(4));
-  Atomics.wait(view, 0, 0, milliseconds);
+function pause(milliseconds, abortSignal) {
+  if (abortSignal?.aborted) {
+    return Promise.reject(interruptionError(abortSignal));
+  }
+  return new Promise((resolvePause, rejectPause) => {
+    const interrupt = () => {
+      clearTimeout(timer);
+      rejectPause(interruptionError(abortSignal));
+    };
+    const timer = setTimeout(() => {
+      if (abortSignal !== undefined) {
+        abortSignal.removeEventListener("abort", interrupt);
+      }
+      resolvePause();
+    }, milliseconds);
+    if (abortSignal !== undefined) {
+      abortSignal.addEventListener("abort", interrupt, {once: true});
+    }
+  });
 }
 
-function waitForService({
+function allowSignalDelivery() {
+  return new Promise((resolveTurn) => setImmediate(resolveTurn));
+}
+
+async function waitForService({
+  abortSignal,
   docker,
   isInterrupted,
   port,
@@ -1144,7 +1342,7 @@ function waitForService({
       fail("NGINX_ACCEPTANCE_INTERRUPTED", "Nginx 验收被中断。");
     }
     try {
-      executeWgetRequest({
+      await executeWgetRequest({
         docker,
         expectation: {
           body: TARGET_SENTINELS["/"],
@@ -1158,8 +1356,9 @@ function waitForService({
       });
       return;
     } catch (cause) {
+      propagateInterruption(cause);
       lastError = cause;
-      pause(100);
+      await pause(100, abortSignal);
     }
   }
   fail(
@@ -1169,13 +1368,15 @@ function waitForService({
   );
 }
 
-function runHttpAcceptance({
+async function runHttpAcceptance({
+  abortSignal,
   docker,
   isInterrupted,
   ports,
   serviceName,
 }) {
-  waitForService({
+  await waitForService({
+    abortSignal,
     docker,
     isInterrupted,
     port: ports.wwwHttps,
@@ -1187,7 +1388,7 @@ function runHttpAcceptance({
       fail("NGINX_ACCEPTANCE_INTERRUPTED", "Nginx 验收被中断。");
     }
     try {
-      executeWgetRequest({
+      await executeWgetRequest({
         docker,
         expectation: testCase.expectation,
         host: testCase.host,
@@ -1197,6 +1398,7 @@ function runHttpAcceptance({
         serviceName,
       });
     } catch (cause) {
+      propagateInterruption(cause);
       fail(
         "NGINX_ACCEPTANCE_HTTP",
         `Nginx HTTP 用例失败：${testCase.role}。`,
@@ -1207,8 +1409,8 @@ function runHttpAcceptance({
   return cases.length;
 }
 
-function parseContainerIdentity(docker, name, labelValue) {
-  const result = docker.require(
+async function parseContainerIdentity(docker, name, labelValue) {
+  const result = await docker.require(
     ["container", "inspect", name],
     "NGINX_ACCEPTANCE_DOCKER_SERVICE",
     "无法检查 Nginx 验收容器。",
@@ -1226,8 +1428,8 @@ function parseContainerIdentity(docker, name, labelValue) {
   return document;
 }
 
-function removeContainer(docker, name, labelValue) {
-  const inspected = docker.invoke(["container", "inspect", name]);
+async function removeContainer(docker, name, labelValue) {
+  const inspected = await docker.invoke(["container", "inspect", name]);
   if (dockerNotFound(inspected, "container", name)) return;
   const document = parseDockerInspect(
     requireCommand(
@@ -1243,12 +1445,12 @@ function removeContainer(docker, name, labelValue) {
     labelValue,
     "NGINX_ACCEPTANCE_CLEANUP",
   );
-  docker.require(
+  await docker.require(
     ["container", "rm", "--force", name],
     "NGINX_ACCEPTANCE_CLEANUP",
     "无法删除 Nginx 验收容器。",
   );
-  const after = docker.invoke(["container", "inspect", name]);
+  const after = await docker.invoke(["container", "inspect", name]);
   if (!dockerNotFound(after, "container", name)) {
     fail(
       "NGINX_ACCEPTANCE_CLEANUP",
@@ -1257,8 +1459,8 @@ function removeContainer(docker, name, labelValue) {
   }
 }
 
-function removeNetwork(docker, name, labelValue) {
-  const inspected = docker.invoke(["network", "inspect", name]);
+async function removeNetwork(docker, name, labelValue) {
+  const inspected = await docker.invoke(["network", "inspect", name]);
   if (dockerNotFound(inspected, "network", name)) return;
   const document = parseDockerInspect(
     requireCommand(
@@ -1278,12 +1480,12 @@ function removeNetwork(docker, name, labelValue) {
       "待清理的 Nginx 验收网络标签身份不匹配。",
     );
   }
-  docker.require(
+  await docker.require(
     ["network", "rm", name],
     "NGINX_ACCEPTANCE_CLEANUP",
     "无法删除 Nginx 验收网络。",
   );
-  const after = docker.invoke(["network", "inspect", name]);
+  const after = await docker.invoke(["network", "inspect", name]);
   if (!dockerNotFound(after, "network", name)) {
     fail(
       "NGINX_ACCEPTANCE_CLEANUP",
@@ -1310,7 +1512,7 @@ function removeTemporaryRoot(temporaryRoot, removeTemporaryDirectory) {
   }
 }
 
-function cleanup({
+async function cleanup({
   attemptedContainers,
   attemptedNetwork,
   docker,
@@ -1336,14 +1538,14 @@ function cleanup({
     } else {
       for (const name of [...attemptedContainers].reverse()) {
         try {
-          removeContainer(docker, name, labelValue);
+          await removeContainer(docker, name, labelValue);
         } catch (cause) {
           errors.push(cause);
         }
       }
       if (attemptedNetwork) {
         try {
-          removeNetwork(docker, networkName, labelValue);
+          await removeNetwork(docker, networkName, labelValue);
         } catch (cause) {
           errors.push(cause);
         }
@@ -1441,7 +1643,7 @@ export async function runNginxDockerAcceptance({
   removeTemporaryDirectory = rmSync,
   repositoryRoot,
   signalTarget = process,
-  spawnProcess = spawnSync,
+  spawnProcess = spawnCommand,
 } = {}) {
   if (
     typeof repositoryRoot !== "string"
@@ -1464,8 +1666,12 @@ export async function runNginxDockerAcceptance({
   });
 
   const attemptedContainers = [];
+  const operationAbortController = new AbortController();
   let attemptedNetwork = false;
+  let cleanupDocker;
+  let commandEnvironment;
   let docker;
+  let dockerConfigRoot;
   let interrupted = false;
   let labelValue;
   let networkName;
@@ -1476,10 +1682,16 @@ export async function runNginxDockerAcceptance({
   let sigtermListenerInstalled = false;
   const interrupt = () => {
     interrupted = true;
+    if (!operationAbortController.signal.aborted) {
+      operationAbortController.abort(new NginxDockerAcceptanceError(
+        "NGINX_ACCEPTANCE_INTERRUPTED",
+        "Nginx 验收被中断。",
+      ));
+    }
   };
   const requireNotInterrupted = () => {
     if (interrupted) {
-      fail("NGINX_ACCEPTANCE_INTERRUPTED", "Nginx 验收被中断。");
+      throw interruptionError(operationAbortController.signal);
     }
   };
 
@@ -1488,17 +1700,25 @@ export async function runNginxDockerAcceptance({
     sigintListenerInstalled = true;
     signalTarget.on("SIGTERM", interrupt);
     sigtermListenerInstalled = true;
+    await allowSignalDelivery();
     requireNotInterrupted();
 
     temporaryRoot = createTemporaryDirectory(
       join(tmpdir(), "axial-muse-nginx-acceptance-"),
     );
     chmodSync(temporaryRoot, 0o700);
-    const dockerConfigRoot = resolve(temporaryRoot, "docker-config");
+    dockerConfigRoot = resolve(temporaryRoot, "docker-config");
     mkdirSync(dockerConfigRoot, {mode: 0o700});
     chmodSync(dockerConfigRoot, 0o700);
-    const commandEnvironment = childEnvironment(temporaryRoot);
+    commandEnvironment = childEnvironment(temporaryRoot);
     docker = createDockerClient({
+      abortSignal: operationAbortController.signal,
+      cwd: repositoryRoot,
+      dockerConfigRoot,
+      environment: commandEnvironment,
+      spawnProcess,
+    });
+    cleanupDocker = createDockerClient({
       cwd: repositoryRoot,
       dockerConfigRoot,
       environment: commandEnvironment,
@@ -1511,12 +1731,12 @@ export async function runNginxDockerAcceptance({
     const serviceName = `${prefix}-service`;
     networkName = `${prefix}-network`;
 
-    const dockerVersion = requireDockerEngine(docker);
-    const image = requirePinnedImage(docker);
+    const dockerVersion = await requireDockerEngine(docker);
+    const image = await requirePinnedImage(docker);
 
-    ensureDockerResourceAbsent(docker, "container", versionName);
+    await ensureDockerResourceAbsent(docker, "container", versionName);
     attemptedContainers.push(versionName);
-    const versionResult = docker.require(
+    const versionResult = await docker.require(
       assertPinnedNginxContainerArguments([
         "container",
         "run",
@@ -1542,16 +1762,17 @@ export async function runNginxDockerAcceptance({
       );
     }
 
-    const fixture = createAcceptanceFixture({
+    const fixture = await createAcceptanceFixture({
+      abortSignal: operationAbortController.signal,
       commandEnvironment,
       repositoryRoot,
       spawnProcess,
       temporaryRoot,
     });
 
-    ensureDockerResourceAbsent(docker, "container", testName);
+    await ensureDockerResourceAbsent(docker, "container", testName);
     attemptedContainers.push(testName);
-    docker.require(
+    await docker.require(
       assertPinnedNginxContainerArguments([
         "container",
         "run",
@@ -1570,9 +1791,9 @@ export async function runNginxDockerAcceptance({
       "真实 Nginx 配置检查失败。",
     );
 
-    ensureDockerResourceAbsent(docker, "network", networkName);
+    await ensureDockerResourceAbsent(docker, "network", networkName);
     attemptedNetwork = true;
-    docker.require(
+    await docker.require(
       [
         "network",
         "create",
@@ -1586,11 +1807,15 @@ export async function runNginxDockerAcceptance({
       "NGINX_ACCEPTANCE_DOCKER_NETWORK",
       "无法创建隔离 Docker 网络。",
     );
-    const network = requireNetworkIdentity(docker, networkName, labelValue);
+    const network = await requireNetworkIdentity(
+      docker,
+      networkName,
+      labelValue,
+    );
 
-    ensureDockerResourceAbsent(docker, "container", serviceName);
+    await ensureDockerResourceAbsent(docker, "container", serviceName);
     attemptedContainers.push(serviceName);
-    docker.require(
+    await docker.require(
       buildNginxServiceCreateArguments({
         fixture,
         labelValue,
@@ -1600,7 +1825,7 @@ export async function runNginxDockerAcceptance({
       "NGINX_ACCEPTANCE_DOCKER_SERVICE",
       "无法创建 Nginx 验收服务容器。",
     );
-    const container = parseContainerIdentity(
+    const container = await parseContainerIdentity(
       docker,
       serviceName,
       labelValue,
@@ -1614,12 +1839,16 @@ export async function runNginxDockerAcceptance({
         "Nginx 验收服务容器没有绑定固定镜像或隔离网络。",
       );
     }
-    docker.require(
+    await docker.require(
       ["container", "start", serviceName],
       "NGINX_ACCEPTANCE_DOCKER_SERVICE",
       "无法启动 Nginx 验收服务容器。",
     );
-    const running = parseContainerIdentity(docker, serviceName, labelValue);
+    const running = await parseContainerIdentity(
+      docker,
+      serviceName,
+      labelValue,
+    );
     if (
       !isPlainRecord(running.State)
       || running.State.Running !== true
@@ -1643,7 +1872,7 @@ export async function runNginxDockerAcceptance({
         "Nginx 验收容器网络身份在启动时发生漂移。",
       );
     }
-    requireExclusiveNetworkMember({
+    await requireExclusiveNetworkMember({
       address: endpoint.address,
       containerId: running.Id,
       docker,
@@ -1652,7 +1881,8 @@ export async function runNginxDockerAcceptance({
       networkName,
       serviceName,
     });
-    const assertionCount = runHttpAcceptance({
+    const assertionCount = await runHttpAcceptance({
+      abortSignal: operationAbortController.signal,
       docker,
       isInterrupted: () => interrupted,
       ports: endpoint.ports,
@@ -1665,7 +1895,7 @@ export async function runNginxDockerAcceptance({
       );
     }
     requireNotInterrupted();
-    const afterAcceptance = parseContainerIdentity(
+    const afterAcceptance = await parseContainerIdentity(
       docker,
       serviceName,
       labelValue,
@@ -1700,7 +1930,7 @@ export async function runNginxDockerAcceptance({
         "Nginx 验收容器网络身份在 HTTP 验收期间发生漂移。",
       );
     }
-    requireExclusiveNetworkMember({
+    await requireExclusiveNetworkMember({
       address: endpoint.address,
       containerId: running.Id,
       docker,
@@ -1726,10 +1956,10 @@ export async function runNginxDockerAcceptance({
 
   let cleanupError;
   try {
-    cleanup({
+    await cleanup({
       attemptedContainers,
       attemptedNetwork,
-      docker,
+      docker: cleanupDocker,
       labelValue,
       networkName,
       removeTemporaryDirectory,
@@ -1738,6 +1968,7 @@ export async function runNginxDockerAcceptance({
   } catch (cause) {
     cleanupError = cause;
   } finally {
+    await allowSignalDelivery();
     if (sigintListenerInstalled) {
       signalTarget.removeListener("SIGINT", interrupt);
     }

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {spawn} from "node:child_process";
 import fs, {
   linkSync,
   mkdirSync,
@@ -1143,9 +1144,11 @@ function optionValue(arguments_, option) {
 
 function createFakeNginxDocker({
   duplicateLocation = false,
+  failFirstReadiness = false,
   mutateAfterHttp,
   onCleanup,
   onFinalHttp,
+  onReadinessFailure,
   repoDigest = NGINX_ACCEPTANCE_MANIFEST_DIGEST,
 } = {}) {
   const calls = [];
@@ -1154,6 +1157,7 @@ function createFakeNginxDocker({
   const networkId = "b".repeat(64);
   let cleanupNotified = false;
   let httpRequestCount = 0;
+  let wgetAttemptCount = 0;
   let network;
   let temporaryRootMode;
 
@@ -1328,7 +1332,7 @@ ${locationHeaders}Connection closed
     });
   }
 
-  function spawnProcess(command, arguments_) {
+  async function spawnProcess(command, arguments_) {
     calls.push({arguments_: [...arguments_], command});
     if (command === "/usr/bin/openssl") {
       writeFileSync(optionValue(arguments_, "-keyout"), "private-key\n");
@@ -1434,6 +1438,14 @@ ${locationHeaders}Connection closed
       dockerArguments[0] === "container"
       && dockerArguments[1] === "exec"
     ) {
+      wgetAttemptCount += 1;
+      if (failFirstReadiness && wgetAttemptCount === 1) {
+        onReadinessFailure?.();
+        return fakeCommandResult({
+          status: 1,
+          stderr: "wget: connection refused\n",
+        });
+      }
       const result = wgetResult(dockerArguments.at(-1));
       httpRequestCount += 1;
       if (
@@ -1471,6 +1483,7 @@ ${locationHeaders}Connection closed
     containers,
     fixtureDirectoryModes,
     hasNetwork: () => network !== undefined,
+    httpAttemptCount: () => wgetAttemptCount,
     spawnProcess,
     temporaryRootMode: () => temporaryRootMode,
   };
@@ -1804,6 +1817,171 @@ test("D-107 最后请求或清理期间的 signal 均失败关闭且移除监听
     assert.equal(signalTarget.listenerCount("SIGTERM"), 0);
     assert.equal(fake.containers.size, 0);
     assert.equal(fake.hasNetwork(), false);
+  }
+});
+
+test("D-107 readiness 异步退避可被 signal 立即取消", async () => {
+  const signalTarget = new EventEmitter();
+  const fake = createFakeNginxDocker({
+    failFirstReadiness: true,
+    onReadinessFailure() {
+      setImmediate(() => signalTarget.emit("SIGTERM"));
+    },
+  });
+  await assert.rejects(
+    runNginxDockerAcceptance(fakeAcceptanceOptions(fake, {signalTarget})),
+    (error) => error instanceof NginxDockerAcceptanceError
+      && error.code === "NGINX_ACCEPTANCE_INTERRUPTED",
+  );
+  assert.equal(fake.httpAttemptCount(), 1);
+  assert.equal(fake.containers.size, 0);
+  assert.equal(fake.hasNetwork(), false);
+  assert.equal(signalTarget.listenerCount("SIGINT"), 0);
+  assert.equal(signalTarget.listenerCount("SIGTERM"), 0);
+});
+
+function runParentSignalProbe(signalName) {
+  const acceptanceModuleUrl = new URL(
+    "../../scripts/release/lib/nginx-docker-acceptance.mjs",
+    import.meta.url,
+  ).href;
+  const repositoryRoot = process.cwd();
+  const source = `
+import {
+  NginxDockerAcceptanceError,
+  runNginxDockerAcceptance,
+} from ${JSON.stringify(acceptanceModuleUrl)};
+import {writeSync} from "node:fs";
+
+let commandStarted = false;
+try {
+  await runNginxDockerAcceptance({
+    architecture: "x64",
+    arguments_: [],
+    assertExecutableIdentity() {},
+    currentWorkingDirectory: ${JSON.stringify(repositoryRoot)},
+    environmentSource: {},
+    nodeVersion: "24.18.0",
+    platform: "linux",
+    repositoryRoot: ${JSON.stringify(repositoryRoot)},
+    signalTarget: process,
+    spawnProcess(_command, _arguments, options) {
+      if (commandStarted) {
+        throw new Error("unexpected command after interruption");
+      }
+      commandStarted = true;
+      writeSync(1, "SIGNAL_READY\\n");
+      return new Promise((resolveCommand) => {
+        const keepAlive = setInterval(() => {}, 1_000);
+        const interrupted = () => {
+          clearInterval(keepAlive);
+          resolveCommand({
+            error: options.signal?.reason,
+            signal: "SIGTERM",
+            status: null,
+            stderr: "",
+            stdout: "",
+          });
+        };
+        if (options.signal?.aborted) {
+          interrupted();
+        } else {
+          options.signal?.addEventListener("abort", interrupted, {once: true});
+        }
+      });
+    },
+  });
+  writeSync(1, "FALSE_SUCCESS\\n");
+  process.exitCode = 70;
+} catch (error) {
+  if (
+    error instanceof NginxDockerAcceptanceError
+    && error.code === "NGINX_ACCEPTANCE_INTERRUPTED"
+  ) {
+    writeSync(1, "INTERRUPTED\\n");
+    process.exitCode = 73;
+  } else {
+    writeSync(2, \`UNEXPECTED:\${error?.code ?? error?.name}\\n\`);
+    process.exitCode = 74;
+  }
+}
+`;
+  const child = spawn(
+    process.execPath,
+    ["--input-type=module", "--eval", source],
+    {
+      cwd: repositoryRoot,
+      env: {
+        LANG: "C.UTF-8",
+        LC_ALL: "C.UTF-8",
+        PATH: "/usr/bin:/bin",
+      },
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    },
+  );
+  return new Promise((resolveProbe, rejectProbe) => {
+    let signalSent = false;
+    let stderr = "";
+    let stdout = "";
+    const timeout = setTimeout(() => {
+      child.kill("SIGKILL");
+      rejectProbe(new Error(
+        `signal probe timed out: ${signalName}; `
+        + `stdout=${JSON.stringify(stdout)}; `
+        + `stderr=${JSON.stringify(stderr)}`,
+      ));
+    }, 5_000);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      if (!signalSent && stdout.includes("SIGNAL_READY\n")) {
+        signalSent = true;
+        if (!child.kill(signalName)) {
+          child.kill("SIGKILL");
+          clearTimeout(timeout);
+          rejectProbe(new Error(`signal probe could not send ${signalName}`));
+        }
+      }
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      rejectProbe(error);
+    });
+    child.once("close", (code, closeSignal) => {
+      clearTimeout(timeout);
+      resolveProbe({
+        closeSignal,
+        code,
+        signalSent,
+        stderr,
+        stdout,
+      });
+    });
+  });
+}
+
+test("D-107 父进程真实 SIGINT/SIGTERM 在异步命令期间取消并失败关闭", async () => {
+  for (const signalName of ["SIGINT", "SIGTERM"]) {
+    const result = await runParentSignalProbe(signalName);
+    assert.equal(
+      result.signalSent,
+      true,
+      `${signalName}: ${JSON.stringify(result)}`,
+    );
+    assert.equal(result.closeSignal, null, signalName);
+    assert.equal(result.code, 73, signalName);
+    assert.equal(
+      result.stdout,
+      "SIGNAL_READY\nINTERRUPTED\n",
+      signalName,
+    );
+    assert.equal(result.stderr, "", signalName);
   }
 });
 
