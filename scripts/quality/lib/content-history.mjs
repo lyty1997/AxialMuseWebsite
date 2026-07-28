@@ -878,6 +878,7 @@ function parseRegistries(registries, context) {
 async function parseArticles(articleEntries, context) {
   const articleBySource = new Map();
   const sourceByArticle = new Map();
+  const sourcePathByArticle = new Map();
   const publishedAtByArticle = new Map();
   for (const entry of articleEntries) {
     if (entry.bytes.byteLength === 0 || entry.bytes.byteLength > MAX_ARTICLE_BYTES) {
@@ -931,6 +932,7 @@ async function parseArticles(articleEntries, context) {
       },
       context,
     );
+    sourcePathByArticle.set(decoded.frontMatter.articleId, entry.sourcePath);
     if (Object.hasOwn(decoded.frontMatter, "publishedAt")) {
       if (!isDate(decoded.frontMatter.publishedAt)) {
         fail("CONTENT_HISTORY_PUBLISHED_AT", {
@@ -948,6 +950,7 @@ async function parseArticles(articleEntries, context) {
     articleBySource,
     publishedAtByArticle,
     sourceByArticle,
+    sourcePathByArticle,
   });
 }
 
@@ -962,6 +965,7 @@ async function createSnapshot({
     articleIds: new Set(articles.sourceByArticle.keys()),
     publishedAtByArticle: articles.publishedAtByArticle,
     registryIds: parseRegistries(registries, {commit}),
+    sourcePathByArticle: articles.sourcePathByArticle,
   });
 }
 
@@ -980,6 +984,7 @@ function projectValidatedCurrentSnapshot(content) {
 
   const articleBySource = new Map();
   const sourceByArticle = new Map();
+  const sourcePathByArticle = new Map();
   const publishedAtByArticle = new Map();
   for (const article of content.articles) {
     const sourcePath = isPlainRecord(article) && isSafeDiagnosticPath(article.sourcePath)
@@ -995,6 +1000,7 @@ function projectValidatedCurrentSnapshot(content) {
       },
       context,
     );
+    sourcePathByArticle.set(article.articleId, sourcePath);
     if (isPlainRecord(article) && article.publishedAt !== undefined) {
       if (!isDate(article.publishedAt)) {
         fail("CONTENT_HISTORY_PUBLISHED_AT", {
@@ -1035,6 +1041,7 @@ function projectValidatedCurrentSnapshot(content) {
     articleIds: new Set(sourceByArticle.keys()),
     publishedAtByArticle,
     registryIds,
+    sourcePathByArticle,
   });
 }
 
@@ -1121,12 +1128,7 @@ function mergePublishedAtLedger(parentStates, commit) {
 }
 
 function articleSourcePath(snapshot, articleId) {
-  for (const [sourceName, candidateId] of snapshot.articleBySource) {
-    if (candidateId === articleId) {
-      return `site-content/writing/${sourceName}/index.md`;
-    }
-  }
-  return UNKNOWN_SOURCE_PATH;
+  return snapshot.sourcePathByArticle.get(articleId) ?? UNKNOWN_SOURCE_PATH;
 }
 
 function transitionState(commit, snapshot, parentStates) {
@@ -1384,11 +1386,14 @@ function addCandidateToSnapshot(snapshot, candidate) {
     {...candidate, sourcePath},
     {commit: WORKTREE_ID},
   );
+  const sourcePathByArticle = new Map(snapshot.sourcePathByArticle);
+  sourcePathByArticle.set(candidate.articleId, sourcePath);
   return Object.freeze({
     articleBySource,
     articleIds: new Set(sourceByArticle.keys()),
     publishedAtByArticle: new Map(snapshot.publishedAtByArticle),
     registryIds: new Set(snapshot.registryIds),
+    sourcePathByArticle,
   });
 }
 

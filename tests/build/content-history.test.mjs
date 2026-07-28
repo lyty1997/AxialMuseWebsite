@@ -276,25 +276,31 @@ function articleStateText(
   ].join("\n");
 }
 
-function writeArticle(root, sourceName, articleId, body) {
+function writeArticle(root, sourceName, articleId, body, extension = "md") {
   const path = join(
     root,
     "site-content",
     "writing",
     sourceName,
-    "index.md",
+    `index.${extension}`,
   );
   mkdirSync(dirname(path), {recursive: true});
   writeFileSync(path, articleText(articleId, sourceName, body), "utf8");
 }
 
-function writeArticleState(root, sourceName, articleId, options) {
+function writeArticleState(
+  root,
+  sourceName,
+  articleId,
+  options,
+  extension = "md",
+) {
   const path = join(
     root,
     "site-content",
     "writing",
     sourceName,
-    "index.md",
+    `index.${extension}`,
   );
   mkdirSync(dirname(path), {recursive: true});
   writeFileSync(
@@ -920,25 +926,29 @@ test("E-013 publishedAt 建立后允许同值修订与 source-name 改名", asyn
   }
 });
 
-test("E-013 存活文章不得修改或删除 publishedAt", async () => {
+test("E-013 历史与工作区 MDX 存活文章不得修改或删除 publishedAt", async () => {
   const changed = createFixture({
     article: {articleId: ARTICLE_A, sourceName: "changed-date"},
   });
   try {
+    renameSync(
+      join(changed.root, "site-content/writing/changed-date/index.md"),
+      join(changed.root, "site-content/writing/changed-date/index.mdx"),
+    );
     writeArticleState(changed.root, "changed-date", ARTICLE_A, {
       publicationStatus: "published",
       publishedAt: "2026-07-20",
-    });
+    }, "mdx");
     commit(changed.root, "establish date before change");
     writeArticleState(changed.root, "changed-date", ARTICLE_A, {
       publicationStatus: "published",
       publishedAt: "2026-07-21",
-    });
+    }, "mdx");
     commit(changed.root, "change first publication date");
     await expectHistoryError(
       changed.root,
       "CONTENT_HISTORY_DATE_CHANGED",
-      "site-content/writing/changed-date/index.md",
+      "site-content/writing/changed-date/index.mdx",
     );
   } finally {
     destroyFixture(changed);
@@ -948,22 +958,26 @@ test("E-013 存活文章不得修改或删除 publishedAt", async () => {
     article: {articleId: ARTICLE_B, sourceName: "removed-date"},
   });
   try {
+    renameSync(
+      join(removed.root, "site-content/writing/removed-date/index.md"),
+      join(removed.root, "site-content/writing/removed-date/index.mdx"),
+    );
     writeArticleState(removed.root, "removed-date", ARTICLE_B, {
       publicationStatus: "published",
       publishedAt: "2026-07-20",
-    });
+    }, "mdx");
     commit(removed.root, "establish date before removal");
     writeArticle(
       removed.root,
       "removed-date",
       ARTICLE_B,
       "删除日期但保留文章。",
+      "mdx",
     );
-    commit(removed.root, "remove first publication date");
     await expectHistoryError(
       removed.root,
       "CONTENT_HISTORY_DATE_REMOVED",
-      "site-content/writing/removed-date/index.md",
+      "site-content/writing/removed-date/index.mdx",
     );
   } finally {
     destroyFixture(removed);
