@@ -4,6 +4,15 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-28 — #13 production payload 运行时 301 派生与固定 Nginx Docker 验收（本地完成）
+
+- **范围**：在 `main@195656fcbcf05fe440bc2cf9c64e27f68d2be3ab` 建立的 `codex/issue-18-production-baseline` 上推进 #13。本轮只拥有 E-014/CODE-019 的仓库侧注册表读取、公开 HTML 路由提取、规则闭包、确定性运行清单和 Nginx exact-location 配置派生，以及 D-107 授权的本地固定 digest Docker 真实 Nginx 验收；#33 继续拥有 release 封装、摘要和独立复验，#37 继续拥有服务器账本、候选安装、原子激活与回滚兼容，不把这些后续职责或生产现场验收并入 #13。
+- **实现**：新增零第三方依赖的 `scripts/release/lib/runtime-redirects.mjs` 与相邻 TypeScript 声明，严格读取固定 `docs/contracts/redirects.json`，拒绝未知字段、重复 JSON key、非规范/保留路径、重复 source、自跳、链、环、当前静态 source 和 payload 中缺失 target。从同一 production `build/` 的根及子目录 `index.html` 建立规范公开路由，为每项登记生成带/不带尾斜杠的两个直达 `registered` 规则，并为根以外活动页生成 `canonical-slash`；两份输出按 `from` ASCII 排序，JSON 与固定三行 Nginx block 均不含 `reason`、时间、commit、机器路径或可变模板。
+- **构建与质量接线**：production artifact checker 已移除第二套 HTML route 解析，改为经严格 TypeScript 适配器消费同一 runtime 实现和实际 payload 路由；零依赖 `quality` 新增真实注册表检查及核心 fixture，模块门禁只允许该精确适配器运行时导入，并由 E-012 临时 emit runner 复制实现、声明和传递 JSON decoder 边界。固定 registry 的质量与 production 两条入口现在共用稳定单链接普通文件读取，拒绝 symlink/hardlink，并按 CODE-003 保留 operation/close cause；compile 只接受严格 parser 产生且深冻结的 registry provenance，关闭 accessor 在校验后注入 Nginx 文本的旁路。
+- **真实 Nginx 证据**：D-107 固定 Docker Official Image `nginx:1.28.3-alpine3.23` 的 `linux/amd64` child manifest `sha256:0dcc88822d45581e65ae329f8be769762bf628d3b2bb7d2a077d4aa5c98b30e3`，实际版本探针为 `nginx/1.28.3`。独立入口在空 Docker config、固定本地 socket、`--pull never`、非 root、只读、无 capability、无宿主端口和一次性内部网络下通过真实 `nginx -t`；同一派生 include 与 payload 的 25 项 HTTP/HTTPS 断言覆盖根域/`www` 四个 server、`/old` 与 `/old/`、`/projects`、原始查询串、唯一 `Location`、三个规范 target 200、source HTML 缺失、两个 HTTP ACME 200 和四个未知 Host 404。成功后入口与独立复核都确认验收容器、网络和临时目录为零残留；固定镜像缓存按决定保留。
+- **其余本地证据**：精确 Node `24.18.0` 下，零依赖完整 `quality`、严格 `typecheck`、16 个 TypeScript 测试源的 252/252 共享测试及真实 Chromium 回归、production `build`、JavaScript 明列语法、模块边界与 `git diff --check` 均通过。核心 fixture 覆盖空注册表、golden 字节、排序/reason 不变性、双 alias、查询变量、路径/保留空间、重复/链环、source/target payload 闭包、HTML 布局、链接成员、provenance/accessor、稳定 I/O 双故障及 Docker 入口的固定身份、四 server、硬化、无端口、原始 header 与统一自动化隔离。真实当前站点 build 派生出 `/`、`/projects/`、`/writing/` 三条公开路由、0 条 `registered` 与 2 条 `canonical-slash`；D-107 的独立非空 Docker fixture 则刻意派生 2 条 `registered` 与 2 条 `canonical-slash`，用于真实引擎行为验收，二者不混作同一输入事实。
+- **遗留与交付边界**：#13 的仓库实现和本地真实引擎验收已闭环，但当前工作区尚未提交、推送，也没有精确远端 CI 或 GitHub Issue 关闭证据；#33 的 release 封装/摘要和 #37 的服务器账本、现场 Nginx、激活、reload、回滚兼容与公网冒烟继续独立实施。本轮唯一新增外部访问是经用户授权从 Docker Hub 官方 registry 显式拉取固定 digest 镜像，传输常规 registry/网络元数据，不发送站点内容或用户数据；未新增 npm 依赖、第三方运行时服务、浏览器外部请求或用户数据处理，未安装宿主机 Nginx，未操作服务器、DNS、TLS、GitHub Issue/PR，也未提交或推送工作区。
+
 ## 2026-07-28 — #25 显式文章日期命令（本地实现与 fresh checkout 验收完成）
 
 - **接口与状态机**：已依 D-106/CODE-014 实现 `node scripts/author/set-article-dates.mjs --source-name <name> --action publish|revise`，不增加 npm alias。publish 只接受作者已手工切到 published 且两个日期完全缺失的窄过渡态，以一次 `Asia/Shanghai` 时钟写入相同日期；revise 永不改 `publishedAt`，同日完整校验后保持字节与 mode 不变，跨日只改 `updatedAt`。draft、archived、部分日期、时钟回退、非规范定点布局与自动化环境全部失败关闭。

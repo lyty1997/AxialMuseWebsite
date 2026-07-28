@@ -42,6 +42,7 @@ const ROOT_DIRECTORIES = Object.freeze([
   "scripts/build",
   "scripts/content",
   "scripts/quality/lib",
+  "scripts/release/lib",
 ]);
 const ARTICLE_IDS = Object.freeze({
   archived: "018f0000-0000-7000-8000-000000000002",
@@ -187,6 +188,13 @@ function materializePublicContentFixture(root: string): Uint8Array {
     owner: "AxialMuseWebsite",
     roleValues: ["brand", "operational"],
     assets: [],
+  });
+  writeJson(root, "docs/contracts/redirects.json", {
+    version: "0.1.0",
+    kind: "axial_muse_redirects",
+    status: "active",
+    owner: "AxialMuseWebsite",
+    redirects: [],
   });
 
   writeText(
