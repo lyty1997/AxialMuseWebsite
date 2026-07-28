@@ -1,7 +1,7 @@
 # 主站编码规范 Spec
 
 状态：active
-完整度：M0-design-closed（#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端验收；#12 历史门禁、#24 作者创建入口与 #32 可信 CI 第一阶段已完成专题分支实现和本地验收，正依 D-104 纳入 `dev`，对应精确远端 CI 与 Issue 闭环尚待取得；#13 仓库侧 301 派生、production payload 校验及固定 digest Docker 真实 Nginx 验收已完成本地闭环，提交、远端 CI 与 Issue 证据尚待取得；#8、#14/#33/#37 等下游任务继续跟踪）
+完整度：M0-design-closed（#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端验收；#12 历史门禁、#24 作者创建入口与 #32 可信 CI 第一阶段已完成专题分支实现和本地验收，正依 D-104 纳入 `dev`，对应精确远端 CI 与 Issue 闭环尚待取得；#13 仓库侧 301 派生、production payload 校验及固定 digest Docker 真实 Nginx 验收已完成本地闭环并形成本地实现提交，远端 CI 与 Issue 证据尚待取得；#8、#14/#33/#37 等下游任务继续跟踪）
 最近更新：2026-07-28
 适用范围：本站仓库内的主站页面与组件、Docusaurus 构建期适配、作者工具、质量脚本，以及这些代码之间的依赖边界
 
@@ -413,7 +413,7 @@ D-097 至 D-102 已把固定 SHA 的官方 Action、Node 24 主/最低端点、�
 - `package-site.mjs` 在复制完成且源 build 未变化后生成两个派生文件，再把源注册表原始字节摘要、按公开路由排序后的集合摘要、两个派生文件摘要和规则数写入 `release.json`；`files.sha256` 覆盖 payload 与两个可部署文件。检查器必须重新读取 build 和源注册表生成期望字节，验证 registered 与 canonical-slash 数量、全部摘要和 source 静态页面缺失，并拒绝手工修改 metadata 后自洽但不再可从源重建的 artifact。
 - 服务器安装契约不允许重新解释 `redirects.json` 或运行仓库 Node.js：固定发布脚本只校验并复制两个已绑定文件到 release 的非 Web Root `config/`，再生成只含精确 SHA 绝对 payload root 与同 SHA include 的 `site-release.conf`。root-owned `/var/lib/axialmuse/url-exposure-ledger.json` 是独立于 release 的只追加生产证据；固定部署实现必须用结构化 JSON 解析维护它，只接受 E-014 的 `publishedRoutes` 和 `kind: "registered"` 历史边，`canonical-slash` 不入边账本。实现必须拒绝未知字段、非法路径、非 40 位 SHA、重复记录、删除或改写既有记录，并以同目录临时文件、flush 文件与父目录、原子 rename 更新。账本不得进入 artifact、Web Root 或仓库编辑源，也不得从当前配置、注册表或单个 release 自动重建；实施服务器所用的具体结构化解析工具属于服务器软件安装，仍须按部署文档现场核验和授权。
 - 兼容检查复用 CODE-019 的路径与 runtime manifest 解析，但不生成或改写候选规则。对候选 payload/rules 定义最多一步的 `resolve(path)`：200 route 返回自身，exact source 返回其当前 200 target，其他失败；账本中每个历史 published route 必须可解析，每条历史 registered edge 的 `from` 与 `to` 必须解析到相同终点。新边可以把既有 source 改指新的最终页面，但旧 target 必须继续为 200 或成为直达同一终点的 source。候选配置先在隔离本机 Nginx 监听地址完成全规则 HTTP 测试；随后把候选全部规范 200 路径和新增/改指的 registered 边作为潜在暴露原子并入账本，再切 `current`、`nginx -t` 和 reload；这使 `canonical-slash` 的 target 也在公网可缓存前得到保护。只有预先选出的 fallback release 也通过并入后账本时才允许自动回滚；没有兼容 fallback 的候选默认失败，显式生产授权选择 forward-only 后，reload 或公网冒烟失败必须保持兼容闭包并向前修复。公网冒烟与账本备份记录都成功后才能标记 deployment 成功。
-- D-107 的本地真实引擎入口固定官方 `nginx/1.28.3` 的 `linux/amd64` child manifest digest，先验证本地镜像和版本，再以 `--pull never`、空 Docker config、固定本地 socket、非 root、只读根、无 capability、`no-new-privileges`、无宿主 PortBinding和一次性内部 bridge 运行；非空 registry、payload、ACME 与 TLS fixture 都位于私有临时目录并只读挂载。`nginx -t` 与服务消费同一份派生 include；同一固定镜像内置的 BusyBox `wget -S` 经容器 loopback 覆盖根域/`www` × HTTP/HTTPS 四种已知 server，逐项检查登记 source 双形式、`canonical-slash`、唯一 `Location`、原始 query、目标 200、source HTML 缺失、ACME 200 和未知 Host 404。入口零参数、无环境覆盖、不隐式拉取，不进入统一 `quality`、共享测试、package script、hook 或 workflow；操作、超时或清理失败都失败关闭，镜像缓存保留，容器、网络与临时目录必须消失。
+- D-107 的本地真实引擎入口固定官方 `nginx/1.28.3` 的 `linux/amd64` child manifest digest，先验证本地镜像和版本，再以 `--pull never`、空 Docker config、固定本地 socket、非 root、只读根、无 capability、`no-new-privileges`、无宿主 PortBinding和一次性内部 bridge 运行；非空 registry、payload、ACME 与 TLS fixture 都位于私有临时目录并只读挂载。`nginx -t` 与服务消费同一份派生 include；同一固定镜像内置的 BusyBox `wget -S` 经容器 loopback 覆盖根域/`www` × HTTP/HTTPS 四种已知 server，逐项检查登记 source 双形式、`canonical-slash`、唯一 `Location`、原始 query、目标 200、source HTML 缺失、ACME 200 和未知 Host 404。入口零参数、无环境覆盖、不隐式拉取，不进入统一 `quality`、共享测试、package script、hook 或 workflow；外部命令和 readiness 退避必须异步且可取消，SIGINT/SIGTERM 要先终止并等待当前操作子进程，再执行不受该中断取消的有界清理。操作、中断、超时或清理失败都失败关闭，镜像缓存保留，容器、网络与临时目录必须消失。
 - #37 的服务器验收仍须使用实施环境的现场 Nginx，证明四个已知 scheme/host server 在 ACME 和未知 Host 边界不变时返回单跳 301、唯一 `Location`、查询串保留和目标 200；`nginx -t`、隔离候选、reload、公网断言、账本更新或兼容性检查任一失败都不得把 release 标记成功。测试必须分别证明“旧 release 有目标页面但缺少历史 source 规则”不可回滚、二次迁移的全部历史路径收敛到同一 200、新页面仅产生 `canonical-slash` 时也会在 reload 前预写 target 并拒绝缺页面的旧 fallback，以及 forward-only 边界不会自动恢复不兼容 release。账本初始化 fixture 只允许“无活动 release 且上线授权明确”的空站点模式，或显式导入可审计既有生产记录；已初始化后的账本缺失不能再走首次模式。
 
 来源：D-005、D-035、D-038、D-053、D-078、D-107、E-002、E-005、E-014；CODE-003、CODE-004、CODE-011、CODE-015。
@@ -433,7 +433,7 @@ D-097 至 D-102 已把固定 SHA 的官方 Action、Node 24 主/最低端点、�
 
 ## 实施前置清单
 
-下列内容影响目标源码结构，必须在依赖代码创建前完成事实查证并写入对应设计。#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端闭环；#12 历史门禁、#24 作者命令与 #32 第一阶段 CI 已完成本地验收并正依 D-104 纳入 `dev`，对应精确远端 CI 与 Issue 闭环尚待取得；#13 仓库侧 301 派生、payload 校验与真实 Nginx Docker 验收已完成本地闭环，提交、远端 CI 与 Issue 证据仍待取得；#8、#14/#33/#37 与后续任务继续跟踪其余实现。D-078 委托范围内的工程细节由 Agent 形成可验证决定，不再逐项请求用户确认；D-078 排除的后续外部操作或依赖变更、数据与基础设施事项仍执行用户门禁：
+下列内容影响目标源码结构，必须在依赖代码创建前完成事实查证并写入对应设计。#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端闭环；#12 历史门禁、#24 作者命令与 #32 第一阶段 CI 已完成本地验收并正依 D-104 纳入 `dev`，对应精确远端 CI 与 Issue 闭环尚待取得；#13 仓库侧 301 派生、payload 校验与真实 Nginx Docker 验收已完成本地闭环并形成本地实现提交，远端 CI 与 Issue 证据仍待取得；#8、#14/#33/#37 与后续任务继续跟踪其余实现。D-078 委托范围内的工程细节由 Agent 形成可验证决定，不再逐项请求用户确认；D-078 排除的后续外部操作或依赖变更、数据与基础设施事项仍执行用户门禁：
 
 Roadmap 的实现所有权固定为：I-01 / #9 在隔离入口同一任务中创建 D-067 的 `.nvmrc`、`engines.node` 兼容边界，并以 D-073 主/最低随附 npm 完成离线真实 CLI 验收；I-03 / #21 消费该版本契约完成真实依赖准入；I-04 / #22 不再创建或选择版本文件，只在已验收版本与依赖图上建立 Docusaurus scaffold、严格 TypeScript、模块边界、typecheck 与 build。该调整只消除任务产物倒置，不改变上层版本治理或外部操作授权。
 
@@ -468,7 +468,7 @@ Roadmap 的实现所有权固定为：I-01 / #9 在隔离入口同一任务中�
 | 首次依赖解析与供应链准入 | D-077、CODE-015 与 #21 | 1,345 个物理依赖/1,225 个 canonical identity、正式三制品、D-081/D-082 当时的 audit 全零、最终决定和双端点 composite receipt 已完成本地闭环；最新 18 个 high 依赖节点仍是未修复风险，依赖图变化时必须重新失败关闭准入，但不阻断 D-099 后的普通 CI，远端 CI 成功证据尚未形成 |
 | Node ESM TypeScript 测试 | D-079、E-012、CODE-005/CODE-011/CODE-016 | #11 已完成 runner、fixture、主/最低 Node 同负载与现有远端 CI 验收；D-097 至 D-102 已把同一负载接入 Node 24 双端点 workflow 并完成专题本地验收 |
 | HEAD 可达完整 Git 历史与稳定 ID | E-013、CODE-018 | #12 已实现检查器、pre-write 候选 API、临时 Git DAG fixture 与完整 CI checkout；#24 已完成作者候选/终态接线和真实删除后复用反例，两者正依 D-104 纳入 `dev`，组合树远端验证仍待取得 |
-| 服务端 301 与同版本 release | E-014、CODE-015/CODE-019 | #13 仓库侧生成器、派生配置、production payload 校验及固定 digest Docker 真实 Nginx 冒烟已完成本地闭环；提交与远端证据、#33 摘要/封装及 #37 服务器回滚兼容仍未完成 |
+| 服务端 301 与同版本 release | E-014、CODE-015/CODE-019 | #13 仓库侧生成器、派生配置、production payload 校验及固定 digest Docker 真实 Nginx 冒烟已完成本地闭环并形成本地实现提交；远端证据、#33 摘要/封装及 #37 服务器回滚兼容仍未完成 |
 | Production build 与最终 artifact | E-015、CODE-015/CODE-016/CODE-020 | 两个质量 job 的 job-local production build 已接线；release 自包含封装、树摘要、上传、artifact identity 和 deploy 输出校验均未实现 |
 | Docusaurus/React/内容/制品/浏览器契约 | D-078、E-001 至 E-016、CODE-003 至 CODE-020 | #22 已完成 Docusaurus build 基线，#23/#5 已完成内容领域核心与真实项目正文，#6/#7 已完成媒体与目的限定安全扫描，#26 已远端闭环单一 docs 内容投影、侧栏、日期索引和 production 制品检查，#27 已远端闭环页面与公开表达，#28 已远端闭环主题、响应式与浏览器最终验收；D-098 与 #12/#24 的集成候选补齐路径泄漏、历史和作者事务门禁 |
 | Node 24 精确与最低端点 | `.nvmrc`、`engines.node`、E-010 双端点离线 CLI | 本地契约与真实 CLI 已验收；D-097 至 D-102 已形成 Ubuntu 双端点 job，正依 D-104 等待精确远端 CI |
