@@ -19,6 +19,7 @@ import {
   BuildSiteError,
   candidateOutputPath,
   captureCandidateBuildEvidence,
+  materializePreviewConfigChunks,
   parseBuildArguments,
   publishCandidateBuild,
   runProductionBuild,
@@ -37,6 +38,57 @@ function writeFixture(root, relativePath, contents = "") {
   mkdirSync(dirname(path), {recursive: true});
   writeFileSync(path, contents, "utf8");
 }
+
+test("E-009 development config chunk 只在模块已合并且映射缺文件时补齐", () => {
+  const root = mkdtempSync(join(tmpdir(), "axial-muse-preview-config-chunk-"));
+  const generatedFilesDirectory = resolve(root, "generated");
+  const candidatePath = resolve(root, "candidate");
+  const chunkName = "config---projects-5-e-9-87c";
+  try {
+    mkdirSync(generatedFilesDirectory, {mode: 0o700});
+    mkdirSync(candidatePath, {mode: 0o700});
+    writeFixture(
+      generatedFilesDirectory,
+      "routesChunkNames.json",
+      `${JSON.stringify({
+        "/projects/-17c": {config: chunkName},
+        "/writing/-5e1": {config: chunkName},
+      })}\n`,
+    );
+    writeFixture(
+      candidatePath,
+      "main.js",
+      [
+        `(self["webpackChunkfixture"] = self["webpackChunkfixture"] || []);`,
+        `"../../transaction/generated/docusaurus.config.mjs"(module) {}`,
+        `const registry = {"${chunkName}": [() => Promise.resolve(/* import() */).then(require.bind(require, "../../transaction/generated/docusaurus.config.mjs"))]};`,
+        "",
+      ].join("\n"),
+    );
+    assert.deepEqual(materializePreviewConfigChunks({
+      candidatePath,
+      generatedFilesDirectory,
+    }), [chunkName]);
+    const chunkPath = resolve(candidatePath, `${chunkName}.js`);
+    assert.equal(
+      readFileSync(chunkPath, "utf8"),
+      `(self["webpackChunkfixture"] = self["webpackChunkfixture"] || []).push([["${chunkName}"],{}]);\n`,
+    );
+    assert.deepEqual(materializePreviewConfigChunks({
+      candidatePath,
+      generatedFilesDirectory,
+    }), []);
+    rmSync(chunkPath);
+    writeFixture(candidatePath, "main.js", `(self["webpackChunkfixture"] = []);\n`);
+    assert.throws(
+      () => materializePreviewConfigChunks({candidatePath, generatedFilesDirectory}),
+      hasBuildCode("BUILD_PREVIEW_CONFIG_CHUNK"),
+    );
+    assert.equal(existsSync(chunkPath), false);
+  } finally {
+    rmSync(root, {recursive: true, force: true});
+  }
+});
 
 test("I-12/E-009 构建参数封闭解析 production/preview 且两种模式均可执行", () => {
   assert.deepEqual(parseBuildArguments(["--mode", "production"]), {mode: "production"});

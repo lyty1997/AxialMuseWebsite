@@ -10,7 +10,7 @@
 
 **一处曾经的误判（2026-07-05 现场验证后更正）**：本文件最初假设“当前 Claude Code CLI 所在环境”等同于“Linux 开发机”，即会话本身固定跑在 Linux 上。实测发现这个假设不成立——Claude Code CLI / Claude Desktop 的编码会话可以运行在 Windows 或 Linux 任意一端（取决于用户在哪台机器上发起对话），与“网站预览服务固定托管在哪台机器”是两回事，不能划等号。本文件后续把两者分开描述：**托管角色**（固定是 `192.168.0.162` 这台 Linux 机器）与**发起编码会话的机器**（可以是 Windows 也可以是 Linux，随时可能变化）。
 
-**实现状态**：E-009 的仓库实现已在 #8 落地：`scripts/dev/preview.sh` 已改为构建并检查 Docusaurus preview 候选，再通过 worktree 外的 release/current 原子激活；`build-site.mjs --mode preview`、冻结依赖证据和 preview 制品检查也已接线。首个实现与 generated files 隔离修复已提交并推送到 `dev`；两次 CI 分别失败关闭于新接入的严格 TypeScript 门禁和 `build --dev` 自动生成的 debug 页面。当前纠正版已改用 Docusaurus 官方 generated-files 环境变量、显式关闭 classic debug 路由，并让拥有正文的未发布项目以不伪造预览图的安全投影进入 preview；在 Windows 工作区的 WSL Ubuntu 以临时官方 nvm `0.40.6`、精确 Node `24.18.0` 通过严格 TypeScript、252/252 隔离测试和真实 `planned` 内容 preview 候选验收，尚待最终 pre-commit、纠正提交与精确远端 CI。Linux 托管机实际配置迁移、运行/失败注入与真实局域网浏览器验收仍未完成，不能把仓库实现写成现场可用能力。
+**实现状态**：E-009 的仓库实现已在 #8 落地：`scripts/dev/preview.sh` 已改为构建并检查 Docusaurus preview 候选，再通过 worktree 外的 release/current 原子激活；`build-site.mjs --mode preview`、冻结依赖证据和 preview 制品检查也已接线。前三个提交及其 CI 依次失败关闭于不受支持的 generated-files 配置、`build --dev` 自动 debug 页面，以及已合入 `main.js` 却仍被预取的缺失 pages config chunk。当前纠正版使用 Docusaurus 官方 generated-files 环境变量、显式关闭 classic debug 路由、让拥有正文的未发布项目以不伪造预览图的安全投影进入 preview，并只在生成映射、缺失目标和 bundle 合并证据全部闭合时登记该已合并 config chunk；同一 preview 候选在 Windows Chrome 150 已从稳定复现唯一 404 转为全部 11 个浏览器探针通过。Windows 工作区的 WSL Ubuntu 使用临时官方 nvm `0.40.6` 和精确 Node `24.18.0`；当前兼容修复尚待最终 pre-commit、纠正提交与精确远端 CI。Linux 托管机实际配置迁移、运行/失败注入与真实局域网浏览器验收仍未完成，不能把仓库实现写成现场可用能力。
 
 ## 工程量判断
 

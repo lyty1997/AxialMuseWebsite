@@ -2,6 +2,7 @@ import {
   chmodSync,
   closeSync,
   constants,
+  fchmodSync,
   fstatSync,
   fsyncSync,
   lstatSync,
@@ -47,6 +48,7 @@ const PREVIEW_SHA_ENV = "AXIAL_MUSE_PREVIEW_COMMIT_SHA";
 const PREVIEW_CONTROLLER_PID_ENV = "AXIAL_MUSE_PREVIEW_CONTROLLER_PID";
 const PREVIEW_ACCESS_HOST_ENV = "AXIAL_MUSE_PREVIEW_ACCESS_HOST";
 const PREVIEW_ACCESS_PORT_ENV = "AXIAL_MUSE_PREVIEW_ACCESS_PORT";
+const PREVIEW_CONFIG_CHUNK_PATTERN = /^config---[a-z0-9-]+$/u;
 const transactionStates = new WeakMap();
 
 export class BuildSiteError extends Error {
@@ -515,6 +517,182 @@ function readStablePrivateFile(path) {
     return {bytes, identity};
   } finally {
     closeSync(descriptor);
+  }
+}
+
+function readStableOwnedFile(path) {
+  const descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const descriptorBefore = fstatSync(descriptor, {bigint: true});
+    const pathBefore = lstatSync(path, {bigint: true});
+    assertTreeEntry(descriptorBefore, "file");
+    assertTreeEntry(pathBefore, "file");
+    if (
+      (descriptorBefore.mode & 0o022n) !== 0n
+      || (pathBefore.mode & 0o022n) !== 0n
+    ) throw new TypeError("owned file permission or size mismatch");
+    const identity = fileIdentity(descriptorBefore);
+    if (!sameFileIdentity(identity, fileIdentity(pathBefore))) {
+      throw new TypeError("owned file path identity mismatch");
+    }
+    const bytes = readFileSync(descriptor);
+    const descriptorAfter = fstatSync(descriptor, {bigint: true});
+    const pathAfter = lstatSync(path, {bigint: true});
+    if (
+      !sameFileIdentity(identity, fileIdentity(descriptorAfter))
+      || !sameFileIdentity(identity, fileIdentity(pathAfter))
+      || BigInt(bytes.byteLength) !== identity.size
+    ) throw new TypeError("owned file changed while reading");
+    return bytes;
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function strictUtf8(bytes) {
+  const value = new TextDecoder("utf-8", {fatal: true}).decode(bytes);
+  if (!Buffer.from(value, "utf8").equals(bytes)) {
+    throw new TypeError("file is not canonical UTF-8");
+  }
+  return value;
+}
+
+function configChunkNames(routesChunkNames) {
+  if (
+    routesChunkNames === null
+    || typeof routesChunkNames !== "object"
+    || Array.isArray(routesChunkNames)
+  ) throw new TypeError("route chunk map must be an object");
+  const names = new Set();
+  for (const route of Object.values(routesChunkNames)) {
+    if (route === null || typeof route !== "object" || Array.isArray(route)) {
+      throw new TypeError("route chunk entry must be an object");
+    }
+    if (!Object.hasOwn(route, "config")) continue;
+    if (
+      typeof route.config !== "string"
+      || !PREVIEW_CONFIG_CHUNK_PATTERN.test(route.config)
+    ) throw new TypeError("route config chunk name is invalid");
+    names.add(route.config);
+  }
+  if (names.size === 0) throw new TypeError("route config chunk set is empty");
+  return [...names].sort();
+}
+
+function configModuleIsMerged(mainSource, chunkName) {
+  const moduleHeader = (
+    /(?:^|\n)"[^"\n]*\/generated\/docusaurus\.config\.mjs"\s*\(/u.test(mainSource)
+    || /(?:^|\n)\/\*\*\*\/ "[^"\n]*\/generated\/docusaurus\.config\.mjs"/u.test(mainSource)
+  );
+  if (!moduleHeader) return false;
+  let offset = 0;
+  const marker = `"${chunkName}"`;
+  while (offset < mainSource.length) {
+    const index = mainSource.indexOf(marker, offset);
+    if (index === -1) return false;
+    const entry = mainSource.slice(index, index + 2_048);
+    if (
+      entry.includes("Promise.resolve(/* import() */)")
+      && entry.includes("generated/docusaurus.config.mjs")
+    ) return true;
+    offset = index + marker.length;
+  }
+  return false;
+}
+
+function assertCanonicalOwnedDirectory(path) {
+  const metadata = lstatSync(path);
+  if (
+    metadata.isSymbolicLink()
+    || !metadata.isDirectory()
+    || (metadata.mode & 0o022) !== 0
+    || (typeof process.getuid === "function" && metadata.uid !== process.getuid())
+    || realpathSync(path) !== path
+  ) throw new TypeError("owned directory identity mismatch");
+}
+
+export function materializePreviewConfigChunks({
+  candidatePath,
+  generatedFilesDirectory,
+} = {}) {
+  try {
+    if (
+      typeof candidatePath !== "string"
+      || !isAbsolute(candidatePath)
+      || resolve(candidatePath) !== candidatePath
+      || typeof generatedFilesDirectory !== "string"
+      || !isAbsolute(generatedFilesDirectory)
+      || resolve(generatedFilesDirectory) !== generatedFilesDirectory
+    ) throw new TypeError("preview config chunk paths are invalid");
+    assertCanonicalOwnedDirectory(candidatePath);
+    assertCanonicalOwnedDirectory(generatedFilesDirectory);
+    const routesSource = strictUtf8(readStableOwnedFile(
+      resolve(generatedFilesDirectory, "routesChunkNames.json"),
+    ));
+    const names = configChunkNames(JSON.parse(routesSource));
+    const mainSource = strictUtf8(readStableOwnedFile(
+      resolve(candidatePath, "main.js"),
+    ));
+    const chunkGlobals = new Set(
+      [...mainSource.matchAll(/self\["(webpackChunk[A-Za-z0-9_]+)"\]/gu)]
+        .map((match) => match[1]),
+    );
+    if (chunkGlobals.size !== 1) throw new TypeError("webpack chunk global is ambiguous");
+    const chunkGlobal = [...chunkGlobals][0];
+    const materialized = [];
+    for (const name of names) {
+      const path = resolve(candidatePath, `${name}.js`);
+      if (dirname(path) !== candidatePath) throw new TypeError("config chunk path escaped");
+      try {
+        readStableOwnedFile(path);
+        continue;
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+      if (!configModuleIsMerged(mainSource, name)) {
+        throw new TypeError("missing config chunk module is not merged into main bundle");
+      }
+      const contents = Buffer.from(
+        `(self["${chunkGlobal}"] = self["${chunkGlobal}"] || []).push([["${name}"],{}]);\n`,
+        "utf8",
+      );
+      const descriptor = openSync(
+        path,
+        constants.O_WRONLY
+          | constants.O_CREAT
+          | constants.O_EXCL
+          | constants.O_NOFOLLOW,
+        0o644,
+      );
+      try {
+        writeFileSync(descriptor, contents);
+        fchmodSync(descriptor, 0o644);
+        fsyncSync(descriptor);
+      } finally {
+        closeSync(descriptor);
+      }
+      const actual = readStableOwnedFile(path);
+      if (!actual.equals(contents)) throw new TypeError("config chunk bytes drifted");
+      materialized.push(name);
+    }
+    if (materialized.length > 0) {
+      const descriptor = openSync(
+        candidatePath,
+        constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+      );
+      try {
+        fsyncSync(descriptor);
+      } finally {
+        closeSync(descriptor);
+      }
+    }
+    return Object.freeze(materialized);
+  } catch (error) {
+    fail(
+      "BUILD_PREVIEW_CONFIG_CHUNK",
+      "Docusaurus development build 的合并 config chunk 无法安全闭合。",
+      {cause: error},
+    );
   }
 }
 
@@ -1342,6 +1520,14 @@ export function runPreviewBuild({
       failureCode: "BUILD_PREVIEW_DOCUSAURUS",
       failureMessage: "Docusaurus preview candidate build 失败。",
       previewRequest: request,
+    });
+    validateTransactionRoot(assertActiveTransaction(transaction));
+    materializePreviewConfigChunks({
+      candidatePath: transaction.candidatePath,
+      generatedFilesDirectory: resolve(
+        transaction.transactionRoot,
+        GENERATED_FILES_DIRECTORY,
+      ),
     });
     const evidence = captureCandidateBuildEvidence(transaction);
     runDocusaurusPhase({
