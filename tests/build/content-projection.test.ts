@@ -524,15 +524,23 @@ interface ArtifactSidebarLink {
 function artifactNavigationLabel(
   item: Readonly<{title: string; publicationStatus: string}>,
 ): string {
-  return item.publicationStatus === "archived"
-    ? `${item.title}（归档）`
-    : item.title;
+  if (item.publicationStatus === "archived") return `${item.title}（归档）`;
+  return item.title;
+}
+
+function artifactProjectNavigationLabel(
+  item: Readonly<{title: string; publicationStatus: string}>,
+): string {
+  if (item.publicationStatus === "archived") return `${item.title}（归档）`;
+  if (item.publicationStatus === "draft") return `${item.title}（草稿）`;
+  if (item.publicationStatus === "planned") return `${item.title}（计划）`;
+  return item.title;
 }
 
 function artifactProjectSidebar(content: LoadedContent): readonly ArtifactSidebarLink[] {
   return content.projectNavigation.map((item) => ({
     href: item.canonicalPath,
-    label: artifactNavigationLabel(item),
+    label: artifactProjectNavigationLabel(item),
   }));
 }
 
@@ -672,10 +680,12 @@ function artifactRelatedList(
 function artifactProjectCard(
   project: LoadedContent["projectNavigation"][number],
 ): string {
+  const preview = project.previewImage;
+  assert.ok(preview);
   return "<article>"
-    + `<img src="${escapeFixtureHtml(project.previewImage.publicUrl)}" `
-    + `alt="${escapeFixtureHtml(project.previewImage.alt)}" `
-    + `width="${project.previewImage.width}" height="${project.previewImage.height}">`
+    + `<img src="${escapeFixtureHtml(preview.publicUrl)}" `
+    + `alt="${escapeFixtureHtml(preview.alt)}" `
+    + `width="${preview.width}" height="${preview.height}">`
     + `<h3><a href="${escapeFixtureHtml(project.canonicalPath)}">`
     + `${escapeFixtureHtml(project.title)}</a></h3>`
     + `<p>项目状态：${ARTIFACT_PROJECT_STATUS_LABELS[project.status]}</p>`
@@ -809,12 +819,14 @@ function artifactExpectedPageHtml(
   }
   const project = content.projectNavigation.find((item) => item.canonicalPath === route);
   if (project !== undefined) {
+    const preview = project.previewImage;
+    assert.ok(preview);
     return artifactPageHtml(route, sidebar, {
       title: `${project.title} | Axial Muse`,
       description: project.summary,
       socialDescription: project.summary,
       openGraphType: "website",
-      openGraphImage: `https://www.axialmuse.com${project.previewImage.publicUrl}`,
+      openGraphImage: `https://www.axialmuse.com${preview.publicUrl}`,
       main: `<h1>${escapeFixtureHtml(project.title)}</h1>`
         + `<p>${escapeFixtureHtml(project.summary)}</p>`
         + `<p>项目状态：${ARTIFACT_PROJECT_STATUS_LABELS[project.status]}</p>`
@@ -826,9 +838,9 @@ function artifactExpectedPageHtml(
         + (project.repositoryUrl === undefined
           ? ""
           : `<a href="${escapeFixtureHtml(project.repositoryUrl)}">查看源码</a>`)
-        + `<img src="${escapeFixtureHtml(project.previewImage.publicUrl)}" `
-        + `alt="${escapeFixtureHtml(project.previewImage.alt)}" `
-        + `width="${project.previewImage.width}" height="${project.previewImage.height}">`
+        + `<img src="${escapeFixtureHtml(preview.publicUrl)}" `
+        + `alt="${escapeFixtureHtml(preview.alt)}" `
+        + `width="${preview.width}" height="${preview.height}">`
         + (project.relatedWriting.length === 0
           ? ""
           : `<dl>${artifactRelatedList("相关技术分享", project.relatedWriting)}</dl>`),
@@ -1025,6 +1037,18 @@ test("E-016 loader 每次形成唯一深冻结链，production/preview 投影不
       "general",
       "project",
     ]);
+    assert.deepEqual(
+      preview.projectNavigation.map((project) => [
+        project.projectId,
+        project.publicationStatus,
+        Object.hasOwn(project, "previewImage"),
+      ]),
+      [
+        ["archived-project", "archived", true],
+        ["published-project", "published", true],
+        ["draft-project", "draft", false],
+      ],
+    );
     assert.deepEqual(preview.writingNavigation.map((group) => group.kind), [
       "general",
       "project",
@@ -1747,6 +1771,13 @@ test("CODE-013 sidebar 只消费当前 docs[].id，并保持 production/preview 
           type: "doc",
           id: ids.get("site-content/projects/published-project/index.md"),
         },
+        ...(mode === "preview"
+          ? [{
+              type: "doc",
+              id: ids.get("site-content/projects/draft-project/index.md"),
+              label: "Draft Project（草稿）",
+            }]
+          : []),
       ]);
 
       const writing = await generator(sidebarArguments(content, "writing", docs) as never);
@@ -2409,6 +2440,7 @@ test("I-14 production artifact 拒绝任一页面缺失、重复或伪造统一 
     const fixture = createArtifactFixture(repositoryRoot, content);
     const project = content.projectNavigation[0];
     assert.ok(project);
+    assert.ok(project.previewImage);
     assert.equal(project.status, "completed");
     assert.equal(project.publicationStatus, "archived");
     const projectPath = resolve(
@@ -2489,6 +2521,7 @@ test("I-14 production artifact 锁定项目图片与项目文章安全显示字�
     const fixture = createArtifactFixture(repositoryRoot, content);
     const project = content.projectNavigation[0];
     assert.ok(project);
+    assert.ok(project.previewImage);
     const projectPath = resolve(
       fixture.buildDirectory,
       artifactHtmlPath(project.canonicalPath),
@@ -2890,6 +2923,7 @@ test("I-14 production artifact 从行内格式、图片替代文本与修饰短�
       const project = content.projectNavigation[0];
       assert.ok(article);
       assert.ok(project);
+      assert.ok(project.previewImage);
       const articlePath = resolve(
         fixture.buildDirectory,
         artifactHtmlPath(article.canonicalPath),

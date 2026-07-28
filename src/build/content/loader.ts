@@ -1489,7 +1489,7 @@ async function loadValidatedContentInternal(
       "技术文章整批校验失败。",
     );
     const projectNavigation = unwrapDomainResult(
-      buildProjectNavigation({catalog, articles}),
+      buildProjectNavigation({mode: input.mode, catalog, articles}),
       "CONTENT_LOAD_PROJECT_NAVIGATION",
       "项目导航投影失败。",
     );

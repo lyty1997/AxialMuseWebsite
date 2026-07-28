@@ -10,7 +10,7 @@
 
 **一处曾经的误判（2026-07-05 现场验证后更正）**：本文件最初假设“当前 Claude Code CLI 所在环境”等同于“Linux 开发机”，即会话本身固定跑在 Linux 上。实测发现这个假设不成立——Claude Code CLI / Claude Desktop 的编码会话可以运行在 Windows 或 Linux 任意一端（取决于用户在哪台机器上发起对话），与“网站预览服务固定托管在哪台机器”是两回事，不能划等号。本文件后续把两者分开描述：**托管角色**（固定是 `192.168.0.162` 这台 Linux 机器）与**发起编码会话的机器**（可以是 Windows 也可以是 Linux，随时可能变化）。
 
-**实现状态**：E-009 的仓库实现已在 #8 工作区落地：`scripts/dev/preview.sh` 已改为构建并检查 Docusaurus preview 候选，再通过 worktree 外的 release/current 原子激活；`build-site.mjs --mode preview`、冻结依赖证据和 preview 制品检查也已接线。该改动已在 Windows 工作区的 WSL Ubuntu 以临时安装的官方 nvm `0.40.6`、精确 Node `24.18.0` 通过完整 pre-commit 质量门，但尚待提交与远端 CI，Linux 托管机实际配置迁移、运行/失败注入与真实局域网浏览器验收也仍未完成，不能把仓库实现写成远端或现场可用能力。
+**实现状态**：E-009 的仓库实现已在 #8 落地：`scripts/dev/preview.sh` 已改为构建并检查 Docusaurus preview 候选，再通过 worktree 外的 release/current 原子激活；`build-site.mjs --mode preview`、冻结依赖证据和 preview 制品检查也已接线。首个实现与 generated files 隔离修复已提交并推送到 `dev`；两次 CI 分别失败关闭于新接入的严格 TypeScript 门禁和 `build --dev` 自动生成的 debug 页面。当前纠正版已改用 Docusaurus 官方 generated-files 环境变量、显式关闭 classic debug 路由，并让拥有正文的未发布项目以不伪造预览图的安全投影进入 preview；在 Windows 工作区的 WSL Ubuntu 以临时官方 nvm `0.40.6`、精确 Node `24.18.0` 通过严格 TypeScript、252/252 隔离测试和真实 `planned` 内容 preview 候选验收，尚待最终 pre-commit、纠正提交与精确远端 CI。Linux 托管机实际配置迁移、运行/失败注入与真实局域网浏览器验收仍未完成，不能把仓库实现写成现场可用能力。
 
 ## 工程量判断
 
@@ -106,7 +106,7 @@ AxialMuseWebsite.preview/          # 专门用于 checkout 待验收分支并构
 
 ## 端到端迭代流程
 
-> 状态说明：Windows 编辑、普通提交与推送、Git 同步、浏览器审查和远程触发已在 2026-07-05 现场验证；图中的 Docusaurus 候选构建与原子切换已有 #8 仓库实现，尚待完整 Linux 门禁、远端配置迁移和现场重新验收。该步骤不代表 production build 或 Ubuntu CI 质量门禁。
+> 状态说明：Windows 编辑、普通提交与推送、Git 同步、浏览器审查和远程触发已在 2026-07-05 现场验证；图中的 Docusaurus 候选构建与原子切换已有 #8 仓库实现，当前本地纠正版尚待最终门禁、精确远端 CI、远端配置迁移和现场重新验收。该步骤不代表 production build 或 Ubuntu CI 质量门禁。
 
 ```plantuml
 @startuml
@@ -161,7 +161,7 @@ deactivate Preview
 4. ~~两端各跑一次 `sync.sh` / `sync.ps1`，确认能互相看到对方的提交~~：**已完成**（此前验证时把 `dev` 推到了 origin，见 [项目进度](../progress.md)）。
 5. **新增并已验证**：Windows 端生成专用 SSH 密钥、用户手动装到 Linux 端 `authorized_keys`、`restart-remote.ps1` 通过 SSH 成功触发 Linux 端 `preview.sh restart`（从 `779407e` 拉到 `ee7b400` 并重启）。
 6. ~~走一轮完整"改动 → 推送 → 远程重启 → Windows 端渲染确认"的端到端验证~~：**已完成，2026-07-05**。Linux 托管机放行局域网到 8088 端口的访问后，`Test-NetConnection` 从 Windows 端确认端口可达；用已配对的 Chrome 扩展 `navigate` 到 `http://192.168.0.162:8088/`，标签页标题变为真实的 `Axial Muse`、正文内容读取正常，确认渲染链路完全打通。详细记录见 [项目进度](../progress.md)。
-7. **仓库实现已落地，待完整门禁与现场验收**：`preview.sh`、环境示例、preview build/check 和冻结依赖证据已在 #8 工作区实现；还需在主 Node `24.18.0` 跑完整质量门，在 Linux 托管机迁移真实 gitignored 配置并准备冻结依赖证据，随后验证 draft/noindex、production 反向隔离、候选原子切换、失败保留旧页面、切换后回滚、并发拒绝、状态报告，以及 `360/768/1024/1440` 真实 Chrome 截图。
+7. **仓库实现已落地，待最终 CI 与现场验收**：`preview.sh`、环境示例、preview build/check 和冻结依赖证据已在 #8 实现；主 Node `24.18.0` 的严格类型、隔离测试和真实内容 preview 候选已经通过，仍需完成当前纠正版的最终 pre-commit 与精确双端点 CI。在 Linux 托管机还需迁移真实 gitignored 配置并准备冻结依赖证据，随后验证 draft/noindex、production 反向隔离、候选原子切换、失败保留旧页面、切换后回滚、并发拒绝、状态报告，以及 `360/768/1024/1440` 真实 Chrome 截图。
 
 
 ## 从开发预览晋级到生产

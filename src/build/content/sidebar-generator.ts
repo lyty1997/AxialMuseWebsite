@@ -52,6 +52,15 @@ function category(
   };
 }
 
+function projectLabel(
+  project: Readonly<{title: string; publicationStatus: string}>,
+): string | undefined {
+  if (project.publicationStatus === "archived") return `${project.title}（归档）`;
+  if (project.publicationStatus === "draft") return `${project.title}（草稿）`;
+  if (project.publicationStatus === "planned") return `${project.title}（计划）`;
+  return undefined;
+}
+
 function moduleCategory(
   group: ModuleWritingGroup,
   docsBySource: ReadonlyMap<string, SidebarItemsGeneratorDoc>,
@@ -177,12 +186,11 @@ export function createSidebarItemsGenerator(
             sourcePath: project.sourcePath,
           });
         }
+        const label = projectLabel(project);
         return {
           type: "doc" as const,
           id: doc.id,
-          ...(project.publicationStatus === "archived"
-            ? {label: `${project.title}（归档）`}
-            : {}),
+          ...(label === undefined ? {} : {label}),
         };
       });
     }

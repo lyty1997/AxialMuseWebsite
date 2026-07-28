@@ -18,11 +18,11 @@ export interface SiteProject {
   readonly canonicalPath: string;
   readonly navigationOrder: number;
   readonly status: "active" | "paused" | "completed" | "archived";
-  readonly publicationStatus: "published" | "archived";
+  readonly publicationStatus: "draft" | "planned" | "published" | "archived";
   readonly updatedAt: string;
   readonly repositoryUrl?: string;
   readonly relatedWriting: readonly SiteContentLink[];
-  readonly previewImage: SiteProjectPreviewImage;
+  readonly previewImage?: SiteProjectPreviewImage;
 }
 
 export interface SiteArticleAuthor {
@@ -112,7 +112,13 @@ export type SiteContentDetail =
 type JsonRecord = Readonly<Record<string, unknown>>;
 
 const PROJECT_STATUSES = new Set(["active", "paused", "completed", "archived"]);
-const PUBLICATION_STATUSES = new Set(["published", "archived"]);
+const PROJECT_PUBLICATION_STATUSES = new Set([
+  "draft",
+  "planned",
+  "published",
+  "archived",
+]);
+const PUBLIC_ARTICLE_STATUSES = new Set(["published", "archived"]);
 
 function fail(fieldPath: string): never {
   throw new Error(
@@ -279,15 +285,26 @@ function readProject(value: unknown, fieldPath: string): SiteProject {
     "relatedWriting",
     "previewImage",
   ], fieldPath);
-  const preview = record(candidate.previewImage, `${fieldPath}.previewImage`);
-  exactKeys(
-    preview,
-    ["publicUrl", "width", "height", "alt"],
-    `${fieldPath}.previewImage`,
+  const publicationStatus = enumValue<SiteProject["publicationStatus"]>(
+    candidate.publicationStatus,
+    PROJECT_PUBLICATION_STATUSES,
+    `${fieldPath}.publicationStatus`,
   );
-  const width = positiveInteger(preview.width, `${fieldPath}.previewImage.width`);
-  const height = positiveInteger(preview.height, `${fieldPath}.previewImage.height`);
-  if (width !== 1600 || height !== 1000) fail(`${fieldPath}.previewImage`);
+  const preview = candidate.previewImage === undefined
+    ? undefined
+    : record(candidate.previewImage, `${fieldPath}.previewImage`);
+  if (preview !== undefined) {
+    exactKeys(
+      preview,
+      ["publicUrl", "width", "height", "alt"],
+      `${fieldPath}.previewImage`,
+    );
+    const width = positiveInteger(preview.width, `${fieldPath}.previewImage.width`);
+    const height = positiveInteger(preview.height, `${fieldPath}.previewImage.height`);
+    if (width !== 1600 || height !== 1000) fail(`${fieldPath}.previewImage`);
+  } else if (publicationStatus === "published" || publicationStatus === "archived") {
+    fail(`${fieldPath}.previewImage`);
+  }
   const projectCanonicalPath = canonicalPath(
     candidate.canonicalPath,
     `${fieldPath}.canonicalPath`,
@@ -310,11 +327,7 @@ function readProject(value: unknown, fieldPath: string): SiteProject {
       PROJECT_STATUSES,
       `${fieldPath}.status`,
     ),
-    publicationStatus: enumValue<SiteProject["publicationStatus"]>(
-      candidate.publicationStatus,
-      PUBLICATION_STATUSES,
-      `${fieldPath}.publicationStatus`,
-    ),
+    publicationStatus,
     updatedAt: date(candidate.updatedAt, `${fieldPath}.updatedAt`),
     ...(candidate.repositoryUrl === undefined
       ? {}
@@ -325,12 +338,16 @@ function readProject(value: unknown, fieldPath: string): SiteProject {
       "article",
       10,
     ),
-    previewImage: {
-      publicUrl: assetUrl(preview.publicUrl, `${fieldPath}.previewImage.publicUrl`),
-      width: 1600,
-      height: 1000,
-      alt: string(preview.alt, `${fieldPath}.previewImage.alt`),
-    },
+    ...(preview === undefined
+      ? {}
+      : {
+          previewImage: {
+            publicUrl: assetUrl(preview.publicUrl, `${fieldPath}.previewImage.publicUrl`),
+            width: 1600 as const,
+            height: 1000 as const,
+            alt: string(preview.alt, `${fieldPath}.previewImage.alt`),
+          },
+        }),
   };
 }
 
@@ -385,7 +402,7 @@ function readArticle(
       )
     : enumValue<"published" | "archived">(
         candidate.publicationStatus,
-        PUBLICATION_STATUSES,
+        PUBLIC_ARTICLE_STATUSES,
         `${fieldPath}.publicationStatus`,
       );
   const seo = record(candidate.seo, `${fieldPath}.seo`);
@@ -589,7 +606,8 @@ export function readSiteContentData(value: unknown): SiteContentData {
       articlesByRoute,
       `projectNavigation.${projectIndex}.relatedWriting`,
       undefined,
-      true,
+      project.publicationStatus === "published"
+        || project.publicationStatus === "archived",
     );
   }
   for (const [articleIndex, article] of articles.entries()) {

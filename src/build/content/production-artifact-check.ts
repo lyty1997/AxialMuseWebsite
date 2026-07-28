@@ -1387,6 +1387,13 @@ function expectedPageExpectation(
   }
   const project = content.projectNavigation.find((item) => item.canonicalPath === route);
   if (project !== undefined) {
+    if (project.previewImage === undefined) {
+      failContentBuild(
+        "CONTENT_ARTIFACT_PROJECT_IMAGE",
+        "production 项目投影缺少已验证主预览。",
+        {sourcePath: `build/${artifactHtmlPathForRoute(route)}`},
+      );
+    }
     return Object.freeze({
       title: `${project.title} | Axial Muse`,
       description: project.summary,
@@ -1494,19 +1501,27 @@ function assertProjectImage(
   project: LoadedValidatedContent["projectNavigation"][number],
   sourcePath: string,
 ): void {
+  const previewImage = project.previewImage;
+  if (previewImage === undefined) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_PROJECT_IMAGE",
+      "production 项目投影缺少已验证主预览。",
+      {sourcePath},
+    );
+  }
   const images = [...main.matchAll(/<img(?=[\t\n\f\r />])[^>]*>/giu)]
     .map((match) => htmlAttributes(match[0], sourcePath))
     .filter((attributes) => (
       decodePageHtmlText(attributes.get("src") ?? "", sourcePath)
-      === project.previewImage.publicUrl
+      === previewImage.publicUrl
     ));
   const image = images[0];
   if (
     images.length !== 1
     || image === undefined
-    || decodePageHtmlText(image.get("alt") ?? "", sourcePath) !== project.previewImage.alt
-    || decodePageHtmlText(image.get("width") ?? "", sourcePath) !== String(project.previewImage.width)
-    || decodePageHtmlText(image.get("height") ?? "", sourcePath) !== String(project.previewImage.height)
+    || decodePageHtmlText(image.get("alt") ?? "", sourcePath) !== previewImage.alt
+    || decodePageHtmlText(image.get("width") ?? "", sourcePath) !== String(previewImage.width)
+    || decodePageHtmlText(image.get("height") ?? "", sourcePath) !== String(previewImage.height)
   ) {
     failContentBuild(
       "CONTENT_ARTIFACT_PROJECT_IMAGE",

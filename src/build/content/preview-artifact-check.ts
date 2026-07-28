@@ -56,9 +56,17 @@ function expectedPreviewRoutes(content: LoadedValidatedContent): readonly string
 function navigationLabel(
   item: Readonly<{title: string; publicationStatus: string}>,
 ): string {
-  return item.publicationStatus === "archived"
-    ? `${item.title}（归档）`
-    : item.title;
+  if (item.publicationStatus === "archived") return `${item.title}（归档）`;
+  return item.title;
+}
+
+function projectNavigationLabel(
+  item: Readonly<{title: string; publicationStatus: string}>,
+): string {
+  if (item.publicationStatus === "archived") return `${item.title}（归档）`;
+  if (item.publicationStatus === "draft") return `${item.title}（草稿）`;
+  if (item.publicationStatus === "planned") return `${item.title}（计划）`;
+  return item.title;
 }
 
 function expectedProjectSidebar(
@@ -66,7 +74,7 @@ function expectedProjectSidebar(
 ): readonly Readonly<{href: string; label: string}>[] {
   return Object.freeze(content.projectNavigation.map((item) => Object.freeze({
     href: item.canonicalPath,
-    label: navigationLabel(item),
+    label: projectNavigationLabel(item),
   })));
 }
 

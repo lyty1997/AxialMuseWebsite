@@ -39,6 +39,7 @@ const config: Config = {
       "./src/build/content/docusaurus-preset.ts",
       {
         blog: false,
+        debug: false,
         theme: {
           customCss: "./src/css/custom.css",
         },

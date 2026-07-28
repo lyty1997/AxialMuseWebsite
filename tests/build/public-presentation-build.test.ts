@@ -665,6 +665,7 @@ test("I-14/I-15 真实 production build 与 Chromium 回归覆盖公开展示和
     );
     assert.equal(previewResult.signal, null);
     assert.equal(previewResult.error, undefined);
+    assert.equal(existsSync(resolve(previewCandidate, "__docusaurus")), false);
     assert.equal(existsSync(resolve(previewCandidate, "sitemap.xml")), false);
     const previewWriting = readFileSync(resolve(previewCandidate, "writing/index.html"), "utf8");
     const previewDraft = readFileSync(

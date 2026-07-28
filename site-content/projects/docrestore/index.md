@@ -23,7 +23,7 @@
 ## 证据说明
 
 - 项目详情页的“查看源码”入口由项目注册表派生；目标公开仓库中的 README、处理流水线代码和测试用于核对当前实现。
-- [项目展示与未来体验设计](../../../docs/projects/docrestore-experience.md)记录主站公开边界，以及尚未实施的在线体验、安全和数据门禁。
+- [项目展示与未来体验设计](https://github.com/lyty1997/AxialMuseWebsite/blob/main/docs/projects/docrestore-experience.md)记录主站公开边界，以及尚未实施的在线体验、安全和数据门禁。
 - 当前证据只支持源码和已核对的工程事实；视觉证据准备完成前，不以占位图或未审核录屏替代。
 
 ## 复盘
