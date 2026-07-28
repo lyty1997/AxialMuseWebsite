@@ -130,10 +130,11 @@ function createContentDataPluginModule(
       },
       postBuild({outDir}) {
         if (session.phase !== "build" || resolve(outDir) !== session.outputDirectory) {
-          failContentBuild("CONTENT_PLUGIN_POST_BUILD", "私有日期索引只允许写入当前 build 候选。", {
-            sourcePath: ARTICLE_DATE_INDEX_RELATIVE_PATH,
+          failContentBuild("CONTENT_PLUGIN_POST_BUILD", "服务端 postBuild 只允许写入当前 build 候选。", {
+            sourcePath: "build",
           });
         }
+        session.publishStaticAssets(outDir);
         writePrivateDateIndex(context.generatedFilesDir, session);
         session.writeBuildSeal();
       },

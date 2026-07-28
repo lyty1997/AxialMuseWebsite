@@ -35,7 +35,7 @@ const config: Config = {
       },
     },
   },
-  staticDirectories: [buildContext.staticDirectory],
+  staticDirectories: [],
   presets: [
     [
       "./src/build/content/docusaurus-preset.ts",

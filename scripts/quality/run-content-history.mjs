@@ -1,0 +1,37 @@
+import {spawnSync} from "node:child_process";
+import {resolve} from "node:path";
+import {pathToFileURL} from "node:url";
+import {projectRoot} from "./lib/files.mjs";
+import {buildQualityChildEnvironment} from "./lib/process-environment.mjs";
+
+const ROOT = projectRoot();
+const CHILD_ENVIRONMENT = buildQualityChildEnvironment();
+
+export const CONTENT_HISTORY_COMMANDS = Object.freeze([
+  ["scripts/quality/check-content-history.mjs"],
+  ["--test", "tests/build/content-history.test.mjs"],
+  ["--test", "tests/build/content-frontmatter-integration.test.mjs"],
+].map((command) => Object.freeze(command)));
+
+export function runContentHistoryGate(spawn = spawnSync) {
+  for (const arguments_ of CONTENT_HISTORY_COMMANDS) {
+    const normalized = arguments_.map((argument) => (
+      argument.startsWith("-") ? argument : resolve(ROOT, argument)
+    ));
+    const result = spawn(process.execPath, normalized, {
+      cwd: ROOT,
+      env: CHILD_ENVIRONMENT,
+      stdio: "inherit",
+    });
+    if (result.error || result.status !== 0 || result.signal) {
+      console.error(`Content history command failed: node ${arguments_.join(" ")}`);
+      return 1;
+    }
+  }
+  console.log("Content history gate passed.");
+  return 0;
+}
+
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  process.exitCode = runContentHistoryGate();
+}

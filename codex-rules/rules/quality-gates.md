@@ -19,6 +19,10 @@ node scripts/quality/check-static-site.mjs
 node --test tests/build/run-isolated-npm.test.mjs
 node --test tests/build/deterministic-spdx.test.mjs
 
+# 不在零依赖 quality 链路里：E-013 复用冻结的 Docusaurus 解析器
+node scripts/quality/run-isolated-npm.mjs ci
+node scripts/quality/run-content-history.mjs
+
 # 不在 quality 链路里：需本机装 Java 并设置 PUML_JAR 才能跑
 PUML_JAR=/path/to/plantuml.jar node scripts/quality/check-diagrams.mjs
 PUML_JAR=/path/to/plantuml.jar node scripts/quality/render-diagrams.mjs
@@ -26,7 +30,7 @@ PUML_JAR=/path/to/plantuml.jar node scripts/quality/render-diagrams.mjs
 python3 -m http.server -d public 8000                   # 临时手动预览当前静态入口
 ```
 
-在获准运行本站 Node.js 的 Linux 工作区，本地提交前由 `.githooks/pre-commit` 自动通过 E-010 隔离入口运行完整 `quality` 负载，`.githooks/commit-msg` 校验提交信息格式；首次克隆后执行一次 `git config core.hooksPath .githooks` 启用，不能绕过。Ubuntu CI 在合入与发布前执行统一验证。
+在获准运行本站 Node.js 的 Linux 工作区，本地提交前由 `.githooks/pre-commit` 自动通过 E-010 隔离入口运行完整零第三方依赖 `quality` 负载，`.githooks/commit-msg` 校验提交信息格式；首次克隆后执行一次 `git config core.hooksPath .githooks` 启用，不能绕过。E-013 历史入口依赖已冻结的 Docusaurus 解析器，因此不属于 `quality`；Ubuntu CI 必须在 E-010 冻结安装后独立运行它。作者需要本地复核时也先显式准备依赖，hook 不自动联网或写入 `node_modules/`。
 
 跨机协同预览走 `scripts/dev/preview.sh`（固定 8088 端口），与上面的临时 8000 预览是两条独立链路，见[跨机协同开发预览工作流](../../docs/architecture/dev-workflow.md)。
 

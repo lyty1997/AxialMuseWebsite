@@ -9,7 +9,9 @@ import {
   realpathSync,
 } from "node:fs";
 import type {BigIntStats} from "node:fs";
+import {tmpdir} from "node:os";
 import {isAbsolute, relative, resolve} from "node:path";
+import {pathToFileURL} from "node:url";
 import {
   scanBuildTree,
   sha256,
@@ -2588,6 +2590,233 @@ function sameFileTreeEvidence(left: BuildTreeEvidence, right: BuildTreeEvidence)
     });
 }
 
+function lowerPercentEscapes(value: string): string {
+  return value.replace(/%[0-9A-F]{2}/gu, (escape) => escape.toLowerCase());
+}
+
+function machinePathRepresentations(value: string): readonly string[] {
+  const bytes = Buffer.from(value, "utf8");
+  const alignedLength = bytes.byteLength - (bytes.byteLength % 3);
+  const base64 = bytes.toString("base64");
+  const alignedBase64 = alignedLength === 0
+    ? ""
+    : bytes.subarray(0, alignedLength).toString("base64");
+  const base64Url = base64.replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+  const alignedBase64Url = alignedBase64.replaceAll("+", "-").replaceAll("/", "_");
+  const component = encodeURIComponent(value);
+  const fileUrl = pathToFileURL(value).href;
+  const baseRepresentations = [
+    value,
+    value.replaceAll("/", "\\/"),
+    value.replaceAll("/", "\\x2f"),
+    value.replaceAll("/", "\\x2F"),
+    value.replaceAll("/", "\\u002f"),
+    value.replaceAll("/", "\\u002F"),
+    component,
+    lowerPercentEscapes(component),
+    encodeURIComponent(component),
+    fileUrl,
+    lowerPercentEscapes(fileUrl),
+    encodeURIComponent(fileUrl),
+    base64,
+    base64.replace(/=+$/u, ""),
+    base64Url,
+    alignedBase64,
+    alignedBase64Url,
+    bytes.toString("hex"),
+    bytes.toString("hex").toUpperCase(),
+  ];
+  const serializedRepresentations = baseRepresentations.map((candidate) => {
+    const serialized = JSON.stringify(candidate);
+    if (serialized === undefined) {
+      failContentBuild(
+        "CONTENT_ARTIFACT_MACHINE_PATH_INPUT",
+        "无法建立服务端机器路径的文本表示。",
+        {sourcePath: "build"},
+      );
+    }
+    return serialized.slice(1, -1);
+  });
+  return Object.freeze([...new Set([
+    ...baseRepresentations,
+    ...serializedRepresentations,
+  ])].filter((candidate) => candidate.length >= 4));
+}
+
+function machinePathPercentRepresentations(value: string): readonly string[] {
+  const component = encodeURIComponent(value);
+  const fileUrl = pathToFileURL(value).href;
+  return Object.freeze([...new Set([
+    component,
+    encodeURIComponent(component),
+    fileUrl,
+    encodeURIComponent(fileUrl),
+  ])].filter((candidate) => candidate.length >= 4));
+}
+
+function machinePathHexRepresentation(value: string): string {
+  return Buffer.from(value, "utf8").toString("hex");
+}
+
+function isAsciiHexDigit(byte: number): boolean {
+  return (
+    (byte >= 0x30 && byte <= 0x39)
+    || (byte >= 0x41 && byte <= 0x46)
+    || (byte >= 0x61 && byte <= 0x66)
+  );
+}
+
+function foldAsciiHexLetter(byte: number): number {
+  return byte >= 0x41 && byte <= 0x46 ? byte + 0x20 : byte;
+}
+
+function normalizePercentEscapeCase(bytes: Uint8Array): void {
+  for (let index = 0; index + 2 < bytes.byteLength; index += 1) {
+    if (
+      bytes[index] !== 0x25
+      || !isAsciiHexDigit(bytes[index + 1])
+      || !isAsciiHexDigit(bytes[index + 2])
+    ) continue;
+    bytes[index + 1] = foldAsciiHexLetter(bytes[index + 1]);
+    bytes[index + 2] = foldAsciiHexLetter(bytes[index + 2]);
+    if (
+      bytes[index + 1] === 0x32
+      && bytes[index + 2] === 0x35
+      && index + 4 < bytes.byteLength
+      && isAsciiHexDigit(bytes[index + 3])
+      && isAsciiHexDigit(bytes[index + 4])
+    ) {
+      bytes[index + 3] = foldAsciiHexLetter(bytes[index + 3]);
+      bytes[index + 4] = foldAsciiHexLetter(bytes[index + 4]);
+    }
+  }
+}
+
+function normalizeAsciiHexCase(bytes: Uint8Array): void {
+  for (let index = 0; index < bytes.byteLength; index += 1) {
+    bytes[index] = foldAsciiHexLetter(bytes[index]);
+  }
+}
+
+function includesAnyToken(
+  bytes: Uint8Array,
+  tokens: readonly Buffer[],
+): boolean {
+  const view = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return tokens.some((token) => view.includes(token));
+}
+
+function hasNormalizedMachinePathLeak(
+  buildDirectory: string,
+  baseline: BuildTreeEvidence,
+  percentTokens: readonly Buffer[],
+  hexTokens: readonly Buffer[],
+): boolean {
+  for (const file of baseline.files) {
+    const bytes = readStableFileBytes(
+      resolve(buildDirectory, file.relativePath),
+      `build/${file.relativePath}`,
+      file,
+    );
+    let percentView: Uint8Array | undefined;
+    try {
+      percentView = Uint8Array.from(bytes);
+      normalizePercentEscapeCase(percentView);
+      if (includesAnyToken(percentView, percentTokens)) return true;
+      normalizeAsciiHexCase(bytes);
+      if (includesAnyToken(bytes, hexTokens)) return true;
+    } finally {
+      percentView?.fill(0);
+      bytes.fill(0);
+    }
+  }
+  return false;
+}
+
+function assertNoMachinePathLeak(
+  content: LoadedValidatedContent,
+  buildDirectory: string,
+  generatedFilesDirectory: string,
+  baseline: BuildTreeEvidence,
+): void {
+  let temporaryRoot: string;
+  try {
+    temporaryRoot = realpathSync(tmpdir());
+  } catch (error) {
+    failContentBuild(
+      "CONTENT_ARTIFACT_MACHINE_PATH_INPUT",
+      "无法建立受控系统临时路径泄漏证据。",
+      {cause: error, sourcePath: "build"},
+    );
+  }
+  const values = [...new Set([
+    content.repositoryRoot,
+    buildDirectory,
+    generatedFilesDirectory,
+    resolve(temporaryRoot, "axial-muse-build-"),
+  ])].sort();
+  const tokens = [...new Set(values.flatMap(machinePathRepresentations))]
+    .map((value) => Buffer.from(value, "utf8"));
+  const percentTokens = [...new Set(values.flatMap(machinePathPercentRepresentations))]
+    .map((value) => {
+      const token = Buffer.from(value, "utf8");
+      normalizePercentEscapeCase(token);
+      return token;
+    });
+  const hexTokens = [...new Set(values.map(machinePathHexRepresentation))]
+    .map((value) => Buffer.from(value, "utf8"));
+  const allTokens = [...tokens, ...percentTokens, ...hexTokens];
+  const totalTokenBytes = allTokens.reduce((total, token) => total + token.byteLength, 0);
+  if (
+    allTokens.length > MAX_UNPUBLISHED_CONTENT_TOKENS
+    || allTokens.some((token) => token.byteLength > MAX_UNPUBLISHED_CONTENT_TOKEN_BYTES)
+    || totalTokenBytes > MAX_UNPUBLISHED_CONTENT_TOKEN_TOTAL_BYTES
+  ) {
+    for (const token of allTokens) token.fill(0);
+    failContentBuild(
+      "CONTENT_ARTIFACT_MACHINE_PATH_INPUT",
+      "服务端机器路径泄漏证据超过固定资源上限。",
+      {sourcePath: "build"},
+    );
+  }
+  try {
+    const evidence = scanBuildTree(buildDirectory, [], tokens, []);
+    if (!sameFileTreeEvidence(baseline, evidence)) {
+      failContentBuild(
+        "CONTENT_ARTIFACT_DRIFT",
+        "production 制品在机器路径泄漏扫描期间发生漂移。",
+        {sourcePath: "build"},
+      );
+    }
+    const hasNormalizedLeak = hasNormalizedMachinePathLeak(
+      buildDirectory,
+      baseline,
+      percentTokens,
+      hexTokens,
+    );
+    const afterNormalizedScan = scanBuildTree(buildDirectory, [], [], []);
+    if (!sameFileTreeEvidence(baseline, afterNormalizedScan)) {
+      failContentBuild(
+        "CONTENT_ARTIFACT_DRIFT",
+        "production 制品在机器路径规范化扫描期间发生漂移。",
+        {sourcePath: "build"},
+      );
+    }
+    if (
+      evidence.hasLeakedContentToken
+      || hasNormalizedLeak
+    ) {
+      failContentBuild(
+        "CONTENT_ARTIFACT_MACHINE_PATH",
+        "production 制品含服务端仓库、候选或受控临时路径表示。",
+        {sourcePath: "build"},
+      );
+    }
+  } finally {
+    for (const token of allTokens) token.fill(0);
+  }
+}
+
 interface UnpublishedLeakTokens {
   readonly pathTokens: readonly Uint8Array[];
   readonly contentTokens: readonly Uint8Array[];
@@ -2935,6 +3164,12 @@ export function assertProductionArtifact(
   const leakTokens = unpublishedTokens(content);
   try {
     const evidence = scanBuildWithLeakTokens(buildDirectory, leakTokens);
+    assertNoMachinePathLeak(
+      content,
+      buildDirectory,
+      generatedFilesDirectory,
+      evidence,
+    );
     if (evidence.hasLeakedToken) {
       failContentBuild("CONTENT_ARTIFACT_UNPUBLISHED", "production 制品含未发布内容标识或正文。", {
         sourcePath: "build",

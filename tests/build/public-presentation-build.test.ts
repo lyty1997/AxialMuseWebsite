@@ -38,6 +38,7 @@ const ROOT_FILES = Object.freeze([
 ]);
 const ROOT_DIRECTORIES = Object.freeze([
   "src",
+  "scripts/author/lib",
   "scripts/build",
   "scripts/content",
   "scripts/quality/lib",

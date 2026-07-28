@@ -14,6 +14,8 @@ node_modules/
 /.axial-muse-build-retired/
 /.axial-muse-build-candidate-*/
 /.axial-muse-build-backup-*/
+/.axial-muse-author.lock
+/site-content/.author-staging-*
 /.docusaurus/
 .next/
 out/
