@@ -82,6 +82,8 @@ function createFixture() {
       typecheck: "tsc --noEmit",
       test: "node scripts/quality/run-tests.mjs",
       build: "node scripts/build/build-site.mjs --mode production",
+      "package:artifact": "node scripts/release/package-site.mjs",
+      "check:artifact": "node scripts/quality/check-release-package.mjs",
     },
     dependencies: {
       "@docusaurus/core": "3.10.2",

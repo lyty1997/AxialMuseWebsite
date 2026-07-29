@@ -96,7 +96,8 @@ function baseManifest() {
       typecheck: "tsc --noEmit",
       test: "node scripts/quality/run-tests.mjs",
       build: "node scripts/build/build-site.mjs --mode production",
-      "check:artifact": "node scripts/quality/check-artifact.mjs",
+      "package:artifact": "node scripts/release/package-site.mjs",
+      "check:artifact": "node scripts/quality/check-release-package.mjs",
     },
     engines: {
       node: `>=${TEST_MINIMUM_NODE_VERSION} <${NODE_MAJOR + 1}`,
@@ -663,6 +664,8 @@ test("E-010 npm isolation contract", async (t) => {
       ["--test", "tests/build/module-boundaries.test.mjs"],
       ["--test", "tests/build/content-decoders.test.mjs"],
       ["--test", "tests/build/runtime-redirects.test.mjs"],
+      ["--test", "tests/build/file-tree.test.mjs"],
+      ["--test", "tests/build/release-package.test.mjs"],
       ["--test", "tests/build/build-site.test.mjs"],
       ["--test", "tests/build/author-transaction.test.mjs"],
     ]);
@@ -1337,6 +1340,7 @@ test("E-010 npm isolation contract", async (t) => {
       ["audit", null, ["audit", "--include=dev", "--audit-level=moderate", "--json"]],
       ["sbom-native", null, ["sbom", "--package-lock-only", "--sbom-format=spdx", "--sbom-type=application", "--offline"]],
       ["run-script", "quality", ["run", "quality"]],
+      ["run-script", "check:artifact", ["run", "--silent", "check:artifact"]],
     ];
     for (const [profile, scriptName, expected] of cases) {
       assert.deepEqual(
@@ -2297,6 +2301,26 @@ test("E-010 npm isolation contract", async (t) => {
       "fixture stdout\nIsolated npm profile passed: ci (registry=official, cache=fresh, config=isolated).\n",
     );
     assert.equal(loggedError, "fixture stderr\n");
+
+    loggedOutput = "";
+    loggedError = "";
+    writeIsolatedNpmResult({
+      profile: "run-script",
+      scriptName: "check:artifact",
+      stdout: `releaseContentSha256=${"a".repeat(64)}\n`,
+      stderr: "",
+    }, {
+      standardOutput: { write: (chunk) => { loggedOutput += chunk; } },
+      standardError: { write: (chunk) => { loggedError += chunk; } },
+    });
+    assert.equal(
+      loggedOutput,
+      `releaseContentSha256=${"a".repeat(64)}\n`,
+    );
+    assert.equal(
+      loggedError,
+      "Isolated npm profile passed: run-script (registry=official, cache=fresh, config=isolated).\n",
+    );
   });
 
   await t.test("rejects local bin escapes before a run-script workload", () => {

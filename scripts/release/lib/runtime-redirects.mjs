@@ -8,6 +8,7 @@ import {
   readdirSync,
   realpathSync,
 } from "node:fs";
+import {createHash} from "node:crypto";
 import {dirname, isAbsolute, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {
@@ -325,7 +326,29 @@ function assertSingleLinkRegularFile(metadata) {
   }
 }
 
-function readStableRegularFile(path, sourcePath) {
+function operationalFileIdentity(metadata) {
+  const hash = createHash("sha256");
+  for (const value of [
+    metadata.dev,
+    metadata.ino,
+    metadata.mode,
+    metadata.nlink,
+    metadata.uid,
+    metadata.gid,
+    metadata.size,
+    metadata.mtimeNs,
+    metadata.ctimeNs,
+  ]) {
+    const bytes = Buffer.from(value.toString(10), "ascii");
+    const length = Buffer.alloc(8);
+    length.writeBigUInt64BE(BigInt(bytes.byteLength));
+    hash.update(length);
+    hash.update(bytes);
+  }
+  return hash.digest("hex");
+}
+
+function readStableRegularFileSnapshot(path, sourcePath) {
   let descriptor;
   let value;
   let operationError;
@@ -360,7 +383,10 @@ function readStableRegularFile(path, sourcePath) {
     ) {
       throw new TypeError("file identity changed while reading");
     }
-    value = new Uint8Array(bytes);
+    value = Object.freeze({
+      bytes: new Uint8Array(bytes),
+      operationalSha256: operationalFileIdentity(descriptorAfter),
+    });
   } catch (cause) {
     operationError = cause;
   }
@@ -406,13 +432,21 @@ function assertCanonicalRepositoryRoot(repositoryRoot) {
 }
 
 export function readRedirectRegistryFromRepositoryRoot(repositoryRoot) {
+  return readRedirectRegistrySnapshotFromRepositoryRoot(repositoryRoot).registry;
+}
+
+export function readRedirectRegistrySnapshotFromRepositoryRoot(repositoryRoot) {
   assertCanonicalRepositoryRoot(repositoryRoot);
-  return parseRedirectRegistry(
-    readStableRegularFile(
-      resolve(repositoryRoot, REDIRECT_REGISTRY_SOURCE_PATH),
-      REDIRECT_REGISTRY_SOURCE_PATH,
-    ),
+  const snapshot = readStableRegularFileSnapshot(
+    resolve(repositoryRoot, REDIRECT_REGISTRY_SOURCE_PATH),
+    REDIRECT_REGISTRY_SOURCE_PATH,
   );
+  return Object.freeze({
+    registry: parseRedirectRegistry(snapshot.bytes),
+    rawSha256: createHash("sha256").update(snapshot.bytes).digest("hex"),
+    byteLength: snapshot.bytes.byteLength,
+    operationalSha256: snapshot.operationalSha256,
+  });
 }
 
 export function readRedirectRegistry() {

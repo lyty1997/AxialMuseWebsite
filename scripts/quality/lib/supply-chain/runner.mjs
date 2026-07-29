@@ -1246,6 +1246,7 @@ export function runIsolatedNpm({
     }
     return {
       profile,
+      scriptName,
       runtime,
       arguments: workloadArguments,
       stdout: workloadResult.stdout,

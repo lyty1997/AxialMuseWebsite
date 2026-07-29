@@ -20,6 +20,7 @@ import {
   captureCandidateBuildEvidence,
   parseBuildArguments,
   publishCandidateBuild,
+  runProductionArtifactCheck,
   runProductionBuild,
 } from "../../scripts/build/build-site.mjs";
 
@@ -109,6 +110,137 @@ test("CODE-014 production build 持有 build lock 后二次拒绝并发作者 lo
       readFileSync(resolve(root, ".axial-muse-author.lock"), "utf8"),
       "fixture\n",
     );
+  } finally {
+    rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("#33 production artifact checker 只持验证锁并保留既有 retired 状态", () => {
+  const root = mkdtempSync(join(tmpdir(), "axial-muse-production-check-"));
+  try {
+    writeFixture(root, ".nvmrc", readFileSync(resolve(PROJECT_ROOT, ".nvmrc")));
+    writeFixture(
+      root,
+      "package.json",
+      readFileSync(resolve(PROJECT_ROOT, "package.json")),
+    );
+    mkdirSync(resolve(root, "site-content/writing"), {recursive: true});
+    writeFixture(root, "build/index.html", "<!doctype html>\n");
+    writeFixture(root, ".axial-muse-build-retired/identity.txt", "retired\n");
+    writeFixture(
+      root,
+      "node_modules/@docusaurus/core/bin/docusaurus.mjs",
+      [
+        "import {writeFileSync} from \"node:fs\";",
+        "import {resolve} from \"node:path\";",
+        "if (process.argv.slice(2).join(\" \") !== \"axial-muse:check-production\") process.exit(9);",
+        "const transactionRoot = process.env.AXIAL_MUSE_BUILD_TRANSACTION_ROOT;",
+        "writeFileSync(resolve(transactionRoot, \".axial-muse-content-input-seal\"), [",
+        "  \"axial-muse-content-input-v1\",",
+        "  \"owner:\" + process.env.AXIAL_MUSE_BUILD_OWNER,",
+        "  \"sha256:\" + \"f\".repeat(64),",
+        "  \"\",",
+        "].join(\"\\n\"), {encoding: \"utf8\", flag: \"wx\", mode: 0o600});",
+        "writeFileSync(\"production-check-call.json\", JSON.stringify({",
+        "  phase: process.env.AXIAL_MUSE_BUILD_PHASE,",
+        "  output: process.env.AXIAL_MUSE_BUILD_OUTPUT,",
+        "  transactionRoot,",
+        "}));",
+      ].join("\n"),
+    );
+
+    assert.equal(runProductionArtifactCheck({root}), undefined);
+    const call = JSON.parse(
+      readFileSync(resolve(root, "production-check-call.json"), "utf8"),
+    );
+    assert.deepEqual(
+      {phase: call.phase, output: call.output},
+      {phase: "release", output: resolve(root, "build")},
+    );
+    assert.equal(existsSync(call.transactionRoot), false);
+    assert.equal(existsSync(resolve(root, ".axial-muse-build.lock")), false);
+    assert.equal(
+      readFileSync(
+        resolve(root, ".axial-muse-build-retired/identity.txt"),
+        "utf8",
+      ),
+      "retired\n",
+    );
+  } finally {
+    rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("#33 production artifact checker 拒绝退出 0 但未生成输入 seal 的空操作", () => {
+  const root = mkdtempSync(join(tmpdir(), "axial-muse-production-check-no-seal-"));
+  try {
+    writeFixture(root, ".nvmrc", readFileSync(resolve(PROJECT_ROOT, ".nvmrc")));
+    writeFixture(
+      root,
+      "package.json",
+      readFileSync(resolve(PROJECT_ROOT, "package.json")),
+    );
+    mkdirSync(resolve(root, "site-content/writing"), {recursive: true});
+    writeFixture(root, "build/index.html", "<!doctype html>\n");
+    writeFixture(
+      root,
+      "node_modules/@docusaurus/core/bin/docusaurus.mjs",
+      [
+        "import {writeFileSync} from \"node:fs\";",
+        "if (process.argv.slice(2).join(\" \") !== \"axial-muse:check-production\") process.exit(9);",
+        "writeFileSync(\"production-check-call.json\", JSON.stringify({",
+        "  transactionRoot: process.env.AXIAL_MUSE_BUILD_TRANSACTION_ROOT,",
+        "}));",
+      ].join("\n"),
+    );
+
+    assert.throws(
+      () => runProductionArtifactCheck({root}),
+      hasBuildCode("BUILD_ARTIFACT_CHECK_SEAL"),
+    );
+    const call = JSON.parse(
+      readFileSync(resolve(root, "production-check-call.json"), "utf8"),
+    );
+    assert.equal(existsSync(call.transactionRoot), false);
+    assert.equal(existsSync(resolve(root, ".axial-muse-build.lock")), false);
+  } finally {
+    rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("#33 production artifact checker 拒绝不属于当前 owner 的输入 seal", () => {
+  const root = mkdtempSync(join(tmpdir(), "axial-muse-production-check-wrong-seal-"));
+  try {
+    writeFixture(root, ".nvmrc", readFileSync(resolve(PROJECT_ROOT, ".nvmrc")));
+    writeFixture(
+      root,
+      "package.json",
+      readFileSync(resolve(PROJECT_ROOT, "package.json")),
+    );
+    mkdirSync(resolve(root, "site-content/writing"), {recursive: true});
+    writeFixture(root, "build/index.html", "<!doctype html>\n");
+    writeFixture(
+      root,
+      "node_modules/@docusaurus/core/bin/docusaurus.mjs",
+      [
+        "import {writeFileSync} from \"node:fs\";",
+        "import {resolve} from \"node:path\";",
+        "if (process.argv.slice(2).join(\" \") !== \"axial-muse:check-production\") process.exit(9);",
+        "const transactionRoot = process.env.AXIAL_MUSE_BUILD_TRANSACTION_ROOT;",
+        "writeFileSync(resolve(transactionRoot, \".axial-muse-content-input-seal\"), [",
+        "  \"axial-muse-content-input-v1\",",
+        "  \"owner:not-current-owner\",",
+        "  \"sha256:\" + \"f\".repeat(64),",
+        "  \"\",",
+        "].join(\"\\n\"), {encoding: \"utf8\", flag: \"wx\", mode: 0o600});",
+      ].join("\n"),
+    );
+
+    assert.throws(
+      () => runProductionArtifactCheck({root}),
+      hasBuildCode("BUILD_ARTIFACT_CHECK_SEAL"),
+    );
+    assert.equal(existsSync(resolve(root, ".axial-muse-build.lock")), false);
   } finally {
     rmSync(root, {recursive: true, force: true});
   }
