@@ -64,11 +64,12 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 | Output directory | Docusaurus production 输出为默认 `build/`，#33 的临时交付根为 `dist/release/`；`dist/` 不提交。当前公网仍提供迁移前 `public/`，尚未部署 Docusaurus release |
 | Artifact 身份 | 仓库侧已实现 40 位提交 SHA、source build tree、内部清单与 artifact 外 `releaseContentSha256`；canonical repository、workflow run ID/attempt、artifact ID 和 GitHub 外层 `artifactDigest` 仍须由 #14 producer/upload 生成，展示名不用于选择 |
 | Artifact 内容 | #33 已实现 `payload/`（已重验 `build/` 的逐文件复制）与 `metadata/`（source build tree、提交标识、release manifest、逐文件 SHA-256、运行重定向清单和 Nginx exact-location 配置）的本地确定性生成与复验；尚无已上传 production artifact |
+| 服务器 artifact 校验器 | #35 已在仓库实现只使用 Python 3.12 标准库的 `ops/deploy/verify_artifact.py` 与 Node/Python 共享 golden；本地负向验收不等于服务器安装。#14 真实 ZIP shape 与 #36 `/usr/bin/python3`、root-owned 安装副本、owner/mode 仍待现场复验 |
 | 跨 job build 边界 | E-015 固定不上传或下载中间 build artifact；`production-artifact` 在 fresh runner 自包含重建、重验和封装，避免消费其他 job 文件系统 |
 | 发布新鲜度 | 目标：`deploy-production` 在引用 CAM Secret/腾讯云 API 前以只读 GitHub API 证明 canonical `refs/heads/main` 仍等于候选 SHA；concurrency 只互斥、不承担顺序；尚未实施 |
 | Workflow token | 目标：prerequisite/producer 仅 `contents: read`，deploy 仅 `contents: read`、`actions: read`，其他 scope 全部为 `none`；尚未实施 |
 | Artifact 读取 | OD-009 待核验；公开仓库无需凭证，私有仓库仅用单仓库 `Actions: read` 细粒度凭证 |
-| 服务器发布职责 | 目标：分别校验外层 `artifactDigest` 与从解包后 exact release 独立重算的 `releaseContentSha256`，再校验元数据、归档路径与文件清单，把同 SHA payload/运行清单/Nginx 配置安装至不可变 release，用 URL 暴露账本验证历史闭包，生成精确 SHA root/include，执行隔离候选测试、`nginx -t`、reload、逐规则冒烟和受控恢复 |
+| 服务器发布职责 | #35 只负责从私有 staging 校验外层 `artifactDigest`、安全解包、从 exact release 独立重算 `releaseContentSha256`，并交叉校验元数据、清单、运行规则与提交身份，成功形成 `verified-release`。#37 才在部署锁内复核后安装同 SHA payload/运行清单/Nginx 配置至不可变 release，用 URL 暴露账本验证历史闭包，生成精确 SHA root/include，执行隔离候选测试、`nginx -t`、reload、逐规则冒烟和受控恢复；两者均尚未部署 |
 | 活动重定向身份 | #33 的 release metadata 已实现源注册表摘要、公开路由摘要、运行清单摘要、Nginx 配置摘要和规则数；当前尚无已部署活动 release |
 | URL 暴露账本 | 目标：`/var/lib/axialmuse/url-exposure-ledger.json`；每次 reload 前只追加候选的全部规范 200 路径和新增或改指的 registered 301 边，`canonical-slash` 不入边账本但 target 由路由预写保护；记录每次 deployment 前后摘要并由 root-owned 备份保护，当前未创建 |
 | 回滚兼容谓词 | 目标：每个历史 published route 仍可解析，每条历史 301 边的 source/target 收敛到同一当前 200；只有目标文件但缺少 source 规则不算兼容 |

@@ -20,6 +20,8 @@ node_modules/
 .next/
 out/
 coverage/
+__pycache__/
+*.py[cod]
 
 # Local environment
 .env

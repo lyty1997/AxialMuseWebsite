@@ -1,5 +1,6 @@
 {
   "wireMagic": "AXIALMUSE-FILE-TREE-V1",
+  "pathUnicodeVersion": "15.0.0",
   "vectors": [
     {
       "name": "empty-tree",
@@ -67,6 +68,30 @@
         }
       ],
       "treeSha256": "3a0122f8a13776f38107facdaa6551142eb9c8b67c2b57cd55c7591c9d32593d"
+    }
+  ],
+  "invalidVectors": [
+    {
+      "name": "post-unicode-15-combining-sequence",
+      "files": [
+        {
+          "path": "a/\u0315\u0897.txt",
+          "contentBase64": ""
+        }
+      ]
+    },
+    {
+      "name": "post-unicode-15-case-pair",
+      "files": [
+        {
+          "path": "a/\u1c89.txt",
+          "contentBase64": "QQ=="
+        },
+        {
+          "path": "a/\u1c8a.txt",
+          "contentBase64": "Qg=="
+        }
+      ]
     }
   ]
 }

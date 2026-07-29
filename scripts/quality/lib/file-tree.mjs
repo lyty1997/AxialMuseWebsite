@@ -12,7 +12,9 @@ import {
 import {isAbsolute, relative, resolve, sep} from "node:path";
 
 export const FILE_TREE_WIRE_MAGIC = "AXIALMUSE-FILE-TREE-V1";
+export const FILE_TREE_PATH_UNICODE_VERSION = "15.0.0";
 export const FILE_TREE_MAX_FILES = 65_536;
+export const FILE_TREE_MAX_DIRECTORIES = FILE_TREE_MAX_FILES * 2;
 export const FILE_TREE_MAX_DEPTH = 64;
 export const FILE_TREE_MAX_SEGMENT_BYTES = 255;
 export const FILE_TREE_MAX_PATH_BYTES = 4_096;
@@ -25,6 +27,35 @@ const READ_CHUNK_BYTES = 64 * 1024;
 const HEX_64_PATTERN = /^[0-9a-f]{64}$/u;
 const CONTROL_CHARACTER_PATTERN =
   /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
+const ASSIGNED_CHARACTER_PATTERN = /^\p{Assigned}$/u;
+const POST_UNICODE_15_ASSIGNED_RANGES = Object.freeze([
+  [2191, 2191], [2199, 2199], [3164, 3164], [3292, 3292],
+  [6863, 6877], [6880, 6891], [6990, 6991], [7039, 7039],
+  [7305, 7306], [8385, 8385], [9255, 9257], [11158, 11158],
+  [12284, 12287], [12772, 12773], [12783, 12783], [42955, 42959],
+  [42962, 42962], [42964, 42964], [42970, 42972], [42993, 42993],
+  [64451, 64466], [64912, 64913], [64968, 64974], [67008, 67059],
+  [67904, 67929], [68928, 68965], [68969, 68997], [69006, 69007],
+  [69314, 69319], [69328, 69336], [69370, 69372], [70528, 70537],
+  [70539, 70539], [70542, 70542], [70544, 70581], [70583, 70592],
+  [70594, 70594], [70597, 70597], [70599, 70602], [70604, 70613],
+  [70615, 70616], [70625, 70626], [71376, 71395], [72544, 72551],
+  [72640, 72673], [72688, 72697], [73136, 73179], [73184, 73193],
+  [73562, 73562], [78944, 82938], [90368, 90425], [93504, 93561],
+  [93856, 93880], [93883, 93907], [94194, 94198], [100344, 100351],
+  [101631, 101631], [101641, 101662], [101760, 101874],
+  [117760, 118012], [118016, 118451], [118458, 118480],
+  [118496, 118512], [124368, 124410], [124415, 124415],
+  [124608, 124638], [124640, 124661], [124670, 124671],
+  [128728, 128728], [128887, 128890], [129202, 129211],
+  [129216, 129217], [129232, 129240], [129620, 129623],
+  [129673, 129674], [129678, 129679], [129726, 129726],
+  [129734, 129734], [129736, 129736], [129741, 129741],
+  [129756, 129756], [129759, 129759], [129769, 129770],
+  [129775, 129775], [129995, 130031], [130042, 130042],
+  [177978, 177983], [183970, 183981], [191472, 192093],
+  [205744, 210041],
+].map((range) => Object.freeze(range)));
 const URL_SCHEME_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:/u;
 const UTF8_DECODER = new TextDecoder("utf-8", {fatal: true});
 const UTF8_ENCODER = new TextEncoder();
@@ -150,6 +181,35 @@ function encodeUtf8(value, sourcePath) {
   return bytes;
 }
 
+function isPostUnicode15Assigned(codePoint) {
+  let lower = 0;
+  let upper = POST_UNICODE_15_ASSIGNED_RANGES.length - 1;
+  while (lower <= upper) {
+    const middle = Math.floor((lower + upper) / 2);
+    const [rangeStart, rangeEnd] = POST_UNICODE_15_ASSIGNED_RANGES[middle];
+    if (codePoint < rangeStart) {
+      upper = middle - 1;
+    } else if (codePoint > rangeEnd) {
+      lower = middle + 1;
+    } else {
+      return true;
+    }
+  }
+  return false;
+}
+
+function usesUnicode15AssignedRepertoire(value) {
+  for (const character of value) {
+    if (
+      !ASSIGNED_CHARACTER_PATTERN.test(character)
+      || isPostUnicode15Assigned(character.codePointAt(0))
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function sameBytes(left, right) {
   if (left.byteLength !== right.byteLength) return false;
   for (let index = 0; index < left.byteLength; index += 1) {
@@ -180,6 +240,7 @@ function assertCanonicalSegment(name, bytes, sourcePath) {
     || name.includes("/")
     || name.includes("\\")
     || CONTROL_CHARACTER_PATTERN.test(name)
+    || !usesUnicode15AssignedRepertoire(name)
     || name.normalize("NFC") !== name
   ) {
     fail("FILE_TREE_PATH", sourcePath);
@@ -193,6 +254,7 @@ function assertCanonicalRelativePath(value, sourcePath) {
     || value.startsWith("/")
     || value.includes("\\")
     || CONTROL_CHARACTER_PATTERN.test(value)
+    || !usesUnicode15AssignedRepertoire(value)
     || value.normalize("NFC") !== value
   ) {
     fail("FILE_TREE_PATH", sourcePath);
@@ -424,6 +486,7 @@ function normalizeRecords(records) {
     .sort((left, right) => Buffer.compare(left.pathBytes, right.pathBytes));
   const exactBytes = new Set();
   const folded = new Set();
+  const directories = new Set();
   let totalBytes = 0;
   for (const record of normalized) {
     const byteKey = Buffer.from(record.path, "utf8").toString("hex");
@@ -433,6 +496,13 @@ function normalizeRecords(records) {
     }
     exactBytes.add(byteKey);
     folded.add(foldedPath);
+    const segments = record.path.split("/");
+    for (let index = 1; index < segments.length; index += 1) {
+      directories.add(segments.slice(0, index).join("/"));
+      if (directories.size > FILE_TREE_MAX_DIRECTORIES) {
+        fail("FILE_TREE_LIMIT", record.path);
+      }
+    }
     totalBytes += record.byteLength;
     if (totalBytes > FILE_TREE_MAX_TOTAL_BYTES) {
       fail("FILE_TREE_LIMIT", record.path);
@@ -523,6 +593,7 @@ export function captureFileTree(options) {
   const records = [];
   const exactPaths = new Set();
   const foldedPaths = new Set();
+  let directoryCount = 0;
   let totalBytes = 0;
 
   const walk = (directory, segments) => {
@@ -580,6 +651,10 @@ export function captureFileTree(options) {
         fail("FILE_TREE_ENTRY", sourcePath);
       }
       if (metadata.isDirectory()) {
+        directoryCount += 1;
+        if (directoryCount > FILE_TREE_MAX_DIRECTORIES) {
+          fail("FILE_TREE_LIMIT", sourcePath);
+        }
         walk(path, [...segments, name]);
         continue;
       }

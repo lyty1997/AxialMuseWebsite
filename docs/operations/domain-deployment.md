@@ -96,12 +96,12 @@ M0 不额外建设公网 staging 子域名，避免增加服务器配置、证�
 | 组件 | 职责 | 约束 |
 |---|---|---|
 | Nginx | HTTPS、同版本 301、安全头、静态文件 | 使用系统包；不安装可视化服务器面板；请求期只引用精确 release SHA |
-| 系统下载、归档与哈希工具 | 从固定 GitHub 仓库读取 artifact 元数据，安全解包并校验摘要和文件清单 | 不处理源码、不调用 Node/npm，也不从源码 checkout 执行脚本；具体系统包在实施前核验 |
+| 系统下载、归档与哈希工具 | 从固定 GitHub 仓库读取 artifact 元数据，安全解包并校验摘要和文件清单 | #35 的 verifier 固定使用 Ubuntu 24.04 `/usr/bin/python3` 3.12 标准库且不调用 Node/npm；目标机实际版本、owner/mode 与下载工具仍在 #36 现场核验 |
 | Certbot | 签发与续期 TLS 证书 | 使用 webroot HTTP-01；续期后验证并 reload Nginx |
 | TAT agent | 接收腾讯云固定运维命令 | 保持在线；命令和实例按 CAM 最小授权 |
 | logrotate / systemd | 日志轮转、服务与续期定时器 | 不引入第三方常驻监控 agent |
 
-当前公网仍使用迁移前 `public/`，但仓库已具备 Docusaurus production `build/`、#13 服务端 301 派生和 #33 确定性 `dist/release/` 封装/独立复验；这些本地能力尚未形成可部署 Actions artifact。#14 仍须把 E-005/E-014/E-015 固定的链路接入 `production-artifact`：对 `main` 精确 SHA 在 fresh runner 自包含重建、重验、封装并单次上传，使 release 同时绑定静态 payload 与服务端 301 派生配置。#37 再实现生产服务器只接收、校验和提供该 release，不承担源码拉取、写作、编辑、依赖安装或构建。
+当前公网仍使用迁移前 `public/`，但仓库已具备 Docusaurus production `build/`、#13 服务端 301 派生和 #33 确定性 `dist/release/` 封装/独立复验；这些本地能力尚未形成可部署 Actions artifact。#14 仍须把 E-005/E-014/E-015 固定的链路接入 `production-artifact`：对 `main` 精确 SHA 在 fresh runner 自包含重建、重验、封装并单次上传，使 release 同时绑定静态 payload 与服务端 301 派生配置。#35 独立实现服务器的双摘要、安全解包和内部闭包复验；#37 再消费已验证 staging，完成不可变安装、账本、Nginx 与激活。两者都不允许服务器拉取源码、写作、编辑、安装 Node/npm 或执行构建。
 
 ### 目录契约
 
@@ -138,7 +138,8 @@ M0-P 实施时按以下路径纳入仓库；表中路径是设计契约，文件
 |---|---|
 | `ops/nginx/axialmuse.conf` | 精确 Host、ACME 边界、release include、兜底跳转、错误页和缓存规则 |
 | `ops/nginx/snippets/security-headers.conf` | CSP、HSTS 以外的安全响应头；HSTS 由启用步骤单独控制 |
-| `ops/deploy/deploy.sh` | 校验固定仓库的 workflow run、artifact、SHA、摘要、归档路径与文件清单，安装同版本 payload/config，用暴露账本检查历史 URL 闭包，生成精确 SHA 包装，执行隔离预检、`nginx -t`、reload、冒烟与受控恢复 |
+| `ops/deploy/verify_artifact.py` | 以系统 Python 标准库独立校验外层 artifact、ZIP 路径、完整 release tree、内部 metadata/清单和运行规则，只在全部通过后产生固定 `verified-release/` staging |
+| `ops/deploy/deploy.sh` | 编排固定 workflow/artifact 身份与下载并调用独立 verifier；在锁内复核 `verified-release/` 身份和整树摘要后负责不可变安装、暴露账本、精确 SHA 包装、隔离预检、`nginx -t`、reload、冒烟与受控恢复，不重复安全解包或内部清单解析 |
 | `ops/deploy/rollback.sh` | 只整版切换到已存在、通过校验且使账本中历史 source/target 收敛到同一当前 200 终点的兼容 release |
 | `ops/systemd/` | 证书检查、服务器健康与维护 timer/service 模板 |
 | `ops/logrotate/` | Nginx error log 和认证日志保留策略模板 |
@@ -195,8 +196,8 @@ GitHub environment 可以限制部署分支、保护 secrets 并控制并发。�
 1. GitHub Actions 使用 `InvokeCommand` 请求执行已开启自定义参数的 `axialmuse-deploy` TAT command，并传入且只传入 `workflowRunId`、`artifactId`、40 位 `commitSha`、GitHub 上传输出的 `artifactDigest` 与上传前 job output `releaseContentSha256`；两个摘要均为不带算法前缀的 64 位小写十六进制且职责不同，不能共用字段。
 2. root 持有的发布入口严格校验参数形态，并只访问脚本内固定的 GitHub owner/repository；不接受任意 URL、shell 片段、分支名或文件路径。
 3. 服务器读取 artifact 元数据，核对 workflow run、artifact ID、`head_sha` 和未过期状态；REST `digest` 必须精确等于 ASCII `sha256:` 拼接 TAT 的裸 `artifactDigest`，缺失、其他算法、重复前缀、大小写或长度异常均失败，不做宽松归一化。公开仓库不带凭证，私有仓库只使用经 OD-009 核验和单独配置的 `Actions: read` 凭证。
-4. artifact 下载到 `staging/` 后，先对下载的外层字节计算裸 SHA-256 hex 并精确核对 `artifactDigest`，再拒绝绝对路径、父目录逃逸、越界链接和非预期归档结构；安全解包后由 root-owned 服务器 verifier 按 CODE-020 的稳定 wire format 从全部 release 普通文件独立重算并核对 artifact 外传入的 `releaseContentSha256`，随后才核对内部逐文件 SHA-256 清单、源注册表/公开路由摘要、运行清单、Nginx 配置和规则数。服务器 verifier 与仓库 Node 实现是跨信任边界的两个实现，接线前必须通过 CODE-020 的同一组 golden vectors 和负面路径 fixture；服务器不得运行/导入仓库脚本，也不得用 artifact 内自报字段替代任一 TAT 期望值。
-5. 全部校验通过后，把 `payload/` 与两个已绑定的可部署派生文件安装到同文件系统临时 release 的 `payload/`、`config/`，校验入口、关键资源、301 source/target、文件权限和目录大小；root-owned 固定脚本只根据已验证 40 位 SHA 生成绝对 payload root 与同 SHA redirect include，不解析源码注册表，也不运行仓库脚本、Node/npm 或构建。
+4. artifact 下载到本次 root-owned、权限 `0700` 的 staging root 固定名、mode `0600` 的 `artifact.zip` 后，`/usr/bin/python3 -I -B` 运行固定 `verify_artifact.py`：先从同一 archive fd 计算裸 SHA-256 并精确核对 `artifactDigest`，再在标准库 ZIP 解析前有界核对 EOCD/ZIP64、成员数和 central directory，随后预扫并安全解包，拒绝绝对路径、父目录逃逸、链接、特殊文件、重复/大小写/前缀冲突、隐藏或非规范路径及非预期归档结构；按 CODE-020 稳定 wire format 从全部 release 普通文件独立重算并核对 artifact 外传入的 `releaseContentSha256`，最后核对内部逐文件 SHA-256 清单、payload/公开路由摘要、运行清单、Nginx 配置、规则数、metadata commit 与 TAT `commitSha`。服务器没有源 `redirects.json`，其摘要只由外传完整 release digest 绑定，不声称在服务器重算。全部通过后，以 `RENAME_NOREPLACE` 形成固定 `verified-release/` 并从正式路径重算整树；入口前已存在或竞态出现的同名对象必须原样保留并失败，本事务失败只清理身份仍可证明的候选/输出。服务器 verifier 与仓库 Node 实现是跨信任边界的两个实现，接线前必须通过 CODE-020 的同一组正向与 Unicode 漂移负面 vectors；服务器不得运行/导入仓库脚本，也不得用 artifact 内自报字段代替任一 TAT 期望值。
+5. deploy 在排他锁内复核 `verified-release/` 的 inode 与完整树摘要后，才把 `payload/` 与两个已绑定的可部署派生文件安装到同文件系统临时 release 的 `payload/`、`config/`，校验入口、关键资源、301 source/target、文件权限和目录大小；root-owned 固定脚本只根据已验证 40 位 SHA 生成绝对 payload root 与同 SHA redirect include，不解析源码注册表，也不运行仓库脚本、Node/npm 或构建。
 6. 候选在公开激活前用隔离的本机 Nginx 监听地址完成静态检查、全部 exact 301、唯一 `Location`、查询保留和目标 200 行为验证，不只运行 `nginx -t`。
 7. 部署排他锁内读取 root-owned 暴露账本，对候选定义最多一步的路径解析：历史规范 200 路径必须仍可解析，每条历史 301 边的 source 与历史 target 必须收敛到同一当前 200。只有目标文件而没有历史 source 规则仍判定不兼容。
 8. 候选的全部规范 200 路径，以及新增或改指后可能暴露的 registered 301 边，先并入候选账本；`canonical-slash` 不单独写入边账本，但其 canonical target 必须作为候选规范路由预写。激活前必须选出一个也满足更新后账本的 fallback release。不存在时默认拒绝发布；只有 production environment 的单独授权明确接受 forward-only，才允许在没有自动回滚的情况下继续。首次发布新 canonical URL 时，旧 release 通常没有该 target，因此通常属于此类 forward-only 激活。
