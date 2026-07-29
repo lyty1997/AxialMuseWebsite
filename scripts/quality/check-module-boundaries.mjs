@@ -420,7 +420,13 @@ function validateRootContracts(root, issues) {
         "根 package.json 不得改变 Docusaurus 生成 .js 文件的 CommonJS 解释边界。",
       );
     }
-    for (const scriptName of ["typecheck", "test", "build"]) {
+    for (const scriptName of [
+      "typecheck",
+      "test",
+      "build",
+      "package:artifact",
+      "check:artifact",
+    ]) {
       const allowed = RUN_SCRIPT_COMMANDS[scriptName];
       if (!allowed.includes(packageJson.scripts?.[scriptName])) {
         addIssue(

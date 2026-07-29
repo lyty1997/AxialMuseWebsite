@@ -1,0 +1,72 @@
+{
+  "wireMagic": "AXIALMUSE-FILE-TREE-V1",
+  "vectors": [
+    {
+      "name": "empty-tree",
+      "files": [],
+      "treeSha256": "4587f34b1ee143b99d0732020e2764e0a4a42a1e270afb32a346fc17dc7034c1"
+    },
+    {
+      "name": "empty-file",
+      "files": [
+        {
+          "path": "empty.txt",
+          "contentBase64": ""
+        }
+      ],
+      "treeSha256": "1423a426816007514e81e9b5381eae805597df3297c97e0c98306f791ab23158"
+    },
+    {
+      "name": "non-ascii-path",
+      "files": [
+        {
+          "path": "资料/空.txt",
+          "contentBase64": "QXhpYWwK"
+        }
+      ],
+      "treeSha256": "8b9b47820489b90357e88c76a29ea8c2954e303fe7108210523dc7453551334a"
+    },
+    {
+      "name": "single-byte-a",
+      "files": [
+        {
+          "path": "byte.txt",
+          "contentBase64": "QQ=="
+        }
+      ],
+      "treeSha256": "c9c730dc3c544d2cd1283806d0b33099f16446fa7c3a4e49df6dc0080d00eb5d"
+    },
+    {
+      "name": "single-byte-b",
+      "files": [
+        {
+          "path": "byte.txt",
+          "contentBase64": "Qg=="
+        }
+      ],
+      "treeSha256": "48ca570701b1e3ef16c11475fc99d1b4ce03f23b1b80ee9065c679e79c6e8f84"
+    },
+    {
+      "name": "raw-utf8-byte-order",
+      "files": [
+        {
+          "path": "𐀀.txt",
+          "contentBase64": "c3VwcAo="
+        },
+        {
+          "path": ".txt",
+          "contentBase64": "cHVhCg=="
+        },
+        {
+          "path": "é.txt",
+          "contentBase64": "YWNjZW50Cg=="
+        },
+        {
+          "path": "a.txt",
+          "contentBase64": "QQo="
+        }
+      ],
+      "treeSha256": "3a0122f8a13776f38107facdaa6551142eb9c8b67c2b57cd55c7591c9d32593d"
+    }
+  ]
+}

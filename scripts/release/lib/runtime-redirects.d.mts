@@ -22,6 +22,13 @@ export interface RedirectRegistry {
   readonly redirects: readonly RedirectRegistryEntry[];
 }
 
+export interface RedirectRegistrySnapshot {
+  readonly registry: RedirectRegistry;
+  readonly rawSha256: string;
+  readonly byteLength: number;
+  readonly operationalSha256: string;
+}
+
 export interface RuntimeRedirectRule {
   readonly kind: RuntimeRedirectKind;
   readonly from: string;
@@ -58,6 +65,10 @@ export function readRedirectRegistry(): RedirectRegistry;
 export function readRedirectRegistryFromRepositoryRoot(
   repositoryRoot: string,
 ): RedirectRegistry;
+
+export function readRedirectRegistrySnapshotFromRepositoryRoot(
+  repositoryRoot: string,
+): RedirectRegistrySnapshot;
 
 export function publicRouteFromHtmlPath(
   relativePath: string,

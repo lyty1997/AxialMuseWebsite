@@ -37,6 +37,8 @@ export const QUALITY_COMMANDS = Object.freeze([
   ["--test", "tests/build/module-boundaries.test.mjs"],
   ["--test", "tests/build/content-decoders.test.mjs"],
   ["--test", "tests/build/runtime-redirects.test.mjs"],
+  ["--test", "tests/build/file-tree.test.mjs"],
+  ["--test", "tests/build/release-package.test.mjs"],
   ["--test", "tests/build/build-site.test.mjs"],
   ["--test", "tests/build/author-transaction.test.mjs"],
 ].map((command) => Object.freeze(command)));

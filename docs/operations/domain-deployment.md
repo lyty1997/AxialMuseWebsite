@@ -1,7 +1,7 @@
 # 域名与生产发布设计
 
 状态：draft
-最近更新：2026-07-27
+最近更新：2026-07-29
 适用范围：M0 腾讯云域名、DNS、轻量应用服务器、HTTPS、自动发布与回滚
 
 ## 目的
@@ -101,7 +101,7 @@ M0 不额外建设公网 staging 子域名，避免增加服务器配置、证�
 | TAT agent | 接收腾讯云固定运维命令 | 保持在线；命令和实例按 CAM 最小授权 |
 | logrotate / systemd | 日志轮转、服务与续期定时器 | 不引入第三方常驻监控 agent |
 
-当前仓库仍是迁移前 `public/` 骨架，目标 workflow、artifact 和服务器发布入口尚未实现。E-005/E-014/E-015 已固定目标链路：Docusaurus 只在 GitHub Actions 构建默认 `build/`，`production-artifact` 对 `main` 精确 SHA 在 fresh runner 自包含重建、重验并封装，release 同时绑定静态 payload 与服务端 301 派生配置；生产服务器只接收、校验和提供该 release，不承担源码拉取、写作、编辑、依赖安装或构建。
+当前公网仍使用迁移前 `public/`，但仓库已具备 Docusaurus production `build/`、#13 服务端 301 派生和 #33 确定性 `dist/release/` 封装/独立复验；这些本地能力尚未形成可部署 Actions artifact。#14 仍须把 E-005/E-014/E-015 固定的链路接入 `production-artifact`：对 `main` 精确 SHA 在 fresh runner 自包含重建、重验、封装并单次上传，使 release 同时绑定静态 payload 与服务端 301 派生配置。#37 再实现生产服务器只接收、校验和提供该 release，不承担源码拉取、写作、编辑、依赖安装或构建。
 
 ### 目录契约
 
