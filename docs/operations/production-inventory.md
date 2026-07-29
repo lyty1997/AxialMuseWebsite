@@ -60,14 +60,14 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 | 生产分支 | `main` |
 | 发布方式 | 目标：GitHub Actions 构建不可变 artifact -> 腾讯云 TAT 受限交付 -> 校验后原子 release；尚未实施 |
 | 构建位置 | 目标：仅 GitHub Actions 构建；PR/`main` 的 `website-quality` 与 release-eligible `production-artifact` 各自在独立 runner 构建，只有后者对 `main` 精确 SHA fresh rebuild + full quality 的 build 可部署；生产服务器不构建 |
-| Build command | 仓库已实现 `build`、`package:artifact` 与 `check:artifact`；后两者复用冻结依赖中的 production checker，并完成确定性封装及外部 `releaseContentSha256` 复验。#14 尚未把完整顺序接入四个 prerequisite 之后的 `production-artifact` job |
+| Build command | 仓库已实现 `build`、`package:artifact` 与 `check:artifact`；后两者复用冻结依赖中的 production checker，并完成确定性封装及外部 `releaseContentSha256` 复验。#14 已在当前工作区把完整顺序接入四个 prerequisite 之后的 `production-artifact` job，但尚无 canonical `main` 真实运行 |
 | Output directory | Docusaurus production 输出为默认 `build/`，#33 的临时交付根为 `dist/release/`；`dist/` 不提交。当前公网仍提供迁移前 `public/`，尚未部署 Docusaurus release |
-| Artifact 身份 | 仓库侧已实现 40 位提交 SHA、source build tree、内部清单与 artifact 外 `releaseContentSha256`；canonical repository、workflow run ID/attempt、artifact ID 和 GitHub 外层 `artifactDigest` 仍须由 #14 producer/upload 生成，展示名不用于选择 |
+| Artifact 身份 | 仓库侧已实现 40 位提交 SHA、source build tree、内部清单与 artifact 外 `releaseContentSha256`；#14 工作区接线在 upload 前形成 build/release 操作 seal，upload 后复核同一 seal、HEAD blob 与默认 index 状态后，才映射 canonical repository、workflow run ID/attempt、artifact ID 和 GitHub 外层 `artifactDigest` 七项 outputs，展示名不用于选择。由于尚未发生真实 upload，这些 GitHub 服务端身份没有实际值 |
 | Artifact 内容 | #33 已实现 `payload/`（已重验 `build/` 的逐文件复制）与 `metadata/`（source build tree、提交标识、release manifest、逐文件 SHA-256、运行重定向清单和 Nginx exact-location 配置）的本地确定性生成与复验；尚无已上传 production artifact |
-| 服务器 artifact 校验器 | #35 已在仓库实现只使用 Python 3.12 标准库的 `ops/deploy/verify_artifact.py` 与 Node/Python 共享 golden；本地负向验收不等于服务器安装。#14 真实 ZIP shape 与 #36 `/usr/bin/python3`、root-owned 安装副本、owner/mode 仍待现场复验 |
+| 服务器 artifact 校验器 | #35 已由本地提交 `f7fdc43` 实现只使用 Python 3.12 标准库的 `ops/deploy/verify_artifact.py` 与 Node/Python 共享 golden，但尚未推送；本地负向验收不等于服务器安装。#14 真实 ZIP shape 与 #36 `/usr/bin/python3`、root-owned 安装副本、owner/mode 仍待现场复验 |
 | 跨 job build 边界 | E-015 固定不上传或下载中间 build artifact；`production-artifact` 在 fresh runner 自包含重建、重验和封装，避免消费其他 job 文件系统 |
 | 发布新鲜度 | 目标：`deploy-production` 在引用 CAM Secret/腾讯云 API 前以只读 GitHub API 证明 canonical `refs/heads/main` 仍等于候选 SHA；concurrency 只互斥、不承担顺序；尚未实施 |
-| Workflow token | 目标：prerequisite/producer 仅 `contents: read`，deploy 仅 `contents: read`、`actions: read`，其他 scope 全部为 `none`；尚未实施 |
+| Workflow token | prerequisite 与 #14 producer 的 `contents: read` 已在当前工作区配置，其他 producer scope 为 `none`；deploy 的 `contents: read`、`actions: read` 及其余 scope 收敛仍属 #34/#37 未实现目标 |
 | Artifact 读取 | OD-009 待核验；公开仓库无需凭证，私有仓库仅用单仓库 `Actions: read` 细粒度凭证 |
 | 服务器发布职责 | #35 只负责从私有 staging 校验外层 `artifactDigest`、安全解包、从 exact release 独立重算 `releaseContentSha256`，并交叉校验元数据、清单、运行规则与提交身份，成功形成 `verified-release`。#37 才在部署锁内复核后安装同 SHA payload/运行清单/Nginx 配置至不可变 release，用 URL 暴露账本验证历史闭包，生成精确 SHA root/include，执行隔离候选测试、`nginx -t`、reload、逐规则冒烟和受控恢复；两者均尚未部署 |
 | 活动重定向身份 | #33 的 release metadata 已实现源注册表摘要、公开路由摘要、运行清单摘要、Nginx 配置摘要和规则数；当前尚无已部署活动 release |
@@ -139,6 +139,7 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 
 | 日期 | 变更 | 原因 | 验证 |
 |---|---|---|---|
+| 2026-07-29 | 按 D-110 在工作区接入 canonical `main` push 的 fresh `production-artifact`、固定完整 SHA 的官方 upload Action、单次精确上传和七项校验后 outputs | 闭合 E-015/CODE-020 的最终 build 字节所有权，并为 #34/#35 提供明确的 artifact 身份边界 | 本地静态与合成 fixture 契约已通过；改动尚未提交或推送，且没有 canonical `main` 真实 run、upload、artifact ID/digest、可下载 ZIP、required checks 或 Issue 关闭证据 |
 | 2026-07-18 | 记录 E-014 的同版本服务端 301、精确 SHA Web Root/include、只追加 URL 暴露账本、历史 source/target 收敛谓词和 fallback/forward-only 恢复边界 | 静态跳转页无法返回真实 301，请求期 `current` Web Root 会在 graceful reload 中混用新旧代，且只检查目标文件会误放缺少历史 source 规则的回滚 | 设计已落盘；生成器、artifact、账本、Nginx、TAT 和服务器操作均未实施 |
 | 2026-07-18 | 记录 E-015 的 production artifact 自包含重建、同 job build tree/封装闭包、唯一 ID/双摘要输出、main HEAD 新鲜度和最小 token 边界 | GitHub jobs 文件系统隔离；直接封装另一个 job 的 `build/` 没有输入，建立中间 handoff 又会增加 Action、归档、重跑和过期协议；concurrency 不保证旧 run 不会晚到 | 设计已落盘；选择在 `production-artifact` fresh runner 重新执行完整主端点质量，不实现中间 build artifact；workflow 与 Action 均未修改 |
 | 2026-07-18 | 记录 E-005 的 GitHub Actions `build/` artifact、TAT 受限参数和服务器只校验/解包/切换目标 | D-078 委托内部工程细节后形成静态制品交付决定 | 设计已落盘；Action、凭证、workflow、TAT、服务器与 DNS 操作均未实施，仍需对应准入、核验和授权 |
