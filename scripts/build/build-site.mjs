@@ -585,17 +585,40 @@ function configModuleIsMerged(mainSource, chunkName) {
     || /(?:^|\n)\/\*\*\*\/ "[^"\n]*\/generated\/docusaurus\.config\.mjs"/u.test(mainSource)
   );
   if (!moduleHeader) return false;
-  let offset = 0;
-  const marker = `"${chunkName}"`;
-  while (offset < mainSource.length) {
-    const index = mainSource.indexOf(marker, offset);
-    if (index === -1) return false;
-    const entry = mainSource.slice(index, index + 2_048);
-    if (
-      entry.includes("Promise.resolve(/* import() */)")
-      && entry.includes("generated/docusaurus.config.mjs")
-    ) return true;
-    offset = index + marker.length;
+  const registryShapes = Object.freeze([
+    Object.freeze({
+      marker: `"${chunkName}"`,
+      alias: '"@generated/docusaurus.config"',
+    }),
+    Object.freeze({
+      marker: `\\"${chunkName}\\"`,
+      alias: '\\"@generated/docusaurus.config\\"',
+    }),
+  ]);
+  for (const {marker, alias} of registryShapes) {
+    let offset = 0;
+    while (offset < mainSource.length) {
+      const index = mainSource.indexOf(marker, offset);
+      if (index === -1) break;
+      const entry = mainSource.slice(index, index + 2_048);
+      const importIndex = entry.indexOf("Promise.resolve(/* import() */)");
+      const configModuleIndex = entry.indexOf(
+        "generated/docusaurus.config.mjs",
+        importIndex,
+      );
+      const aliasIndex = entry.indexOf(alias, configModuleIndex);
+      const resolvedConfigModuleIndex = entry.indexOf(
+        "generated/docusaurus.config.mjs",
+        aliasIndex + alias.length,
+      );
+      if (
+        importIndex !== -1
+        && configModuleIndex !== -1
+        && aliasIndex !== -1
+        && resolvedConfigModuleIndex !== -1
+      ) return true;
+      offset = index + marker.length;
+    }
   }
   return false;
 }

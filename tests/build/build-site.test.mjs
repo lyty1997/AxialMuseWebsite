@@ -60,8 +60,16 @@ test("E-009 development config chunk 只在模块已合并且映射缺文件时�
       "main.js",
       [
         `(self["webpackChunkfixture"] = self["webpackChunkfixture"] || []);`,
-        `"../../transaction/generated/docusaurus.config.mjs"(module) {}`,
-        `const registry = {"${chunkName}": [() => Promise.resolve(/* import() */).then(require.bind(require, "../../transaction/generated/docusaurus.config.mjs"))]};`,
+        `"../../transaction/generated/docusaurus.config.mjs"(__unused_module, __webpack_exports__, __webpack_require__) {}`,
+        `eval(${JSON.stringify([
+          "const registry = {",
+          `  "${chunkName}": [`,
+          '    ()=>Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, "../../transaction/generated/docusaurus.config.mjs")),',
+          '    "@generated/docusaurus.config",',
+          '    /*require.resolve*/("../../transaction/generated/docusaurus.config.mjs")',
+          "  ]",
+          "};",
+        ].join("\n"))});`,
         "",
       ].join("\n"),
     );
@@ -79,7 +87,46 @@ test("E-009 development config chunk 只在模块已合并且映射缺文件时�
       generatedFilesDirectory,
     }), []);
     rmSync(chunkPath);
-    writeFixture(candidatePath, "main.js", `(self["webpackChunkfixture"] = []);\n`);
+    writeFixture(
+      candidatePath,
+      "main.js",
+      [
+        `(self["webpackChunkfixture"] = []);`,
+        `"../../transaction/generated/docusaurus.config.mjs"(__unused_module, __webpack_exports__, __webpack_require__) {}`,
+        `eval(${JSON.stringify([
+          "const registry = {",
+          `  "${chunkName}": [`,
+          '    ()=>Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, "../../transaction/generated/docusaurus.config.mjs")),',
+          '    "@generated/docusaurus.config",',
+          '    /*require.resolve*/("../../transaction/generated/globalData.json")',
+          "  ]",
+          "};",
+        ].join("\n"))});`,
+        "",
+      ].join("\n"),
+    );
+    assert.throws(
+      () => materializePreviewConfigChunks({candidatePath, generatedFilesDirectory}),
+      hasBuildCode("BUILD_PREVIEW_CONFIG_CHUNK"),
+    );
+    writeFixture(
+      candidatePath,
+      "main.js",
+      [
+        `(self["webpackChunkfixture"] = []);`,
+        `"../../transaction/generated/docusaurus.config.mjs"(__unused_module, __webpack_exports__, __webpack_require__) {}`,
+        `eval(${JSON.stringify([
+          "const registry = {",
+          `  "${chunkName}": [`,
+          '    ()=>Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, "../../transaction/generated/globalData.json")),',
+          '    "@generated/globalData",',
+          '    /*require.resolve*/("../../transaction/generated/globalData.json")',
+          "  ]",
+          "};",
+        ].join("\n"))});`,
+        "",
+      ].join("\n"),
+    );
     assert.throws(
       () => materializePreviewConfigChunks({candidatePath, generatedFilesDirectory}),
       hasBuildCode("BUILD_PREVIEW_CONFIG_CHUNK"),

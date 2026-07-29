@@ -427,6 +427,7 @@ start_server() {
   fi
   (
     cd "${state_root}"
+    exec 9>&-
     exec nohup python3 -m http.server \
       --bind 0.0.0.0 --directory current "${PORT}"
   ) >"${server_log}" 2>&1 < /dev/null &

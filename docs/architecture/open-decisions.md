@@ -220,6 +220,14 @@
 
 - Docusaurus、Node/npm、TypeScript、内容模型、路由、主题、注册表、Linux/Ubuntu-only 执行边界、供应链协议、默认 `build/` 产物、production job 字节所有权及 GitHub Actions/TAT 交付方向已经确定。内部脚本、API、schema、测试和 CI 接线属于 D-078 委托范围；#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端闭环，#27/#28 已由 `main@d00000e` 收纳。D-097 至 D-102 的可信 CI、#12 历史门禁与 #32 workflow 契约，以及 D-103 的 #24 作者事务已在专题分支完成实现和本地验收；D-104 授权其并入 `dev` 后以精确集成 SHA 完成 CI，再经 `dev -> main` PR 验收。临时 ref 不替代上述远端 run 或 Issue 证据。#25 已在当前临时分支依 D-106/CODE-014 完成直接 Node 日期入口、状态机、历史日期 ledger、原子替换与显式作者验收的本地实现，并通过 fresh checkout 的完整本地门禁；尚未提交、推送、取得远端 CI 或关闭 Issue。#8、#13/#14 与 #33 按各自依赖继续跟踪预览和 release 实现。后续依赖变化、新增外部工具、artifact/upload Action 与凭证、Git 发布和基础设施操作仍保留对应门禁。
 - E-010 的 npm 配置与缓存隔离、官方 registry/lock 来源预检、版本闭包、旁路门禁和双端点 CLI，E-011 的确定性 SPDX 规范化与证据状态机，以及 #21 的策略/admission schema、真实候选审查、tarball/NOTICE、audit 受限报告、正式三制品、静态闭包、最终证据持有、双端点冻结安装和 composite receipt 均已通过真实图验收；#22 已消费该准入图并完成 Docusaurus/TypeScript 基线的远端闭环。D-097 至 D-102 已接通 Node 24 主/最低端点、完整历史、真实内容 production build、静态供应链证据与零依赖本地质量入口并完成专题本地验收，现依 D-104 纳入 `dev`；普通 CI 不运行 live audit，已知 18 个 high 仍作为未修复风险跟踪。#28 已完成零 npm 依赖的真实 Chrome 自动回归；组合 workflow 的远端执行、`main` required checks、production artifact 和受限 retention 仍待验收或后续实现。任何依赖图变化都必须重新走包含 live audit 的准入闭环。
+- **GitHub Actions 分层与额度优化（待用户确认；[Issue #61](https://github.com/lyty1997/AxialMuseWebsite/issues/61)）**：当前 private repository 的四 job workflow 在 #8 三次实际纠错 run 中，按 GitHub-hosted runner 逐 job 分钟取整约消耗 `6 + 8 + 8 = 22` 分钟，且均尚未进入成功的 production build；本月仓库观测到 64 次 workflow run，当前计费周期额度已用完，最新 run 未获 runner。现有重复包括主/最低 Node 各自执行完整安装与负载、已属于两次 `quality` 的静态供应链又由独立 job 第三次执行，以及十几秒的 diagrams/supply-chain 分别占用 runner。候选方案互斥且尚未批准：
+  1. **方案 A（推荐）**：本地 pre-commit 保留零依赖 `quality`；`dev` push 只执行单一主 Node 安装后集成 job；`dev -> main` PR 执行完整双端点远端验收，并把 PlantUML 与静态供应链收回主 job；`main` 只承担精确 SHA 构建/制品阶段。
+  2. **方案 B**：本地 pre-push 承担完整负载，`dev` push 不自动使用托管 runner，远端只在 PR 或手工触发时完整验收；节省最多，但 `dev` 不再具有 GitHub 验证结论，且本地 hook 可被绕过。
+  3. **方案 C**：改用 WSL self-hosted runner；不消耗 GitHub-hosted 分钟，但新增 runner 凭证、在线可用性、隔离、升级与事故响应责任。
+
+  独立于上述远端 CI 方案选择，开发阶段已确认保留当前 WSL 本地 CI 环境，不在每次任务后删除或重新安装 Node 与冻结依赖。该环境只在 `.nvmrc`、npm 版本闭包、manifest 或 lockfile 变化时重建受影响层；普通代码和文档变更复用现有 Node `24.18.0`、npm `11.16.0` 与 `node_modules`。持久化本地环境不自动成为 self-hosted runner，不保存 GitHub runner 凭证，也不替代进入 `main` 前的 GitHub 完整验收。
+
+  无论选择哪项，进入 `main` 前仍须保留至少一次 GitHub 环境对 PR merge ref 的完整失败关闭验收，未来 E-015 production artifact 仍须在精确 `main` SHA 的 fresh job 自包含重建；不得以本地自报、跳过、共享 cache、浮动 Action 或宽松退出替代。确认前不修改 workflow、hook、required checks、runner 或凭证；2026-07-29 用户明确授权把当前已验收工作区提交到本地 `dev`，本计费周期仍不 push、不重跑 Actions，等待下一个计费周期后再用真实成功 run 比较分钟。
 - 内容编辑采用 Markdown 默认、MDX 受控例外；M0 不启用其他解析模式，`src/components/mdx/index.ts` 白名单初始为空。任何后续 MDX 组件、浏览器行为或外部请求都必须按新增能力重新准入。
 - M0 路由职责、尾斜杠、保留路径、冲突与重定向、项目内容来源、注册表、“通用技术”、跨项目关系、三栏断点和不生成的系列/主题/作者/归档路由已经由 E-001 至 E-004 固定。
 - 中央身份服务的实现方式、协议、会话边界和部署位置仍待用户决定。
