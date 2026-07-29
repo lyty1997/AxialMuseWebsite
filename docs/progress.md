@@ -4,12 +4,19 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
-## 2026-07-29 — #14 fresh production-artifact producer（工作区实现与本地契约验收完成，待真实上传与 Issue 验收）
+## 2026-07-29 — #34 deploy 身份、新鲜度与受限 TAT 调度（本地候选实现完成，待外部接线授权）
+
+- **范围与决定**：在 `codex/issue-18-production-baseline` 上直接消费 #14 `production-artifact` 的七项 job outputs，只实现仓库内身份/新鲜度核心、受控 GitHub API/TAT HTTPS、TC3-HMAC-SHA256 请求、CLI、合成 API mock 和活动 workflow 之外的静态 job/concurrency fixture。未修改 `.github/workflows/ci.yml`，未创建 `production` environment、variables、Secrets、CAM 策略或 TAT command，也未读取真实凭证或调用腾讯云 API。
+- **身份与 Secret 门禁**：核心精确接受 workflow run ID、artifact ID、commit SHA、外层 `artifactDigest`、`releaseContentSha256`、repository 和 run attempt，并与当前 GitHub repository/run/attempt/SHA、canonical `main` push 及只读 API 的 branch/run/artifact 元数据交叉核对；两次读取 main 关闭核验窗口。artifact 必须属于当前 run/repository/head、名称与 ID 精确、非空未过期，REST digest 只能是 `sha256:` 加裸小写摘要。fixture 先在无 CAM Secret 引用的独立 step 完成全量预检，dispatch step 再次核验后才惰性读取 TAT access；任一反例在 Secret loader 和 TAT transport 调用前失败。
+- **受限调度与并发候选**：TAT 请求固定上海地域、单一 command/instance、`InvokeCommand` 和 workflow run ID、artifact ID、commit SHA、双摘要五项参数，禁止 `RunCommand`、URL、shell、路径、额外实例/参数和结果不明时自动重试；网络读取有绝对 wall-clock deadline、响应大小/编码/JSON 上限，诊断只保留稳定脱敏 code。成功行固定为 `status: "dispatched"` 与规范 invocation/request ID，只证明调度被 API 接受。静态候选要求非 `main` CI 保留取消、`main` run 不被后续 push 中断，生产 job 固定串行且不取消；新鲜度仍由 job 自证。
+- **本地证据与遗留**：五个定向 Node test 文件共 28/28 通过，覆盖 main 移动、错误 run/repository/attempt/head、同名异 ID、过期 artifact、摘要形态、Secret 前置访问、TC3 golden、完整 CLI 环境/signal 映射、动态 target、超时/中断、权限和调度绕过；固定 Node `24.18.0` 的完整零第三方依赖 `quality`、JavaScript/模块/Markdown/契约/Secret 门禁与 `git diff --check` 通过。#34 改动仍在工作区，尚未提交、推送、运行真实 Actions 或回填 Issue。真实接线前须核验 environment 保护、实际 command/instance、五项自定义参数与最小 CAM 权限并再次取得授权；#37 还必须在同一个持有生产 concurrency 的 job 中有界等待精确 TAT task 终态、核验服务器结果并完成本机/公网闭环，因此当前 fixture 不可直接启用为完整部署。
+
+## 2026-07-29 — #14 fresh production-artifact producer（本地实现、验收与提交完成，待推送/真实上传）
 
 - **范围与决定**：在 `codex/issue-18-production-baseline` 上消费 #32 的四个 prerequisite workflow 契约、#13 的同版本运行时 301 和 #33 的确定性 release 封装，按 D-110 只实现 E-015/CODE-020 的最终 producer、单次 upload 与七项 job outputs。#34 继续拥有 deploy 身份与 main HEAD 新鲜度，#35 继续拥有服务器独立 verifier，#36 继续拥有目标机清单与安装验收，#37 继续拥有 environment、TAT、不可变安装、账本、Nginx、激活和公网闭环。
 - **workflow 接线**：`.github/workflows/ci.yml` 新增非 matrix、无 environment/Secret、仅 `contents: read` 的 `production-artifact`；它直接依赖四个 prerequisite，只允许 canonical repository 的 `main` push，不新增 `workflow_dispatch`。fresh checkout 在空 `build/`/`dist/` 上以主 Node 和全新 E-010 私有 cache 冻结安装，依次重跑 `quality`、独立历史门禁、`typecheck`、测试、production build、`package:artifact` 与 `check:artifact`。上传前零依赖入口先把 build/release 的内容和操作身份摘要形成当前 step 专用 seal，再使用 D-110 固定完整 commit SHA 的官方 `actions/upload-artifact` 对精确 `dist/release/` 单次上传；post-upload 门禁重新捕获两棵树并与 seal 比较，同时复核 Action 返回值、当前 HEAD 与受控源码 blob，全部通过后才映射 artifact ID/digest、release digest、repository、run ID/attempt 与 commit SHA 七项输出。
 - **失败关闭门禁与本地证据**：新增 `check-production-artifact-workspace.mjs`、`prepare-production-artifact-upload.mjs`、`check-production-artifact-outputs.mjs` 及对应零第三方依赖核心，分别拒绝预存输出、隐藏的 index/source 漂移、跨 Action 的 build/release 身份变化和异常输出身份；workflow 静态检查与 `tests/build/production-artifact-*.test.mjs` fixture 覆盖仓库/事件/权限/prerequisite、fresh workspace、命令顺序、单次精确 upload、固定 Action、`assume-unchanged`/`skip-worktree`、build/release 持久替换、上传窗口 A→B→A、HEAD/状态漂移、输出形态及其他篡改反例。当前证据只证明工作区代码和本地合成 fixture 的 build/release/HEAD 七项 outputs 绑定契约，未执行 GitHub-hosted Action，也不能生成 GitHub 服务端 artifact 身份或真实 ZIP。
-- **遗留与外部边界**：#14 改动仍在工作区，尚未提交或推送；远程仓库暂不可用且 GitHub Actions 暂无额度，因此没有 canonical `main` 的真实 producer run、artifact ID/digest、可下载 ZIP、#35 对真实 archive shape 的复验、required checks、Issue 回填或关闭证据。未读取 Secret 或凭证，未创建 environment，未操作服务器、TAT、Nginx、DNS、TLS、账本或生产目录。未来真实上传会把已经验收的公开 payload、非公开 release metadata/Nginx 派生配置和 GitHub 自带 repository/run 元数据交给 GitHub Actions artifact 服务保留 30 天；不包含访问者、账户、评论等用户数据。
+- **遗留与外部边界**：#14 实现已形成本地提交 `7b5cc47`，尚未推送；远程仓库暂不可用且 GitHub Actions 暂无额度，因此没有 canonical `main` 的真实 producer run、artifact ID/digest、可下载 ZIP、#35 对真实 archive shape 的复验、required checks、Issue 回填或关闭证据。未读取 Secret 或凭证，未创建 environment，未操作服务器、TAT、Nginx、DNS、TLS、账本或生产目录。未来真实上传会把已经验收的公开 payload、非公开 release metadata/Nginx 派生配置和 GitHub 自带 repository/run 元数据交给 GitHub Actions artifact 服务保留 30 天；不包含访问者、账户、评论等用户数据。
 
 ## 2026-07-29 — #35 服务器侧独立 artifact verifier（本地实现、验收与提交完成，待推送/远端验收）
 

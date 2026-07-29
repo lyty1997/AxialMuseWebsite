@@ -143,7 +143,7 @@ M0-P 实施时按以下路径纳入仓库；表中路径是设计契约，文件
 | `ops/deploy/rollback.sh` | 只整版切换到已存在、通过校验且使账本中历史 source/target 收敛到同一当前 200 终点的兼容 release |
 | `ops/systemd/` | 证书检查、服务器健康与维护 timer/service 模板 |
 | `ops/logrotate/` | Nginx error log 和认证日志保留策略模板 |
-| `.github/workflows/deploy-production.yml` | `main` 精确 SHA 到 TAT 的受限生产发布 |
+| `.github/workflows/ci.yml` 的 `deploy-production` job | 直接消费同一 run 的 `production-artifact` 精确输出，把 `main` 精确 SHA 受限调度到 TAT；不得用独立 workflow 再按名称、latest 或跨 run 查询 artifact |
 | `.github/workflows/maintenance.yml` | HTTPS、TLS、链接、DNS 和到期提醒的定时检查 |
 
 - 仓库只保存无 secret 模板；实例 ID、SecretId、SecretKey、私有仓库 artifact 读取凭证和证书私钥不得写入这些文件。
@@ -175,7 +175,7 @@ M0-P 实施时按以下路径纳入仓库；表中路径是设计契约，文件
 
 ### GitHub 侧
 
-生产 workflow 仅由 canonical repository 的 `main` push，或明确选择 `refs/heads/main` 的人工 `workflow_dispatch` 触发，并满足：
+M0 生产 workflow 仅由 canonical repository 的 `main` push 触发，不提供普通 `workflow_dispatch` 发布入口；历史 SHA 恢复必须走另行授权的恢复流程。发布链满足：
 
 - `website-quality`、`node-minimum`、`diagrams` 和 `supply-chain` 对精确 `GITHUB_SHA` 运行各自发布必需门禁；任一 failure、cancelled 或 skipped 都阻止最终 job，禁止 `always()` 或 `continue-on-error` 绕过。D-099 后 `supply-chain` 的普通 CI 结论只来自失败关闭的静态供应链证据，live audit 保留给显式依赖准入/重准入，不属于生产 prerequisite。
 - 非 matrix `production-artifact` 在 fresh runner 对同一 SHA 完整 checkout，使用 E-010 为本次 job 新建且不复用的私有 npm cache 冻结安装，并重新执行主端点的零依赖 `quality`、独立 E-013 历史入口、`typecheck`、`test` 与 production `build`，实际生成并重验唯一 production `build/`；它不下载或复用 `website-quality` 的 job-local build，不配置 `actions/setup-node` cache、不调用 cache restore/save Action、不读取任何共享或复用的依赖/build cache，也不接受 preview 或本地旧目录 fallback。
@@ -183,10 +183,10 @@ M0-P 实施时按以下路径纳入仓库；表中路径是设计契约，文件
 - Artifact 展示名含 SHA、run ID 和 run attempt；deploy 只消费 `production-artifact` 输出的唯一 artifact ID、外层 `artifactDigest`、上传前独立计算且不写入 artifact 的 `releaseContentSha256`、repository、run 和 SHA，不按名称、pattern、latest、URL 或跨 run 查询。
 - 四个 prerequisite 与 `production-artifact` 的 `GITHUB_TOKEN` 权限仅为 `contents: read`；`deploy-production` 仅为新鲜度和 artifact 元数据复核使用 `contents: read`、`actions: read`，未列权限全部为 `none`，禁止 write、OIDC/attestation scope 和 producer Secret。
 - 使用 `production` environment 保存腾讯云部署凭证。`deploy-production` 在引用 CAM Secret 或调用腾讯云 API 前，先用只读 GitHub API 证明 canonical `refs/heads/main` 仍等于本次 SHA，并复核当前 run/artifact/head SHA/digest；失败立即停止。普通人工重跑不能发布旧 SHA，历史恢复必须使用另行授权流程。
-- 使用 concurrency group，任一时刻只允许一个生产发布；GitHub 不保证等待顺序，因此 concurrency 不能替代上述 main HEAD 新鲜度检查。
+- 顶层 CI 对非 `main` 保留旧 run 取消，但不得因后续 push 中断已经运行的 `main` 发布链；生产 job 使用固定 concurrency group 且 `cancel-in-progress: false`，任一时刻只允许一个生产发布。GitHub 不保证等待顺序且可能替换等待中的旧 run，因此 concurrency 不能替代上述 main HEAD 新鲜度检查。
 - 将当前 `GITHUB_SHA` 作为唯一发布版本，不发布浮动的“最新 main”。
 - 在调用 TAT 前核对 artifact 所属 workflow run、`head_sha` 与外层上传摘要，只向固定 command 分别传递 run/artifact 标识、SHA、`artifactDigest` 和 `releaseContentSha256`，不传递任意下载 URL、shell 片段或路径。
-- TAT 返回成功后，从公网验证 canonical 首页和关键资源。
+- `InvokeCommand` 返回 invocation ID 只表示调度已被接受，不是部署成功。#37 接线须在同一持有生产 concurrency 的 job 中有界查询精确 command/instance 的 invocation task，只有终态成功且服务器身份、摘要、账本与本机 smoke 结果匹配后，才继续从公网验证 canonical 首页和关键资源。
 - 部署失败时 workflow 失败，不把失败提交标记为已发布。
 
 GitHub environment 可以限制部署分支、保护 secrets 并控制并发。参考：[GitHub deployment environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments)、[GitHub Actions 部署控制](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/control-deployments)。
