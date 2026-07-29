@@ -101,7 +101,7 @@ M0 不额外建设公网 staging 子域名，避免增加服务器配置、证�
 | TAT agent | 接收腾讯云固定运维命令 | 保持在线；命令和实例按 CAM 最小授权 |
 | logrotate / systemd | 日志轮转、服务与续期定时器 | 不引入第三方常驻监控 agent |
 
-当前公网仍使用迁移前 `public/`，但仓库已具备 Docusaurus production `build/`、#13 服务端 301 派生和 #33 确定性 `dist/release/` 封装/独立复验；这些本地能力尚未形成可部署 Actions artifact。#14 仍须把 E-005/E-014/E-015 固定的链路接入 `production-artifact`：对 `main` 精确 SHA 在 fresh runner 自包含重建、重验、封装并单次上传，使 release 同时绑定静态 payload 与服务端 301 派生配置。#35 独立实现服务器的双摘要、安全解包和内部闭包复验；#37 再消费已验证 staging，完成不可变安装、账本、Nginx 与激活。两者都不允许服务器拉取源码、写作、编辑、安装 Node/npm 或执行构建。
+当前公网仍使用迁移前 `public/`，但仓库已具备 Docusaurus production `build/`、#13 服务端 301 派生、#33 确定性 `dist/release/` 封装/独立复验，以及 #35 服务器独立 verifier；#35 已形成本地提交 `f7fdc43` 但尚未推送。#14 也已按 D-110 在当前工作区把 E-005/E-014/E-015 固定的链路接入 `production-artifact`：对 canonical `main` 精确 SHA 在 fresh runner 自包含重建、重验、封装并单次上传，使 release 同时绑定静态 payload 与服务端 301 派生配置。该接线只有本地静态/fixture 契约证据，尚未发生 GitHub-hosted run 或真实 upload，因而没有可部署 Actions artifact、实际 outputs 或 ZIP。#35 独立实现服务器的双摘要、安全解包和内部闭包复验；#37 再消费已验证 staging，完成不可变安装、账本、Nginx 与激活。两者都不允许服务器拉取源码、写作、编辑、安装 Node/npm 或执行构建。
 
 ### 目录契约
 

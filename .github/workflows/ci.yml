@@ -244,3 +244,134 @@ jobs:
 
       - name: Static supply chain evidence
         run: node scripts/quality/check-supply-chain.mjs
+
+  production-artifact:
+    name: Production artifact
+    needs:
+      - website-quality
+      - node-minimum
+      - diagrams
+      - supply-chain
+    if: github.repository == 'lyty1997/AxialMuseWebsite' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      artifact-id: ${{ steps.identity.outputs.artifact-id }}
+      artifact-digest: ${{ steps.identity.outputs.artifact-digest }}
+      release-content-sha256: ${{ steps.identity.outputs.release-content-sha256 }}
+      repository: ${{ steps.identity.outputs.repository }}
+      run-id: ${{ steps.identity.outputs.run-id }}
+      run-attempt: ${{ steps.identity.outputs.run-attempt }}
+      commit-sha: ${{ steps.identity.outputs.commit-sha }}
+
+    steps:
+      - name: Checkout exact production commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up primary Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: ".nvmrc"
+          package-manager-cache: false
+
+      - name: Assert fresh production checkout
+        run: node scripts/quality/check-production-artifact-workspace.mjs
+
+      - name: Materialize private Node runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          source_node="$(readlink -f "$(command -v node)")"
+          source_bin="${source_node%/*}"
+          source_prefix="${source_bin%/*}"
+          source_parent="${source_prefix%/*}"
+          source_root="${source_parent%/*}"
+          tool_cache="$(readlink -f "${RUNNER_TOOL_CACHE}")"
+          runner_temp="$(readlink -f "${RUNNER_TEMP}")"
+          target_prefix="${runner_temp}/axial-muse-node-runtime"
+          if [[ "${source_node}" != "${source_prefix}/bin/node" ]]; then
+            echo "Current Node executable is not rooted in its distribution prefix." >&2
+            exit 1
+          fi
+          if [[ "${source_root}" != "${tool_cache}/node" ]]; then
+            echo "Current Node distribution is outside RUNNER_TOOL_CACHE/node." >&2
+            exit 1
+          fi
+          if [[ -e "${target_prefix}" ]]; then
+            echo "Private Node runtime target already exists." >&2
+            exit 1
+          fi
+          mkdir --mode=700 -- "${target_prefix}"
+          cp -R -- "${source_prefix}/." "${target_prefix}/"
+          chmod -R go-w -- "${target_prefix}"
+          printf '%s\n' "${target_prefix}/bin" >> "${GITHUB_PATH}"
+
+      - name: Frozen dependency install
+        run: node scripts/quality/run-isolated-npm.mjs ci
+
+      - name: Quality gates
+        run: node scripts/quality/run-isolated-npm.mjs run-script quality
+
+      - name: Content history
+        run: node scripts/quality/run-content-history.mjs
+
+      - name: Type check
+        run: node scripts/quality/run-isolated-npm.mjs run-script typecheck
+
+      - name: Tests
+        run: node scripts/quality/run-isolated-npm.mjs run-script test
+
+      - name: Production build
+        run: node scripts/quality/run-isolated-npm.mjs run-script build
+
+      - name: Package production artifact
+        run: node scripts/quality/run-isolated-npm.mjs run-script package:artifact
+
+      - name: Check release package
+        id: release
+        shell: bash
+        env:
+          AXIAL_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          release_output="$(node scripts/quality/run-isolated-npm.mjs run-script check:artifact)"
+          if [[ "${release_output}" =~ ^releaseContentSha256=([0-9a-f]{64})$ ]]; then
+            release_content_sha256="${BASH_REMATCH[1]}"
+          else
+            echo "Release checker did not return one canonical digest." >&2
+            exit 1
+          fi
+          AXIAL_RELEASE_CONTENT_SHA256="${release_content_sha256}" \
+            node scripts/quality/prepare-production-artifact-upload.mjs
+
+      - name: Upload production artifact
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: axial-muse-site-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/release/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+          overwrite: false
+          include-hidden-files: false
+          archive: true
+
+      - name: Validate production artifact outputs
+        id: identity
+        env:
+          AXIAL_ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          AXIAL_ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+          AXIAL_BUILD_OPERATIONAL_SHA256: ${{ steps.release.outputs.build-operational-sha256 }}
+          AXIAL_RELEASE_CONTENT_SHA256: ${{ steps.release.outputs.release-content-sha256 }}
+          AXIAL_RELEASE_OPERATIONAL_SHA256: ${{ steps.release.outputs.release-operational-sha256 }}
+          AXIAL_REPOSITORY: ${{ github.repository }}
+          AXIAL_RUN_ID: ${{ github.run_id }}
+          AXIAL_RUN_ATTEMPT: ${{ github.run_attempt }}
+          AXIAL_COMMIT_SHA: ${{ github.sha }}
+        run: node scripts/quality/check-production-artifact-outputs.mjs
