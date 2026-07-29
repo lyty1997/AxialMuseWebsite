@@ -20,9 +20,11 @@ import {
   captureFileTree,
   digestFileTreeRecords,
   FILE_TREE_MAX_DEPTH,
+  FILE_TREE_MAX_DIRECTORIES,
   FILE_TREE_MAX_FILES,
   FILE_TREE_MAX_FILE_BYTES,
   FILE_TREE_MAX_TOTAL_BYTES,
+  FILE_TREE_PATH_UNICODE_VERSION,
   FILE_TREE_WIRE_MAGIC,
   FileTreeError,
   fileTreeContentsEqual,
@@ -33,7 +35,7 @@ import {
 
 const GOLDEN_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  "../fixtures/release/file-tree-v1.json",
+  "../../ops/deploy/file-tree-v1-golden.json",
 );
 
 function hasCode(code) {
@@ -69,6 +71,10 @@ function recordsForVector(vector) {
 test("CODE-020 AXIALMUSE-FILE-TREE-V1 固定 golden vectors", () => {
   const fixture = JSON.parse(readFileSync(GOLDEN_PATH, "utf8"));
   assert.equal(fixture.wireMagic, FILE_TREE_WIRE_MAGIC);
+  assert.equal(
+    fixture.pathUnicodeVersion,
+    FILE_TREE_PATH_UNICODE_VERSION,
+  );
   for (const vector of fixture.vectors) {
     assert.equal(
       digestFileTreeRecords(recordsForVector(vector)),
@@ -80,6 +86,20 @@ test("CODE-020 AXIALMUSE-FILE-TREE-V1 固定 golden vectors", () => {
     fixture.vectors.find((entry) => entry.name === "single-byte-a").treeSha256,
     fixture.vectors.find((entry) => entry.name === "single-byte-b").treeSha256,
   );
+  for (const vector of fixture.invalidVectors) {
+    assert.throws(
+      () => digestFileTreeRecords(vector.files.map((file) => {
+        const content = Buffer.from(file.contentBase64, "base64");
+        return {
+          path: file.path,
+          byteLength: content.byteLength,
+          sha256: createHash("sha256").update(content).digest("hex"),
+        };
+      })),
+      hasCode("FILE_TREE_PATH"),
+      vector.name,
+    );
+  }
 });
 
 test("CODE-020 文件系统枚举使用原始 UTF-8 bytes 排序且忽略空目录身份", () => {
@@ -385,6 +405,31 @@ test("CODE-020 record API 的文件数、深度、路径与字节边界精确失
     () => digestFileTreeRecords([
       ...maximumFiles,
       record("files/overflow"),
+    ]),
+    hasCode("FILE_TREE_LIMIT"),
+  );
+
+  const maximumDirectoryRecords = [
+    ...Array.from({length: 2_080}, (_, index) => record([
+      `branch-${index.toString(16).padStart(4, "0")}`,
+      ...Array.from({length: 62}, () => "a"),
+      "file.txt",
+    ].join("/"))),
+    record([
+      "limit",
+      ...Array.from({length: 31}, () => "b"),
+      "file.txt",
+    ].join("/")),
+  ];
+  assert.equal(FILE_TREE_MAX_DIRECTORIES, 131_072);
+  assert.match(
+    digestFileTreeRecords(maximumDirectoryRecords),
+    /^[0-9a-f]{64}$/u,
+  );
+  assert.throws(
+    () => digestFileTreeRecords([
+      ...maximumDirectoryRecords,
+      record("overflow/file.txt"),
     ]),
     hasCode("FILE_TREE_LIMIT"),
   );
