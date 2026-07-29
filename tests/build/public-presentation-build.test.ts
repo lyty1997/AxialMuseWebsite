@@ -260,7 +260,7 @@ function materializePublicContentFixture(root: string): Uint8Array {
         description: "以真实 Docusaurus preview 构建证明草稿可访问且不会进入 production。",
         socialDescription: "真实草稿 fixture 只服务局域网 preview 验收。",
       },
-    }, "## Preview 草稿正文\n\n真实草稿正文指纹：DRAFT-PREVIEW-BODY-27。\n"),
+    }, "## Preview 草稿正文\n\n真实草稿正文指纹：DRAFT-PREVIEW-BODY-27。合法正文端口示例：8088。\n"),
   );
 
   const previewBytes = Uint8Array.from(
@@ -676,6 +676,7 @@ test("I-14/I-15 真实 production build 与 Chromium 回归覆盖公开展示和
     assertContainsAll(previewDraft, [
       "Draft Fixture Article",
       "DRAFT-PREVIEW-BODY-27",
+      "合法正文端口示例：8088",
       "https://www.axialmuse.com/writing/draft-fixture-article/",
     ]);
     for (const previewHtml of listFilesWithSuffix(previewCandidate, ".html")) {

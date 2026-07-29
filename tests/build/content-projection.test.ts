@@ -30,7 +30,10 @@ import {
 import {
   createProjectPreviewRemarkPluginForTest,
 } from "../../src/build/content/project-preview-projection.js";
-import {assertPreviewIndexing} from "../../src/build/content/preview-artifact-check.js";
+import {
+  assertPreviewAccessNotLeaked,
+  assertPreviewIndexing,
+} from "../../src/build/content/preview-artifact-check.js";
 
 const ARTICLE_DATE_INDEX_SOURCE_PATH = "axial-muse/article-date-index.json";
 const ARTICLE_IDS = Object.freeze({
@@ -396,6 +399,33 @@ test("E-009 preview HTML 必须恰有一条 noindex, nofollow", () => {
     assert.throws(
       () => assertPreviewIndexing(html, "build/index.html"),
       assertBuildError("CONTENT_PREVIEW_NOINDEX"),
+    );
+  }
+});
+
+test("E-009 preview 访问泄漏检查不把正文中的裸端口误判为配置", () => {
+  const environment = {
+    AXIAL_MUSE_PREVIEW_ACCESS_HOST: "192.168.0.162",
+    AXIAL_MUSE_PREVIEW_ACCESS_PORT: "8088",
+  };
+  assert.doesNotThrow(() => assertPreviewAccessNotLeaked(
+    "合法正文端口示例：8088。",
+    "build/writing/example/index.html",
+    environment,
+  ));
+  for (const value of [
+    "192.168.0.162",
+    "192.168.0.162:8088",
+    "http://localhost:8088",
+    "http://127.0.0.1:8088",
+  ]) {
+    assert.throws(
+      () => assertPreviewAccessNotLeaked(
+        `preview access=${value}`,
+        "build/assets/js/main.js",
+        environment,
+      ),
+      assertBuildError("CONTENT_PREVIEW_ACCESS_LEAK"),
     );
   }
 });

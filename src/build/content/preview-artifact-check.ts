@@ -177,7 +177,6 @@ function forbiddenAccessValues(environment: NodeJS.ProcessEnv): readonly string[
   }
   const values = new Set([
     host,
-    port,
     `${host}:${port}`,
     `http://${host}`,
     `https://${host}`,
@@ -195,6 +194,32 @@ function readArtifactText(
     resolve(buildDirectory, file.relativePath),
     `build/${file.relativePath}`,
     file,
+  );
+}
+
+function assertForbiddenAccessValuesAbsent(
+  text: string,
+  sourcePath: string,
+  forbidden: readonly string[],
+): void {
+  if (forbidden.some((value) => text.includes(value))) {
+    failContentBuild(
+      "CONTENT_PREVIEW_ACCESS_LEAK",
+      "preview 制品写入了仅属于局域网访问配置的 host 或 port。",
+      {sourcePath},
+    );
+  }
+}
+
+export function assertPreviewAccessNotLeaked(
+  text: string,
+  sourcePath: string,
+  environment: NodeJS.ProcessEnv = process.env,
+): void {
+  assertForbiddenAccessValuesAbsent(
+    text,
+    sourcePath,
+    forbiddenAccessValues(environment),
   );
 }
 
@@ -240,13 +265,11 @@ export function assertPreviewArtifact(
   const forbidden = forbiddenAccessValues(environment);
   for (const file of evidence.files.filter((candidate) => isTextArtifact(candidate.relativePath))) {
     const text = readArtifactText(buildDirectory, file);
-    if (forbidden.some((value) => text.includes(value))) {
-      failContentBuild(
-        "CONTENT_PREVIEW_ACCESS_LEAK",
-        "preview 制品写入了仅属于局域网访问配置的 host 或 port。",
-        {sourcePath: `build/${file.relativePath}`},
-      );
-    }
+    assertForbiddenAccessValuesAbsent(
+      text,
+      `build/${file.relativePath}`,
+      forbidden,
+    );
     if (hasPrivateDateIndexSignature(text, content)) {
       failContentBuild(
         "CONTENT_ARTIFACT_PRIVATE_INDEX",
