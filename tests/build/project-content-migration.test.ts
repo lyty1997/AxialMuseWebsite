@@ -137,10 +137,10 @@ test("I-10 两份真实正文与四份注册表形成唯一且完整的迁移目
 test("I-10 迁移事实留在正文，原过渡章节只保留所有权链接", () => {
   const docrestoreBody = readFileSync(resolve(ROOT, PROJECT_SOURCE_PATHS[0]), "utf8");
   for (const fact of [
-    "把多张文档照片转化为结构清晰、可编辑并可追溯的 Markdown",
-    "OCR、清洗、合并、脱敏、精修和输出",
-    "不提供在线体验",
-    "公开视觉证据尚未完成",
+    "连续拍摄的文档照片重新组织成可审阅、可编辑的结果",
+    "OCR、清洗去重、隐私处理、LLM 与输出",
+    "当前没有公共在线体验",
+    "主预览、演示视频、封面和字幕尚未通过本站公开性审核",
   ]) assert.match(docrestoreBody, new RegExp(fact, "u"));
 
   const scaffoldBody = readFileSync(resolve(ROOT, PROJECT_SOURCE_PATHS[1]), "utf8");

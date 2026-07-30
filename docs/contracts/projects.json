@@ -12,11 +12,11 @@
       "title": "DocRestore",
       "slug": "docrestore",
       "navigationOrder": 10,
-      "summary": "将文档屏幕拍摄照片经过 OCR、清洗、去重、可选 PII 脱敏和 LLM 精修，还原为 Markdown 文档。",
+      "summary": "将连续文档照片或 PDF 经 OCR、清洗、去重合并与可选脱敏、精修，还原为可审阅的 Markdown 或按模式生成的结构化结果。",
       "status": "active",
       "publicationStatus": "planned",
       "startedAt": "2026-04",
-      "updatedAt": "2026-07-02",
+      "updatedAt": "2026-07-03",
       "repositoryUrl": "https://github.com/lyty1997/DocRestore",
       "productionBranch": "main",
       "showcaseMode": "repository",
@@ -25,7 +25,8 @@
       "writingModules": [],
       "source": [
         "docs/projects/docrestore-experience.md",
-        "https://github.com/lyty1997/DocRestore"
+        "https://github.com/lyty1997/DocRestore",
+        "https://github.com/lyty1997/DocRestore/tree/19ca6b1444758d076d5c3e66b78f68d0066a4694"
       ]
     },
     {

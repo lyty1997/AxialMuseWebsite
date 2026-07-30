@@ -1,7 +1,7 @@
 # DocRestore 项目展示与未来体验设计
 
 状态：active
-最近更新：2026-07-22
+最近更新：2026-07-29
 适用范围：主站项目展示、开源仓库、演示视频，以及未来 `docrestore.axialmuse.com` 体验边界
 
 ## 目的
@@ -41,6 +41,19 @@
 | 后端位置 | 自有服务器可用于私有运行和录制；当前不作为公共服务入口 |
 
 DocRestore README 当前写有 `npm test`，但 `frontend/package.json` 尚未定义 `test` script；自动发布先使用 `npm exec -- vitest run`。在 DocRestore 仓库正式配置 CI 时应补齐稳定的 `test` script，并以仓库门禁为最终真相源。
+
+## 本轮内容证据基线
+
+2026-07-29 用户授权推进 Issue #29，并要求项目正文从 DocRestore GitHub 仓库的源文件和设计文档中总结，明确写出开发过程和设计思路。本轮只授权准备可审核正文与可追溯事实，不把真实截图自动视为已获公开批准，也不授权在线体验、体验子域名、后端发布或生产上线。
+
+本轮内容核对固定到 DocRestore 公开仓库 `main` 的提交 [`19ca6b1444758d076d5c3e66b78f68d0066a4694`](https://github.com/lyty1997/DocRestore/commit/19ca6b1444758d076d5c3e66b78f68d0066a4694)，提交时间为 2026-07-03。正文优先使用同一提交中的源码、测试、README 和较新的进度记录相互印证；设计文档与这些事实冲突时，不照抄过时结论。例如同一提交的架构总览仍把 PDF 输入写为待实现，而 README、PDF 模块、测试和 2026-06-26 至 2026-07-03 的进度记录已经把它记为已交付，因此主站正文只把后者写为当前能力，并在证据说明中标明核对快照。
+
+正文、注册表与未来主预览按以下边界推进：
+
+- `site-content/projects/docrestore/index.md` 只总结该精确提交已经能证明的问题、架构、开发过程、设计取舍、限制和复盘。
+- `docs/contracts/projects.json` 的 `source` 同时保留本站设计文档与 DocRestore 精确提交；`updatedAt` 只反映这次核对到的项目源码最近实质更新日期。
+- 项目在真实 1600 × 1000 WebP、alt、隐私、版权与事实审核全部完成前保持 `publicationStatus: planned`，不登记 `previewImage`，production 继续排除该项目。
+- 候选截图必须来自实际 DocRestore 界面或可复核的真实结果，不使用生成式占位图、营销合成图或未授权样例；进入仓库前由用户明确确认可公开。
 
 ## 主站项目正文
 
