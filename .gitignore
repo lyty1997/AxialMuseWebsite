@@ -28,6 +28,7 @@ __pycache__/
 .env.*
 !.env.example
 scripts/dev/dev-workflow.env
+/.local/issue-36-ufw/
 
 # Logs
 *.log
