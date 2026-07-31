@@ -4,12 +4,43 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-07-30 — #36 加固前复核与 verifier bootstrap 候选（整体仍为 GAP）
+
+- **继续只读复核**：严格 host key SSH、`sudo -n`、`sshd -t`、Nginx、TAT 与 systemd 仍健康，没有 failed unit、未知非本地 TCP 或 Web 监听。UFW 已安装但 inactive，IPv4/IPv6 INPUT 默认接受；腾讯云代理已有的来源拒绝链不是 OS 端口白名单，因此双层防火墙尚未闭环。自动安全更新服务及两个 apt timer 已启用且未配置自动重启；新鲜包索引仍有三个非内核数据包待升级，`reboot-required` 仍存在。Ubuntu 官方 Certbot 最小安装模拟不删除包或触碰 SSH/Nginx/TAT，但 Certbot 尚未安装；本轮没有执行服务器或云写操作。
+- **首次安装器候选**：D-121 固定一次性 Python 3.12 标准库 bootstrap、四参数封闭 CLI、canonical `main` 三 Git blob 外部认证和精确两个 payload 的私有 source root。实现以 held `/usr/local/lib` directory fd 与持久 lock 文件双重非阻塞 `flock` 关闭 fresh-empty 并发窗口，以 receipt `1.1.0` 绑定 lock 与全部事务对象 identity，再用 `renameat2(RENAME_NOREPLACE)`、目录同步、`prepared -> committed` 唯一提交点和五态恢复完成首次安装或失败隔离；runner 自身不安装，生产机仍不接收源码树、Node/npm 或构建环境。
+- **故障注入与修复**：对抗审查复现并修复了“正式路径自测首次失败后重试成功仍提交”、post-activation 父目录 `fsync` 被误报为 lock 并留待下次提交、persistent marker `fsync` 错误分类，以及替换 lock inode 后第二 bootstrap 并发进入四项缺陷。当前 23/23 bootstrap 测试及 #35 既有 20/20 verifier 测试通过，覆盖真实 verifier/golden 自测、候选/正式/marker 恢复、正式失败隔离、持久同步结果不明、目录/文件双锁、lock inode 替换、竞态目标、source rebind、身份漂移与 stdout 边界；Ruff、固定 Node `24.18.0` 完整零依赖 `quality` 和差异检查通过。该 Python 入口按设计不加入 Node-only `quality`/pre-commit。
+- **剩余门禁**：bootstrap、#35 verifier 与 golden 仍未进入 canonical `main`，当前工作区证据不能授权服务器安装；本轮也没有 commit、push、PR、merge 或 Issue 写入授权。#36 继续失败关闭于 OS/腾讯云防火墙最终规则、允许的 SSH 来源集合、Certbot/待升级包的软件变更、维护重启及重启后验收，以及 verifier 的 canonical-main 前置和现场安装。每次服务器写操作前仍须确认 D-117 快照正常及控制台/TAT 恢复通道可用；#37 的生产目录、发布、Nginx 站点、DNS/TLS 与公网开放继续暂停。未新增第三方运行服务、浏览器请求或访问者数据处理。
+
+## 2026-07-30 — #36 SSH 全局策略加固完成（整体仍为 GAP）
+
+- **范围与决定**：用户按 D-119 授权只实施 SSH 全局策略加固，并按 D-120 选择方案 1，把有效 `AuthorizedKeysFile` 收敛为唯一 `.ssh/authorized_keys`。实施保持既有非 root 管理身份、端口、主机密钥、主密钥文件、`sudo -n`、TAT 与腾讯云代理不变；没有创建 `AllowUsers`，也没有修改账户、密钥、OS/腾讯云防火墙、软件、Nginx、快照或系统重启状态。
+- **失败关闭与根因**：前三次正式尝试均在持久提交点前因 graceful reload 后服务状态尚未收敛而停止；独立 300 秒 watchdog 每次都恢复并复验既有基线，清理后状态为 `baseline_clean`，没有遗留已提交候选。脱敏分阶段诊断把根因定位为 systemd reload 后的瞬时状态采样竞态，而不是策略放宽或验证绕过；第四次把单次瞬时采样改为有界收敛门禁，并继续要求服务健康、daemon 身份不变及全部原后验成立。
+- **提交与验收**：第四次事务在完整独立后验通过后，才把 pending drop-in 在同一文件系统原子改名并同步为 canonical root-owned drop-in，随后取消 watchdog、清除私有回退材料并达到 `committed_clean`。两条全新的严格公钥专用 SSH 会话分别复核管理身份、`sudo -n`、服务状态、配置树和有效策略；全局策略现明确为 `AuthenticationMethods publickey`、`PubkeyAuthentication yes`、`AuthorizedKeysFile .ssh/authorized_keys`、`PasswordAuthentication no`、`KbdInteractiveAuthentication no`、`PermitEmptyPasswords no` 与 `PermitRootLogin no`。
+- **剩余门禁**：D-119/D-120 的 SSH 项已经闭合，但 #36 整体仍为 GAP。OS 与腾讯云防火墙最终规则及验收、维护窗口重启和重启后 SSH/TAT/Nginx/systemd/监听复核、verifier/Certbot 安装验收仍须分别决定和授权；#37 的生产目录、TAT 发布、账本、Nginx 站点、激活与公网闭环继续暂停。现有快照未执行恢复演练，恢复或删除也未授权。
+
+## 2026-07-30 — #36 控制面、加固前快照与额外身份可逆禁用（仍为 GAP）
+
+- **升级意图**：用户确认 2026-07-29 现场核验窗口内观察到的系统包升级是本人有意执行，接受当前已升级包状态；该确认解除异常变更调查分支，但不授权重启。当前加固前恢复点已经建立，维护窗口、明确重启授权和重启后 SSH/TAT/Nginx/systemd/监听复核仍须单独闭环。
+- **控制面结论**：用户提供脱敏逐项结果，确认目标实例与生命周期、快照能力/配额、控制台恢复入口、TAT/任务、代理保留及账号保护未发现阻断偏差；管理入口为来源受限状态，公网 Web 入站尚未开放，未发现其他或 IPv6 入站暴露。通用端口自检对这些最小暴露状态给出的警告不要求扩大放行。
+- **带宽告警残余风险**：控制面另报告一条历史出带宽告警。只读时间线证明它与有意包升级不重合，废弃旧站清理实际发生在告警之后；补充内网监控只显示短时入向峰值后恢复，历史系统采样未显示持续高出带宽，当前无未知公网/Web 监听或 failed unit。由于没有历史逐进程流量留存，单次告警仍不能确定归因；用户按 D-116 决定不再继续追查并接受仅限该事件的残余不确定性，因此它不再阻断 #36。未来复发、持续异常或新未知监听/进程仍重新失败关闭。
+- **加固前快照**：用户按 D-117 为升级及旧站清理后、加固前的当前系统盘创建了新快照，并确认腾讯云控制台终态成功/正常。该证据闭合快照存在与当前状态，不等于恢复演练；精确快照和实例标识不写入仓库，后续每次依赖该回退基线实施变更前仍须确认快照存在且正常。
+- **额外管理身份处置**：用户先按 D-118 选择方案 1，随后在确认快照正常后明确授权执行。root-only 事务入口先复核唯一候选、首启来源、无活动会话/进程/定时任务/linger/systemd 引用/业务目录所有权、无特权组和唯一受控直接 sudo 规则，再原子移除该规则、保持密码字段锁定并设置账户过期、把登录 shell 改为系统 `nologin`；账户、home、密钥和其他文件均不删除。事务在 180 秒提交窗口内由第二条 SSH 独立验证当前管理员 `sudo -n`、`sshd -t`、非目标配置、运行时和 sudo 图后才提交；持久化回执确认 `committed` 后清理私有回滚材料。
+- **后验与下一门禁**：最终脱敏后验证明目标身份没有活动引用或业务所有权、无特权组或 sudo 能力、shell/过期终态正确，home 仍存在且事务前后摘要一致，passwd/sudoers/sshd 与运行时基线有效；当前管理 SSH/sudo 未受影响。快照仍未授权恢复或删除，重新启用或删除该账户/文件也未授权；SSH 全局策略随后已按 D-119/D-120 达到 `committed_clean`，OS/腾讯云防火墙、软件、服务、维护重启、verifier/Certbot、#37 和 GitHub/Git 操作仍须分别决定和授权。#36 下一项最小门禁应从防火墙最终闭环、维护重启或 verifier 安装中按依赖顺序另行确认，#37 继续暂停。
+
+## 2026-07-29 — #36 生产服务器第一阶段只读核验与废弃旧站清理（GAP，待控制面和加固授权）
+
+- **授权与范围**：在已核对 SSH host key 的生产 alias 上，按 D-113 只使用非交互登录和 `sudo -n` 完成系统/架构/资源、全部监听与进程、软件/服务、账户与权限、SSH 有效配置、操作系统防火墙、TAT/云代理、生产目录、系统 Python 和 verifier 安装前基线的脱敏只读盘点。公网 IP、主机名、用户名、实例 ID、密钥/指纹、来源地址、进程参数和精确可利用安全姿态只留私密现场记录；未访问腾讯云控制面，未调用 tccli/TAT API，未操作 DNS/TLS/artifact/release，也未写入 GitHub Issue、设置或其他远端状态。
+- **现场结论**：Ubuntu 24.04、`x86_64` / `amd64` 和 Python 3.12 符合已确认基线；CPU、内存和系统盘容量已记录，但没有已批准阈值且仍待控制面套餐交叉核对。未发现主站源码、Node/npm、`node_modules`、数据库、容器或开发服务。Nginx 与 TAT 本机组件存在；额外交互身份已归因为首启用户数据创建，腾讯云监控/安全/防火墙进程已归因为 cloud-init/Tencent 本地组件且没有新增公网监听，但在该次 2026-07-29 盘点时身份/代理保留、SSH 与系统防火墙仍有阻断性偏差。canonical GitHub 仓库已只读核验为 public；当时控制面地域/镜像/套餐、续费、快照、轻量防火墙、TAT online 和 GitHub environment protection 能力仍未核验。
+- **废弃旧站清理**：盘点发现此前部署的独立静态站。用户确认可删除并按 D-114 精确授权 Web Root、专属 Nginx 配置和唯一启用链接的不可恢复清理；前置类型、引用、链接、文件树和文件系统边界均通过，先停用并 `nginx -t`/reload、确认 TCP 80 退出后才删除配置与内容。最终三个目标均不存在，父目录保留且为空，Nginx active、零 server block、TCP 80/443 无监听。首次入口把删除子目录必然造成的父目录链接计数减一误判为漂移，故删除后返回非零；没有重跑删除，独立只读终态复核证明实际成功。
+- **继续归因与状态漂移**：后续只读证据确认额外高权限身份当前未发现活跃用途；本机代理来源已解释，控制面核验后用户决定本轮保留 TAT 与腾讯云代理。核验窗口内另观察到当前管理身份发起并完成系统包升级，该动作不由本轮只读探针执行且不在 D-113 授权内；升级后的关键服务与配置复核通过，但补丁终态仍要求单独维护重启。精确认证、授权和补丁姿态只留私密现场记录；升级意图、加固前快照和额外身份处置已分别于 2026-07-30 收敛，维护窗口和重启仍未授权。
+- **设计收口与遗留**：服务器 verifier 安装目标固定为 `/usr/local/lib/axialmuse/artifact-verifier/`，只允许在 #35 源提交进入 canonical `main` 后经单独授权传递 verifier/golden 两个精确文件，并以候选预验、身份绑定回退和明确提交点完成首次安装；本轮没有安装。预期 production release/current/账本目录现场不存在，该缺席已作为 #36 基线证据记录，其创建与 owner/mode 验收仍归 #37；远端 #36 关闭文字须先与此边界同步。#36 仍为 GAP：控制面基础结论、历史带宽风险接受、当前加固前快照、额外管理身份处置和 D-119/D-120 SSH 全局策略已经收敛，OS/腾讯云防火墙、维护重启和 verifier/Certbot 安装仍须分别授权；GitHub environment protection 能力也仍待核验，#37 不得提前开始。仓库仅更新非敏感文档，未新增第三方服务、浏览器外部请求或访问者数据处理，也未提交、推送、写 Issue、创建 PR 或合并。
+
 ## 2026-07-29 — #34 deploy 身份、新鲜度与受限 TAT 调度（本地候选实现完成，待外部接线授权）
 
 - **范围与决定**：在 `codex/issue-18-production-baseline` 上直接消费 #14 `production-artifact` 的七项 job outputs，只实现仓库内身份/新鲜度核心、受控 GitHub API/TAT HTTPS、TC3-HMAC-SHA256 请求、CLI、合成 API mock 和活动 workflow 之外的静态 job/concurrency fixture。未修改 `.github/workflows/ci.yml`，未创建 `production` environment、variables、Secrets、CAM 策略或 TAT command，也未读取真实凭证或调用腾讯云 API。
 - **身份与 Secret 门禁**：核心精确接受 workflow run ID、artifact ID、commit SHA、外层 `artifactDigest`、`releaseContentSha256`、repository 和 run attempt，并与当前 GitHub repository/run/attempt/SHA、canonical `main` push 及只读 API 的 branch/run/artifact 元数据交叉核对；两次读取 main 关闭核验窗口。artifact 必须属于当前 run/repository/head、名称与 ID 精确、非空未过期，REST digest 只能是 `sha256:` 加裸小写摘要。fixture 先在无 CAM Secret 引用的独立 step 完成全量预检，dispatch step 再次核验后才惰性读取 TAT access；任一反例在 Secret loader 和 TAT transport 调用前失败。
 - **受限调度与并发候选**：TAT 请求固定上海地域、单一 command/instance、`InvokeCommand` 和 workflow run ID、artifact ID、commit SHA、双摘要五项参数，禁止 `RunCommand`、URL、shell、路径、额外实例/参数和结果不明时自动重试；网络读取有绝对 wall-clock deadline、响应大小/编码/JSON 上限，诊断只保留稳定脱敏 code。成功行固定为 `status: "dispatched"` 与规范 invocation/request ID，只证明调度被 API 接受。静态候选要求非 `main` CI 保留取消、`main` run 不被后续 push 中断，生产 job 固定串行且不取消；新鲜度仍由 job 自证。
-- **本地证据与遗留**：五个定向 Node test 文件共 28/28 通过，覆盖 main 移动、错误 run/repository/attempt/head、同名异 ID、过期 artifact、摘要形态、Secret 前置访问、TC3 golden、完整 CLI 环境/signal 映射、动态 target、超时/中断、权限和调度绕过；固定 Node `24.18.0` 的完整零第三方依赖 `quality`、JavaScript/模块/Markdown/契约/Secret 门禁与 `git diff --check` 通过。#34 改动仍在工作区，尚未提交、推送、运行真实 Actions 或回填 Issue。真实接线前须核验 environment 保护、实际 command/instance、五项自定义参数与最小 CAM 权限并再次取得授权；#37 还必须在同一个持有生产 concurrency 的 job 中有界等待精确 TAT task 终态、核验服务器结果并完成本机/公网闭环，因此当前 fixture 不可直接启用为完整部署。
+- **本地证据与遗留**：五个定向 Node test 文件共 28/28 通过，覆盖 main 移动、错误 run/repository/attempt/head、同名异 ID、过期 artifact、摘要形态、Secret 前置访问、TC3 golden、完整 CLI 环境/signal 映射、动态 target、超时/中断、权限和调度绕过；固定 Node `24.18.0` 的完整零第三方依赖 `quality`、JavaScript/模块/Markdown/契约/Secret 门禁与 `git diff --check` 通过。#34 改动已形成本地提交 `2c40e87`，尚未推送、运行真实 Actions 或回填 Issue。真实接线前须核验 environment 保护、实际 command/instance、五项自定义参数与最小 CAM 权限并再次取得授权；#37 还必须在同一个持有生产 concurrency 的 job 中有界等待精确 TAT task 终态、核验服务器结果并完成本机/公网闭环，因此当前 fixture 不可直接启用为完整部署。
 
 ## 2026-07-29 — #14 fresh production-artifact producer（本地实现、验收与提交完成，待推送/真实上传）
 

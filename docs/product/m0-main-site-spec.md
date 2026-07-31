@@ -1,9 +1,9 @@
 # M0 主站实现 Spec
 
 状态：active
-最近更新：2026-07-29
+最近更新：2026-07-30
 适用范围：`https://www.axialmuse.com/` 的 Docusaurus 多页面静态主站
-实现前置：#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端验收并进入 `main`；#12 历史门禁、#24 作者创建事务与 #32 CI workflow 已在专题分支完成实现和本地验收，现依 D-104 纳入 `dev` 集成，仍须以组合树精确 SHA 完成远端 CI 与 `dev -> main` PR 验收；#13/#33 已形成 release 输入与封装，#35 已由本地提交 `f7fdc43` 实现服务器 verifier 但尚未推送，#14 producer/upload 已在工作区实现并通过本地契约验收，尚无 canonical `main` 真实 artifact；#8、#36/#37 按依赖链继续实现；真实公开素材仍须通过事实、隐私和版权检查
+实现前置：#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端验收并进入 `main`；#12 历史门禁、#24 作者创建事务与 #32 CI workflow 已在专题分支完成实现和本地验收，现依 D-104 纳入 `dev` 集成，仍须以组合树精确 SHA 完成远端 CI 与 `dev -> main` PR 验收；#13/#33 已形成 release 输入与封装，#35 已由本地提交 `f7fdc43` 实现服务器 verifier 但尚未推送，#14 producer/upload 已由本地提交 `7b5cc47` 完成且尚未推送，当前仍无 canonical `main` 真实 artifact；#8、#36/#37 按依赖链继续实现；真实公开素材仍须通过事实、隐私和版权检查
 
 ## 目的与授权边界
 
@@ -248,11 +248,11 @@ site-assets/                   # 原件目录，不直接交给 Docusaurus
 
 | 项目 | 状态 | 影响 |
 |---|---|---|
-| 本轮审查跟踪 | #9/#10/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端验收；#12/#24/#32 已在专题分支完成实现和本地验收并依 D-104 纳入 `dev` 集成；#13/#33/#35 已形成 release 输入、封装和本地服务器 verifier，#14 producer/upload 已完成工作区实现与本地契约验收；#8、#14 真实 artifact 与 #36/#37 继续跟踪下游验收 | 不把 #27/#28 单项闭环、临时 ref push、工作区 fixture 或组合前本地结果误报为全站完成、#12/#24/#32 的远端闭环或 #14 的真实 GitHub artifact；实现偏离 E-006 至 E-016 时回到对应 Issue |
+| 本轮审查跟踪 | #9/#10/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端验收；#12/#24/#32 已在专题分支完成实现和本地验收并依 D-104 纳入 `dev` 集成；#13/#33/#35 已形成 release 输入、封装和本地服务器 verifier，#14 producer/upload 已由本地提交 `7b5cc47` 完成；#8、#14 真实 artifact 与 #36/#37 继续跟踪下游验收 | 不把 #27/#28 单项闭环、临时 ref push、工作区 fixture 或组合前本地结果误报为全站完成、#12/#24/#32 的远端闭环或 #14 的真实 GitHub artifact；实现偏离 E-006 至 E-016 时回到对应 Issue |
 | 首次 npm 解析与真实传递图准入 | #21 已完成 1,225 个 canonical identity 的真实 tarball/许可证/脚本准入、正式 SBOM/evidence/NOTICE、首次准入当时的 audit 全零、D-082 最终决定和主/最低端点 composite receipt；2026-07-26 最新 live audit 的 18 个 high 仍是未修复风险 | 本项不再阻塞 #22；依赖图变化时仍须按 D-077 重新准入并通过 live audit。D-097 至 D-102 已实现并本地验收目标 CI 第一阶段，普通 CI 只阻断静态供应链漂移；相关实现正依 D-104 纳入 `dev`，组合树远端成功仍待精确 SHA 证明 |
 | 两个项目真实视觉证据 | 尚未准备 | 阻塞对应项目改为 `published`，不阻塞框架和空状态实现 |
 | 全站或文章 Open Graph 图片 | 尚无已批准素材 | 未阻塞 #27 已完成的 metadata 合并与文本标签；仍阻塞相关页面满足 M0 全量 `og:image` 目标，不得以占位图绕过 |
 | DocRestore 演示视频 | 后续增量 | 不阻塞 M0 |
-| GitHub Actions production artifact、TAT 与凭证接线 | 可信 CI 第一阶段已由 D-097 至 D-102 完成专题实现和本地验收，并正依 D-104 纳入 `dev`；D-110 已授权固定 upload Action，#14 producer/upload 已在当前工作区实现，但尚未提交、推送或在 canonical `main` 真实运行。required checks 治理、deploy Action、TAT 与凭证仍未授权实施 | 真实 artifact/ZIP 与后续接线缺失仍阻塞自动部署，不阻塞本地构建或普通 CI 的后续远端验收 |
-| 服务器、DNS、证书与生产核验 | 尚未执行 | 阻塞公开上线，不阻塞主站开发 |
+| GitHub Actions production artifact、TAT 与凭证接线 | 可信 CI 第一阶段已由 D-097 至 D-102 完成专题实现和本地验收，并正依 D-104 纳入 `dev`；D-110 已授权固定 upload Action，#14 producer/upload 已由本地提交 `7b5cc47` 完成，但尚未推送或在 canonical `main` 真实运行。required checks 治理、deploy Action、TAT 与凭证仍未授权实施 | 真实 artifact/ZIP 与后续接线缺失仍阻塞自动部署，不阻塞本地构建或普通 CI 的后续远端验收 |
+| 服务器、DNS、证书与生产核验 | #36 服务器侧只读基线、废弃旧站清理、控制面基础核验和 D-119/D-120 SSH 全局策略已完成；OS/腾讯云防火墙、维护重启和 verifier/Certbot 安装仍为 GAP，DNS、证书与 #37 生产闭环尚未执行 | 阻塞公开上线，不阻塞主站开发 |
 | 公安联网备案信息 | 尚待现场核验 | 核验前不显示占位号 |
