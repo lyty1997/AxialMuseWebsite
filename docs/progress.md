@@ -4,6 +4,28 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-08-02 — D-126 一次性只读语义变换探针完成（#36 整体仍为 GAP）
+
+- **授权与执行**：用户授权且只授权一次 D-126 服务器只读语义变换探针；最终预检通过后，唯一正式执行返回固定结果 `status=complete oracleMatch=true`，一次性授权随消费点永久消费。探针没有传出真实配置、规则或摘要值，没有写服务器、reload UFW、重启、重新建立基线、修改云资源、安装 verifier 或进入 #37。
+- **结论边界**：结果精确证明当前规范化 non-vendor 投影加入两条公开标准 IPv6 rate-limit 终止规则后等于冻结 oracle，闭合当前内容关系。它不追溯证明最早 full-hash 差异的历史因果，不改写 D-125 的历史 `environmental_inconclusive`，也不把公共 TEST-NET 时序候选升级为历史事实。
+- **剩余门禁**：#36 仍为 GAP。下一步须由用户决定并另行授权 component-aware transition；其后才可收敛云 SSH 单来源并复验，再分别推进维护重启与重启后 SSH/TAT/Nginx/UFW/Certbot/systemd/监听/包状态稳态。旧重启授权没有恢复，verifier、云规则变更、DNS/TLS 和 #37 均未授权。
+
+## 2026-08-02 — #36 软件事务与云边界准备（整体仍为 GAP）
+
+- **恢复点与云方案**：D-117 加固前快照降为历史恢复点；用户已为 D-122 提交后的当前加固态创建软件事务前系统盘快照，确认控制台终态正常且恢复通道可用，未授权恢复或删除。腾讯云轻量防火墙已允许任意 IPv4 来源访问 TCP 80/443；用户选择方案 A 并确认删除当时三个受限 SSH 来源中的槽位 1、3、只保留槽位 2，随后三次严格 SSH 在 TCP 22 建连阶段超时。用户之后把刚删除的两条受限规则按原值恢复，新的严格 SSH 会话成功；服务器连接元数据的脱敏分类确认实际来源仍对应槽位 2，且与 OS UFW 唯一 `/32` SSH 用户规则一致。此前超时因此不再解释为来源槽位选错，更可能位于云规则实施或传播窗口，但现有证据不足以断言具体因果。
+- **软件事务与独立后验**：D-124 的单一 apt 事务已精确升级 `distro-info-data`、`libssl-dev`、`libssl3t64`、`openssl`、`tzdata`、`tzdata-legacy` 六包，并以 `--no-install-recommends` 新增 Certbot 及其六个固定 Python 依赖，零额外、零移除且没有执行 `autoremove`。最终写前计划、完整重启前 verifier 和 journald-only systemd 单元预检均先通过；实际事务成功后，root-only 回执只作为事务证据，独立 `post-software` verifier 又复核全部十三包、APT auto/manual 标记、Certbot CLI 与官方 timer、无 ACME 状态，以及 SSH、`sudo -n`、UFW 双栈/YJ 链、Nginx、TAT、监听面和零 failed unit。预期终态摘要在写入前由完整 dpkg 清单加获准增量推导，未使用安装后现采值回填。
+- **仓库验收**：同步 D-124、生产清单和剩余门禁后，固定 Node `24.18.0` 的完整 `quality` 在宿主执行环境通过。首次受限沙箱运行只在需要创建隔离 Git/npm fixture 的单测失败；同一单测在宿主环境 59/59 通过，随后完整聚合门禁通过，证明该失败来自执行环境限制而非仓库回归。最终文档微调后的 Markdown、契约词、Secret 与差异检查也通过。
+- **恢复后复验、隔离取证与当时门禁**：恢复连接后的完整 `post-software` 在最终全量防火墙摘要处以 `live-hash` 失败关闭；冻结 capture 重新证明 UFW 配置、完整已安装包和 boot 摘要仍等于软件后验基线。脱敏组件投影随后证明 non-vendor 摘要保持历史值，腾讯 vendor 分量会在没有本轮服务器写操作时动态变化，但其当前规则仍全部为 `REJECT` 且结构闭合。用户按 D-125 两次明确授权一次性传输同一组 11 个最小配置成员：首轮因私有副本 DAC 边界在序列化前失败并清理；修正为不增加 capability 的 stdin 内存 tar 后，正式重试的 fresh enable、reload、cold start 各运行两次，六次都完成、同路径双读稳定且三模式的归一化规则投影一致。结构计数中，重建的 IPv4 链/规则数和 IPv6 链数均与同窗服务器 non-vendor 投影一致，唯一差值是固定本机隔离环境每次多 2 条 IPv6 规则；完整归一化摘要仍不匹配，不能把真实内容差异缩写成只有这两条，结论只能是 `environmental_inconclusive`，不能证明服务器漂移或静默再基线。整个窗口前后服务器归一化 full/vendor/non-vendor 投影与冻结 capture 均完全相同，全部容器及本机私有配置副本已经删除；服务器没有重启、文件写入、UFW reload、TAT、云规则再修改或 #37。追加传输授权已消费；正式回执及其失败关闭边界保持不变。其后的 D-126 已闭合当前内容关系，但未改写这段历史结论。
+- **本地时序候选与后续证据**：固定镜像的 UFW 0.36.2 源码审计和不使用真实地址的 TEST-NET 重放，在公共等价夹具内连续两次精确复现 initial-enable 103、reload 105，要求 IPv4 不变、IPv6 只新增两个标准 rate-limit 终止规则，并证明该无 IPv6 用户规则夹具没有进入 limit 链的 jump/goto，因此新增规则不可达；正式回执中的两次 cold-start 与 reload 完整归一化投影也彼此一致。这为 UFW 首次启用时序提供了强结构候选解释，但当时公共夹具与正式服务器/oracle 之间只能绑定逐链规则数量摘要，不能冒充真实内容等价。现有冻结 transaction/evidence 不含可恢复真实输入，因此本机 exact 重放路径失败关闭；正式 `environmental_inconclusive` 与最早 full-live 缺少 vendor/non-vendor 分量的历史残余继续保留。随后 D-126 以一次性只读探针得到 `oracleMatch=true`，只补足当前内容关系；transition、重启、reload、云 SSH 单来源、重新建立基线、服务器 artifact verifier 与 #37 仍须新的明确决定和授权。
+
+## 2026-08-01 — #36 OS 防火墙提交与重启前稳态（整体仍为 GAP）
+
+- **授权与范围**：按 D-122 只操作腾讯轻量应用服务器的 OS 防火墙，保持 D-119/D-120 SSH 身份与策略、账户/密钥、Nginx、TAT、软件包和腾讯云控制面不变；开发机本地 UFW 从未被操作。目标规则固定为默认拒绝入站、允许出站、禁用 routed，只允许已验证开发机来源访问既有 SSH 端口，并允许任意 IPv4 来源访问 TCP 80/443，不开放 IPv6 或其他入站。用户当时另行授权防火墙验收后的一次维护重启，但没有授权 Certbot 或待升级包；D-125 后预期 postcondition 已改变，这项历史授权不能直接继续使用。
+- **失败关闭与修复**：早期尝试分别暴露自动包任务锁竞争、SSH 标准输入被交互式 UFW dry-run 消费、dry-run 会改写 `ufw.conf`、Ubuntu vendor IPv6 规则中合法不存在 `ufw-not-local`，以及提交后清理错误假设 systemd wants 目录必然存在。所有提交前失败均由 watchdog 回滚或通过精确闭包恢复到写入前基线；提交后的目录假设只影响临时状态清理，不改变已经验收并提交的防火墙规则。修复后的冻结脚本与四组本地 fixture 均按事务摘要绑定。
+- **提交、清理与稳态**：最终事务启用 UFW 后，第二条全新严格公钥 SSH 会话逐项通过管理身份、`sudo -n`、SSH 策略、TAT、Nginx、failed units、监听面、双栈默认/用户规则和腾讯 YJ 链身份后才提交。包管理锁持有者按其原协议自然退出后，独立审计的清理事务只删除本事务两个运行时 marker 和 33 个精确绑定的状态成员；随后提交后重启前 steady verifier 再次通过。服务器当前 UFW active/enabled，目标规则与 vendor 链保持稳定；腾讯云轻量防火墙没有被改动。
+- **软件只读计划**：2026-08-01 的新鲜 apt 模拟显示六个升级候选：`distro-info-data`、`libssl-dev`、`libssl3t64`、`openssl`、`tzdata`、`tzdata-legacy`，零新增、零移除；这些升级尚未授权。Certbot `--no-install-recommends` 模拟显示新增 `certbot`、`python3-acme`、`python3-certbot`、`python3-configargparse`、`python3-josepy`、`python3-parsedatetime`、`python3-rfc3339` 七包，零升级、零移除，也尚未授权或安装。
+- **CI 与剩余门禁**：用户确认 GitHub Actions 额度恢复，并要求当前 `codex/issue-18-production-baseline` 暂不合并 `main`，待 #18 完成后一次性开 PR。topic push 本身不触发 workflow，故尚无本轮远端 CI 证据。#36 合并前仍须由用户手工闭合腾讯云轻量防火墙、决定六个升级候选和 Certbot、执行已授权维护重启并完成重启后稳态；verifier 首次安装硬性等待 bootstrap/verifier/golden 同一提交进入 canonical `main`，之后还要单独取得现场安装授权。#37 的生产目录、发布、Nginx 站点、DNS/TLS 与公网闭环继续暂停；本轮未引入浏览器请求、访问者数据处理或第三方常驻服务。
+
 ## 2026-07-30 — #36 加固前复核与 verifier bootstrap 候选（整体仍为 GAP）
 
 - **继续只读复核**：严格 host key SSH、`sudo -n`、`sshd -t`、Nginx、TAT 与 systemd 仍健康，没有 failed unit、未知非本地 TCP 或 Web 监听。UFW 已安装但 inactive，IPv4/IPv6 INPUT 默认接受；腾讯云代理已有的来源拒绝链不是 OS 端口白名单，因此双层防火墙尚未闭环。自动安全更新服务及两个 apt timer 已启用且未配置自动重启；新鲜包索引仍有三个非内核数据包待升级，`reboot-required` 仍存在。Ubuntu 官方 Certbot 最小安装模拟不删除包或触碰 SSH/Nginx/TAT，但 Certbot 尚未安装；本轮没有执行服务器或云写操作。

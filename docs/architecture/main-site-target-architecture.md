@@ -1,7 +1,7 @@
 # 主站目标架构
 
 状态：active
-最近更新：2026-07-30
+最近更新：2026-08-02
 适用范围：主站内容构建、未来中央账户、评论服务和独立项目服务的职责边界
 
 ## 决策依据
@@ -240,7 +240,7 @@ Docusaurus 内部不使用 articleId 代替框架 ID。首版文章不填写原�
 5. 浏览文章、项目介绍和个人主页不依赖数据库或动态 API。
 6. 当前没有登录、评论或试用能力时，页面不得将其表达为已上线功能。
 
-Docusaurus、Node/npm、严格 TypeScript、内容身份和首次供应链协议已由 D-051 至 D-077 固定；D-078 至 D-080 与 E-001 至 E-016 又关闭了 M0 项目内容来源、URL 闭包、注册表布局、主题适配、构建位置、制品交付、主预览、发布态素材白名单、草稿预览候选、npm 启动前隔离、确定性 SPDX、Node ESM 测试、完整 Git 历史、服务端 301、production job 字节所有权、单一内容装配和本地作者 Node 24 选择边界。内部 API、命名、路径检查、作者命令、索引、侧栏、SEO 合并、测试、CI 和供应链脚本不再重新选择上层方向；#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端闭环，D-080 已实现本地作者 hook。D-097 至 D-102 的 Node 24 CI 第一阶段、#12 历史门禁和 #32 workflow，以及 D-103 的 #24 作者事务已完成专题实现与本地验收，现依 D-104 纳入 `dev` 集成；#13/#33/#35 已分别形成 release 输入、封装和服务器 verifier 的仓库能力，#14 producer/upload 已由本地提交 `7b5cc47` 完成但尚未推送，D-119/D-120 SSH 全局策略已达到 `committed_clean`。#8 预览、#14 canonical `main` 真实 artifact、#36 的 OS/腾讯云防火墙、维护重启与 verifier/Certbot 安装和 #37 部署仍待闭环。服务器、凭证、后续仓库门禁和生产操作仍须取得各自授权；系统默认 Node 22 与 `public/` 只描述仍存在的迁移期事实，不能再用旧 workflow 描述组合树。
+Docusaurus、Node/npm、严格 TypeScript、内容身份和首次供应链协议已由 D-051 至 D-077 固定；D-078 至 D-080 与 E-001 至 E-016 又关闭了 M0 内容、URL、注册表、主题、构建、artifact、预览、素材、供应链、测试、历史、服务端 301 和单一内容装配边界。#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端闭环；D-097 至 D-103、#12、#24 与 #32 已完成专题实现和本地验收，仍依 D-104 等待组合树远端闭环。#13/#33/#35 已形成 release 输入、封装和服务器 verifier，#14 producer/upload 已完成本地接线。#36 已完成 D-119/D-120 SSH、D-122 OS UFW 重启前稳态和 D-124 软件事务；D-125 的历史正式回执仍为 `environmental_inconclusive`。D-126 唯一一次只读语义变换探针以 `status=complete oracleMatch=true` 证明现场 current normalized non-vendor 命中冻结 current 基线，并在固定位置加入两条公开标准 IPv6 rate-limit 终止规则后命中冻结 oracle。该探针未写服务器、未 reload、未重启、未再基线，授权已经消费；它关闭当前内容关系缺口，但不证明 initial-enable 的历史因果，也不授权 transition。#8 预览、#14 canonical `main` 真实 artifact、#36 的历史残余接受与 component-aware transition 决策、云层单来源收敛、维护重启及后验、verifier 安装，以及 #37 部署仍待闭环；确认前暂停相应服务器动作。服务器、凭证、后续仓库门禁和生产操作仍须取得各自授权；系统默认 Node 22 与 `public/` 只描述迁移期事实。
 
 ## 首版工程技术基线
 
@@ -250,7 +250,7 @@ D-053 将已经分散确认的框架、图表、静态服务、发布控制和�
 |---|---|---|
 | 站点与内容 | 使用 `.nvmrc` 唯一精确执行基线、`>=24.16.0 <25` 兼容边界与受控升级治理下的 Node 24 LTS 工具链；以 Docusaurus `3.10.2` 的 core/classic preset/Faster 同版本拓扑、v4 兼容行为、npm、唯一 `package-lock.json` 与隔离冻结安装承载可重复静态构建；Docusaurus 管理的目标源码使用显式严格 TypeScript，首轮候选直接依赖与根 `tsconfig` 采用 D-076 的官方基线和本站收紧规则，D-079/E-012 另固定 Node 测试类型候选与临时编译的 Node ESM 测试，并分别通过 `tsc --noEmit`、测试和 Docusaurus build；依赖按 D-077、E-010、E-011 完成官方 registry-only、启动前配置与缓存隔离、无脚本 tarball 证据、确定性 SPDX SBOM、显式漏洞阈值和双端点只读准入；源码采用 D-075 的标准入口目录、跨层公共入口、框架入口默认导出、内部具名导出和无自定义业务别名边界；作者命令、质量与构建负载只在 Linux 执行环境和 Ubuntu CI 运行；项目介绍与技术文章共用单一 docs 内容实例并分别使用各自侧栏；领域内容模型保持唯一可编辑真相源；实例使用根 `routeBasePath` 和仓库根 `site-content/` 物理内容根，文章 `slug` 直接采用原生完整路径；核心字段采用原生精确直用和最小内存适配；`site-content/writing/` 是唯一文章类型边界，每篇文章使用独立源码目录和唯一正文入口，`<source-name>` 采用人工稳定可读命名，UUIDv7 articleId 作为领域身份，作者显式运行仓库 Node.js 创建命令并通过原生 `randomUUIDv7()` 在唯一正文入口中一次写入该 ID，E-013 以 Docusaurus 3.10.2 公共结构化 frontmatter 解析器、HEAD 可达完整 Git 历史和 lineage 父状态 ledger 防止稳定 ID 复用，正文采用源码相对文章链接，技术分享侧栏从 `classification` 和当前 `docs[].id` 构建期派生 | #9/#10 已实现 E-010/E-011；#21 已完成 1,225 个 canonical identity 的真实传递图准入（含 E-013 的 `@docusaurus/utils@3.10.2`）、正式三制品、首次准入当时的 audit 全零和双端点冻结安装；最新 live audit 的 18 个 high 仍是未修复风险。#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端验收；D-097 至 D-102 的 Node 24 CI、完整历史门禁、固定 Action SHA、静态供应链与零依赖 pre-commit，以及 #24 作者事务已完成专题本地验收并依 D-104 纳入 `dev`，组合树尚无远端 CI 或 Issue 验收证据。#13/#33/#35 已形成 release 输入、封装和本地服务器 verifier，#14 producer/upload 已由本地提交 `7b5cc47` 完成；#8、#14 的真实 Actions artifact 与 #36/#37 继续跟踪下游验收，后续真实用途新增依赖仍受显式重准入门禁 |
 | 图表 | 保留仓库现有 PlantUML 源码编译为静态 SVG 的流程 | 不引入 Docusaurus 运行时图表插件或浏览器端渲染；版本升级仍需供应链复核 |
-| Web 与 TLS | Ubuntu Server 24.04 LTS 上由 Nginx 提供静态制品，Certbot 通过 ACME HTTP-01 管理证书 | 生产不运行 Docusaurus/Node.js；具体安装来源、版本和配置在部署实施前核验 |
+| Web 与 TLS | Ubuntu Server 24.04 LTS 上由 Nginx 提供静态制品，Certbot 通过 ACME HTTP-01 管理证书 | 生产不运行 Docusaurus/Node.js；Ubuntu 官方 apt 的 Certbot 安装与 timer 基线已由 D-124 验收，ACME webroot、证书签发、续期 hook 和 Nginx TLS 配置仍待实施 |
 | 发布控制 | GitHub Actions 的 `production-artifact` 在四个 prerequisite job 成功后，对 `main` 精确 SHA 在 fresh runner 自包含重建、重验并封装同版本 payload 与服务端 301 配置；deploy 以只读 GitHub 权限复核 main HEAD/当前 artifact，再经最小权限 CAM 调用固定 TAT command；服务器分别验证外层 artifact 与上传前 release tree 摘要后整版切换不可变 release | E-015 已固定不传递 `website-quality` build、concurrency 不替代 main 新鲜度、producer/deploy token 最小权限和双摘要信任边界；D-110 已准入固定完整 SHA 的官方 upload Action，#14 已由本地提交 `7b5cc47` 接入 producer，但尚无真实 Actions upload。canonical 仓库已只读核验为 public，当前 artifact 读取不配置服务器凭证；OD-009 继续跟踪 environment protection 的方案能力，deploy Action、CAM、TAT 和服务器配置仍需准入与操作授权 |
 | 原生运维 | 使用 systemd 管理服务与定时任务，使用 logrotate 或系统日志轮转能力控制技术日志 | 不引入容器、PaaS、编排平台或第三方常驻监控 agent |
 | CI 与发布门禁 | 门禁失败阻止发布成功，旧 release 只有通过当前 URL 暴露账本才能继续使用；D-074 的 `tsc --noEmit`、E-012 的 Node ESM 测试与 Docusaurus build 独立必需；E-013 要求所有历史 job 完整 checkout 并拒绝浅仓库；E-014 要求 301 配置与同一 payload 绑定；E-015 要求最终 production build 在同一 job 完整重验、封装和一次上传；普通 CI 对 D-077/E-010/E-011 可静态复核的依赖来源、integrity、许可证、脚本、admissions、SBOM/NOTICE 和 manifest/lock 漂移失败关闭，显式依赖准入/重准入另对 live audit 漏洞阈值与双端点验证失败关闭 | E-010/E-011 与 #21 的真实供应链报告、制品闭包、最终决定、双端点冻结安装和 composite receipt 已通过本地验收；D-097 至 D-102 已完成完整历史、Node 24 CI、固定 Action SHA、静态供应链证据与零依赖本地质量入口的专题实现和 fresh 本地验收，现依 D-104 纳入 `dev`。#13 服务端 301、#33 release 字节闭包、#35 verifier 和 #14 producer/upload 均有仓库侧本地证据；组合树远端 CI/required checks、canonical `main` 真实 artifact 与 30 天 retention 仍待真实验收 |

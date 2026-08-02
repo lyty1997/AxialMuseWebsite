@@ -1,14 +1,14 @@
 # 自动化维护与运行手册
 
 状态：draft
-最近更新：2026-07-30
+最近更新：2026-08-02
 适用范围：M0 腾讯云主站与项目体验子域名的自动发布、监测、备份、安全维护与故障处理
 
 ## 目的
 
 本文定义 `axialmuse.com` 主站及已登记项目体验上线后的最低运行标准，让日常维护依赖可重复检查和明确告警。首版由 Nginx 承载静态站点与静态项目体验，优先自动化发布、证书、健康检查和备份，不引入应用后端、数据库或第三方页面监测脚本。
 
-D-053 已固定 Docusaurus 官方静态能力、现有 PlantUML、Nginx/Certbot、GitHub Actions/TAT、Ubuntu/systemd 原生运维和 CI 门禁能力类别；D-073 至 D-077 固定框架、工具链、TypeScript、依赖与首次供应链准入边界，D-078 授权内部工程收敛，D-079 固定 Node 测试类型直接候选，E-005 固定静态 artifact 交付链路，E-010 至 E-015 固定 npm 启动前隔离、确定性 SPDX、Node ESM TypeScript 测试、HEAD 可达完整 Git 历史、同版本服务端 301 和 production artifact 自包含字节闭包。仓库已经具有 Docusaurus、真实依赖图、production build、#13 运行时 301 派生、#33 确定性 `dist/release/` 封装与独立复验，以及 #35 Python 标准库服务器 verifier 的本地实现；#35 已形成本地提交 `f7fdc43` 但尚未推送，#14 producer/upload 已由本地提交 `7b5cc47` 完成但尚未推送。#34 已在活动 workflow 外实现七项身份/main 新鲜度核验、无 Secret 预检、固定 TAT dispatch 与并发静态候选；它只返回 `status: dispatched` 和 invocation ID，不表示 TAT task 或部署成功。D-097 至 D-103 形成第一阶段可信 CI、历史和作者事务专题实现；D-099 已从普通 push/PR CI 移除 live npm audit，静态供应链证据继续失败关闭；已观测的 18 个 high 依赖节点仍是未修复风险，但不再阻断普通 CI。#36 的服务器只读清单、归因、废弃旧站清理、控制面基础核验、快照、额外身份处置和 D-119/D-120 SSH 全局策略已完成；当前仍未闭合的是组合树真实 GitHub run、required checks、canonical `main` 的真实 upload、artifact outputs/ZIP、#34 environment/CAM/TAT 活动接线、#36 的 OS/腾讯云防火墙、维护重启与 verifier/Certbot 安装验收，以及 #37 TAT 终态、不可变安装、账本、激活和定时任务。
+D-053 至 D-079 与 E-005/E-010 至 E-015 已固定静态站、工具链、供应链、测试、历史、301、artifact、Nginx/Certbot、Actions/TAT 和 Ubuntu/systemd 运维边界。仓库已具有 #13/#33/#35/#14/#34 的 301、release、verifier、producer 和受限 dispatch 能力，但 canonical `main` artifact 与活动 TAT 尚待。#36 已完成服务器盘点、旧站清理、控制面核验、额外身份处置、D-119/D-120 SSH、D-122 OS UFW 和 D-124 软件事务；D-125 历史正式回执仍为 `environmental_inconclusive`。D-126 唯一一次只读探针以 `status=complete oracleMatch=true` 关闭 current normalized non-vendor 加两条公开规则后命中 frozen oracle 的内容关系缺口，未写服务器且授权已消费。它不证明历史因果或授权 transition；component-aware transition、云层单来源、维护重启、再基线、verifier 安装和 #37 仍须新决定与授权。
 
 ## 服务目标
 
@@ -70,7 +70,7 @@ D-077 已固定 npm 原生能力加零第三方依赖策略脚本、SPDX JSON、
 
 上述实现最初由离线 fixture 验收；D-081/D-082 授权后，真实解析、1,225 项精确候选/admissions、35/11/12 补充法律证据、正式 SBOM/evidence/NOTICE、当时漏洞全零的 audit、最终决定及 Node 24.18.0/24.16.0 双端点证明均已闭合。最初诊断的 20 个 moderate、1 个 high 已由两项精确传递 override 后的首轮最终 lock 和当时 audit 全零结果取代；2026-07-26 后续观测到的 18 个 high 仍是未修复风险，并按 D-099 移出普通 CI 而非视为已解决。后续联网动作继续受官方来源与受限证据边界约束；新增依赖、Action、脚本例外和其他外部操作继续受原门禁约束。缺失输入、零测试、浅/不完整历史、缺失或预存构建制品、静态重定向页、build 竞争修改或 payload/规则摘要不一致必须失败，不能沿用迁移前检查中对不存在入口的跳过行为；所有发布必需 job 通过后，`production-artifact` 才能在 fresh runner 重建、重验并封装最终 build。
 
-D-065 的文章创建命令只允许作者在获准的 Linux 作者环境显式运行；Git hook、CI、预览、发布和生产内容门禁只能失败并定位非法内容，不得生成、修复、暂存或提交。D-066/D-067/D-072/D-073 要求获准作者工具、质量、PlantUML 和构建执行器使用 Node 24，主/最低端点以各自随附 npm 读取同一 lockfile，任何版本、配置、lockfile、外部请求或冻结安装偏离都失败。D-074/D-076 与 D-079/E-012 分别固定生产源码类型和独立测试边界；E-013 至 E-015 固定完整历史、同版本 301 和 production job 自包含重建。D-097 至 D-099 已把 workflow 收敛为固定 SHA 的官方 Action、Node 24 主/最低端点、完整 checkout、E-010 隔离冻结安装、独立 `quality`/`typecheck`/`test`/`build`、E-013 历史门禁、PlantUML 和静态供应链证据四类 job；D-102 把依赖冻结的 E-013 从零第三方依赖 `quality` 拆为两个构建 job 的安装后独立入口，避免无 `node_modules/` 的 pre-commit 被阻断。普通 CI 不运行 live audit。#21 的候选报告、正式三制品、最终决定和真实双端点依赖闭环，以及 TypeScript、E-012 runner、内容解码和模块边界已经完成；#13 已完成服务端 301 的仓库侧闭环，#33 已由 `b38354b` 推送 release 封装和独立复验但该 ref 无远端 CI，#35 已由本地提交 `f7fdc43` 实现服务器 verifier 但尚未推送，#14 已由本地提交 `7b5cc47` 完成 production artifact producer/upload 但尚未推送，D-119/D-120 SSH 全局策略已完成。尚未完成的是 #8 preview、#14 canonical `main` 真实上传与 outputs/ZIP、#36 的 OS/腾讯云防火墙、维护重启和 verifier/Certbot 安装验收，以及 #37 deploy/服务器闭环。真实内容树除获准作者显式创建操作外始终只读，本轮未创建真实文章。
+D-065 的文章创建命令只允许作者在获准 Linux 环境显式运行；Git hook、CI、预览和发布门禁不得生成或修复内容。D-066 至 D-079 与 E-012 至 E-015 固定 Node 24、类型、测试、完整历史、301 和 production job 自包含重建；D-097 至 D-102 已形成对应 workflow，#13/#33/#35/#14 已形成发布链仓库能力。尚未完成 #8 preview、#14 canonical `main` artifact，以及 #36 的 transition/重启/verifier。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已以 `status=complete oracleMatch=true` 闭合当前内容关系，但不授权 transition。真实内容树除获准作者操作外始终只读。
 
 D-080 已单独完成当前 Linux 作者用户的固定 nvm/Node 24 安装与本地 pre-commit 自动选择：系统和新 Bash 默认 Node 保持不变，hook 不读取用户 npm `prefix`、不修改 shell 初始化或 alias，缺少精确运行时时失败且不联网。#24 文章创建工具已完成本地验收并依 D-103 获准纳入当前专题分支提交及同名临时 ref；这不改变系统默认 Node，也不等于远端验收或授权创建真实文章。
 
@@ -82,13 +82,13 @@ D-067/D-097 的 Ubuntu CI 边界与当前实施状态如下：
 - 只有明确的受审依赖变更可以在主基线按 D-077 生成候选 `package-lock.json`；候选经过证据审查和人工准入后，才可与对应 `package.json` 一并进入正常冻结安装。普通作者验证、非依赖 PR、最低端点和发布流程不得改写依赖图。首次迁移必须证明两个 npm 端点能读取同一 lockfile；任一端点失败时阻止迁移并回到依赖决策，不得重写锁文件掩盖不兼容。
 - Node 24 安全 patch 被发现后及时发起独立升级 PR；其他 patch 至少每月检查。升级 PR 先修改 `.nvmrc` 候选值，Ubuntu CI 的主任务和最低版本任务、PlantUML 及届时发布必需门禁通过后才允许合并，不得自动合并，也不得在普通 patch PR 中修改 `engines` 边界。
 
-D-097 至 D-099 已在工作区实现三个官方 Action 的精确 commit SHA、Node `24.18.0` 与 `24.16.0` 两个 job、同一隔离负载、D-075 模块边界、E-013 检查器与真实 Git DAG fixture、完整 checkout、四 job 拓扑和静态供应链证据；Ubuntu runner 通过固定 `actions/setup-node` 取得版本，不再引入 nvm 安装步骤。两端已在全新任务私有副本中仅连接官方 npm registry 完成冻结安装，并分别通过当时的 `quality`、`typecheck`、223/223 测试与 production `build`；D-098 的机器路径门禁也已由两个不同私有根的真实 build 验证。此前 live audit 对 1,345 个依赖节点报告 18 个 high、0 个 critical，源于 `brace-expansion` advisory 经 `minimatch`/`serve-handler` 扩散到 Docusaurus 图；D-099 将 live audit 从普通 CI 移除，因此该结果继续作为 Dependabot Alerts 与人工维护跟踪的未修复风险，而不是 CI blocker。#33 的 `package:artifact`、`check:artifact`、release 文件树摘要和独立重建复验已由 `b38354b` 推送到专题分支，且该 ref 不触发现有 CI；#35 的标准库 verifier 和共享 golden 已由本地提交 `f7fdc43` 实现但尚未推送。#14 已按 D-110 由本地提交 `7b5cc47` 接入固定完整 SHA 的官方 upload Action、fresh producer，以及 post-upload 的 build/release/HEAD 身份闭包和七项 outputs；这不是 GitHub-hosted Action 的真实运行，提交尚未推送。#36 的服务器盘点、控制面基础核验与 D-119/D-120 SSH 全局策略已完成，但 OS/腾讯云防火墙、维护重启和 verifier/Certbot 安装仍为 GAP；其余待闭合项是组合树真实 GitHub run、required check context 与 branch protection/ruleset、#14 canonical `main` 真实上传和实际 artifact 身份/ZIP，以及 #37 deploy。依赖图若发生变化则另须按 D-077 完成失败关闭重准入。生产服务器不安装 Node/npm、不拉源码、不执行构建；artifact 读取边界、deploy Action、凭证、GitHub `production` environment、TAT 和服务器配置仍须另行准入、核验和授权。
+D-097 至 D-099 已实现固定 Action SHA、Node 24 双端点、完整 checkout、隔离负载、历史与静态供应链证据；已观测的 18 个 high 依赖节点继续按未修复风险跟踪。#33/#35/#14 已形成 release、服务器 verifier 与 producer 能力，但尚无对应 GitHub-hosted 真实 artifact。#36 已完成服务器盘点、SSH、OS UFW 与软件事务；D-125 历史回执仍为 `environmental_inconclusive`，D-126 已以 `status=complete oracleMatch=true` 闭合当前内容关系且未写服务器。历史因果仍未证明，transition、云层单来源、维护重启、再基线、verifier 和 #37 继续失败关闭。生产服务器不安装 Node/npm、不拉源码、不执行构建。
 
 影响 UI 的 PR 还必须在 E-009 的局域网静态预览制品完成桌面端、平板端和移动端截图。预览状态须报告活动 artifact SHA 与待验收提交一致；每个 HTML 均为 `noindex, nofollow`、无 sitemap，且 draft 只在“草稿”组可见。M0 没有公网 PR 预览，截图和质量结果共同作为合并证据；当前脚本尚未迁移完成，因此迁移前 `public/` 截图不能作为 Docusaurus 页面验收。
 
 ### 生产发布
 
-当前四个 prerequisite 只在工作区形成第一阶段 workflow，尚未成为 `main` required checks；#14 已由本地提交 `7b5cc47` 实现以下第 4、5 步的 `production-artifact` fresh producer、单次 upload 与七项 outputs 接线，但尚未推送，#33 已实现第 5 步的仓库侧封装与独立复验脚本，#35 已实现第 7 步中“下载完成后的独立校验与 verified staging”本地能力。#34 已实现第 6 步的仓库内身份、新鲜度、Secret 前置门禁与固定 TAT dispatch 候选，但没有修改活动 workflow 或外部配置。当前没有 canonical `main` 的真实 producer run、实际 upload/outputs/ZIP、真实 invocation 或 #35 真实 ZIP 复验；D-119/D-120 SSH 全局策略已经完成，#34 environment/CAM/TAT 接线、#36 的 OS/腾讯云防火墙、维护重启与 verifier/Certbot 安装验收，以及 #37 的 TAT 终态、安装、账本、激活和恢复仍是未实现或未部署的目标契约。
+当前 prerequisite workflow 尚未成为 `main` required checks；#14/#33/#35/#34 已形成 producer、release、verified staging 与受限 dispatch 候选，但没有 canonical `main` 真实 producer、artifact、invocation 或真实 ZIP 复验。D-119/D-120、D-122、D-124 已完成；D-125 历史回执仍为 `environmental_inconclusive`。D-126 唯一一次只读探针已以 `status=complete oracleMatch=true` 关闭当前内容关系缺口，未写服务器且不授权 transition。#36 的 transition verifier、维护重启、云层单来源、再基线与 verifier 安装，以及 #37 的 TAT/账本/激活/恢复继续禁止；#34 活动 environment/CAM/TAT 接线也未完成。
 
 1. PR required checks 与本地预览验收均通过。
 2. PR 合入 `main`。
@@ -125,7 +125,7 @@ GitHub 计划任务可能延迟，不作为分钟级监控。M0 不注入浏览�
 
 ## 服务器例行任务
 
-2026-07-30 的 #36 只读现场核验确认 Ubuntu 官方自动安全更新服务及 `apt-daily`、`apt-daily-upgrade` timer 已启用，未配置自动重启；这代表当前运行基线，不代表允许 Agent 自行安装、升级或重启。包变更前必须刷新并固定本次安装计划、拒绝删除关键组件，确认加固前快照仍为正常状态，并取得本次软件变更授权；`reboot-required` 只能进入获准维护窗口，重启后须独立复核 SSH 公钥会话、`sudo -n`、TAT、Nginx、failed units、监听面和防火墙终态。当前仍有三个非内核数据包待升级，Certbot 尚未安装，因此下列 ACME 和补丁任务仍含未部署目标。
+2026-07-30 的 #36 盘点确认 Ubuntu 自动安全更新与两个 apt timer 已启用且不自动重启；D-122 已完成 OS UFW 重启前稳态，D-124 已完成六包升级与七包 Certbot 最小安装，当时的软件后验通过且无 ACME 状态。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已以 `status=complete oracleMatch=true` 闭合当前内容关系，但不恢复旧重启授权。若以后另行获准维护重启，仍须复核 SSH、`sudo -n`、TAT、Nginx、Certbot timer、failed units、监听、包和双层防火墙；verifier 安装还须等待 bootstrap、verifier 与 golden 同一提交进入 canonical `main` 并重新取得现场授权。
 
 ### 每日
 
