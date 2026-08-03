@@ -1,8 +1,8 @@
 # 主站编码规范 Spec
 
 状态：active
-完整度：M0-design-closed（#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自远端验收；#12/#24/#32 已完成专题实现与本地验收，#13/#33/#35/#14/#34 已形成 301、release、verifier、producer 与 dispatch 能力，但组合 CI、canonical `main` artifact 和活动 TAT 尚待。#36 已完成服务器盘点、SSH、OS UFW 和软件事务；D-125 历史正式回执仍为 `environmental_inconclusive`。D-126 唯一一次只读探针以 `status=complete oracleMatch=true` 关闭当前 normalized non-vendor 加两条公开规则后命中 frozen oracle 的内容关系缺口，未写服务器且授权已消费。它不证明历史因果或授权 transition；#36 仍等待 transition 决策、云层单来源、维护重启后验与 verifier 安装，#37 继续失败关闭）
-最近更新：2026-08-02
+完整度：M0-design-closed（#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自远端验收；#12/#24/#32 已完成专题实现与本地验收，#13/#33/#35/#14/#34 已形成 301、release、verifier、producer 与 dispatch 能力，但组合 CI、canonical `main` artifact 和活动 TAT 尚待。#36 已完成服务器盘点、SSH、OS UFW 和软件事务；D-125 历史正式回执仍为 `environmental_inconclusive`。D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已返回 `status=complete outcome=committed`；D-129 的唯一维护重启已执行，但完整 post-reboot 因 vendor declaration predicate 不满足而 pending。D-130 只读逐组件源码与契约已通过本地审计，formal receipt 尚未形成。#36 仍等待该 receipt 与 verifier 安装，#37 继续失败关闭）
+最近更新：2026-08-03
 适用范围：本站仓库内的主站页面与组件、Docusaurus 构建期适配、作者工具、质量脚本，以及这些代码之间的依赖边界
 
 ## 目的
@@ -55,7 +55,7 @@ D-097 至 D-102 已把固定 SHA 的官方 Action、Node 24 主/最低端点、�
 | D-061 至 D-064、D-078、E-013 | 内容根、源码布局、稳定身份、路径、源码相对链接、日期索引、侧栏与 HEAD 可达历史 | 路径、身份、历史 DAG、链接、索引和侧栏契约测试 | #12 已实现历史检查器、pre-write 候选 API、真实 Git DAG fixture 与完整 CI checkout；#24 已接入同一候选/终态实现并通过本地完整历史 fixture，正依 D-104 纳入 `dev`，精确远端 CI 尚待取得 |
 | D-065 至 D-067、D-072、D-078 | 作者显式创建入口、UUIDv7 后端、版本治理和 Linux/Ubuntu 执行边界 | 作者工具、版本契约和 Ubuntu CI | Node 24 版本文件与 E-010 端点校验已实现；#24 作者工具、原子事务、残留门禁与主端点显式验收已完成本地验收，正依 D-104 纳入 `dev` |
 | D-052、D-053、D-073、D-077、D-079、E-010、E-011、E-014、E-015 | 依赖准入、锁文件、隔离冻结安装、确定性供应链证据、质量、production job 字节闭包和带 301 配置的发布必需门禁 | 依赖、制品、浏览器与发布检查 | E-010/E-011 与 #21 真实图准入、正式证据及双端点 composite receipt 已完成；D-097 至 D-102 已形成第一阶段 CI 接线，#13 已完成 301 派生、payload 校验与固定 digest Docker 真实 Nginx 验收，#33 已完成自包含 release 封装、规范摘要和独立复验，#14 production artifact workflow/upload 已由本地提交 `7b5cc47` 接线并通过本地契约验收；canonical `main` 真实制品与 #37 部署仍未形成 |
-| D-005 至 D-009、E-014、E-015 及生产发布设计 | canonical/隐私边界、最小权限发布和 payload/301 同版本 release 切换 | 真实制品与生产冒烟 | E-014/E-015 已收口，#13/#33/#35/#14 已形成仓库能力；D-119/D-120、D-122、D-124 已完成。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已以 `status=complete oracleMatch=true` 闭合当前内容关系，但不证明历史因果或授权 transition。真实 Actions 上传、#36 transition/云层单来源/维护重启后验/verifier 安装及 #37 现场验收仍未完成 |
+| D-005 至 D-009、E-014、E-015 及生产发布设计 | canonical/隐私边界、最小权限发布和 payload/301 同版本 release 切换 | 真实制品与生产冒烟 | E-014/E-015 已收口，#13/#33/#35/#14 已形成仓库能力；D-119/D-120、D-122、D-124 已完成。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已闭合当前内容关系，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成，但不证明历史因果。D-129 唯一重启已执行、原完整后验 pending；D-130 源码/契约本地审计通过但 formal receipt 尚未形成。真实 Actions 上传、#36 D-130 receipt/verifier 安装及 #37 现场验收仍未完成 |
 | D-015、D-016 及项目体验架构 | 项目展示不得绕过体验状态与独立部署边界 | 注册表、页面制品与发布权限检查 | 当前项目体验不启用 |
 
 ## 当前实现画像
@@ -476,7 +476,7 @@ Roadmap 的实现所有权固定为：I-01 / #9 在隔离入口同一任务中�
 | 首次依赖解析与供应链准入 | D-077、CODE-015 与 #21 | 1,345 个物理依赖/1,225 个 canonical identity、正式三制品、D-081/D-082 当时的 audit 全零、最终决定和双端点 composite receipt 已完成本地闭环；最新 18 个 high 依赖节点仍是未修复风险，依赖图变化时必须重新失败关闭准入，但不阻断 D-099 后的普通 CI，远端 CI 成功证据尚未形成 |
 | Node ESM TypeScript 测试 | D-079、E-012、CODE-005/CODE-011/CODE-016 | #11 已完成 runner、fixture、主/最低 Node 同负载与现有远端 CI 验收；D-097 至 D-102 已把同一负载接入 Node 24 双端点 workflow 并完成专题本地验收 |
 | HEAD 可达完整 Git 历史与稳定 ID | E-013、CODE-018 | #12 已实现检查器、pre-write 候选 API、临时 Git DAG fixture 与完整 CI checkout；#24 已完成作者候选/终态接线和真实删除后复用反例，两者正依 D-104 纳入 `dev`，组合树远端验证仍待取得 |
-| 服务端 301 与同版本 release | E-014、CODE-015/CODE-019 | #13/#33/#35/#14 已形成生成、封装、服务器 verifier 和 producer 能力；D-119/D-120、D-122、D-124 已完成。D-125 历史回执仍为 `environmental_inconclusive`，D-126 已以 `status=complete oracleMatch=true` 关闭当前内容关系缺口且未写服务器；它不授权 transition。#14 真实 ZIP、#36 transition/云层单来源/维护重启后验/verifier 安装及 #37 回滚兼容仍未完成 |
+| 服务端 301 与同版本 release | E-014、CODE-015/CODE-019 | #13/#33/#35/#14 已形成生成、封装、服务器 verifier 和 producer 能力；D-119/D-120、D-122、D-124 已完成。D-125 历史回执仍为 `environmental_inconclusive`，D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成；D-129 唯一重启已执行、原完整后验 pending，D-130 源码/契约已本地审计但 formal receipt 尚未形成。#14 真实 ZIP、#36 D-130 receipt/verifier 安装及 #37 回滚兼容仍未完成 |
 | Production build 与最终 artifact | E-015、CODE-015/CODE-016/CODE-020 | 两个质量 job 的 job-local production build 已接线；#33 已实现 release 自包含封装、规范树摘要及独立复验，#35 已实现本地服务器独立校验器，#14 已由本地提交 `7b5cc47` 实现 producer/upload、fresh workspace 和七项输出门禁；canonical `main` 的真实 producer run/outputs/ZIP、#36 verifier 安装验收、#37 verified staging 安装/激活尚未完成或现场验收 |
 | Docusaurus/React/内容/制品/浏览器契约 | D-078、E-001 至 E-016、CODE-003 至 CODE-020 | #22 已完成 Docusaurus build 基线，#23/#5 已完成内容领域核心与真实项目正文，#6/#7 已完成媒体与目的限定安全扫描，#26 已远端闭环单一 docs 内容投影、侧栏、日期索引和 production 制品检查，#27 已远端闭环页面与公开表达，#28 已远端闭环主题、响应式与浏览器最终验收；D-098 与 #12/#24 的集成候选补齐路径泄漏、历史和作者事务门禁 |
 | Node 24 精确与最低端点 | `.nvmrc`、`engines.node`、E-010 双端点离线 CLI | 本地契约与真实 CLI 已验收；D-097 至 D-102 已形成 Ubuntu 双端点 job，正依 D-104 等待精确远端 CI |

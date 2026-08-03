@@ -1,7 +1,7 @@
 # 内容发布流程
 
 状态：active
-最近更新：2026-08-02
+最近更新：2026-08-03
 适用范围：M0-M2 项目、技术分享和页面文案的创建、审核、上线与修订
 
 ## 目的
@@ -138,7 +138,7 @@ Docusaurus schema、错误契约、文章命令、Node 24 门禁、路径检查�
 3. **起草**：修改正文与作者确定的领域字段；事实、观点、计划和未知信息使用不同表达，不从 articleId 推导 slug、分类或日期。
 4. **自检**：检查真实姓名、联系方式、截图、日志、路径和示例数据，移除密钥与隐私信息。
 5. **准备发布**：作者先手工把已审核文章改为 `publicationStatus: published`，且不手工填写首次日期；#25 进入共享分支后，在获准 Linux 环境以 `.nvmrc` 精确 Node 显式运行 `node scripts/author/set-article-dates.mjs --source-name <name> --action publish`，确认 Git diff 只增加两个相等日期。后续公开修订使用 `--action revise`，确认 `publishedAt` 未变且只有跨日修订更新 `updatedAt`。当前临时分支的实现已通过本地验收但尚未提交、推送或取得远端证据，因此本工作区之外仍不得把示例当作已发布能力；创建命令、CI、构建和发布自动化也不承担该步骤。
-6. **验证**：完成 Docusaurus 迁移后，在完整非浅 Git worktree 的 Linux 环境或 Ubuntu CI 中分别运行 `quality`、独立 `tsc --noEmit`、Node ESM 测试、完整历史门禁和 Docusaurus build，再以浏览器检查桌面、平板、移动端、链接和资源；涉及既有 slug 时还要从同一 production build 证明唯一 301、目标存在且 source 无静态 HTML。预览、类型检查、测试、历史、构建与 release 检查互不替代。D-097 至 D-099 已接入 Node 24 双端点，#33/#35/#14 已形成 release、服务器 verifier 和 producer 能力，但 canonical `main` 真实 upload/outputs/ZIP 与组合树远端 CI 尚待。#36 已完成盘点、SSH、OS UFW 与软件事务；D-125 历史正式回执仍为 `environmental_inconclusive`。D-126 唯一一次只读探针以 `status=complete oracleMatch=true` 关闭当前 normalized non-vendor 加两条公开规则后命中 frozen oracle 的内容关系缺口，未写服务器且授权已消费；它不证明历史因果或授权 transition。transition、云层单来源、维护重启后验、verifier 安装和 #37 继续暂停，不得从本地门禁通过推导生产就绪。
+6. **验证**：完成 Docusaurus 迁移后，在完整非浅 Git worktree 的 Linux 环境或 Ubuntu CI 中分别运行 `quality`、独立 `tsc --noEmit`、Node ESM 测试、完整历史门禁和 Docusaurus build，再以浏览器检查桌面、平板、移动端、链接和资源；涉及既有 slug 时还要从同一 production build 证明唯一 301、目标存在且 source 无静态 HTML。预览、类型检查、测试、历史、构建与 release 检查互不替代。D-097 至 D-099 已接入 Node 24 双端点，#33/#35/#14 已形成 release、服务器 verifier 和 producer 能力，但 canonical `main` 真实 upload/outputs/ZIP 与组合树远端 CI 尚待。#36 已完成盘点、SSH、OS UFW 与软件事务；D-125 历史正式回执仍为 `environmental_inconclusive`。D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已返回 `status=complete outcome=committed`。D-129 的唯一维护重启已执行，但完整 post-reboot 因 vendor declaration predicate 不满足而 pending；D-130 只读逐组件验收源码与契约已通过本地审计，formal receipt 尚未形成。verifier 安装和 #37 继续暂停，不得从本地门禁通过推导生产就绪。
 7. **创建 PR**：说明设计文档依据、公开内容变化、来源、截图和验证结果。
 8. **预览审核**：使用分支预览确认排版、导航、SEO 元数据、图片和索引策略。
 9. **内容审核**：逐项核对标题、摘要、事实来源、状态、日期、版权和承诺边界。

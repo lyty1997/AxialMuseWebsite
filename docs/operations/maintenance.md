@@ -1,14 +1,14 @@
 # 自动化维护与运行手册
 
 状态：draft
-最近更新：2026-08-02
+最近更新：2026-08-03
 适用范围：M0 腾讯云主站与项目体验子域名的自动发布、监测、备份、安全维护与故障处理
 
 ## 目的
 
 本文定义 `axialmuse.com` 主站及已登记项目体验上线后的最低运行标准，让日常维护依赖可重复检查和明确告警。首版由 Nginx 承载静态站点与静态项目体验，优先自动化发布、证书、健康检查和备份，不引入应用后端、数据库或第三方页面监测脚本。
 
-D-053 至 D-079 与 E-005/E-010 至 E-015 已固定静态站、工具链、供应链、测试、历史、301、artifact、Nginx/Certbot、Actions/TAT 和 Ubuntu/systemd 运维边界。仓库已具有 #13/#33/#35/#14/#34 的 301、release、verifier、producer 和受限 dispatch 能力，但 canonical `main` artifact 与活动 TAT 尚待。#36 已完成服务器盘点、旧站清理、控制面核验、额外身份处置、D-119/D-120 SSH、D-122 OS UFW 和 D-124 软件事务；D-125 历史正式回执仍为 `environmental_inconclusive`。D-126 唯一一次只读探针以 `status=complete oracleMatch=true` 关闭 current normalized non-vendor 加两条公开规则后命中 frozen oracle 的内容关系缺口，未写服务器且授权已消费。它不证明历史因果或授权 transition；component-aware transition、云层单来源、维护重启、再基线、verifier 安装和 #37 仍须新决定与授权。
+D-053 至 D-079 与 E-005/E-010 至 E-015 已固定静态站、工具链、供应链、测试、历史、301、artifact、Nginx/Certbot、Actions/TAT 和 Ubuntu/systemd 运维边界。仓库已具有 #13/#33/#35/#14/#34 的 301、release、verifier、producer 和受限 dispatch 能力，但 canonical `main` artifact 与活动 TAT 尚待。#36 已完成服务器盘点、旧站清理、控制面核验、额外身份处置、D-119/D-120 SSH、D-122 OS UFW 和 D-124 软件事务；D-125 历史正式回执仍为 `environmental_inconclusive`。D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已返回 `status=complete outcome=committed`。D-129 的唯一维护重启已执行并确认新 boot，但完整 post-reboot 因 vendor declaration predicate 不满足而 pending。D-130 已记录所有者当前确认并完成新只读逐组件源码/契约的本地审计，formal receipt 尚未形成；verifier 安装和 #37 仍须新的决定与授权。
 
 ## 服务目标
 
@@ -70,7 +70,7 @@ D-077 已固定 npm 原生能力加零第三方依赖策略脚本、SPDX JSON、
 
 上述实现最初由离线 fixture 验收；D-081/D-082 授权后，真实解析、1,225 项精确候选/admissions、35/11/12 补充法律证据、正式 SBOM/evidence/NOTICE、当时漏洞全零的 audit、最终决定及 Node 24.18.0/24.16.0 双端点证明均已闭合。最初诊断的 20 个 moderate、1 个 high 已由两项精确传递 override 后的首轮最终 lock 和当时 audit 全零结果取代；2026-07-26 后续观测到的 18 个 high 仍是未修复风险，并按 D-099 移出普通 CI 而非视为已解决。后续联网动作继续受官方来源与受限证据边界约束；新增依赖、Action、脚本例外和其他外部操作继续受原门禁约束。缺失输入、零测试、浅/不完整历史、缺失或预存构建制品、静态重定向页、build 竞争修改或 payload/规则摘要不一致必须失败，不能沿用迁移前检查中对不存在入口的跳过行为；所有发布必需 job 通过后，`production-artifact` 才能在 fresh runner 重建、重验并封装最终 build。
 
-D-065 的文章创建命令只允许作者在获准 Linux 环境显式运行；Git hook、CI、预览和发布门禁不得生成或修复内容。D-066 至 D-079 与 E-012 至 E-015 固定 Node 24、类型、测试、完整历史、301 和 production job 自包含重建；D-097 至 D-102 已形成对应 workflow，#13/#33/#35/#14 已形成发布链仓库能力。尚未完成 #8 preview、#14 canonical `main` artifact，以及 #36 的 transition/重启/verifier。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已以 `status=complete oracleMatch=true` 闭合当前内容关系，但不授权 transition。真实内容树除获准作者操作外始终只读。
+D-065 的文章创建命令只允许作者在获准 Linux 环境显式运行；Git hook、CI、预览和发布门禁不得生成或修复内容。D-066 至 D-079 与 E-012 至 E-015 固定 Node 24、类型、测试、完整历史、301 和 production job 自包含重建；D-097 至 D-102 已形成对应 workflow，#13/#33/#35/#14 已形成发布链仓库能力。尚未完成 #8 preview、#14 canonical `main` artifact，以及 #36 的 D-130 formal receipt/verifier。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已闭合当前内容关系，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成，D-129 失败历史保持 pending，D-130 源码/契约已本地审计。真实内容树除获准作者操作外始终只读。
 
 D-080 已单独完成当前 Linux 作者用户的固定 nvm/Node 24 安装与本地 pre-commit 自动选择：系统和新 Bash 默认 Node 保持不变，hook 不读取用户 npm `prefix`、不修改 shell 初始化或 alias，缺少精确运行时时失败且不联网。#24 文章创建工具已完成本地验收并依 D-103 获准纳入当前专题分支提交及同名临时 ref；这不改变系统默认 Node，也不等于远端验收或授权创建真实文章。
 
@@ -82,13 +82,13 @@ D-067/D-097 的 Ubuntu CI 边界与当前实施状态如下：
 - 只有明确的受审依赖变更可以在主基线按 D-077 生成候选 `package-lock.json`；候选经过证据审查和人工准入后，才可与对应 `package.json` 一并进入正常冻结安装。普通作者验证、非依赖 PR、最低端点和发布流程不得改写依赖图。首次迁移必须证明两个 npm 端点能读取同一 lockfile；任一端点失败时阻止迁移并回到依赖决策，不得重写锁文件掩盖不兼容。
 - Node 24 安全 patch 被发现后及时发起独立升级 PR；其他 patch 至少每月检查。升级 PR 先修改 `.nvmrc` 候选值，Ubuntu CI 的主任务和最低版本任务、PlantUML 及届时发布必需门禁通过后才允许合并，不得自动合并，也不得在普通 patch PR 中修改 `engines` 边界。
 
-D-097 至 D-099 已实现固定 Action SHA、Node 24 双端点、完整 checkout、隔离负载、历史与静态供应链证据；已观测的 18 个 high 依赖节点继续按未修复风险跟踪。#33/#35/#14 已形成 release、服务器 verifier 与 producer 能力，但尚无对应 GitHub-hosted 真实 artifact。#36 已完成服务器盘点、SSH、OS UFW 与软件事务；D-125 历史回执仍为 `environmental_inconclusive`，D-126 已以 `status=complete oracleMatch=true` 闭合当前内容关系且未写服务器。历史因果仍未证明，transition、云层单来源、维护重启、再基线、verifier 和 #37 继续失败关闭。生产服务器不安装 Node/npm、不拉源码、不执行构建。
+D-097 至 D-099 已实现固定 Action SHA、Node 24 双端点、完整 checkout、隔离负载、历史与静态供应链证据；已观测的 18 个 high 依赖节点继续按未修复风险跟踪。#33/#35/#14 已形成 release、服务器 verifier 与 producer 能力，但尚无对应 GitHub-hosted 真实 artifact。#36 已完成服务器盘点、SSH、OS UFW 与软件事务；D-125 历史回执仍为 `environmental_inconclusive`，D-126 已闭合当前内容关系，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成。D-129 的唯一重启已执行但完整后验 pending；D-130 源码/契约已本地审计但 formal receipt 尚未形成。历史因果仍未证明，再基线、verifier 和 #37 继续失败关闭。生产服务器不安装 Node/npm、不拉源码、不执行构建。
 
 影响 UI 的 PR 还必须在 E-009 的局域网静态预览制品完成桌面端、平板端和移动端截图。预览状态须报告活动 artifact SHA 与待验收提交一致；每个 HTML 均为 `noindex, nofollow`、无 sitemap，且 draft 只在“草稿”组可见。M0 没有公网 PR 预览，截图和质量结果共同作为合并证据；当前脚本尚未迁移完成，因此迁移前 `public/` 截图不能作为 Docusaurus 页面验收。
 
 ### 生产发布
 
-当前 prerequisite workflow 尚未成为 `main` required checks；#14/#33/#35/#34 已形成 producer、release、verified staging 与受限 dispatch 候选，但没有 canonical `main` 真实 producer、artifact、invocation 或真实 ZIP 复验。D-119/D-120、D-122、D-124 已完成；D-125 历史回执仍为 `environmental_inconclusive`。D-126 唯一一次只读探针已以 `status=complete oracleMatch=true` 关闭当前内容关系缺口，未写服务器且不授权 transition。#36 的 transition verifier、维护重启、云层单来源、再基线与 verifier 安装，以及 #37 的 TAT/账本/激活/恢复继续禁止；#34 活动 environment/CAM/TAT 接线也未完成。
+当前 prerequisite workflow 尚未成为 `main` required checks；#14/#33/#35/#34 已形成 producer、release、verified staging 与受限 dispatch 候选，但没有 canonical `main` 真实 producer、artifact、invocation 或真实 ZIP 复验。D-119/D-120、D-122、D-124 已完成；D-125 历史回执仍为 `environmental_inconclusive`。D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成。D-129 的唯一重启已发生，但完整 post-reboot 仍 pending；D-130 只读源码/契约已本地审计但 formal receipt 尚未形成。#36 的 verifier 安装，以及 #37 的 TAT/账本/激活/恢复继续禁止；#34 活动 environment/CAM/TAT 接线也未完成。
 
 1. PR required checks 与本地预览验收均通过。
 2. PR 合入 `main`。
@@ -125,7 +125,7 @@ GitHub 计划任务可能延迟，不作为分钟级监控。M0 不注入浏览�
 
 ## 服务器例行任务
 
-2026-07-30 的 #36 盘点确认 Ubuntu 自动安全更新与两个 apt timer 已启用且不自动重启；D-122 已完成 OS UFW 重启前稳态，D-124 已完成六包升级与七包 Certbot 最小安装，当时的软件后验通过且无 ACME 状态。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已以 `status=complete oracleMatch=true` 闭合当前内容关系，但不恢复旧重启授权。若以后另行获准维护重启，仍须复核 SSH、`sudo -n`、TAT、Nginx、Certbot timer、failed units、监听、包和双层防火墙；verifier 安装还须等待 bootstrap、verifier 与 golden 同一提交进入 canonical `main` 并重新取得现场授权。
+2026-07-30 的 #36 盘点确认 Ubuntu 自动安全更新与两个 apt timer 已启用且不自动重启；D-122 已完成 OS UFW 重启前稳态，D-124 已完成六包升级与七包 Certbot 最小安装，当时的软件后验通过且无 ACME 状态。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已闭合当前内容关系，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成。D-129 的唯一维护重启已执行并确认新 boot，原冻结 post-reboot 因 vendor declaration predicate 不满足而 pending；D-130 只读源码/契约已本地审计，formal receipt 尚未形成。任何服务恢复或第二次重启都须新授权。verifier 安装还须等待 bootstrap、verifier 与 golden 同一提交进入 canonical `main` 并重新取得现场授权。
 
 ### 每日
 
