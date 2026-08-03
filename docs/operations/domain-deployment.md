@@ -1,12 +1,12 @@
 # 域名与生产发布设计
 
 状态：draft
-最近更新：2026-08-02
+最近更新：2026-08-03
 适用范围：M0 腾讯云域名、DNS、轻量应用服务器、HTTPS、自动发布与回滚
 
 ## 目的
 
-本文把 `axialmuse.com` 从已注册、已备案状态发布到腾讯云上海轻量应用服务器的过程拆成可验证步骤。服务器盘点、旧站清理、控制面基础核验、恢复点、额外身份处置、D-119/D-120 SSH、D-122 OS UFW 重启前稳态、云 Web 入站和 D-124 软件事务已经完成。D-125 历史正式回执仍为 `environmental_inconclusive`；D-126 唯一一次只读语义变换探针随后以 `status=complete oracleMatch=true` 证明 current normalized non-vendor 加两条公开标准 IPv6 规则后命中 frozen oracle，且未写服务器、未 reload、未重启、未再基线，一次性授权已消费。该结果关闭当前内容关系缺口，但不证明历史因果或授权 transition。#36 仍等待历史残余接受与 transition 决策、云层单来源、维护重启后验和 verifier 安装；#37 继续暂停。
+本文把 `axialmuse.com` 从已注册、已备案状态发布到腾讯云上海轻量应用服务器的过程拆成可验证步骤。服务器盘点、旧站清理、控制面基础核验、恢复点、额外身份处置、D-119/D-120 SSH、D-122 OS UFW 重启前稳态、云 Web 入站和 D-124 软件事务已经完成。D-125 历史正式回执仍为 `environmental_inconclusive`；D-126 以 `status=complete oracleMatch=true` 关闭当前内容关系缺口后，用户在 D-128 接受剩余历史不确定性并确认云层当时已为单一 SSH 来源，唯一正式 component-aware transition 返回 `status=complete outcome=committed`，授权已消费且清理完成。D-129 的唯一维护重启已经执行并确认新 boot，但完整 post-reboot 因冻结 vendor declaration predicate 不满足而保持 `post-reboot-pending`。D-130 已记录所有者对当前主机侧无已知问题和腾讯云控制面正常的人工确认，并完成新只读逐组件源码/契约的本地审计；formal receipt 尚未形成。#36 仍等待 D-130 receipt 和 verifier 安装，#37 继续暂停。
 
 ## 已知事实
 
@@ -15,7 +15,7 @@
 - ICP 备案号：`沪ICP备2026029086号`。
 - 腾讯云接入备案：用户于 2026-07-13 确认接入成功。
 - 生产服务器：腾讯云轻量应用服务器，中国上海地域，Ubuntu Server 24.04 LTS 64bit。
-- 服务器用途：用户确认为本网站生产服务器；盘点发现并经确认废弃的旧静态网页已清理。额外管理身份按 D-118 可逆禁用，云代理保留，D-119/D-120 SSH、D-122 OS UFW 重启前稳态和 D-124 软件事务已完成，云 Web 入站已开放。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已以 `status=complete oracleMatch=true` 关闭当前内容关系缺口，未写服务器且不证明历史因果。transition、云层单来源、维护重启后验、verifier 安装和 #37 仍须分别决定与授权。
+- 服务器用途：用户确认为本网站生产服务器；盘点发现并经确认废弃的旧静态网页已清理。额外管理身份按 D-118 可逆禁用，云代理保留，D-119/D-120 SSH、D-122 OS UFW 重启前稳态和 D-124 软件事务已完成；云 Web 入站和单一 SSH 来源是 D-129 前最后由用户确认的精确规则事实，用户又在 D-130 人工确认当前主机侧无已知问题且腾讯云控制面正常。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成。D-129 唯一重启已发生而完整后验 pending；D-130 formal receipt、verifier 安装和 #37 仍须分别决定与授权。
 
 以上事实来自用户确认，实施时仍需通过腾讯云控制台和服务器只读命令交叉核验。文档不记录腾讯云账号、实例 ID、公网 IP、密码或密钥；生产事实统一维护在 [生产环境清单](production-inventory.md)。
 
@@ -82,19 +82,21 @@ M0 不额外建设公网 staging 子域名，避免增加服务器配置、证�
 - CPU、内存、系统盘与剩余空间、全部监听及其本机进程、已安装的 Web/运行时/下载归档工具、系统服务、账户/权限、SSH 有效配置、操作系统防火墙、本机 TAT、系统 Python 和预期生产目录缺席均已通过严格 host key SSH 与 `sudo -n` 只读命令盘点。用户后续人工控制面核验确认实例规格与生命周期未发现阻断偏差；精确规格和容量只保留在私密现场记录，当前设计不为个人静态站点虚构尚未批准的资源阈值。
 - 用户此前确认为空机并专用于本网站；盘点发现的旧静态网页已由用户确认并清理，未发现主站源码、Node/npm、数据库、容器或其他应用内容。额外管理身份与腾讯云代理的首启来源已经归因；用户选择本轮保留 TAT 与腾讯云代理，额外管理身份已经按 D-118 可逆禁用并完成独立后验。
 
-截至 D-124 软件后验完成、维护重启前的控制面与加固状态：
+截至 D-130 所有者当前确认与新验收契约本地审计后、formal receipt 仍待形成的控制面与加固状态：
 
-- 用户已于 2026-07-30 提供人工控制面核验的脱敏逐项结论：目标实例与生命周期、快照能力/配额、控制台恢复、TAT/任务、代理保留及 MFA/操作保护未发现阻断偏差。2026-08-02 确认腾讯云轻量防火墙已允许任意 IPv4 来源访问 TCP 80/443；SSH 当时有三个分别受限的 IPv4 来源，用户选择方案 A，不增加 IPv6 或其他入站。额外两条删除后曾出现三次 TCP 22 建连超时；用户随后恢复此前三条受限规则集合，严格 SSH 已成功，服务器连接元数据确认实际来源仍对应槽位 2，并匹配 OS UFW 唯一 SSH 来源规则。云层当前保持恢复后的三来源集合，尚未再次收敛。
+- 用户已于 2026-07-30 提供人工控制面核验的脱敏逐项结论：目标实例与生命周期、快照能力/配额、控制台恢复、TAT/任务、代理保留及 MFA/操作保护未发现阻断偏差。2026-08-02 确认腾讯云轻量防火墙已允许任意 IPv4 来源访问 TCP 80/443；SSH 当时有三个分别受限的 IPv4 来源，用户选择方案 A，不增加 IPv6 或其他入站。额外两条删除后曾出现三次 TCP 22 建连超时；用户随后恢复此前三条受限规则集合，严格 SSH 已成功，服务器连接元数据确认实际来源仍对应槽位 2，并匹配 OS UFW 唯一 SSH 来源规则。用户之后在 D-129 前确认两个额外来源已经再次删除、云层只保留该同源单一 SSH 入口；维护重启没有改写云规则。用户又在 D-130 确认按当前主机侧证据未发现问题，并在腾讯云控制面确认当前状态正常。这是所有者人工确认，不是 Agent 从本地进程状态独立推导的云控制面证明。
 - 控制面另有一条无法逐进程确定归因的历史出带宽告警；只读时间线已排除有意包升级和后续废弃旧站清理，补充内网监控只显示短时入向峰值后恢复，且当前没有持续异常、未知公网/Web 监听或 failed unit。用户按 D-116 明确接受仅限该单次历史告警的残余不确定性，因此它不再阻断 #36；未来复发、持续异常或新未知监听/进程仍须重新失败关闭。
 - D-117 加固前快照只保留为历史恢复点。用户已于 2026-08-02 为 D-122 提交后的当前加固态创建软件事务前系统盘快照，确认控制台终态正常且控制台或 TAT 恢复通道可用；该证据未包含恢复演练，也不授权恢复或删除。
 - 用户已按 D-118 完成额外管理身份的可逆禁用：移除唯一受控直接 sudo 规则，设置账户过期和不可交互 shell，同时保留账户、home、密钥文件和其他文件；提交前后的独立 SSH/sudo、配置、运行时与文件摘要验收通过。TAT 与腾讯云代理按已确认决定保留。
 - D-119/D-120 已以可回退事务完成 SSH 全局策略：root-owned canonical drop-in 明确公钥专用认证、唯一 `.ssh/authorized_keys`、禁止密码/键盘交互/空密码和 root 登录；两条独立严格公钥会话、`sudo -n`、服务、配置树与有效策略后验通过，终态为 `committed_clean`，私有回退状态已清理。既有管理身份、端口、主机密钥、主密钥文件和 sudo 路径保持不变。
-- D-122 已以独立自动回滚保护的事务完成目标服务器 OS 防火墙：UFW active/enabled，默认拒绝入站、允许出站、禁用 routed；只允许已验证开发机来源访问既有 SSH 端口，并允许任意 IPv4 来源访问 TCP 80/443，没有 IPv6 用户放行或其他入站，既有腾讯 YJ 链保持不变。第二条全新严格公钥会话、事务临时状态精确清理和提交后的重启前稳态后验均通过；开发机本地 UFW 未被操作。腾讯云轻量防火墙的公网 Web 入站已由用户手工配置并确认；恢复此前三条受限云 SSH 规则后，严格 SSH 成功，服务器实际来源仍对应槽位 2 且匹配 OS UFW 唯一规则。此后没有重启、服务器写操作或 UFW/云规则再改。
-- 用户已确认核验窗口内的包升级是本人有意操作，当前加固态恢复点已经建立。防火墙验收后的一次维护重启曾获历史授权，但 D-125 后预期 postcondition 已变化，D-126 的只读 true 结果也不恢复该授权；尚未执行重启或重启后验。D-124 当时的软件独立后验已通过；恢复 SSH 后的完整 `post-software` 只在最终 `live-hash` 失败，冻结 capture 证明配置、包与 boot 摘要仍匹配。维护重启必须在新的 transition 决定后重新授权。
+- D-122 已以独立自动回滚保护的事务完成目标服务器 OS 防火墙：UFW active/enabled，默认拒绝入站、允许出站、禁用 routed；只允许已验证开发机来源访问既有 SSH 端口，并允许任意 IPv4 来源访问 TCP 80/443，没有 IPv6 用户放行或其他入站。D-122/D-128 的重启前后验证都曾证明当时既有腾讯 YJ 链保持安全语义；第二条全新严格公钥会话、事务临时状态精确清理和提交后的重启前稳态后验均通过，开发机本地 UFW 未被操作。D-129 新 boot 的只读采样仍证明 normalized non-vendor 精确命中 frozen oracle、IPv6 vendor 缺席且双读稳定，但 IPv4 YJ 链声明、引用和规则均缺席，故不能沿用“YJ 保持不变”的重启前结论。
+- 用户已确认核验窗口内的包升级是本人有意操作，当前加固态恢复点已经建立。D-124 当时的软件独立后验已通过；恢复 SSH 后的完整 `post-software` 只在最终 `live-hash` 失败，冻结 capture 证明当时配置、包与 boot 摘要仍匹配。D-129 后来取得独立新授权并执行唯一维护重启；SSH unavailable→available 和 boot 改变已确认，正式 post-reboot 在 vendor declaration predicate 处失败关闭。追加的 diagnostic-only remainder 在只允许 vendor 完全缺席及 Nginx `ExecStart status=0` 精确表示等价后，以两条间隔 10 秒的新会话证明其余当前语义门禁通过，但跨重启聚合 posture 摘要不等；该证据不能改写正式 pending。
 - D-125 正式追加隔离重建在固定、无网络、只读根且仅授予 `NET_ADMIN` 的本地容器中，对 UFW `enable`、`reload`、`cold-start` 各执行两次。六次均完成并各自连续两读稳定，三模式的归一化规则投影一致；和现场剔除 vendor 后的投影相比，IPv4 链数、IPv4 规则数和 IPv6 链数相等，结构计数的唯一差值是重建侧 IPv6 规则数多 2，但精确归一化规则摘要不匹配，因此结果为 `environmental_inconclusive`，不能证明服务器漂移，也不能证明差异唯一来自环境。取证前后现场归一化投影以及 config/package/boot 摘要组完全相同；全部随机容器经确认不存在，本地临时敏感配置副本已删除。该过程没有服务器写入、UFW reload、维护重启或重新建立基线；本次敏感配置转移授权已经消费。
 - D-125 的本地补充候选没有再次连接服务器、读取敏感配置或使用真实地址。固定 UFW 0.36.2 源码顺序与 TEST-NET 等价重放支持 initial-enable 103 到 persisted reload/cold-start 105 的生命周期时序，并在等价配置中观察到 IPv4 投影不变、IPv6 只新增两个标准 rate-limit 终止规则；该等价配置没有 IPv6 用户规则或进入 limit 链的 jump/goto。该重放结果与正式回执只完成逐链数量绑定，因此只能作为强结构候选。冻结 transaction/evidence 已按契约清理真实输入，仅余 hash/摘要且不可逆，无法再恢复输入完成本机 exact 重放；该闭包路径已经失败关闭。最早只保存 full-live 摘要的历史漂移残余继续保留。
 - D-126 的唯一一次正式只读语义变换探针以 `status=complete oracleMatch=true` 完整结束：current normalized non-vendor 先命中 frozen current，固定加入两条公开标准 IPv6 规则后命中 frozen oracle。一次性授权已消费；除正常 SSH/sudo 审计外没有服务器文件、防火墙、reload、重启、再基线或其他写操作。该证据只关闭当前内容关系，不改变 D-125 历史回执、不证明 initial-enable 是历史原因，也不授权 transition。
-- 2026-08-02 的实际 apt 事务精确完成六个升级和七个 Certbot 最小新增包，零额外、零移除且没有执行 `autoremove`；当时的独立 `post-software` verifier 已核验包、APT 标记、Certbot CLI/timer、无 ACME 状态和既有服务边界，当前仍有维护重启标记。component-aware transition、重启、reload、云 SSH 单来源再次收敛、再基线、verifier 安装和 #37 均须新的决定与授权。
+- D-128 在用户接受上述历史不确定性并确认云层单一 SSH 来源后，使用受独立 watchdog 保护的冻结候选执行唯一正式 component-aware transition；结果为 `status=complete outcome=committed`，一次性授权已消费且事务清理完成。成功后 normalized non-vendor 命中 D-126 的 frozen oracle，UFW、vendor 安全语义、全新严格 SSH/sudo、服务、监听、配置、包、boot 与零 failed unit 后验均通过；本轮没有维护重启、重新建立基线、云规则修改、verifier 或 #37 操作。
+- D-129 的精确冻结候选在 fresh preflight 后消费一次性授权并只发送一次重启；同一新 boot 的正式 post 和一次 resume 均返回 `remote-vendor-declaration`，本地结果保持 `post-reboot-pending`。多次脱敏诊断确认 `YDService`/`YDLive` 存在且晚于 UFW 启动，TAT agent active/running/enabled，但该时间关系不证明缺链根因或主机安全控制面状态。diagnostic-only remainder 随后在两条间隔 10 秒的新 SSH 会话中一致证明 SSH、UFW/non-vendor oracle、Nginx、TAT、Certbot、systemd、监听、包、自动更新和重启标记清除等当前语义门禁通过；重启前后聚合 posture 摘要仍不等，且诊断明确不构成 formal acceptance。D-130 另行固定 vendor `fully_absent`/`rejecting` 完整态、聚合残余显式接受和其余逐组件严格门禁；源码与反例已本地审计，formal 未执行。没有第二次重启、UFW reload/再基线、手工补链、腾讯服务重启、云规则或快照操作。
+- 2026-08-02 的实际 apt 事务精确完成六个升级和七个 Certbot 最小新增包，零额外、零移除且没有执行 `autoremove`；当时的独立 `post-software` verifier 已核验包、APT 标记、Certbot CLI/timer、无 ACME 状态和既有服务边界。D-129 唯一重启后的 diagnostic-only remainder 又证明当前精确包/Certbot/Nginx/监听/failed units 与 `reboot-required` 缺席门禁通过；由于 vendor predicate 和跨重启 posture 绑定未满足，正式完整 post-reboot 仍 pending，verifier 安装和 #37 也仍须新的决定与授权。
 
 若现场核验发现未知业务、重要数据或系统版本不符，先停止改动并确认原因；不通过重装系统覆盖未知内容。
 
@@ -206,7 +208,7 @@ bootstrap 必须实现失败关闭的首次安装事务：
 | TCP 443 | `0.0.0.0/0` | 正式 HTTPS 访问 |
 | TCP 22 | 站点所有者当前公网 IP | 紧急管理；不供自动部署使用 |
 
-未使用端口全部关闭；不公开数据库、服务器面板、开发服务器或预览端口。D-122 已完成 OS UFW 提交和重启前稳态，云层 TCP 80/443 已允许任意 IPv4；SSH 规则集合恢复后，严格 SSH 来源仍与 OS UFW 唯一规则匹配。D-125 历史回执仍为 `environmental_inconclusive`，D-126 已以 `status=complete oracleMatch=true` 关闭当前内容关系缺口，但不授权 transition。云层单来源收敛及后续重启继续等待新的决定；不得向所有来源开放 SSH，也不得开放 IPv6 或其他端口。参考：[管理实例防火墙](https://cloud.tencent.com/document/product/1207/44577)。两层必须同时闭合。
+未使用端口全部关闭；不公开数据库、服务器面板、开发服务器或预览端口。D-122 已完成 OS UFW 提交和重启前稳态；云层 TCP 80/443 与单一 SSH 来源是 D-129 前最后由用户确认的精确规则事实，D-130 又记录所有者对当前主机侧和腾讯云控制面正常的人工确认。D-125 历史回执仍为 `environmental_inconclusive`，D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成。D-129 的唯一维护重启已经执行而完整 post-reboot pending；D-130 formal 仍待执行，第二次重启或恢复动作都须新授权。不得向所有来源开放 SSH，也不得开放 IPv6 或其他端口。参考：[管理实例防火墙](https://cloud.tencent.com/document/product/1207/44577)。两层必须同时闭合。
 
 ### 登录与权限
 
@@ -354,7 +356,7 @@ Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩
 1. 完成服务器地域、系统、镜像、现有服务和续费盘点；服务器侧与腾讯云控制面基础字段已完成脱敏核验。
 2. 核验 ICP 备案号、备案内容与腾讯云接入状态。
 3. 创建系统盘快照；实例支持、配额、恢复入口和当前 D-122 加固态软件事务前快照正常状态已经确认，恢复或删除仍须另行授权。
-4. 复核已提交的 D-119/D-120 SSH、D-122 OS 防火墙和 D-124 软件状态。D-125 历史正式回执仍为 `environmental_inconclusive`；D-126 唯一一次只读探针已以 `status=complete oracleMatch=true` 证明 current normalized non-vendor 加两条公开规则后命中 frozen oracle，且未写服务器。该结果不证明历史因果或授权 transition；在用户作出新的 transition 决定前，不执行云层单来源收敛、维护重启、再基线、verifier 或 #37。
+4. 复核已提交的 D-119/D-120 SSH、D-122 OS 防火墙和 D-124 软件状态。D-125 历史正式回执仍为 `environmental_inconclusive`；D-126 已证明 transition 前的当前内容关系，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成。D-129 的唯一维护重启已执行并确认新 boot，但完整 post-reboot 因 vendor declaration predicate 不满足而 pending。D-130 人工控制面确认与新只读源码/契约本地审计已完成，须另行授权取得 formal receipt 后再推进 verifier 或 #37。任何第二次重启或恢复仍须各自门禁。
 5. 保留并验证现有 Nginx、TAT agent 与系统下载/归档/哈希/Python 工具；verifier/golden 还必须等待同一提交进入 canonical `main` 后再取得现场安装授权。生产不安装 Node/npm，也不为主站准备源码 clone。
 6. 由 #37 创建并验收生产 release/current/账本目录、root-owned 发布/回滚脚本、只追加 URL 暴露账本和固定 TAT command；#36 已记录这些目录当前不存在，远端 #36 关闭文字须先与该职责边界同步，不能以缺席冒充 owner/mode 通过。部署脚本必须整版安装 payload/config、生成精确 SHA 包装，并拒绝历史 source/target 不再收敛到同一 200 的回滚。canonical 仓库已核验为 public，服务器不配置 artifact 凭证。
 7. 配置通过准入并固定 commit SHA 的 GitHub Actions、四个 prerequisite、E-015 `production-artifact`、`production` environment、最小 CAM 凭证与 deployment workflow；最终 job 不使用 environment/Secret，只有 deploy job 可以读取 CAM 凭证。

@@ -4,6 +4,24 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-08-03 — D-130 semantic acceptance 源码与证据契约获准（formal 待形成）
+
+- **所有者当前确认**：用户复核 D-129 的正式失败和 diagnostic-only remainder 后，确认按当前主机侧证据未发现问题，并在腾讯云控制面确认当前状态正常。该结论是用户人工确认，不把本机进程或 TAT 在线当作 Agent 对整个云控制面的独立证明，也不追溯解释 vendor 链缺席。
+- **获准契约**：用户选择新建 D-130 逐组件只读语义验收，并接受旧 preflight 只留聚合摘要造成的不可分解历史残余。vendor 只可为 `fully_absent` 或原严格 `rejecting`，任何 partial/换态失败关闭；其他 D-124/D-129 当前语义门禁继续精确执行，systemd 仅接受 Nginx `ExecStart status=0` 的精确成功表示等价。聚合摘要不等只记为 `accepted_residual_unattributed`，不声称匹配、已归因或已重新建立基线。
+- **授权和剩余边界**：本轮只授权修改、本地审计 D-130 源码、证据 schema 和反例，不授权连接服务器执行 formal。D-129 的 consumed/result 必须保持 `post-reboot-pending`/`formalAccepted=false`，不执行第二次重启、reload/补链/再基线、服务恢复或云写操作。D-130 formal receipt 尚未形成；#36 还需该 receipt 与 canonical `main` verifier 现场安装，#37 继续暂停。
+
+## 2026-08-03 — D-129 唯一维护重启已执行，完整 post-reboot 失败关闭（#36 整体仍为 GAP）
+
+- **授权与已执行事实**：用户确认当前快照正常、控制台或 TAT 恢复通道可用后，授权只执行一次维护重启及完整后验。精确冻结候选的 fresh preflight 通过，一次性 guard 随后消费授权并只发送一次重启；严格 SSH 经历不可达再恢复，boot identity 已改变，同一新 boot 的 system state 为 `running`。本地 consumed/result 与原 transaction 绑定，结果保持 `authorizationConsumed=true`、`bootChanged=true`、`sshCycleObserved=true` 和 `outcome=post-reboot-pending`。
+- **失败关闭与只读 remainder 证据**：首次正式 post-reboot 与一次同 boot 的只读 resume 均在 `remote-vendor-declaration` 停止。后续多次脱敏采样持续证明防火墙双读稳定、normalized non-vendor 精确命中 frozen oracle、IPv6 vendor 缺席，但 IPv4 `YJ-FIREWALL-INPUT` 的声明、INPUT 引用和规则均缺席；`YDService`/`YDLive` 存在且晚于 UFW 启动，TAT agent active/running/enabled。diagnostic-only remainder 另把 D-124 host-baseline 偏差定位为 Nginx `ExecStart` 成功状态的单值 `0` 表示；只允许 vendor 完全缺席和该精确表示等价后，两条全新严格 SSH 会话间隔 10 秒，一致通过 SSH/UFW/non-vendor oracle/Nginx/TAT/Certbot/systemd/监听/包/自动更新和 `reboot-required` 缺席等当前语义门禁。当前两次 post posture 稳定，但不等于重启前聚合 posture 摘要，无法从原单一摘要继续归因；诊断明确为 `formalAccepted=false`，服务器与本地 guard 均未改变。
+- **后续状态**：腾讯云公开资料没有给出空 vendor 链的 boot 常驻或恢复时限契约，因此 D-129 既不能按原冻结谓词验收，也不能据此断言主机安全代理故障。唯一维护重启授权已经永久消费，没有执行第二次重启、UFW reload/再基线、手工补链、腾讯服务重启或云控制面修改。用户后续在 D-130 决策中确认主机侧未发现问题且当前腾讯云控制面正常，并另行授权修改新验收源码与契约；该后续人工确认不改写 D-129 的失败历史。
+
+## 2026-08-03 — D-128 component-aware transition 完成（#36 整体仍为 GAP）
+
+- **决定与当前边界**：用户接受 D-125 对 initial-enable 历史因果继续保持 `environmental_inconclusive`，确认当前加固态快照正常、控制台或 TAT 恢复通道可用，并更正腾讯云当前只保留与 OS UFW 唯一 SSH 用户规则同源的单一管理来源；本轮没有改写云规则。D-126 的 `status=complete oracleMatch=true` 仍只作为 transition 前的当前内容关系证据，不追溯改写历史结论。
+- **执行与终态**：完成本地冻结候选、固定 Docker、服务器只读 preflight 和独立复审后，前两次正式入口分别暴露 systemd 255 的 InvocationID 输出和 transient `FragmentPath` 契约差异，均在 `supervision-ready` 前失败关闭且没有消费授权、arm watchdog、reload 或留下事务残余。修正后的候选再次通过完整门禁；新获准的唯一正式调用返回 `status=complete outcome=committed`。本地 consumed/result 绑定一致，`authorizationConsumed=true`、`cleanupComplete=true`；成功路径已完成一次受监督的 UFW runtime transition、component-wise 后验和临时状态清理，没有自动重试、维护重启、重新建立基线、云规则改写、verifier、证书、#37 或 Git 发布操作。
+- **剩余门禁**：#36 仍为 GAP。D-128 不构成维护重启授权；下一步须另行授权一次维护重启，并完成重启后的 SSH、`sudo -n`、TAT、Nginx、UFW、Certbot、systemd、监听、包和双层防火墙稳态验收。服务器 artifact verifier 仍须等待 bootstrap、verifier 与 golden 的同一提交进入 canonical `main` 后，再取得独立现场安装授权；#37 继续暂停。
+
 ## 2026-08-02 — D-126 一次性只读语义变换探针完成（#36 整体仍为 GAP）
 
 - **授权与执行**：用户授权且只授权一次 D-126 服务器只读语义变换探针；最终预检通过后，唯一正式执行返回固定结果 `status=complete oracleMatch=true`，一次性授权随消费点永久消费。探针没有传出真实配置、规则或摘要值，没有写服务器、reload UFW、重启、重新建立基线、修改云资源、安装 verifier 或进入 #37。
@@ -22,9 +40,9 @@
 
 - **授权与范围**：按 D-122 只操作腾讯轻量应用服务器的 OS 防火墙，保持 D-119/D-120 SSH 身份与策略、账户/密钥、Nginx、TAT、软件包和腾讯云控制面不变；开发机本地 UFW 从未被操作。目标规则固定为默认拒绝入站、允许出站、禁用 routed，只允许已验证开发机来源访问既有 SSH 端口，并允许任意 IPv4 来源访问 TCP 80/443，不开放 IPv6 或其他入站。用户当时另行授权防火墙验收后的一次维护重启，但没有授权 Certbot 或待升级包；D-125 后预期 postcondition 已改变，这项历史授权不能直接继续使用。
 - **失败关闭与修复**：早期尝试分别暴露自动包任务锁竞争、SSH 标准输入被交互式 UFW dry-run 消费、dry-run 会改写 `ufw.conf`、Ubuntu vendor IPv6 规则中合法不存在 `ufw-not-local`，以及提交后清理错误假设 systemd wants 目录必然存在。所有提交前失败均由 watchdog 回滚或通过精确闭包恢复到写入前基线；提交后的目录假设只影响临时状态清理，不改变已经验收并提交的防火墙规则。修复后的冻结脚本与四组本地 fixture 均按事务摘要绑定。
-- **提交、清理与稳态**：最终事务启用 UFW 后，第二条全新严格公钥 SSH 会话逐项通过管理身份、`sudo -n`、SSH 策略、TAT、Nginx、failed units、监听面、双栈默认/用户规则和腾讯 YJ 链身份后才提交。包管理锁持有者按其原协议自然退出后，独立审计的清理事务只删除本事务两个运行时 marker 和 33 个精确绑定的状态成员；随后提交后重启前 steady verifier 再次通过。服务器当前 UFW active/enabled，目标规则与 vendor 链保持稳定；腾讯云轻量防火墙没有被改动。
-- **软件只读计划**：2026-08-01 的新鲜 apt 模拟显示六个升级候选：`distro-info-data`、`libssl-dev`、`libssl3t64`、`openssl`、`tzdata`、`tzdata-legacy`，零新增、零移除；这些升级尚未授权。Certbot `--no-install-recommends` 模拟显示新增 `certbot`、`python3-acme`、`python3-certbot`、`python3-configargparse`、`python3-josepy`、`python3-parsedatetime`、`python3-rfc3339` 七包，零升级、零移除，也尚未授权或安装。
-- **CI 与剩余门禁**：用户确认 GitHub Actions 额度恢复，并要求当前 `codex/issue-18-production-baseline` 暂不合并 `main`，待 #18 完成后一次性开 PR。topic push 本身不触发 workflow，故尚无本轮远端 CI 证据。#36 合并前仍须由用户手工闭合腾讯云轻量防火墙、决定六个升级候选和 Certbot、执行已授权维护重启并完成重启后稳态；verifier 首次安装硬性等待 bootstrap/verifier/golden 同一提交进入 canonical `main`，之后还要单独取得现场安装授权。#37 的生产目录、发布、Nginx 站点、DNS/TLS 与公网闭环继续暂停；本轮未引入浏览器请求、访问者数据处理或第三方常驻服务。
+- **提交、清理与稳态**：最终事务启用 UFW 后，第二条全新严格公钥 SSH 会话逐项通过管理身份、`sudo -n`、SSH 策略、TAT、Nginx、failed units、监听面、双栈默认/用户规则和腾讯 YJ 链身份后才提交。包管理锁持有者按其原协议自然退出后，独立审计的清理事务只删除本事务两个运行时 marker 和 33 个精确绑定的状态成员；随后提交后重启前 steady verifier 再次通过。D-122 收口时服务器 UFW 为 active/enabled，目标规则与 vendor 链保持稳定；腾讯云轻量防火墙没有被改动。
+- **软件只读计划**：2026-08-01 的新鲜 apt 模拟显示六个升级候选：`distro-info-data`、`libssl-dev`、`libssl3t64`、`openssl`、`tzdata`、`tzdata-legacy`，零新增、零移除；这些升级在本条记录形成时尚未授权。Certbot `--no-install-recommends` 模拟显示新增 `certbot`、`python3-acme`、`python3-certbot`、`python3-configargparse`、`python3-josepy`、`python3-parsedatetime`、`python3-rfc3339` 七包，零升级、零移除，在该时点也尚未授权或安装；后续实际软件事务见 D-124。
+- **CI 与当时剩余门禁**：用户确认 GitHub Actions 额度恢复，并要求当前 `codex/issue-18-production-baseline` 暂不合并 `main`，待 #18 完成后一次性开 PR。topic push 本身不触发 workflow，故当时尚无本轮远端 CI 证据。本条记录形成时，#36 合并前仍须由用户手工闭合腾讯云轻量防火墙、决定六个升级候选和 Certbot、执行获准维护重启并完成重启后稳态；这些事项的后续结果见 D-124 至 D-130，当前仍待 D-130 formal receipt 与 canonical `main` 前置满足后的 verifier 安装。#37 的生产目录、发布、Nginx 站点、DNS/TLS 与公网闭环继续暂停；本轮未引入浏览器请求、访问者数据处理或第三方常驻服务。
 
 ## 2026-07-30 — #36 加固前复核与 verifier bootstrap 候选（整体仍为 GAP）
 

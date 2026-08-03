@@ -1,7 +1,7 @@
 # M0 主站实现 Spec
 
 状态：active
-最近更新：2026-08-02
+最近更新：2026-08-03
 适用范围：`https://www.axialmuse.com/` 的 Docusaurus 多页面静态主站
 实现前置：#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端验收并进入 `main`；#12 历史门禁、#24 作者创建事务与 #32 CI workflow 已在专题分支完成实现和本地验收，现依 D-104 纳入 `dev` 集成，仍须以组合树精确 SHA 完成远端 CI 与 `dev -> main` PR 验收；#13/#33 已形成 release 输入与封装，#35 已由本地提交 `f7fdc43` 实现服务器 verifier 但尚未推送，#14 producer/upload 已由本地提交 `7b5cc47` 完成且尚未推送，当前仍无 canonical `main` 真实 artifact；#8、#36/#37 按依赖链继续实现；真实公开素材仍须通过事实、隐私和版权检查
 
@@ -254,5 +254,5 @@ site-assets/                   # 原件目录，不直接交给 Docusaurus
 | 全站或文章 Open Graph 图片 | 尚无已批准素材 | 未阻塞 #27 已完成的 metadata 合并与文本标签；仍阻塞相关页面满足 M0 全量 `og:image` 目标，不得以占位图绕过 |
 | DocRestore 演示视频 | 后续增量 | 不阻塞 M0 |
 | GitHub Actions production artifact、TAT 与凭证接线 | 可信 CI 第一阶段已由 D-097 至 D-102 完成专题实现和本地验收，并正依 D-104 纳入 `dev`；D-110 已授权固定 upload Action，#14 producer/upload 已由本地提交 `7b5cc47` 完成，但尚未推送或在 canonical `main` 真实运行。required checks 治理、deploy Action、TAT 与凭证仍未授权实施 | 真实 artifact/ZIP 与后续接线缺失仍阻塞自动部署，不阻塞本地构建或普通 CI 的后续远端验收 |
-| 服务器、DNS、证书与生产核验 | #36 服务器侧只读基线、废弃旧站清理、控制面基础核验、D-119/D-120 SSH 全局策略、D-122 OS UFW 重启前稳态和 D-124 原软件后验已完成；云规则集合恢复后 SSH 当前来源已与保留槽位 2 和 OS UFW 匹配。D-125 正式隔离重建仍为历史 `environmental_inconclusive`；D-126 唯一一次获准的服务器只读语义变换探针已返回 `status=complete oracleMatch=true`，只证明当前规范化 non-vendor 投影加入两条公开标准 IPv6 rate-limit 终止规则后等于冻结 oracle。该结果不证明最早 full-hash 差异的历史因果，也不授权 component-aware transition、重启、reload、重新建立基线、verifier、云规则变更或 #37；授权已消费，探针未写服务器。须先取得 transition 的新决定与授权，再收敛云 SSH 单来源并复验；完成维护重启、重启后稳态、verifier canonical-main 安装、DNS/TLS 与公网验收前，#36 仍为 GAP | 阻塞公开上线，不阻塞主站开发 |
+| 服务器、DNS、证书与生产核验 | #36 服务器侧只读基线、废弃旧站清理、控制面基础核验、D-119/D-120 SSH 全局策略、D-122 OS UFW 重启前稳态和 D-124 原软件后验已完成；D-129 前用户最后确认云层只保留与 OS UFW 匹配的单一 SSH 来源。D-125 正式隔离重建仍为历史 `environmental_inconclusive`；D-126 以 `status=complete oracleMatch=true` 关闭当前内容关系缺口后，D-128 component-aware transition 已返回 `status=complete outcome=committed`，授权已消费且清理完成。D-129 的唯一维护重启已经执行并确认新 boot，但完整 post-reboot 因 vendor declaration predicate 不满足而保持 pending；没有执行第二次重启、reload、再基线或恢复写入。用户在 D-130 人工确认当前主机侧无已知问题且腾讯云控制面正常，新只读逐组件源码/契约已本地审计，但 formal receipt 尚未形成。完成 D-130 receipt 和 verifier canonical-main 安装前，#36 仍为 GAP，DNS/TLS 与公网验收另归 #37 | 阻塞公开上线，不阻塞主站开发 |
 | 公安联网备案信息 | 尚待现场核验 | 核验前不显示占位号 |
