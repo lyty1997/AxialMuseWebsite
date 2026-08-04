@@ -250,6 +250,12 @@
 
   用户随后明确授权第一阶段 Git 晋级：把当前专题工作作为一个聚焦提交普通推送到同名 topic，保留 `origin/dev` 已有 #8 工作并以普通 merge 解决不改变既定设计的冲突后推送 `dev`，等待该精确 `dev` CI 全部成功，再创建并在 checks 全绿且 head/base 未漂移时合并 `dev -> main` PR，最后观察精确 `main` push CI。该授权禁止 force、rebase、直推 `main` 或绕过失败/跳过的门禁；任一冲突无法在既定设计内消解、CI 红灯或远端漂移都必须停止。授权仍不包含 Issue 写入、服务器或云资源写操作、verifier 安装及 #37；这些动作继续按第二阶段分别确认。
 
+- **D-137 / 2026-08-04**：D-136 的首轮普通 topic push 被 GitHub 以 `GH007` 邮箱隐私门禁拒绝，远端同名 topic 未改变。只读审计确认远端 topic 到本地 `68ee529` 之间恰有七个线性、未签名且尚未发布的提交，它们的 author/committer 邮箱均不是 GitHub noreply；因此只修正末端提交不能关闭门禁。用户选择方案 A，明确允许对这七个未推送提交作一次窄化的本地历史重写，作为 D-136“禁止 rebase”的单次例外：author 与 committer 邮箱统一替换为从当前已登录 GitHub 账户公开 ID/login 推导的 canonical noreply，提交内容树、消息、author/committer 姓名与时间、线性顺序和相对父子关系必须保持等价；父提交 ID 级联变化会使七个提交 SHA 全部改变，但不得改动远端既有提交。
+
+  重写前允许创建一个不进入默认 push refspec 的本地恢复 ref，并临时保存本条决定的工作区补丁；重写后必须逐提交证明七组 tree、message、姓名、时间及父子映射等价，确认新范围只使用目标 noreply，恢复本条补丁并把它作为新的 noreply 提交追加。随后重新读取远端 topic，只有其仍指向重写前基点时才可普通 push；禁止 force、修改 GitHub 邮箱隐私设置、改写其他本地或远端 ref，以及把恢复 ref 推送到远端。该授权不扩大 D-136 的 CI/合并条件，也不包含 Issue、服务器、云资源、verifier、后续 evidence 晋级或 #37 操作。
+
+  执行结果：重写前的本地恢复 ref 精确指向 `68ee529`；七个提交随后形成一一映射，新 head 为 `19b6b9a`。对象级复核确认每组 tree、message、author/committer 姓名与原始时间、单亲顺序及相对父子映射全部等价，新范围的两类邮箱均为目标 noreply；工具自动产生的重复 `refs/original` 已删除，独立恢复 ref 继续只保留在本地。远端 topic 仍为 `b38354b`，没有 force、GitHub 设置改动或其他远端写入；本条记录独立追加，不折入七个被重写的内容树。新的普通 push 成功前仍不得把 topic 记为已发布。
+
 - **D-139 / 2026-08-04**：用户确认 `dev` 尚未完成，PR #62 不应把整个开发主干晋级到 canonical `main`，并明确授权完整回退该 PR。只读审计确认远端 `main` 的 `7c0865f` 是双亲 merge：第一父为合并前 `main@195656f`，第二父为当时完整 `dev@cfc4058`；该次晋级带入 19 个可达提交，最终树相对第一父涉及 103 个文件。纠正采用公开历史可追溯的 `git revert -m 1 7c0865f`，禁止 force、reset、rebase、直接推送 `main` 或删除已发布提交。
 
   本次回退是 Git 工作流的紧急窄化例外：从 `main@7c0865f` 建立 `codex/revert-pr-62`，仅允许新增本决定和 PR #62 的机械反向补丁，经本地完整 `quality`、纠正 PR checks 与合并后 `main` CI 成功后进入 `main`；不能经未完成的 `dev -> main`，否则会重新引入待回退范围。合并前必须确认远端 `main` 仍精确指向预期基点，回退后除本决定外的 tracked tree 必须与 `main@195656f` 一致。任一冲突无法机械收敛、门禁失败或远端漂移都停止，不绕过检查。
