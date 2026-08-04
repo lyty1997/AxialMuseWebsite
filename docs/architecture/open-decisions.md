@@ -256,6 +256,12 @@
 
   执行结果：重写前的本地恢复 ref 精确指向 `68ee529`；七个提交随后形成一一映射，新 head 为 `19b6b9a`。对象级复核确认每组 tree、message、author/committer 姓名与原始时间、单亲顺序及相对父子映射全部等价，新范围的两类邮箱均为目标 noreply；工具自动产生的重复 `refs/original` 已删除，独立恢复 ref 继续只保留在本地。本条记录随后作为新的 noreply 提交追加，最终 topic head 为 `e88386b`；真实远端 CAS 复核仍为 `b38354b` 后，普通 fast-forward push 已成功并再次由远端 ref 验证。全程没有 force、GitHub 设置改动、恢复 ref 推送或其他远端写入；`dev` 集成及其 CI 仍按 D-136 独立失败关闭。
 
+- **D-139 / 2026-08-04**：用户确认 `dev` 尚未完成，PR #62 不应把整个开发主干晋级到 canonical `main`，并明确授权完整回退该 PR。只读审计确认远端 `main` 的 `7c0865f` 是双亲 merge：第一父为合并前 `main@195656f`，第二父为当时完整 `dev@cfc4058`；该次晋级带入 19 个可达提交，最终树相对第一父涉及 103 个文件。纠正采用公开历史可追溯的 `git revert -m 1 7c0865f`，禁止 force、reset、rebase、直接推送 `main` 或删除已发布提交。
+
+  本次回退是 Git 工作流的紧急窄化例外：从 `main@7c0865f` 建立 `codex/revert-pr-62`，仅允许新增本决定和 PR #62 的机械反向补丁，经本地完整 `quality`、纠正 PR checks 与合并后 `main` CI 成功后进入 `main`；不能经未完成的 `dev -> main`，否则会重新引入待回退范围。合并前必须确认远端 `main` 仍精确指向预期基点，回退后除本决定外的 tracked tree 必须与 `main@195656f` 一致。任一冲突无法机械收敛、门禁失败或远端漂移都停止，不绕过检查。
+
+  完整回退会同时移除 #18 及该 PR 中全部 `dev` 内容，但不改动 `dev`、专题分支、当前未提交的 #36 evidence、服务器、云资源、制品或 GitHub Issue。由于原提交仍通过已发布 merge 保留在 `main` 历史中，后续批准重新晋级时不能假定再次合并原分支会恢复内容；必须基于当时稳定 `main` 重新形成可审计的新提交，或另行确认精确的 revert-of-revert 方案。
+
 ## 依 D-078 形成的 M0 工程决定
 
 - **E-001 / 2026-07-18 — 项目内容职责拆分**：`docs/contracts/projects.json` 继续拥有项目 ID、短 slug、标题、摘要、状态、日期、仓库、展示开关、导航顺序和写作模块等结构化事实；项目长文位于 `site-content/projects/<project-id>/index.md` 或 `index.mdx`，只拥有背景、能力、取舍、限制、证据说明和复盘正文，不重复 H1、摘要、状态、日期、仓库或路由字段。构建期根据稳定 project ID 关联两者，并从注册表只读派生 Docusaurus 的 `title`、`description`、完整 `/projects/<project-slug>` 路径和草稿行为，不回写源文件。`published` 或 `archived` 项目必须恰有一个正文入口；`draft` 或 `planned` 可以暂缺正文但不能产生生产路由；孤儿正文、双入口和结构化字段双写均使构建失败。项目列表、项目侧栏和详情元数据读取同一注册表，正文文件路径不生成公开 URL。
