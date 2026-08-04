@@ -4,6 +4,13 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-08-04 — D-137 授权未推送提交使用 noreply 身份重写
+
+- **失败事实**：D-136 首轮普通 topic push 被 GitHub `GH007` 邮箱隐私门禁拒绝，远端未改变。只读审计确认远端 topic 到本地 `68ee529` 之间恰有七个线性、未签名、尚未发布的提交，七者 author/committer 邮箱均不是 GitHub noreply，因此不能只修正最新提交。
+- **授权与不变量**：用户选择方案 A，授权把这七个未推送提交的 author/committer 邮箱统一改为当前已登录 GitHub 账户的 canonical noreply，作为 D-136 禁止 rebase 的一次窄化例外。允许建立不被默认推送的本地恢复 ref 和临时保存本条补丁；七组 tree、message、姓名、时间与线性父子映射必须逐项等价，只有提交邮箱、级联 parent ID 与由此产生的 SHA 可以改变。本条补丁在重写后作为新的 noreply 提交追加，不折入七个历史内容树。
+- **执行与复核**：本地恢复 ref 绑定旧 head `68ee529`；七个提交完成一一重写后，新 head 为 `19b6b9a`。对象级复核确认 tree、message、author/committer 姓名与时间、单亲顺序和相对父子映射全部等价，新范围两类邮箱均为目标 noreply；重复工具备份已清理，独立恢复 ref 继续只留本地。远端 topic 仍为 `b38354b`，尚未发生成功 push、force、GitHub 设置修改或其他远端写入。
+- **后续门禁**：等价校验和远端基点复核都通过后，才可普通 push topic 并继续 D-136；禁止 force、改 GitHub 隐私设置、改写或推送其他 ref。服务器、云资源、Issue、verifier、后续 evidence 晋级与 #37 仍未授权。
+
 ## 2026-08-04 — D-136 确认 #36 两阶段晋级方案（第一阶段 Git 已授权）
 
 - **决策**：用户确认方案 A，保留 D-123 的历史事实，但以两阶段晋级取代其面向未来的单 PR 节奏。只读审计证明 canonical `main` 尚不含 bootstrap、verifier 与 golden，而 D-121 要求三者先进入同一 canonical `main` 精确提交才能安装；#36 又属于 #18 完成条件，安装结果还须回填文档，因此不能在“#18 全部完成后才首次合入”的同时只使用一个 PR。
