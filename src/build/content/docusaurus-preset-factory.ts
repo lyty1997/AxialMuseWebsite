@@ -481,7 +481,6 @@ function assertExactDocsOptions(
   value: Record<string, unknown>,
   sidebarItemsGenerator: unknown,
   projectPreviewRemarkPlugin: unknown,
-  mode: "production" | "preview",
 ): void {
   const descriptors = readPlainDataDescriptors(value, "本地 docs options");
   const expectedKeys = [
@@ -493,7 +492,6 @@ function assertExactDocsOptions(
     "sidebarItemsGenerator",
     "sidebarPath",
     "tags",
-    ...(mode === "preview" ? ["versions"] : []),
   ].sort();
   const keys = Object.keys(descriptors).sort();
   const versions = snapshotDenseArray(
@@ -504,26 +502,6 @@ function assertExactDocsOptions(
     descriptors.remarkPlugins?.value,
     "docs.remarkPlugins",
   );
-  if (mode === "preview") {
-    const versions = readPlainDataDescriptors(
-      descriptors.versions?.value,
-      "docs.versions",
-    );
-    const current = readPlainDataDescriptors(
-      versions.current?.value,
-      "docs.versions.current",
-    );
-    if (
-      Object.keys(versions).join("\n") !== "current"
-      || Object.keys(current).join("\n") !== "noIndex"
-      || current.noIndex?.value !== true
-    ) {
-      return fail(
-        "DOCS_PRESET_DOCS_CONFIG",
-        "preview current docs version 必须显式绑定 noIndex=true。",
-      );
-    }
-  }
   if (
     keys.length !== expectedKeys.length
     || keys.some((key, index) => key !== expectedKeys[index])
@@ -671,19 +649,11 @@ export function createClassicDerivedPreset(
       tags: false,
       sidebarItemsGenerator,
       remarkPlugins,
-      ...(session.docsAdapterSession.mode === "preview"
-        ? {
-            versions: Object.freeze({
-              current: Object.freeze({noIndex: true}),
-            }),
-          }
-        : {}),
     };
     assertExactDocsOptions(
       docsOptions,
       sidebarItemsGenerator,
       projectPreviewRemarkPlugin,
-      session.docsAdapterSession.mode,
     );
     const classicOptions = {
       ...callerOptions,
@@ -697,7 +667,6 @@ export function createClassicDerivedPreset(
       docsOptions,
       sidebarItemsGenerator,
       projectPreviewRemarkPlugin,
-      session.docsAdapterSession.mode,
     );
     const candidates = inspectOfficialDocsTuples(inspected.plugins, docsOptions);
     if (

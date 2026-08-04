@@ -219,7 +219,6 @@ export interface ContentNavigationLink {
 }
 
 export interface ProjectNavigationInput {
-  readonly mode: ContentBuildMode;
   readonly catalog: ProjectCatalog;
   readonly articles: readonly Article[];
 }
@@ -239,11 +238,11 @@ export interface ProjectNavigationItem {
   readonly canonicalPath: string;
   readonly navigationOrder: number;
   readonly status: "active" | "paused" | "completed" | "archived";
-  readonly publicationStatus: "draft" | "planned" | "published" | "archived";
+  readonly publicationStatus: "published" | "archived";
   readonly updatedAt: string;
   readonly repositoryUrl?: string;
   readonly relatedWriting: readonly ContentNavigationLink[];
-  readonly previewImage?: ProjectNavigationPreviewImage;
+  readonly previewImage: ProjectNavigationPreviewImage;
 }
 
 export interface WritingNavigationInput {

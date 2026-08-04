@@ -60,24 +60,16 @@ if (behavior === "compile-failure") {
     testBody = 'import assert from "node:assert/strict";\\nimport {readFileSync, readdirSync} from "node:fs";\\nimport test from "node:test";\\nimport {frontMatterDecoderFixture} from "../../scripts/content/frontmatter.mjs";\\nimport {jsonDecoderFixture} from "../../scripts/content/json.mjs";\\ntest("E-012 copied decoder runtime", () => { const runtimeRoot = new URL("../../scripts/content/", import.meta.url); assert.equal(frontMatterDecoderFixture, "frontmatter-runtime"); assert.equal(jsonDecoderFixture, "json-runtime"); assert.deepEqual(readdirSync(runtimeRoot).sort(), ["frontmatter.d.mts", "frontmatter.mjs", "json.d.mts", "json.mjs"]); assert.equal(readFileSync(new URL("frontmatter.d.mts", runtimeRoot), "utf8"), "export declare const frontMatterDecoderFixture: string;\\\\n"); assert.equal(readFileSync(new URL("json.d.mts", runtimeRoot), "utf8"), "export declare const jsonDecoderFixture: string;\\\\n"); });\\n';
   } else if (behavior === "decoder-near-match") {
     testBody = 'import assert from "node:assert/strict";\\nimport {existsSync} from "node:fs";\\nimport test from "node:test";\\ntest("E-012 near-match does not copy decoder runtime", () => { assert.equal(existsSync(new URL("../../scripts/content/", import.meta.url)), false); });\\n';
-  } else if (behavior === "redirect-runtime") {
-    testBody = 'import assert from "node:assert/strict";\\nimport {readFileSync, readdirSync} from "node:fs";\\nimport test from "node:test";\\nimport {runtimeRedirectFixture} from "../../scripts/release/lib/runtime-redirects.mjs";\\ntest("E-014 copied redirect runtime", () => { const runtimeRoot = new URL("../../scripts/release/lib/", import.meta.url); assert.equal(runtimeRedirectFixture, "redirect-runtime:json-runtime"); assert.deepEqual(readdirSync(runtimeRoot).sort(), ["runtime-redirects.d.mts", "runtime-redirects.mjs"]); assert.match(readFileSync(new URL("runtime-redirects.d.mts", runtimeRoot), "utf8"), /runtimeRedirectFixture/u); });\\n';
   } else {
     testBody = 'import assert from "node:assert/strict";\\nimport {readFileSync} from "node:fs";\\nimport test from "node:test";\\nimport {fixtureValue} from "./support.js";\\ntest("E-012 fake legal .js import", () => { assert.equal(fixtureValue, 42); assert.deepEqual(JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")), {type: "module", private: true}); });\\n';
   }
   writeFileSync(resolve(buildRoot, "example.test.js"), testBody, "utf8");
-  if (
-    behavior === "decoder-runtime"
-    || behavior === "decoder-near-match"
-    || behavior === "redirect-runtime"
-  ) {
+  if (behavior === "decoder-runtime" || behavior === "decoder-near-match") {
     const adapterRoot = resolve(outputRoot, "src/build/content");
     mkdirSync(adapterRoot, {recursive: true});
     const adapterName = behavior === "decoder-runtime"
       ? "content-decoders.js"
-      : behavior === "redirect-runtime"
-        ? "runtime-redirects.js"
-        : "content-decoders-copy.js";
+      : "content-decoders-copy.js";
     writeFileSync(resolve(adapterRoot, adapterName), "export const emittedAdapter = true;\\n", "utf8");
   }
   if (behavior === "extra-emit") {
@@ -123,16 +115,6 @@ function createFixture({behavior = "success", withSource = true} = {}) {
     root,
     "scripts/content/json.d.mts",
     "export declare const jsonDecoderFixture: string;\n",
-  );
-  writeFixture(
-    root,
-    "scripts/release/lib/runtime-redirects.mjs",
-    "import {jsonDecoderFixture} from \"../../content/json.mjs\";\nexport const runtimeRedirectFixture = `redirect-runtime:${jsonDecoderFixture}`;\n",
-  );
-  writeFixture(
-    root,
-    "scripts/release/lib/runtime-redirects.d.mts",
-    "export declare const runtimeRedirectFixture: string;\n",
   );
   const compilerPath = resolve(outer, "fake-tsc.mjs");
   writeFileSync(compilerPath, fakeCompilerSource(behavior), "utf8");
@@ -399,33 +381,6 @@ test("E-012 精确 decoder importer 缺少任一固定运行时文件即失败�
     rmSync(resolve(fixture.root, "scripts/content/json.d.mts"));
     const captured = captureRun(fixture);
     assert.ok(hasTestCode("TEST_DECODER_RUNTIME")(captured.error));
-    assert.equal(captured.calls.length, 1);
-    assertTemporaryParentEmpty(fixture);
-  } finally {
-    destroyFixture(fixture);
-  }
-});
-
-test("E-014 精确 emitted redirect adapter 复制声明、实现与传递解码边界", () => {
-  const fixture = createFixture({behavior: "redirect-runtime"});
-  try {
-    const captured = captureRun(fixture);
-    assert.equal(captured.error, undefined, `${captured.stdout}\n${captured.stderr}`);
-    assert.equal(captured.calls.length, 2);
-    assert.match(captured.stdout, /E-014 copied redirect runtime/u);
-    assert.equal(captured.stderr, "");
-    assertTemporaryParentEmpty(fixture);
-  } finally {
-    destroyFixture(fixture);
-  }
-});
-
-test("E-014 emitted redirect adapter 缺少固定声明时失败关闭", () => {
-  const fixture = createFixture({behavior: "redirect-runtime"});
-  try {
-    rmSync(resolve(fixture.root, "scripts/release/lib/runtime-redirects.d.mts"));
-    const captured = captureRun(fixture);
-    assert.ok(hasTestCode("TEST_REDIRECT_RUNTIME")(captured.error));
     assert.equal(captured.calls.length, 1);
     assertTemporaryParentEmpty(fixture);
   } finally {

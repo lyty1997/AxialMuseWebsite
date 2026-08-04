@@ -4,13 +4,11 @@ import {
   readdirSync,
   realpathSync,
 } from "node:fs";
-import type {Stats} from "node:fs";
 import {tmpdir} from "node:os";
 import {basename, dirname, isAbsolute, resolve} from "node:path";
 
 const BUILD_ROOT_PREFIX = "axial-muse-build-";
 const OWNER_FILE_NAME = ".axial-muse-build-owner";
-const TRANSACTION_OWNER_FILE_NAME = ".axial-muse-build-transaction-owner";
 const OWNER_PATTERN = /^[0-9a-f]{64}$/u;
 
 export type BuildMode = "production" | "preview";
@@ -19,7 +17,6 @@ export interface BuildContext {
   readonly mode: BuildMode;
   readonly buildRoot: string;
   readonly staticDirectory: string;
-  readonly generatedFilesDirectory: string;
   readonly owner: string;
 }
 
@@ -39,12 +36,7 @@ function assertPrivateEntry(
   expectedType: "directory" | "file",
   expectedMode: number,
 ): void {
-  let metadata: Stats;
-  try {
-    metadata = lstatSync(path);
-  } catch {
-    fail("BUILD_CONTEXT_ENTRY", "构建上下文成员缺失或无法读取。");
-  }
+  const metadata = lstatSync(path);
   const hasExpectedType = expectedType === "directory"
     ? metadata.isDirectory()
     : metadata.isFile();
@@ -67,14 +59,11 @@ export function readBuildContext(
 ): BuildContext {
   const mode = environment.AXIAL_MUSE_BUILD_MODE;
   const buildRootInput = environment.AXIAL_MUSE_BUILD_ROOT;
-  const generatedFilesDirectoryInput = environment.AXIAL_MUSE_BUILD_GENERATED_FILES;
   const owner = environment.AXIAL_MUSE_BUILD_OWNER;
   if (
     (mode !== "production" && mode !== "preview")
     || typeof buildRootInput !== "string"
     || !isAbsolute(buildRootInput)
-    || typeof generatedFilesDirectoryInput !== "string"
-    || !isAbsolute(generatedFilesDirectoryInput)
     || typeof owner !== "string"
     || !OWNER_PATTERN.test(owner)
   ) {
@@ -87,7 +76,6 @@ export function readBuildContext(
     mode,
     buildRoot: buildRootInput,
     staticDirectory: resolve(buildRootInput, "static"),
-    generatedFilesDirectory: generatedFilesDirectoryInput,
     owner,
   });
 }
@@ -97,7 +85,6 @@ function validateBuildContext(context: BuildContext): BuildContext {
     mode,
     buildRoot: buildRootInput,
     staticDirectory: staticDirectoryInput,
-    generatedFilesDirectory: generatedFilesDirectoryInput,
     owner,
   } = context;
   if (
@@ -106,8 +93,6 @@ function validateBuildContext(context: BuildContext): BuildContext {
     || !isAbsolute(buildRootInput)
     || typeof staticDirectoryInput !== "string"
     || !isAbsolute(staticDirectoryInput)
-    || typeof generatedFilesDirectoryInput !== "string"
-    || !isAbsolute(generatedFilesDirectoryInput)
     || typeof owner !== "string"
     || !OWNER_PATTERN.test(owner)
   ) {
@@ -140,34 +125,10 @@ function validateBuildContext(context: BuildContext): BuildContext {
     fail("BUILD_CONTEXT_MARKER", "构建上下文模式与所有权标记不匹配。");
   }
 
-  assertPrivateEntry(generatedFilesDirectoryInput, "directory", 0o700);
-  const generatedFilesDirectory = realpathSync(generatedFilesDirectoryInput);
-  const generatedParentInput = dirname(generatedFilesDirectory);
-  assertPrivateEntry(generatedParentInput, "directory", 0o700);
-  const generatedParent = realpathSync(generatedParentInput);
-  if (
-    generatedFilesDirectoryInput !== generatedFilesDirectory
-    || generatedParentInput !== generatedParent
-    || dirname(generatedParent) !== temporaryRoot
-    || !basename(generatedParent).startsWith("axial-muse-build-transaction-")
-    || basename(generatedFilesDirectory) !== "generated"
-  ) {
-    fail("BUILD_CONTEXT_GENERATED_PATH", "generated files 目录不属于本次私有构建事务。");
-  }
-  const transactionOwnerPath = resolve(
-    generatedParent,
-    TRANSACTION_OWNER_FILE_NAME,
-  );
-  assertPrivateEntry(transactionOwnerPath, "file", 0o600);
-  if (readFileSync(transactionOwnerPath, "utf8") !== `${mode}:${owner}\n`) {
-    fail("BUILD_CONTEXT_GENERATED_MARKER", "generated files 目录未绑定本次构建事务。");
-  }
-
   return Object.freeze({
     mode,
     buildRoot,
     staticDirectory,
-    generatedFilesDirectory,
     owner,
   });
 }
@@ -178,7 +139,6 @@ export function revalidateBuildContext(context: BuildContext): BuildContext {
     || typeof context !== "object"
     || Object.keys(context).sort().join("\n") !== [
       "buildRoot",
-      "generatedFilesDirectory",
       "mode",
       "owner",
       "staticDirectory",

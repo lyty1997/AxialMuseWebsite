@@ -96,8 +96,7 @@ function baseManifest() {
       typecheck: "tsc --noEmit",
       test: "node scripts/quality/run-tests.mjs",
       build: "node scripts/build/build-site.mjs --mode production",
-      "package:artifact": "node scripts/release/package-site.mjs",
-      "check:artifact": "node scripts/quality/check-release-package.mjs",
+      "check:artifact": "node scripts/quality/check-artifact.mjs",
     },
     engines: {
       node: `>=${TEST_MINIMUM_NODE_VERSION} <${NODE_MAJOR + 1}`,
@@ -643,15 +642,9 @@ test("E-010 npm isolation contract", async (t) => {
       ["scripts/quality/check-contracts.mjs"],
       ["scripts/quality/check-secrets.mjs"],
       ["scripts/quality/check-static-site.mjs"],
-      ["scripts/quality/check-runtime-redirects.mjs"],
       ["scripts/quality/check-supply-chain.mjs"],
       ["--test", "tests/build/run-isolated-npm.test.mjs"],
       ["--test", "tests/build/ci-workflow.test.mjs"],
-      ["--test", "tests/build/deploy-workflow.test.mjs"],
-      ["--test", "tests/build/bounded-json-http.test.mjs"],
-      ["--test", "tests/build/production-deploy-identity.test.mjs"],
-      ["--test", "tests/build/production-deploy.test.mjs"],
-      ["--test", "tests/build/tencent-tat.test.mjs"],
       ["--test", "tests/build/deterministic-spdx.test.mjs"],
       ["--test", "tests/build/supply-chain-audit-report.test.mjs"],
       ["--test", "tests/build/supply-chain-audit.test.mjs"],
@@ -668,14 +661,8 @@ test("E-010 npm isolation contract", async (t) => {
       ["--test", "tests/build/run-tests.test.mjs"],
       ["--test", "tests/build/module-boundaries.test.mjs"],
       ["--test", "tests/build/content-decoders.test.mjs"],
-      ["--test", "tests/build/runtime-redirects.test.mjs"],
-      ["--test", "tests/build/file-tree.test.mjs"],
-      ["--test", "tests/build/release-package.test.mjs"],
-      ["--test", "tests/build/production-artifact-workspace.test.mjs"],
-      ["--test", "tests/build/production-artifact-outputs.test.mjs"],
       ["--test", "tests/build/build-site.test.mjs"],
       ["--test", "tests/build/author-transaction.test.mjs"],
-      ["--test", "tests/build/preview-workflow.test.mjs"],
     ]);
     assert.deepEqual(CONTENT_HISTORY_COMMANDS, [
       ["scripts/quality/check-content-history.mjs"],
@@ -1348,7 +1335,6 @@ test("E-010 npm isolation contract", async (t) => {
       ["audit", null, ["audit", "--include=dev", "--audit-level=moderate", "--json"]],
       ["sbom-native", null, ["sbom", "--package-lock-only", "--sbom-format=spdx", "--sbom-type=application", "--offline"]],
       ["run-script", "quality", ["run", "quality"]],
-      ["run-script", "check:artifact", ["run", "--silent", "check:artifact"]],
     ];
     for (const [profile, scriptName, expected] of cases) {
       assert.deepEqual(
@@ -2309,26 +2295,6 @@ test("E-010 npm isolation contract", async (t) => {
       "fixture stdout\nIsolated npm profile passed: ci (registry=official, cache=fresh, config=isolated).\n",
     );
     assert.equal(loggedError, "fixture stderr\n");
-
-    loggedOutput = "";
-    loggedError = "";
-    writeIsolatedNpmResult({
-      profile: "run-script",
-      scriptName: "check:artifact",
-      stdout: `releaseContentSha256=${"a".repeat(64)}\n`,
-      stderr: "",
-    }, {
-      standardOutput: { write: (chunk) => { loggedOutput += chunk; } },
-      standardError: { write: (chunk) => { loggedError += chunk; } },
-    });
-    assert.equal(
-      loggedOutput,
-      `releaseContentSha256=${"a".repeat(64)}\n`,
-    );
-    assert.equal(
-      loggedError,
-      "Isolated npm profile passed: run-script (registry=official, cache=fresh, config=isolated).\n",
-    );
   });
 
   await t.test("rejects local bin escapes before a run-script workload", () => {

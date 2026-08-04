@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import {
   chmodSync,
-  mkdirSync,
   mkdtempSync,
   readFileSync,
   renameSync,
@@ -36,7 +35,6 @@ function createFixture(): Readonly<{
   const transactionRoot = mkdtempSync(join(tmpdir(), "axial-muse-build-transaction-"));
   chmodSync(repositoryRoot, 0o700);
   chmodSync(transactionRoot, 0o700);
-  mkdirSync(resolve(transactionRoot, "generated"), {mode: 0o700});
   writeFileSync(resolve(repositoryRoot, ".axial-muse-build.lock"), `${OWNER}\n`, {
     encoding: "utf8",
     mode: 0o600,
@@ -123,46 +121,6 @@ test("E-016 build postBuild 唯一写入 owner-bound 完整输入 seal，check/v
       checker.assert();
     }
     assert.equal(currentnessChecks, 4);
-  } finally {
-    rmSync(fixture.repositoryRoot, {recursive: true, force: true});
-    rmSync(fixture.transactionRoot, {recursive: true, force: true});
-  }
-});
-
-test("#33 release 验证事务建立临时 seal 并拒绝同字节换 inode", () => {
-  const fixture = createFixture();
-  let currentnessChecks = 0;
-  try {
-    const release = createContentBuildSealController({
-      repositoryRoot: fixture.repositoryRoot,
-      mode: "production",
-      owner: OWNER,
-      phase: "release",
-      inputDigest: DIGEST,
-      environment: fixture.environment,
-      assertInputsCurrent() {
-        currentnessChecks += 1;
-      },
-    });
-    release.write();
-    release.assert();
-    assert.equal(currentnessChecks, 2);
-
-    const sealPath = resolve(
-      fixture.transactionRoot,
-      ".axial-muse-content-input-seal",
-    );
-    const originalBytes = readFileSync(sealPath);
-    renameSync(
-      sealPath,
-      resolve(fixture.repositoryRoot, "original-input-seal"),
-    );
-    writeFileSync(sealPath, originalBytes, {mode: 0o600});
-    chmodSync(sealPath, 0o600);
-    assert.throws(
-      () => release.assert(),
-      assertContentCode("CONTENT_SESSION_TRANSACTION_IDENTITY"),
-    );
   } finally {
     rmSync(fixture.repositoryRoot, {recursive: true, force: true});
     rmSync(fixture.transactionRoot, {recursive: true, force: true});

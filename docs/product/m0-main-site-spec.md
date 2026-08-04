@@ -1,9 +1,9 @@
 # M0 主站实现 Spec
 
 状态：active
-最近更新：2026-08-04
+最近更新：2026-07-28
 适用范围：`https://www.axialmuse.com/` 的 Docusaurus 多页面静态主站
-实现前置：#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端验收并进入 `main`；#12 历史门禁、#24 作者创建事务与 #32 CI workflow 已在专题分支完成实现和本地验收，现依 D-104 纳入 `dev` 集成，仍须以组合树精确 SHA 完成远端 CI 与 `dev -> main` PR 验收；#13/#33 已形成 release 输入与封装，#35 与 #14 分别由专题提交 `4bbf859`、`a9a2f29` 实现服务器 verifier 与 producer/upload，并已随 topic `e88386b` 普通推送，当前仍无 canonical `main` 真实 artifact；#8、#36/#37 按依赖链继续实现；真实公开素材仍须通过事实、隐私和版权检查
+实现前置：#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端验收并进入 `main`；#12 历史门禁、#24 作者创建事务与 #32 CI workflow 已在专题分支完成实现和本地验收，现依 D-104 纳入 `dev` 集成，仍须以组合树精确 SHA 完成远端 CI 与 `dev -> main` PR 验收；#8、#13/#14 按依赖链继续实现；真实公开素材仍须通过事实、隐私和版权检查
 
 ## 目的与授权边界
 
@@ -207,7 +207,7 @@ site-assets/                   # 原件目录，不直接交给 Docusaurus
 5. 适配主题、响应式、素材和可访问性，不改变公开事实。
 6. 在主 Node 与最低 Node 端点运行同一质量、类型、E-012 测试、E-013 历史检查、构建、路由和断链负载，再完成浏览器和视觉验收。
 7. 按 E-015 让 `production-artifact` 在四个 prerequisite job 成功后，从 fresh runner 对同一 `main` SHA 重新冻结安装并执行完整主端点 `quality`；不传递或复用 `website-quality` 的 job-local build。
-8. 按 E-014 从该 job 同一 production `build/` 与重定向注册表生成确定性运行清单和 Nginx exact-location 配置，证明 source 没有静态 HTML、目标在 payload 中存在，并把 source build tree、payload 与规则封装和复验为同一 release；随后只上传一次并输出唯一 artifact ID/digest。D-110 已授权并在工作区接入固定完整 SHA 的官方 upload Action；deploy Action、凭证和生产接线仍须另行授权。
+8. 按 E-014 从该 job 同一 production `build/` 与重定向注册表生成确定性运行清单和 Nginx exact-location 配置，证明 source 没有静态 HTML、目标在 payload 中存在，并把 source build tree、payload 与规则封装和复验为同一 release；随后只上传一次并输出唯一 artifact ID/digest。Action 与凭证接线另行授权。
 9. 服务器、TAT、Nginx、证书、DNS 和生产冒烟按部署 runbook 单独实施与验收。
 
 ## Definition of Done
@@ -248,11 +248,11 @@ site-assets/                   # 原件目录，不直接交给 Docusaurus
 
 | 项目 | 状态 | 影响 |
 |---|---|---|
-| 本轮审查跟踪 | #9/#10/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端验收；#12/#24/#32 已在专题分支完成实现和本地验收并依 D-104 纳入 `dev` 集成；#13/#33/#35 已形成 release 输入、封装和本地服务器 verifier，#14 producer/upload 已由专题提交 `a9a2f29` 完成并随 topic `e88386b` 普通推送；#8、#14 真实 artifact 与 #36/#37 继续跟踪下游验收 | 不把 #27/#28 单项闭环、临时 ref push、工作区 fixture 或组合前本地结果误报为全站完成、#12/#24/#32 的远端闭环或 #14 的真实 GitHub artifact；实现偏离 E-006 至 E-016 时回到对应 Issue |
+| 本轮审查跟踪 | #9/#10/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端验收；#12/#24/#32 已在专题分支完成实现和本地验收并依 D-104 纳入 `dev` 集成；#8、#13/#14 继续跟踪下游实现、fixture 与真实验收 | 不把 #27/#28 单项闭环、临时 ref push 或组合前本地结果误报为全站完成或 #12/#24/#32 的远端闭环；实现偏离 E-006 至 E-016 时回到对应 Issue |
 | 首次 npm 解析与真实传递图准入 | #21 已完成 1,225 个 canonical identity 的真实 tarball/许可证/脚本准入、正式 SBOM/evidence/NOTICE、首次准入当时的 audit 全零、D-082 最终决定和主/最低端点 composite receipt；2026-07-26 最新 live audit 的 18 个 high 仍是未修复风险 | 本项不再阻塞 #22；依赖图变化时仍须按 D-077 重新准入并通过 live audit。D-097 至 D-102 已实现并本地验收目标 CI 第一阶段，普通 CI 只阻断静态供应链漂移；相关实现正依 D-104 纳入 `dev`，组合树远端成功仍待精确 SHA 证明 |
 | 两个项目真实视觉证据 | 尚未准备 | 阻塞对应项目改为 `published`，不阻塞框架和空状态实现 |
 | 全站或文章 Open Graph 图片 | 尚无已批准素材 | 未阻塞 #27 已完成的 metadata 合并与文本标签；仍阻塞相关页面满足 M0 全量 `og:image` 目标，不得以占位图绕过 |
 | DocRestore 演示视频 | 后续增量 | 不阻塞 M0 |
-| GitHub Actions production artifact、TAT 与凭证接线 | 可信 CI 第一阶段已由 D-097 至 D-102 完成专题实现和本地验收，并正依 D-104 纳入 `dev`；D-110 已授权固定 upload Action，#14 producer/upload 已由专题提交 `a9a2f29` 完成并随 topic `e88386b` 普通推送，但尚未在 canonical `main` 真实运行。required checks 治理、deploy Action、TAT 与凭证仍未授权实施 | 真实 artifact/ZIP 与后续接线缺失仍阻塞自动部署，不阻塞本地构建或普通 CI 的后续远端验收 |
-| 服务器、DNS、证书与生产核验 | #36 服务器侧只读基线、废弃旧站清理、控制面基础核验、D-119/D-120 SSH 全局策略、D-122 OS UFW 重启前稳态和 D-124 原软件后验已完成；D-129 前用户最后确认云层只保留与 OS UFW 匹配的单一 SSH 来源。D-125 正式隔离重建仍为历史 `environmental_inconclusive`；D-126 以 `status=complete oracleMatch=true` 关闭当前内容关系缺口后，D-128 component-aware transition 已返回 `status=complete outcome=committed`，授权已消费且清理完成。D-129 的唯一维护重启已经执行并确认新 boot，但完整 post-reboot 因 vendor declaration predicate 不满足而保持 pending；没有执行第二次重启、reload、再基线或恢复写入。用户在 D-130 人工确认当前主机侧无已知问题且腾讯云控制面正常，新只读逐组件源码/契约已本地审计；D-132 的一轮 formal 以 `remote-posture-exec-start-shape` 失败且未生成 receipt。D-133 单次当前分类已收窄到 TAT `single-zero` outer normalizer，D-134 已完成严格 unit-aware v2 本地候选，这两步本身均不构成 formal。后续获准的一轮 v2 formal 已用同一 boot、间隔至少 10 秒的两条 fresh SSH 会话通过所有 gates，生成并独立校验 mode `0600`、被 Git 忽略的私有 receipt；结果为 `status=accepted-with-residuals`、`vendorState=fully_absent`、`aggregateDisposition=accepted_residual_unattributed`、`serverMutationPerformed=false`，且不改写 D-129/D-132。除正常 SSH/sudo 审计副作用外，本轮没有服务器或云资源写操作。#36 只剩 canonical `main` 后的 verifier 现场安装，DNS/TLS 与公网验收另归仍暂停的 #37 | 阻塞公开上线，不阻塞主站开发 |
+| GitHub Actions production artifact、TAT 与凭证接线 | 可信 CI 第一阶段已由 D-097 至 D-102 完成专题实现和本地验收，并正依 D-104 纳入 `dev`；production artifact、required checks 治理、TAT 与凭证仍未授权实施 | 阻塞自动部署，不阻塞本地构建或普通 CI 的后续远端验收 |
+| 服务器、DNS、证书与生产核验 | 尚未执行 | 阻塞公开上线，不阻塞主站开发 |
 | 公安联网备案信息 | 尚待现场核验 | 核验前不显示占位号 |

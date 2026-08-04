@@ -30,7 +30,7 @@ const PHASE_ENV = "AXIAL_MUSE_BUILD_PHASE";
 const OUTPUT_ENV = "AXIAL_MUSE_BUILD_OUTPUT";
 const validatedContentBuildSessions = new WeakSet<object>();
 
-export type ContentBuildPhase = "build" | "check" | "verify" | "release";
+export type ContentBuildPhase = "build" | "check" | "verify";
 
 export interface ContentBuildSession {
   readonly content: LoadedValidatedContent;
@@ -62,57 +62,20 @@ export function assertContentBuildSession(
 
 function readPhaseAndOutput(
   repositoryRoot: string,
-  mode: "production" | "preview",
   owner: string,
   environment: NodeJS.ProcessEnv,
 ): Readonly<{phase: ContentBuildPhase; outputDirectory: string}> {
   const phase = environment[PHASE_ENV];
   const output = environment[OUTPUT_ENV];
-  let expectedName: string | undefined;
-  let expectedOutput: string | undefined;
-  if (mode === "production") {
-    expectedName = phase === "verify" || phase === "release"
-      ? "build"
-      : `.axial-muse-build-candidate-${owner}`;
-    expectedOutput = resolve(repositoryRoot, expectedName);
-  } else {
-    const stateRoot = environment.PREVIEW_STATE_DIR;
-    const candidate = environment.AXIAL_MUSE_PREVIEW_CANDIDATE;
-    const commitSha = environment.AXIAL_MUSE_PREVIEW_COMMIT_SHA;
-    const controllerPid = environment.AXIAL_MUSE_PREVIEW_CONTROLLER_PID;
-    if (
-      (phase !== "build" && phase !== "check")
-      || typeof stateRoot !== "string"
-      || !isAbsolute(stateRoot)
-      || realpathSync(stateRoot) !== stateRoot
-      || typeof candidate !== "string"
-      || !isAbsolute(candidate)
-      || !/^[0-9a-f]{40}$/u.test(commitSha ?? "")
-      || !/^[1-9][0-9]*$/u.test(controllerPid ?? "")
-    ) {
-      failContentBuild("CONTENT_SESSION_PREVIEW_ENV", "preview 内容构建身份不完整。", {
-        sourcePath: "build",
-      });
-    }
-    expectedName = `${commitSha}.${controllerPid}`;
-    expectedOutput = resolve(stateRoot, "candidates", expectedName);
-    if (candidate !== expectedOutput) {
-      failContentBuild("CONTENT_SESSION_PREVIEW_ENV", "preview 候选不属于当前提交与控制进程。", {
-        sourcePath: "build",
-      });
-    }
-  }
+  const expectedName = phase === "verify"
+    ? "build"
+    : `.axial-muse-build-candidate-${owner}`;
   if (
-    (
-      phase !== "build"
-      && phase !== "check"
-      && phase !== "verify"
-      && phase !== "release"
-    )
+    (phase !== "build" && phase !== "check" && phase !== "verify")
     || typeof output !== "string"
     || !isAbsolute(output)
     || basename(output) !== expectedName
-    || output !== expectedOutput
+    || output !== resolve(repositoryRoot, expectedName)
   ) {
     failContentBuild("CONTENT_SESSION_ENV", "内容构建阶段或候选输出身份不合法。", {
       sourcePath: "build",
@@ -132,7 +95,7 @@ function readPhaseAndOutput(
     }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    if (phase === "check" || phase === "verify" || phase === "release") {
+    if (phase === "check" || phase === "verify") {
       failContentBuild("CONTENT_SESSION_OUTPUT", "验收阶段缺少待检查制品。", {
         sourcePath: "build",
       });
@@ -255,7 +218,6 @@ export async function createContentBuildSession(
   }
   const {phase, outputDirectory} = readPhaseAndOutput(
     context.siteDir,
-    buildContext.mode,
     buildContext.owner,
     environment,
   );

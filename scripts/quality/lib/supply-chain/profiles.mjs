@@ -58,9 +58,7 @@ export function buildProfileArguments({ profile, scriptName, runtimeRole, manife
       if (!Object.hasOwn(manifest.scripts ?? {}, scriptName)) {
         fail("NPM_PROFILE_SCRIPT_MISSING", `package.json 未声明受控脚本 ${scriptName}。`);
       }
-      return scriptName === "check:artifact"
-        ? ["run", "--silent", scriptName]
-        : ["run", scriptName];
+      return ["run", scriptName];
     default:
       fail("NPM_PROFILE_UNKNOWN", "未知 npm 隔离 profile。" );
   }

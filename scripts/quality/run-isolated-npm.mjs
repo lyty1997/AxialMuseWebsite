@@ -37,13 +37,7 @@ export function writeIsolatedNpmResult(result, {
   if (result.stdout) standardOutput.write(result.stdout);
   if (result.stderr) standardError.write(result.stderr);
   const summary = `Isolated npm profile passed: ${result.profile} (registry=official, cache=fresh, config=isolated).\n`;
-  if (
-    result.profile === "sbom-native"
-    || (
-      result.profile === "run-script"
-      && result.scriptName === "check:artifact"
-    )
-  ) {
+  if (result.profile === "sbom-native") {
     standardError.write(summary);
   } else {
     standardOutput.write(summary);

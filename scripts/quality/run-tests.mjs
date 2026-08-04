@@ -48,14 +48,6 @@ const CONTENT_DECODER_RUNTIME_FILES = Object.freeze([
   "json.mjs",
   "json.d.mts",
 ]);
-const RUNTIME_REDIRECT_RUNTIME_FILES = Object.freeze([
-  "scripts/content/frontmatter.mjs",
-  "scripts/content/frontmatter.d.mts",
-  "scripts/content/json.mjs",
-  "scripts/content/json.d.mts",
-  "scripts/release/lib/runtime-redirects.mjs",
-  "scripts/release/lib/runtime-redirects.d.mts",
-]);
 
 export class TestRunError extends Error {
   constructor(code, message, options) {
@@ -397,57 +389,6 @@ function copyContentDecoderRuntime({root, outputRoot, lstatEmittedAdapter}) {
   }
 }
 
-function copyRuntimeRedirectRuntime({root, outputRoot, lstatEmittedAdapter}) {
-  const emittedAdapter = resolve(
-    outputRoot,
-    "src/build/content/runtime-redirects.js",
-  );
-  try {
-    if (!existsAsRegularFile(emittedAdapter, lstatEmittedAdapter)) return;
-    for (const relativePath of RUNTIME_REDIRECT_RUNTIME_FILES) {
-      const source = resolve(root, relativePath);
-      const target = resolve(outputRoot, relativePath);
-      const sourceMetadata = lstatSync(source);
-      if (
-        sourceMetadata.isSymbolicLink()
-        || !sourceMetadata.isFile()
-        || sourceMetadata.nlink !== 1
-      ) {
-        fail("TEST_REDIRECT_RUNTIME", "运行时重定向源文件身份不合法。");
-      }
-      const bytes = readFileSync(source);
-      mkdirSync(dirname(target), {recursive: true, mode: 0o700});
-      chmodSync(dirname(target), 0o700);
-      if (existsAsRegularFile(target, lstatSync)) {
-        const targetMetadata = lstatSync(target);
-        if (
-          targetMetadata.nlink !== 1
-          || !readFileSync(target).equals(bytes)
-        ) {
-          fail("TEST_REDIRECT_RUNTIME", "既有临时运行时文件与固定源字节不一致。");
-        }
-        continue;
-      }
-      writeFileSync(target, bytes, {flag: "wx", mode: 0o600});
-      chmodSync(target, 0o600);
-      const targetMetadata = lstatSync(target);
-      if (
-        targetMetadata.isSymbolicLink()
-        || !targetMetadata.isFile()
-        || targetMetadata.nlink !== 1
-        || !readFileSync(target).equals(bytes)
-      ) {
-        fail("TEST_REDIRECT_RUNTIME", "临时运行时重定向文件字节复核失败。");
-      }
-    }
-  } catch (error) {
-    if (error instanceof TestRunError) throw error;
-    fail("TEST_REDIRECT_RUNTIME", "无法建立临时运行时重定向边界。", {
-      cause: error,
-    });
-  }
-}
-
 function existsAsRegularFile(path, lstatFile) {
   try {
     const metadata = lstatFile(path);
@@ -575,11 +516,6 @@ export function runTests({
 
     writeTemporaryPackage(outputRoot);
     copyContentDecoderRuntime({
-      root: realRoot,
-      outputRoot,
-      lstatEmittedAdapter,
-    });
-    copyRuntimeRedirectRuntime({
       root: realRoot,
       outputRoot,
       lstatEmittedAdapter,

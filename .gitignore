@@ -20,15 +20,12 @@ node_modules/
 .next/
 out/
 coverage/
-__pycache__/
-*.py[cod]
 
 # Local environment
 .env
 .env.*
 !.env.example
 scripts/dev/dev-workflow.env
-/.local/issue-36-ufw/
 
 # Logs
 *.log
