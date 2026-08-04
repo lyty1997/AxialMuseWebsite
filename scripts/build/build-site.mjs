@@ -283,6 +283,7 @@ function runDocusaurusPhase({
   arguments: arguments_,
   failureCode,
   failureMessage,
+  stdio = "inherit",
 }) {
   let result;
   let phaseError;
@@ -300,7 +301,7 @@ function runDocusaurusPhase({
         AXIAL_MUSE_BUILD_OUTPUT: outputPath,
         AXIAL_MUSE_BUILD_TRANSACTION_ROOT: transactionRoot,
       },
-      stdio: "inherit",
+      stdio,
     });
     if (result.error || result.signal || result.status !== 0) {
       phaseError = new BuildSiteError(failureCode, failureMessage, {
@@ -493,9 +494,14 @@ function assertActiveTransaction(transaction) {
   return state;
 }
 
-function validateTransactionRoot(state) {
+function validateTransactionRoot(state, {requireInputSeal = false} = {}) {
   const transactionRoot = state.transactionRoot;
-  if (transactionRoot === undefined) return;
+  if (transactionRoot === undefined) {
+    if (requireInputSeal) {
+      fail("BUILD_TRANSACTION_ROOT_IDENTITY", "私有 transaction 根在提交前发生变化。");
+    }
+    return undefined;
+  }
   try {
     const rootMetadata = lstatSync(transactionRoot);
     const temporaryRoot = realpathSync(tmpdir());
@@ -509,8 +515,12 @@ function validateTransactionRoot(state) {
       || !basename(transactionRoot).startsWith(TRANSACTION_ROOT_PREFIX)
     ) throw new TypeError("transaction root identity mismatch");
     const entries = readdirSync(transactionRoot).sort();
+    const hasInputSeal = entries.includes(INPUT_SEAL_FILE);
+    if (requireInputSeal && !hasInputSeal) {
+      throw new TypeError("transaction input seal missing");
+    }
     const allowedEntries = [TRANSACTION_OWNER_FILE];
-    if (entries.includes(INPUT_SEAL_FILE)) allowedEntries.push(INPUT_SEAL_FILE);
+    if (hasInputSeal) allowedEntries.push(INPUT_SEAL_FILE);
     if (entries.join("\n") !== allowedEntries.sort().join("\n")) {
       throw new TypeError("transaction root member mismatch");
     }
@@ -518,13 +528,36 @@ function validateTransactionRoot(state) {
     if (marker.bytes.toString("utf8") !== `production:${state.owner}\n`) {
       throw new TypeError("transaction owner marker mismatch");
     }
-    if (entries.includes(INPUT_SEAL_FILE)) {
-      readStablePrivateFile(resolve(transactionRoot, INPUT_SEAL_FILE));
-    }
+    return hasInputSeal
+      ? readStablePrivateFile(resolve(transactionRoot, INPUT_SEAL_FILE))
+      : undefined;
   } catch (error) {
     fail("BUILD_TRANSACTION_ROOT_IDENTITY", "私有 transaction 根在提交前发生变化。", {
       cause: error,
     });
+  }
+}
+
+function assertProductionArtifactSeal(state) {
+  try {
+    assertBuildLock(state);
+    const seal = validateTransactionRoot(state, {requireInputSeal: true});
+    const lines = seal.bytes.toString("utf8").split("\n");
+    if (
+      lines.length !== 4
+      || lines[0] !== "axial-muse-content-input-v1"
+      || lines[1] !== `owner:${state.owner}`
+      || !/^sha256:[0-9a-f]{64}$/u.test(lines[2])
+      || lines[3] !== ""
+    ) {
+      throw new TypeError("production artifact input seal mismatch");
+    }
+  } catch (error) {
+    fail(
+      "BUILD_ARTIFACT_CHECK_SEAL",
+      "production build 独立制品验收未产生 owner 绑定的完整输入 seal。",
+      {cause: error},
+    );
   }
 }
 
@@ -964,6 +997,70 @@ export function publishCandidateBuild({
     fail("BUILD_PUBLISH", "候选制品事务发布失败，调用前 build 已恢复。", {
       cause: error,
     });
+  }
+}
+
+export function runProductionArtifactCheck({root = ROOT} = {}) {
+  assertCanonicalRoot(root);
+  assertAuthorTransactionClear(root);
+  assertSupportedNodeVersion({root});
+  const owner = randomBytes(32).toString("hex");
+  let state;
+  let operationError;
+  try {
+    state = {
+      root,
+      owner,
+      lock: acquireBuildLock(root, owner),
+      transactionRoot: undefined,
+    };
+    state.transactionRoot = createTransactionRoot("production", owner);
+    assertAuthorTransactionClear(root);
+    runDocusaurusPhase({
+      root,
+      cliPath: resolveDocusaurusCli(root),
+      context: createBuildContext("production", owner),
+      transactionRoot: state.transactionRoot,
+      outputPath: resolve(root, "build"),
+      phase: "release",
+      arguments: ["axial-muse:check-production"],
+      failureCode: "BUILD_ARTIFACT_CHECK",
+      failureMessage: "production build 独立制品验收失败。",
+      stdio: "pipe",
+    });
+    assertProductionArtifactSeal(state);
+  } catch (error) {
+    operationError = error;
+  }
+
+  let cleanupError;
+  if (state !== undefined) {
+    try {
+      cleanupTransactionRoot(state);
+    } catch (error) {
+      cleanupError = error;
+    }
+    try {
+      releaseBuildLock(state);
+    } catch (error) {
+      cleanupError = cleanupError === undefined
+        ? error
+        : new BuildSiteError(
+            "BUILD_ARTIFACT_CHECK_CLEANUP",
+            "production build 独立制品验收私有根与锁清理同时失败。",
+            {cause: new AggregateError([cleanupError, error])},
+          );
+    }
+  }
+  if (operationError !== undefined || cleanupError !== undefined) {
+    if (operationError !== undefined && cleanupError !== undefined) {
+      fail(
+        "BUILD_ARTIFACT_CHECK_CLEANUP",
+        "production build 独立制品验收与私有状态清理同时失败。",
+        {cause: new AggregateError([operationError, cleanupError])},
+      );
+    }
+    throw operationError ?? cleanupError;
   }
 }
 

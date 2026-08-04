@@ -1,4 +1,9 @@
-import {readFileSync, realpathSync} from "node:fs";
+import {
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+} from "node:fs";
 import {join, resolve} from "node:path";
 
 export const CI_ACTIONS = Object.freeze({
@@ -13,6 +18,10 @@ export const CI_ACTIONS = Object.freeze({
   setupNode: Object.freeze({
     reference: "actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444",
     version: "v5.0.0",
+  }),
+  uploadArtifact: Object.freeze({
+    reference: "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+    version: "v7.0.1",
   }),
 });
 
@@ -90,6 +99,16 @@ const SHALLOW_CHECKOUT_STEP = actionStep(
   ],
 );
 
+const PRODUCTION_CHECKOUT_STEP = actionStep(
+  "Checkout exact production commit",
+  CI_ACTIONS.checkout,
+  [
+    "ref: \${{ github.sha }}",
+    "fetch-depth: 0",
+    "persist-credentials: false",
+  ],
+);
+
 const PRIMARY_NODE_STEP = actionStep(
   "Set up primary Node",
   CI_ACTIONS.setupNode,
@@ -131,6 +150,57 @@ const DOWNLOAD_PLANTUML_STEP = `      - name: Download pinned plantuml.jar
           curl -sSL -o plantuml.jar \\
             "https://github.com/plantuml/plantuml/releases/download/v\${PUML_VERSION}/plantuml-\${PUML_VERSION}.jar"
           echo "\${PUML_SHA256}  plantuml.jar" | sha256sum -c -`;
+
+const ASSERT_FRESH_PRODUCTION_CHECKOUT_STEP = runStep(
+  "Assert fresh production checkout",
+  "node scripts/quality/check-production-artifact-workspace.mjs",
+);
+
+const CHECK_RELEASE_STEP = `      - name: Check release package
+        id: release
+        shell: bash
+        env:
+          AXIAL_COMMIT_SHA: \${{ github.sha }}
+        run: |
+          set -euo pipefail
+          release_output="$(node scripts/quality/run-isolated-npm.mjs run-script check:artifact)"
+          if [[ "\${release_output}" =~ ^releaseContentSha256=([0-9a-f]{64})$ ]]; then
+            release_content_sha256="\${BASH_REMATCH[1]}"
+          else
+            echo "Release checker did not return one canonical digest." >&2
+            exit 1
+          fi
+          AXIAL_RELEASE_CONTENT_SHA256="\${release_content_sha256}" \\
+            node scripts/quality/prepare-production-artifact-upload.mjs`;
+
+const UPLOAD_ARTIFACT_STEP = [
+  "      - name: Upload production artifact",
+  "        id: upload",
+  `        uses: ${CI_ACTIONS.uploadArtifact.reference} # ${CI_ACTIONS.uploadArtifact.version}`,
+  "        with:",
+  "          name: axial-muse-site-\${{ github.sha }}-\${{ github.run_id }}-\${{ github.run_attempt }}",
+  "          path: dist/release/",
+  "          if-no-files-found: error",
+  "          retention-days: 30",
+  "          compression-level: 6",
+  "          overwrite: false",
+  "          include-hidden-files: false",
+  "          archive: true",
+].join("\n");
+
+const VALIDATE_ARTIFACT_OUTPUTS_STEP = `      - name: Validate production artifact outputs
+        id: identity
+        env:
+          AXIAL_ARTIFACT_ID: \${{ steps.upload.outputs.artifact-id }}
+          AXIAL_ARTIFACT_DIGEST: \${{ steps.upload.outputs.artifact-digest }}
+          AXIAL_BUILD_OPERATIONAL_SHA256: \${{ steps.release.outputs.build-operational-sha256 }}
+          AXIAL_RELEASE_CONTENT_SHA256: \${{ steps.release.outputs.release-content-sha256 }}
+          AXIAL_RELEASE_OPERATIONAL_SHA256: \${{ steps.release.outputs.release-operational-sha256 }}
+          AXIAL_REPOSITORY: \${{ github.repository }}
+          AXIAL_RUN_ID: \${{ github.run_id }}
+          AXIAL_RUN_ATTEMPT: \${{ github.run_attempt }}
+          AXIAL_COMMIT_SHA: \${{ github.sha }}
+        run: node scripts/quality/check-production-artifact-outputs.mjs`;
 
 function runStep(name, command, environmentLines = []) {
   return [
@@ -260,6 +330,65 @@ const JOBS = Object.freeze({
       ),
     ]),
   }),
+  "production-artifact": Object.freeze({
+    prefix: `  production-artifact:
+    name: Production artifact
+    needs:
+      - website-quality
+      - node-minimum
+      - diagrams
+      - supply-chain
+    if: github.repository == 'lyty1997/AxialMuseWebsite' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      artifact-id: \${{ steps.identity.outputs.artifact-id }}
+      artifact-digest: \${{ steps.identity.outputs.artifact-digest }}
+      release-content-sha256: \${{ steps.identity.outputs.release-content-sha256 }}
+      repository: \${{ steps.identity.outputs.repository }}
+      run-id: \${{ steps.identity.outputs.run-id }}
+      run-attempt: \${{ steps.identity.outputs.run-attempt }}
+      commit-sha: \${{ steps.identity.outputs.commit-sha }}
+
+    steps:`,
+    steps: Object.freeze([
+      PRODUCTION_CHECKOUT_STEP,
+      PRIMARY_NODE_STEP,
+      ASSERT_FRESH_PRODUCTION_CHECKOUT_STEP,
+      MATERIALIZE_PRIVATE_NODE_STEP,
+      runStep(
+        "Frozen dependency install",
+        "node scripts/quality/run-isolated-npm.mjs ci",
+      ),
+      runStep(
+        "Quality gates",
+        "node scripts/quality/run-isolated-npm.mjs run-script quality",
+      ),
+      runStep(
+        "Content history",
+        "node scripts/quality/run-content-history.mjs",
+      ),
+      runStep(
+        "Type check",
+        "node scripts/quality/run-isolated-npm.mjs run-script typecheck",
+      ),
+      runStep(
+        "Tests",
+        "node scripts/quality/run-isolated-npm.mjs run-script test",
+      ),
+      runStep(
+        "Production build",
+        "node scripts/quality/run-isolated-npm.mjs run-script build",
+      ),
+      runStep(
+        "Package production artifact",
+        "node scripts/quality/run-isolated-npm.mjs run-script package:artifact",
+      ),
+      CHECK_RELEASE_STEP,
+      UPLOAD_ARTIFACT_STEP,
+      VALIDATE_ARTIFACT_OUTPUTS_STEP,
+    ]),
+  }),
 });
 
 const JOB_ORDER = Object.freeze([
@@ -267,12 +396,13 @@ const JOB_ORDER = Object.freeze([
   "node-minimum",
   "diagrams",
   "supply-chain",
+  "production-artifact",
 ]);
 
 const FORBIDDEN_PATTERNS = Object.freeze([
   Object.freeze({
     code: "CI_WORKFLOW_FAILURE_BYPASS",
-    pattern: /(?:^|\n)\s*(?:continue-on-error|if)\s*:/u,
+    pattern: /(?:^|\n)\s*continue-on-error\s*:/u,
   }),
   Object.freeze({
     code: "CI_WORKFLOW_FAILURE_BYPASS",
@@ -280,7 +410,7 @@ const FORBIDDEN_PATTERNS = Object.freeze([
   }),
   Object.freeze({
     code: "CI_WORKFLOW_MATRIX",
-    pattern: /(?:^|\n)\s*(?:strategy|matrix|needs)\s*:/u,
+    pattern: /(?:^|\n)\s*(?:strategy|matrix)\s*:/u,
   }),
   Object.freeze({
     code: "CI_WORKFLOW_EXTERNAL_STATE",
@@ -300,7 +430,7 @@ const FORBIDDEN_PATTERNS = Object.freeze([
   }),
   Object.freeze({
     code: "CI_WORKFLOW_ARTIFACT",
-    pattern: /\bactions\/(?:upload|download)-artifact@/u,
+    pattern: /\bactions\/download-artifact@/u,
   }),
 ]);
 
@@ -375,6 +505,20 @@ function extractSteps(jobLines, jobName) {
   });
 }
 
+function assertProductionTopology(lines) {
+  const conditions = lines.filter((line) => /^\s+if\s*:/u.test(line));
+  if (
+    conditions.length !== 1
+    || conditions[0] !== "    if: github.repository == 'lyty1997/AxialMuseWebsite' && github.event_name == 'push' && github.ref == 'refs/heads/main'"
+  ) {
+    fail("CI_WORKFLOW_FAILURE_BYPASS");
+  }
+  const needs = lines.filter((line) => /^\s+needs\s*:/u.test(line));
+  if (needs.length !== 1 || needs[0] !== "    needs:") {
+    fail("CI_WORKFLOW_NEEDS");
+  }
+}
+
 function assertActionPins(source) {
   const references = source.split("\n").flatMap((line) => {
     const match = /^\s+uses: ([^ #]+)(?: # ([A-Za-z0-9.-]+))?$/u.exec(line);
@@ -385,9 +529,10 @@ function assertActionPins(source) {
     return [Object.freeze({reference: match[1], version: match[2] ?? ""})];
   });
   const expected = [
-    ...Array.from({length: 4}, () => CI_ACTIONS.checkout),
-    ...Array.from({length: 4}, () => CI_ACTIONS.setupNode),
+    ...Array.from({length: 5}, () => CI_ACTIONS.checkout),
+    ...Array.from({length: 5}, () => CI_ACTIONS.setupNode),
     CI_ACTIONS.setupJava,
+    CI_ACTIONS.uploadArtifact,
   ];
   if (references.length !== expected.length) fail("CI_WORKFLOW_ACTION_SET");
   const counts = new Map();
@@ -411,6 +556,7 @@ export function checkCiWorkflowSource(source) {
   for (const {code, pattern} of FORBIDDEN_PATTERNS) {
     if (pattern.test(source)) fail(code);
   }
+  assertProductionTopology(lines);
   assertActionPins(source);
   const jobs = extractJobs(lines);
   for (const jobName of JOB_ORDER) {
@@ -424,7 +570,7 @@ export function checkCiWorkflowSource(source) {
     }
   }
   return Object.freeze({
-    actionCount: 9,
+    actionCount: 12,
     jobCount: JOB_ORDER.length,
   });
 }
@@ -440,11 +586,30 @@ export function checkCiWorkflow(root) {
     fail("CI_WORKFLOW_ROOT");
   }
   if (canonicalRoot !== root) fail("CI_WORKFLOW_ROOT");
-  const path = join(root, ".github", "workflows", "ci.yml");
+  const directory = join(root, ".github", "workflows");
+  const path = join(directory, "ci.yml");
   let source;
   try {
+    const directoryMetadata = lstatSync(directory);
+    const entries = readdirSync(directory, {withFileTypes: true});
+    const fileMetadata = lstatSync(path);
+    if (
+      realpathSync(directory) !== directory
+      || directoryMetadata.isSymbolicLink()
+      || !directoryMetadata.isDirectory()
+      || entries.length !== 1
+      || entries[0].name !== "ci.yml"
+      || !entries[0].isFile()
+      || realpathSync(path) !== path
+      || fileMetadata.isSymbolicLink()
+      || !fileMetadata.isFile()
+      || fileMetadata.nlink !== 1
+    ) {
+      fail("CI_WORKFLOW_FILE_SET");
+    }
     source = readFileSync(path, "utf8");
-  } catch {
+  } catch (error) {
+    if (error instanceof CiWorkflowError) throw error;
     fail("CI_WORKFLOW_FILE");
   }
   return checkCiWorkflowSource(source);

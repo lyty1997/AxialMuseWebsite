@@ -152,6 +152,14 @@ const CONTENT_DECODER_RUNTIME_IMPORTS = Object.freeze({
     ]),
   }),
 });
+const RUNTIME_REDIRECT_IMPORTS = Object.freeze({
+  "src/build/content/runtime-redirects.ts": Object.freeze({
+    "../../../scripts/release/lib/runtime-redirects.mjs": Object.freeze([
+      "scripts/release/lib/runtime-redirects.mjs",
+      "scripts/release/lib/runtime-redirects.d.mts",
+    ]),
+  }),
+});
 const BUILD_INTERNAL_TEST_IMPORTS = Object.freeze({
   "tests/build/content-build-seal.test.ts": Object.freeze(new Set([
     "src/build/content/build-seal.ts",
@@ -412,7 +420,13 @@ function validateRootContracts(root, issues) {
         "根 package.json 不得改变 Docusaurus 生成 .js 文件的 CommonJS 解释边界。",
       );
     }
-    for (const scriptName of ["typecheck", "test", "build"]) {
+    for (const scriptName of [
+      "typecheck",
+      "test",
+      "build",
+      "package:artifact",
+      "check:artifact",
+    ]) {
       const allowed = RUN_SCRIPT_COMMANDS[scriptName];
       if (!allowed.includes(packageJson.scripts?.[scriptName])) {
         addIssue(
@@ -2920,6 +2934,32 @@ function validateSpecifier({
           "MODULE_BOUNDARY_UNRESOLVED_IMPORT",
           relativePath,
           `内容装配解码器文件缺失或不是普通文件：${approvedPath}。`,
+        );
+      }
+    }
+    return;
+  }
+  const approvedRuntimeRedirectFiles = RUNTIME_REDIRECT_IMPORTS[relativePath]?.[specifier];
+  if (approvedRuntimeRedirectFiles !== undefined) {
+    if (typeOnly) {
+      addIssue(
+        issues,
+        "MODULE_BOUNDARY_NODE_SPECIFIER",
+        relativePath,
+        "production 重定向适配器必须通过精确运行时 import 复用唯一实现。",
+      );
+      return;
+    }
+    for (const approvedPath of approvedRuntimeRedirectFiles) {
+      try {
+        const metadata = lstatSync(resolve(root, approvedPath));
+        if (!metadata.isFile() || metadata.isSymbolicLink()) throw new TypeError("not regular");
+      } catch {
+        addIssue(
+          issues,
+          "MODULE_BOUNDARY_UNRESOLVED_IMPORT",
+          relativePath,
+          `运行时重定向文件缺失或不是普通文件：${approvedPath}。`,
         );
       }
     }

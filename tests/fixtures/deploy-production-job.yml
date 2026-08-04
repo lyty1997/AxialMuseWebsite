@@ -1,0 +1,56 @@
+  deploy-production:
+    name: Deploy production
+    needs: production-artifact
+    if: github.repository == 'lyty1997/AxialMuseWebsite' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    concurrency:
+      group: production
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout exact production commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up primary Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: ".nvmrc"
+          package-manager-cache: false
+
+      - name: Verify production deploy identity before CAM Secret access
+        env:
+          AXIAL_WORKFLOW_RUN_ID: ${{ needs.production-artifact.outputs.run-id }}
+          AXIAL_ARTIFACT_ID: ${{ needs.production-artifact.outputs.artifact-id }}
+          AXIAL_COMMIT_SHA: ${{ needs.production-artifact.outputs.commit-sha }}
+          AXIAL_ARTIFACT_DIGEST: ${{ needs.production-artifact.outputs.artifact-digest }}
+          AXIAL_RELEASE_CONTENT_SHA256: ${{ needs.production-artifact.outputs.release-content-sha256 }}
+          AXIAL_REPOSITORY: ${{ needs.production-artifact.outputs.repository }}
+          AXIAL_RUN_ATTEMPT: ${{ needs.production-artifact.outputs.run-attempt }}
+          AXIAL_GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/deploy/check-production-deploy-identity.mjs
+
+      - name: Reverify identity and invoke fixed TAT command
+        env:
+          AXIAL_WORKFLOW_RUN_ID: ${{ needs.production-artifact.outputs.run-id }}
+          AXIAL_ARTIFACT_ID: ${{ needs.production-artifact.outputs.artifact-id }}
+          AXIAL_COMMIT_SHA: ${{ needs.production-artifact.outputs.commit-sha }}
+          AXIAL_ARTIFACT_DIGEST: ${{ needs.production-artifact.outputs.artifact-digest }}
+          AXIAL_RELEASE_CONTENT_SHA256: ${{ needs.production-artifact.outputs.release-content-sha256 }}
+          AXIAL_REPOSITORY: ${{ needs.production-artifact.outputs.repository }}
+          AXIAL_RUN_ATTEMPT: ${{ needs.production-artifact.outputs.run-attempt }}
+          AXIAL_GITHUB_TOKEN: ${{ github.token }}
+          AXIAL_TAT_REGION: ${{ vars.AXIAL_TAT_REGION }}
+          AXIAL_TAT_COMMAND_ID: ${{ vars.AXIAL_TAT_COMMAND_ID }}
+          AXIAL_TAT_INSTANCE_ID: ${{ vars.AXIAL_TAT_INSTANCE_ID }}
+          TENCENTCLOUD_SECRET_ID: ${{ secrets.TENCENTCLOUD_SECRET_ID }}
+          TENCENTCLOUD_SECRET_KEY: ${{ secrets.TENCENTCLOUD_SECRET_KEY }}
+        run: node scripts/deploy/dispatch-production.mjs
