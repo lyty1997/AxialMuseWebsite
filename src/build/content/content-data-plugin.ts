@@ -158,7 +158,10 @@ function createContentDataPluginModule(
               });
             }
             try {
-              if (session.phase === "release") session.writeBuildSeal();
+              if (session.phase === "release") {
+                writePrivateDateIndex(context.generatedFilesDir, session);
+                session.writeBuildSeal();
+              }
               session.assertBuildSeal();
               assertProductionArtifact(
                 session.content,

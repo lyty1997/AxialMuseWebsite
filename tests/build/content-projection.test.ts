@@ -945,6 +945,8 @@ async function invokeArtifactCheck(
   generatedFilesDirectory: string,
   options: Readonly<{
     failSealAssertionAt?: number;
+    onWriteBuildSeal?: () => void;
+    phase?: "check" | "release";
     trace?: {sealAssertions: number; staticAssertions: number; disposals: number};
   }> = {},
 ): Promise<Readonly<{
@@ -976,14 +978,16 @@ async function invokeArtifactCheck(
       trace.disposals += 1;
     },
   });
+  const phase = options.phase ?? "check";
   const session = Object.freeze({
     content,
     docsAdapterSession: Object.freeze({}),
     outputDirectory: buildDirectory,
-    phase: "check" as const,
+    phase,
     staticPlan,
     writeBuildSeal() {
-      throw new Error("check fixture must not write seal");
+      if (phase !== "release") throw new Error("check fixture must not write seal");
+      options.onWriteBuildSeal?.();
     },
     assertBuildSeal() {
       trace.sealAssertions += 1;
@@ -2008,6 +2012,45 @@ test("E-016 日期索引只在 postBuild 原子写入私有 generated files", as
     assert.equal(privateIndex.includes(ARTICLE_IDS.draft), false);
     assert.equal(sealWrites, 1);
     assert.deepEqual(postBuildOrder, ["static", "seal"]);
+  });
+});
+
+test("#33 release 验证在 fresh generated files 中重建私有日期索引", async () => {
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    rmSync(fixture.generatedFilesDirectory, {recursive: true, force: false});
+    mkdirSync(fixture.generatedFilesDirectory, {mode: 0o700});
+    chmodSync(fixture.generatedFilesDirectory, 0o700);
+    let sealWrites = 0;
+
+    await invokeArtifactCheck(
+      content,
+      fixture.buildDirectory,
+      fixture.generatedFilesDirectory,
+      {
+        phase: "release",
+        onWriteBuildSeal() {
+          assert.equal(
+            readFileSync(
+              resolve(fixture.generatedFilesDirectory, ARTICLE_DATE_INDEX_SOURCE_PATH),
+              "utf8",
+            ),
+            `${JSON.stringify(content.articleDateIndex, null, 2)}\n`,
+          );
+          sealWrites += 1;
+        },
+      },
+    );
+
+    assert.equal(sealWrites, 1);
+    assert.equal(
+      readFileSync(
+        resolve(fixture.generatedFilesDirectory, ARTICLE_DATE_INDEX_SOURCE_PATH),
+        "utf8",
+      ),
+      `${JSON.stringify(content.articleDateIndex, null, 2)}\n`,
+    );
   });
 });
 
