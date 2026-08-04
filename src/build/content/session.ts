@@ -30,7 +30,7 @@ const PHASE_ENV = "AXIAL_MUSE_BUILD_PHASE";
 const OUTPUT_ENV = "AXIAL_MUSE_BUILD_OUTPUT";
 const validatedContentBuildSessions = new WeakSet<object>();
 
-export type ContentBuildPhase = "build" | "check" | "verify";
+export type ContentBuildPhase = "build" | "check" | "verify" | "release";
 
 export interface ContentBuildSession {
   readonly content: LoadedValidatedContent;
@@ -71,7 +71,7 @@ function readPhaseAndOutput(
   let expectedName: string | undefined;
   let expectedOutput: string | undefined;
   if (mode === "production") {
-    expectedName = phase === "verify"
+    expectedName = phase === "verify" || phase === "release"
       ? "build"
       : `.axial-muse-build-candidate-${owner}`;
     expectedOutput = resolve(repositoryRoot, expectedName);
@@ -103,7 +103,12 @@ function readPhaseAndOutput(
     }
   }
   if (
-    (phase !== "build" && phase !== "check" && phase !== "verify")
+    (
+      phase !== "build"
+      && phase !== "check"
+      && phase !== "verify"
+      && phase !== "release"
+    )
     || typeof output !== "string"
     || !isAbsolute(output)
     || basename(output) !== expectedName
@@ -127,7 +132,7 @@ function readPhaseAndOutput(
     }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    if (phase === "check" || phase === "verify") {
+    if (phase === "check" || phase === "verify" || phase === "release") {
       failContentBuild("CONTENT_SESSION_OUTPUT", "验收阶段缺少待检查制品。", {
         sourcePath: "build",
       });

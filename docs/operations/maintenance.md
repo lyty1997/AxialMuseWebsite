@@ -1,14 +1,14 @@
 # 自动化维护与运行手册
 
 状态：draft
-最近更新：2026-07-27
+最近更新：2026-08-04
 适用范围：M0 腾讯云主站与项目体验子域名的自动发布、监测、备份、安全维护与故障处理
 
 ## 目的
 
 本文定义 `axialmuse.com` 主站及已登记项目体验上线后的最低运行标准，让日常维护依赖可重复检查和明确告警。首版由 Nginx 承载静态站点与静态项目体验，优先自动化发布、证书、健康检查和备份，不引入应用后端、数据库或第三方页面监测脚本。
 
-D-053 已固定 Docusaurus 官方静态能力、现有 PlantUML、Nginx/Certbot、GitHub Actions/TAT、Ubuntu/systemd 原生运维和 CI 门禁能力类别；D-073 至 D-077 固定框架、工具链、TypeScript、依赖与首次供应链准入边界，D-078 授权内部工程收敛，D-079 固定 Node 测试类型直接候选，E-005 固定静态 artifact 交付链路，E-010 至 E-015 固定 npm 启动前隔离、确定性 SPDX、Node ESM TypeScript 测试、HEAD 可达完整 Git 历史、同版本服务端 301 和 production artifact 自包含字节闭包。仓库已经具有 Docusaurus、真实依赖图和 production build 的本地实现；D-097 又把第一阶段可信 CI 接入当前工作区，D-098 路径传输修复与两个 Node 端点的全新冻结安装、完整代码/构建负载已通过本地验证。D-099 已从普通 push/PR CI 移除 live npm audit，静态供应链证据继续失败关闭；已观测的 18 个 high 依赖节点仍是未修复风险，但不再阻断普通 CI。因此本地第一阶段的确定性负载已通过，真实 GitHub run、required checks、生产 workflow、artifact、environment、服务器配置和定时任务仍未闭合或部署。
+D-053 至 D-079 与 E-005/E-010 至 E-015 已固定静态站、工具链、供应链、测试、历史、301、artifact、Nginx/Certbot、Actions/TAT 和 Ubuntu/systemd 运维边界。仓库已具有 #13/#33/#35/#14/#34 的 301、release、verifier、producer 和受限 dispatch 能力，但 canonical `main` artifact 与活动 TAT 尚待。#36 已完成服务器盘点、旧站清理、控制面核验、额外身份处置、D-119/D-120 SSH、D-122 OS UFW 和 D-124 软件事务；D-125 历史正式回执仍为 `environmental_inconclusive`。D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已返回 `status=complete outcome=committed`。D-129 的唯一维护重启已执行并确认新 boot，但完整 post-reboot 因 vendor declaration predicate 不满足而 pending。D-130 已记录所有者当前确认并完成新只读逐组件源码/契约的本地审计；D-132 首轮 formal 以 `remote-posture-exec-start-shape` 失败且没有 receipt。D-133 单次同 boot 当前分类已确认 TAT 为 `single-zero` 且 unit/fragment/process 门禁均为真，unattended-upgrades 为 `numeric-pair` 且 unit/fragment 门禁均为真；它不是 formal receipt。D-134 已本地完成严格 unit-aware v2 候选。后续获准的一轮 v2 formal 已使用同一 boot、间隔至少 10 秒的两条 fresh SSH 会话通过所有 gates，生成并独立校验 mode `0600`、被 Git 忽略的私有 receipt；结果为 `status=accepted-with-residuals`、`vendorState=fully_absent`、`aggregateDisposition=accepted_residual_unattributed`、`serverMutationPerformed=false`，且不改写 D-129/D-132。除正常 SSH/sudo 审计副作用外，本轮没有服务器或云资源写操作。#36 只剩 canonical `main` 后的 verifier 现场安装，#37 继续暂停。
 
 ## 服务目标
 
@@ -70,7 +70,7 @@ D-077 已固定 npm 原生能力加零第三方依赖策略脚本、SPDX JSON、
 
 上述实现最初由离线 fixture 验收；D-081/D-082 授权后，真实解析、1,225 项精确候选/admissions、35/11/12 补充法律证据、正式 SBOM/evidence/NOTICE、当时漏洞全零的 audit、最终决定及 Node 24.18.0/24.16.0 双端点证明均已闭合。最初诊断的 20 个 moderate、1 个 high 已由两项精确传递 override 后的首轮最终 lock 和当时 audit 全零结果取代；2026-07-26 后续观测到的 18 个 high 仍是未修复风险，并按 D-099 移出普通 CI 而非视为已解决。后续联网动作继续受官方来源与受限证据边界约束；新增依赖、Action、脚本例外和其他外部操作继续受原门禁约束。缺失输入、零测试、浅/不完整历史、缺失或预存构建制品、静态重定向页、build 竞争修改或 payload/规则摘要不一致必须失败，不能沿用迁移前检查中对不存在入口的跳过行为；所有发布必需 job 通过后，`production-artifact` 才能在 fresh runner 重建、重验并封装最终 build。
 
-D-065 的文章创建命令只允许作者在获准的 Linux 作者环境显式运行；Git hook、CI、预览、发布和生产内容门禁只能失败并定位非法内容，不得生成、修复、暂存或提交。D-066/D-067/D-072/D-073 要求获准作者工具、质量、PlantUML 和构建执行器使用 Node 24，主/最低端点以各自随附 npm 读取同一 lockfile，任何版本、配置、lockfile、外部请求或冻结安装偏离都失败。D-074/D-076 与 D-079/E-012 分别固定生产源码类型和独立测试边界；E-013 至 E-015 固定完整历史、同版本 301 和 production job 自包含重建。D-097 至 D-099 已把 workflow 收敛为固定 SHA 的官方 Action、Node 24 主/最低端点、完整 checkout、E-010 隔离冻结安装、独立 `quality`/`typecheck`/`test`/`build`、E-013 历史门禁、PlantUML 和静态供应链证据四类 job，并依 D-100 纳入专题分支；D-102 把依赖冻结的 E-013 从零第三方依赖 `quality` 拆为两个构建 job 的安装后独立入口，避免无 `node_modules/` 的 pre-commit 被阻断。普通 CI 不运行 live audit。D-101 只授权同名临时 ref 推送，该 ref 不触发现有 `main`/`dev` workflow，因此仍未取得真实 GitHub run。#21 的候选报告、正式三制品、最终决定和真实双端点依赖闭环，以及 TypeScript、E-012 runner、内容解码和模块边界已经完成；#24 作者创建工具也已完成本地验收并依 D-103 获准纳入当前专题分支提交及同名临时 ref，服务端 301、production artifact 和 preview 仍未完成。真实内容树除获准作者显式创建操作外始终只读，本轮未创建真实文章。
+D-065 的文章创建命令只允许作者在获准 Linux 环境显式运行；Git hook、CI、预览和发布门禁不得生成或修复内容。D-066 至 D-079 与 E-012 至 E-015 固定 Node 24、类型、测试、完整历史、301 和 production job 自包含重建；D-097 至 D-102 已形成对应 workflow，#13/#33/#35/#14 已形成发布链仓库能力。尚未完成 #8 preview、#14 canonical `main` artifact，以及 #36 在有效 D-130 unit-aware v2 receipt 已形成后仍待的 verifier 现场安装。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已闭合当前内容关系，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成，D-129/D-132 失败历史保持原状。真实内容树除获准作者操作外始终只读。
 
 D-080 已单独完成当前 Linux 作者用户的固定 nvm/Node 24 安装与本地 pre-commit 自动选择：系统和新 Bash 默认 Node 保持不变，hook 不读取用户 npm `prefix`、不修改 shell 初始化或 alias，缺少精确运行时时失败且不联网。#24 文章创建工具已完成本地验收并依 D-103 获准纳入当前专题分支提交及同名临时 ref；这不改变系统默认 Node，也不等于远端验收或授权创建真实文章。
 
@@ -82,22 +82,22 @@ D-067/D-097 的 Ubuntu CI 边界与当前实施状态如下：
 - 只有明确的受审依赖变更可以在主基线按 D-077 生成候选 `package-lock.json`；候选经过证据审查和人工准入后，才可与对应 `package.json` 一并进入正常冻结安装。普通作者验证、非依赖 PR、最低端点和发布流程不得改写依赖图。首次迁移必须证明两个 npm 端点能读取同一 lockfile；任一端点失败时阻止迁移并回到依赖决策，不得重写锁文件掩盖不兼容。
 - Node 24 安全 patch 被发现后及时发起独立升级 PR；其他 patch 至少每月检查。升级 PR 先修改 `.nvmrc` 候选值，Ubuntu CI 的主任务和最低版本任务、PlantUML 及届时发布必需门禁通过后才允许合并，不得自动合并，也不得在普通 patch PR 中修改 `engines` 边界。
 
-D-097 至 D-099 已在工作区实现三个官方 Action 的精确 commit SHA、Node `24.18.0` 与 `24.16.0` 两个 job、同一隔离负载、D-075 模块边界、E-013 检查器与真实 Git DAG fixture、完整 checkout、四 job 拓扑和静态供应链证据；Ubuntu runner 通过固定 `actions/setup-node` 取得版本，不再引入 nvm 安装步骤。两端已在全新任务私有副本中仅连接官方 npm registry 完成冻结安装，并分别通过 `quality`、`typecheck`、223/223 测试与 production `build`；D-098 的机器路径门禁也已由两个不同私有根的真实 build 验证。此前 live audit 对 1,345 个依赖节点报告 18 个 high、0 个 critical，源于 `brace-expansion` advisory 经 `minimatch`/`serve-handler` 扩散到 Docusaurus 图；D-099 将 live audit 从普通 CI 移除，因此该结果继续作为 Dependabot Alerts 与人工维护跟踪的未修复风险，而不是 CI blocker。仍待闭合的是提交/推送后的真实 GitHub run、required check context 与 branch protection/ruleset，以及 production artifact/upload/deploy；依赖图若发生变化则另须按 D-077 完成失败关闭重准入。`tsc --noEmit`、E-012 测试与 Docusaurus build 的 npm script 名称已由 CODE-016 固定为 `typecheck`、`test` 与 `build`；CI 只经隔离 `run-script` 调用。E-005/E-015 仍要求 `production-artifact` 在 fresh runner 自包含重建、重验和封装，生产服务器不安装 Node/npm、不拉源码、不执行构建；相关上传 Action、artifact 读取边界、凭证、GitHub `production` environment、TAT 和服务器配置仍须另行准入、核验和授权。
+D-097 至 D-099 已实现固定 Action SHA、Node 24 双端点、完整 checkout、隔离负载、历史与静态供应链证据；已观测的 18 个 high 依赖节点继续按未修复风险跟踪。#33/#35/#14 已形成 release、服务器 verifier 与 producer 能力，但尚无对应 GitHub-hosted 真实 artifact。#36 已完成服务器盘点、SSH、OS UFW 与软件事务；D-125 历史回执仍为 `environmental_inconclusive`，D-126 已闭合当前内容关系，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成。D-129 的唯一重启已执行但完整后验 pending；D-132 首轮 formal 失败历史保持不变，D-133/D-134 完成分类与本地 v2 契约后，后续获准的 unit-aware v2 formal 已形成并独立校验 `accepted-with-residuals` 私有 receipt。历史因果仍未证明；#36 只剩 canonical `main` 后的 verifier 现场安装，再基线和 #37 继续失败关闭。生产服务器不安装 Node/npm、不拉源码、不执行构建。
 
 影响 UI 的 PR 还必须在 E-009 的局域网静态预览制品完成桌面端、平板端和移动端截图。预览状态须报告活动 artifact SHA 与待验收提交一致；每个 HTML 均为 `noindex, nofollow`、无 sitemap，且 draft 只在“草稿”组可见。M0 没有公网 PR 预览，截图和质量结果共同作为合并证据；当前脚本尚未迁移完成，因此迁移前 `public/` 截图不能作为 Docusaurus 页面验收。
 
 ### 生产发布
 
-当前四个 prerequisite 只在工作区形成第一阶段 workflow，尚未成为 `main` required checks；以下 `production-artifact`、上传、`production` environment、CAM/TAT 和服务器步骤仍是目标契约，均未实现或部署。
+当前 prerequisite workflow 尚未成为 `main` required checks；#14/#33/#35/#34 已形成 producer、release、verified staging 与受限 dispatch 候选，但没有 canonical `main` 真实 producer、artifact、invocation 或真实 ZIP 复验。D-119/D-120、D-122、D-124 已完成；D-125 历史回执仍为 `environmental_inconclusive`。D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成。D-129 的唯一重启已发生，但完整 post-reboot 仍 pending；D-132 首轮 formal 已失败且没有 receipt，D-133/D-134 的分类与本地契约本身不替代 formal。后续获准的 unit-aware v2 formal 已形成并独立校验 `accepted-with-residuals` 私有 receipt，且 `serverMutationPerformed=false`；D-129/D-132 历史不变。#36 只剩 canonical `main` 后的 verifier 现场安装；D-136 已确认先晋级仓库前置、再安装、最后回填证据的两阶段节奏，并已取得第一阶段 topic -> `dev` -> `main` Git 晋级授权；服务器写入、verifier 安装和后续 evidence 晋级仍须分别授权。#37 的 TAT/账本/激活/恢复继续禁止，#34 活动 environment/CAM/TAT 接线也未完成。
 
 1. PR required checks 与本地预览验收均通过。
 2. PR 合入 `main`。
 3. GitHub Actions 对精确 `GITHUB_SHA` 运行 `website-quality`、`node-minimum`、`diagrams`、`supply-chain`；四项必须全部成功，不能用 `always()`、`continue-on-error` 或 skipped 结果绕过。D-099 后 `supply-chain` 的发布必需结论只来自静态供应链证据，普通 CI 不执行 live audit。
 4. 非 matrix `production-artifact` 在 fresh runner 对同一 SHA 完整 checkout，验证 `HEAD` 后证明 checkout 中没有预存 `build/`/`dist/`，再以全新隔离 cache 冻结安装，并依次重新执行主端点零第三方依赖 `quality`、独立 E-013 历史入口、`tsc --noEmit`、E-012 Node ESM 测试和 Docusaurus production build，同时完成资源白名单与制品泄漏检查。它不下载 `website-quality` 输出，不读取 preview、原始素材目录或本地旧 build。
 5. 同一 job 紧接着对该唯一 `build/` 计算前后树摘要，在 `dist/release/` 生成 `payload/`、确定性 `metadata/runtime-redirects.json`、`metadata/nginx/redirects.conf`、release 身份和逐文件摘要；独立复验后，从 exact release 全文件树计算不写入 artifact 的 `releaseContentSha256`，随即只上传一次并取得外层 `artifactDigest`。`deploy-production` 只消费 artifact ID、两个独立摘要及 repository/run/SHA job outputs，不按名称、latest 或跨 run 搜索。
-6. `production` environment job 只以 `contents: read`、`actions: read` 的 `GITHUB_TOKEN` 复核 canonical `refs/heads/main` 仍等于本次 SHA，并验证当前 run/artifact/head SHA/外层 digest；通过前不得引用 CAM Secret 或调用腾讯云 API。随后最小权限 CAM 只向指定 TAT command 传递 workflow run/artifact 标识、提交 SHA、`artifactDigest` 与 `releaseContentSha256`。旧 run 晚到、人工重跑旧 SHA 或 main 已移动都失败；历史恢复另行授权。
-7. 服务器从固定仓库读取 artifact 元数据，完成身份、摘要、归档路径安全和内部文件清单校验后，把已验证 `payload/` 与两个可部署派生文件安装到同一 `releases/<sha>/payload/`、`config/`；其余 metadata 不安装，任何 metadata 都不进入 Web Root。服务器不拉取源码、不运行 Node/npm，也不从源码 checkout 执行脚本。
-8. root-owned 固定脚本生成只引用同 SHA payload/redirect config 的 `site-release.conf`，并在隔离本机 Nginx 候选上验证全部规则。部署锁内再用 root-owned URL 暴露账本校验每个历史路径可解析、每条历史边的 source/target 收敛到同一当前 200。候选的全部规范 200 路径和新增或改指的 registered 301 边必须在 reload 前只追加到账本；`canonical-slash` 不单独入边账本，但其 canonical target 已由路由预写保护。没有兼容 fallback 时默认停止，只有单独生产授权可选择 forward-only；首次发布新 canonical URL 时通常即属于该情形。
+6. `production` environment job 只以 `contents: read`、`actions: read` 的 `GITHUB_TOKEN` 复核 canonical `refs/heads/main` 仍等于本次 SHA，并验证当前 run/artifact/head SHA/外层 digest；通过前不得引用 CAM Secret 或调用腾讯云 API。随后最小权限 CAM 只向指定 TAT command 传递 workflow run/artifact 标识、提交 SHA、`artifactDigest` 与 `releaseContentSha256`。旧 run 晚到、人工重跑旧 SHA 或 main 已移动都失败；历史恢复另行授权。`InvokeCommand` 返回 invocation ID 只代表调度被接受，不能把该时刻标记成 deployment 成功。
+7. 服务器从固定仓库读取 artifact 元数据并下载到私有 staging；root-owned verifier 安装副本核对外层摘要、安全 ZIP 边界、独立整树摘要、内部 metadata/清单/运行规则和提交身份，成功只形成 `verified-release`，不安装、不激活。服务器不拉取源码、不运行 Node/npm，也不从源码 checkout 执行脚本。
+8. #37 在同一个持续持有生产 concurrency 的 job 中，有界查询精确 invocation/command/instance task 至唯一终态；非 `SUCCESS`、超时、身份不一致或结果缺失都失败。成功后在部署锁内复核 verified staging 身份与整树摘要，再把 `payload/` 与两个可部署派生文件安装到同一 `releases/<sha>/payload/`、`config/`；其余 metadata 不安装，任何 metadata 都不进入 Web Root。root-owned 固定脚本生成只引用同 SHA payload/redirect config 的 `site-release.conf`，并在隔离本机 Nginx 候选上验证全部规则，再用 URL 暴露账本校验每个历史路径可解析、每条历史边的 source/target 收敛到同一当前 200。候选的全部规范 200 路径和新增或改指的 registered 301 边必须在 reload 前只追加到账本；`canonical-slash` 不单独入边账本，但其 canonical target 已由路由预写保护。没有兼容 fallback 时默认停止，只有单独生产授权可选择 forward-only；首次发布新 canonical URL 时通常即属于该情形。
 9. 账本预写成功后才切换 `current`、执行 `nginx -t` 和 graceful reload，再逐条检查 301、唯一 `Location`、查询保留、目标 200 与关键静态页面。失败只能整版恢复预选的兼容 release；forward-only 则保持历史闭包并向前修复。成功后核对预写摘要并完成账本备份与部署审计记录，随后才标记 deployment 成功；不得把规范路由延迟到冒烟后追加。
 10. GitHub runner 从公网检查 HTTPS、canonical、登记和尾斜杠重定向、关键锚点和资源；发布者记录 run、artifact、payload/规则摘要、账本前后摘要、fallback/forward-only 结论、TAT invocation、部署 SHA、时间和验证结论。
 
@@ -124,6 +124,8 @@ M0 在 GitHub Actions 增加以下计划任务：
 GitHub 计划任务可能延迟，不作为分钟级监控。M0 不注入浏览器端监测脚本；需要高频告警时再评估服务端外部监控及其数据边界。
 
 ## 服务器例行任务
+
+2026-07-30 的 #36 盘点确认 Ubuntu 自动安全更新与两个 apt timer 已启用且不自动重启；D-122 已完成 OS UFW 重启前稳态，D-124 已完成六包升级与七包 Certbot 最小安装，当时的软件后验通过且无 ACME 状态。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已闭合当前内容关系，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成。D-129 的唯一维护重启已执行并确认新 boot，原冻结 post-reboot 因 vendor declaration predicate 不满足而 pending；D-132 首轮 formal 在 `remote-posture-exec-start-shape` 失败且没有 receipt。D-133 单次当前分类确认 TAT 为 `single-zero` 且既有 unit/fragment/process 门禁为真，unattended-upgrades 为 `numeric-pair` 且 unit/fragment 门禁为真；该诊断不构成 formal。D-134 完成 unit-aware v2 本地修正后，后续获准的一轮 formal 已在同一 boot 的两条 fresh SSH 会话中间隔至少 10 秒通过所有 gates，结果为 `status=accepted-with-residuals`、`vendorState=fully_absent`、`aggregateDisposition=accepted_residual_unattributed`、`serverMutationPerformed=false`；私有 receipt 已独立校验，D-129/D-132 不变。任何服务恢复或第二次重启仍须新授权。verifier 安装还须等待 bootstrap、verifier 与 golden 同一提交进入 canonical `main` 并重新取得现场授权。
 
 ### 每日
 
