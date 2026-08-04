@@ -358,6 +358,15 @@ function sanitizedBuildDiagnostic(
 test("I-14/I-15 真实 production build 与 Chromium 回归覆盖公开展示和主题", async () => {
   assert.equal(process.platform, "linux", "真实 Docusaurus fixture 只允许在 Linux 运行");
   const repositoryRoot = assertOrdinaryDirectory(realpathSync(process.cwd()), "仓库根");
+  const primaryNodeVersion = readFileSync(
+    resolve(repositoryRoot, ".nvmrc"),
+    "utf8",
+  );
+  assert.match(
+    primaryNodeVersion,
+    /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\n$/u,
+  );
+  const isPrimaryRuntime = primaryNodeVersion === `${process.versions.node}\n`;
   const temporaryParent = realpathSync(tmpdir());
   const temporaryRoot = mkdtempSync(
     join(temporaryParent, "axial-muse-public-presentation-"),
@@ -669,40 +678,46 @@ test("I-14/I-15 真实 production build 与 Chromium 回归覆盖公开展示和
         process.umask(previousUmask);
       }
     })();
-    assert.equal(
-      previewResult.status,
-      0,
-      [
-        "真实草稿 fixture preview build 失败。",
-        sanitizedBuildDiagnostic(previewResult.stdout, repositoryRoot, temporaryRoot),
-        sanitizedBuildDiagnostic(previewResult.stderr, repositoryRoot, temporaryRoot),
-      ].join("\n"),
-    );
     assert.equal(previewResult.signal, null);
     assert.equal(previewResult.error, undefined);
-    assert.equal(existsSync(resolve(previewCandidate, "__docusaurus")), false);
-    assert.equal(existsSync(resolve(previewCandidate, "sitemap.xml")), false);
-    assert.equal(lstatSync(resolve(previewCandidate, "main.js")).mode & 0o022, 0);
-    const previewWriting = readFileSync(resolve(previewCandidate, "writing/index.html"), "utf8");
-    const previewDraft = readFileSync(
-      resolve(previewCandidate, "writing/draft-fixture-article/index.html"),
-      "utf8",
-    );
-    assertContainsAll(previewWriting, ["草稿", "Draft Fixture Article"]);
-    assertContainsAll(previewDraft, [
-      "Draft Fixture Article",
-      "DRAFT-PREVIEW-BODY-27",
-      "https://www.axialmuse.com/writing/draft-fixture-article/",
-    ]);
-    for (const previewHtml of listFilesWithSuffix(previewCandidate, ".html")) {
-      assertExactPreviewRobots(readFileSync(previewHtml, "utf8"));
+    if (!isPrimaryRuntime) {
+      assert.equal(previewResult.status, 1);
+      assert.match(previewResult.stderr, /\[BUILD_PREVIEW_RUNTIME_NODE\]/u);
+      assert.equal(existsSync(previewCandidate), false);
+    } else {
+      assert.equal(
+        previewResult.status,
+        0,
+        [
+          "真实草稿 fixture preview build 失败。",
+          sanitizedBuildDiagnostic(previewResult.stdout, repositoryRoot, temporaryRoot),
+          sanitizedBuildDiagnostic(previewResult.stderr, repositoryRoot, temporaryRoot),
+        ].join("\n"),
+      );
+      assert.equal(existsSync(resolve(previewCandidate, "__docusaurus")), false);
+      assert.equal(existsSync(resolve(previewCandidate, "sitemap.xml")), false);
+      assert.equal(lstatSync(resolve(previewCandidate, "main.js")).mode & 0o022, 0);
+      const previewWriting = readFileSync(resolve(previewCandidate, "writing/index.html"), "utf8");
+      const previewDraft = readFileSync(
+        resolve(previewCandidate, "writing/draft-fixture-article/index.html"),
+        "utf8",
+      );
+      assertContainsAll(previewWriting, ["草稿", "Draft Fixture Article"]);
+      assertContainsAll(previewDraft, [
+        "Draft Fixture Article",
+        "DRAFT-PREVIEW-BODY-27",
+        "https://www.axialmuse.com/writing/draft-fixture-article/",
+      ]);
+      for (const previewHtml of listFilesWithSuffix(previewCandidate, ".html")) {
+        assertExactPreviewRobots(readFileSync(previewHtml, "utf8"));
+      }
+      const previewBrowserReceipt = await runThemeBrowserRegression({
+        buildRoot: previewCandidate,
+      });
+      console.log(
+        `E-009 preview browser regression receipt: ${JSON.stringify(previewBrowserReceipt)}`,
+      );
     }
-    const previewBrowserReceipt = await runThemeBrowserRegression({
-      buildRoot: previewCandidate,
-    });
-    console.log(
-      `E-009 preview browser regression receipt: ${JSON.stringify(previewBrowserReceipt)}`,
-    );
   } catch (error) {
     operationError = error;
   } finally {
