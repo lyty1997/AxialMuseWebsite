@@ -1,7 +1,7 @@
 # 主站目标架构
 
 状态：active
-最近更新：2026-08-03
+最近更新：2026-08-04
 适用范围：主站内容构建、未来中央账户、评论服务和独立项目服务的职责边界
 
 ## 决策依据
@@ -240,7 +240,7 @@ Docusaurus 内部不使用 articleId 代替框架 ID。首版文章不填写原�
 5. 浏览文章、项目介绍和个人主页不依赖数据库或动态 API。
 6. 当前没有登录、评论或试用能力时，页面不得将其表达为已上线功能。
 
-Docusaurus、Node/npm、严格 TypeScript、内容身份和首次供应链协议已由 D-051 至 D-077 固定；D-078 至 D-080 与 E-001 至 E-016 又关闭了 M0 内容、URL、注册表、主题、构建、artifact、预览、素材、供应链、测试、历史、服务端 301 和单一内容装配边界。#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端闭环；D-097 至 D-103、#12、#24 与 #32 已完成专题实现和本地验收，仍依 D-104 等待组合树远端闭环。#13/#33/#35 已形成 release 输入、封装和服务器 verifier，#14 producer/upload 已完成本地接线。#36 已完成 D-119/D-120 SSH、D-122 OS UFW 重启前稳态和 D-124 软件事务；D-125 的历史正式回执仍为 `environmental_inconclusive`。D-126 以 `status=complete oracleMatch=true` 关闭当前内容关系缺口后，用户在 D-128 接受剩余历史不确定性并确认云层当时为与 OS UFW 匹配的单一 SSH 来源；唯一正式 component-aware transition 返回 `status=complete outcome=committed`，授权已消费且清理完成。D-129 的唯一维护重启已经执行且 boot 改变，但完整 post-reboot 因 vendor declaration predicate 不满足而保持 pending；没有执行第二次重启、reload、再基线或恢复写入。D-130 已记录所有者对当前主机侧与云控制面的正常确认，并完成新的只读逐组件验收源码与本地反例审计；formal receipt 尚未形成。#8 预览、#14 canonical `main` 真实 artifact、#36 的 D-130 receipt 与 verifier 安装，以及 #37 部署仍待；确认前暂停相应服务器动作。服务器、凭证、后续仓库门禁和生产操作仍须取得各自授权；系统默认 Node 22 与 `public/` 只描述迁移期事实。
+Docusaurus、Node/npm、严格 TypeScript、内容身份和首次供应链协议已由 D-051 至 D-077 固定；D-078 至 D-080 与 E-001 至 E-016 又关闭了 M0 内容、URL、注册表、主题、构建、artifact、预览、素材、供应链、测试、历史、服务端 301 和单一内容装配边界。#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端闭环；D-097 至 D-103、#12、#24 与 #32 已完成专题实现和本地验收，仍依 D-104 等待组合树远端闭环。#13/#33/#35 已形成 release 输入、封装和服务器 verifier，#14 producer/upload 已完成本地接线。#36 已完成 D-119/D-120 SSH、D-122 OS UFW 重启前稳态和 D-124 软件事务；D-125 的历史正式回执仍为 `environmental_inconclusive`。D-126 以 `status=complete oracleMatch=true` 关闭当前内容关系缺口后，用户在 D-128 接受剩余历史不确定性并确认云层当时为与 OS UFW 匹配的单一 SSH 来源；唯一正式 component-aware transition 返回 `status=complete outcome=committed`，授权已消费且清理完成。D-129 的唯一维护重启已经执行且 boot 改变，但原完整 post-reboot 因 vendor declaration predicate 不满足而保持 pending；没有执行第二次重启、reload、再基线或恢复写入。D-130 已记录所有者对当前主机侧与云控制面的正常确认；D-132 首轮 formal 失败后，D-133/D-134 完成 unit 归因和 unit-aware v2 修正。D-135 已以两条 fresh 同 boot 的正式只读观测形成有效 v2 receipt，结果为 `accepted-with-residuals`，全部当前逐组件 gates 为真且 `serverMutationPerformed=false`，D-129/D-132 历史不改写。#8 预览、#14 canonical `main` 真实 artifact、#36 verifier 现场安装，以及 #37 部署仍待；确认前暂停相应服务器动作。服务器、凭证、后续仓库门禁和生产操作仍须取得各自授权；系统默认 Node 22 与 `public/` 只描述迁移期事实。
 
 ## 首版工程技术基线
 
