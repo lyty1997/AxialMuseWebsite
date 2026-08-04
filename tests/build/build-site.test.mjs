@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  chmodSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
@@ -18,9 +19,13 @@ import {
   BuildSiteError,
   candidateOutputPath,
   captureCandidateBuildEvidence,
+  materializePreviewConfigChunks,
   parseBuildArguments,
   publishCandidateBuild,
+  runProductionArtifactCheck,
   runProductionBuild,
+  readPreviewBuildRequest,
+  runPreviewBuild,
 } from "../../scripts/build/build-site.mjs";
 
 const PROJECT_ROOT = resolve(import.meta.dirname, "../..");
@@ -32,19 +37,147 @@ function hasBuildCode(code) {
 function writeFixture(root, relativePath, contents = "") {
   const path = resolve(root, relativePath);
   mkdirSync(dirname(path), {recursive: true});
-  writeFileSync(path, contents, "utf8");
+  writeFileSync(path, contents, {encoding: "utf8", mode: 0o644});
+  chmodSync(path, 0o644);
 }
 
-test("I-12 构建参数封闭解析 production/preview 且 preview 执行仍由 #8 失败关闭", () => {
+test("E-009 development config chunk 只在模块已合并且映射缺文件时补齐", () => {
+  const root = mkdtempSync(join(tmpdir(), "axial-muse-preview-config-chunk-"));
+  const generatedFilesDirectory = resolve(root, "generated");
+  const candidatePath = resolve(root, "candidate");
+  const chunkName = "config---projects-5-e-9-87c";
+  try {
+    mkdirSync(generatedFilesDirectory, {mode: 0o700});
+    mkdirSync(candidatePath, {mode: 0o700});
+    writeFixture(
+      generatedFilesDirectory,
+      "routesChunkNames.json",
+      `${JSON.stringify({
+        "/projects/-17c": {config: chunkName},
+        "/writing/-5e1": {config: chunkName},
+      })}\n`,
+    );
+    writeFixture(
+      candidatePath,
+      "main.js",
+      [
+        `(self["webpackChunkfixture"] = self["webpackChunkfixture"] || []);`,
+        `"../../transaction/generated/docusaurus.config.mjs"(module) {}`,
+        `const registry = {"${chunkName}": [() => Promise.resolve(/* import() */).then(require.bind(require, "../../transaction/generated/docusaurus.config.mjs"))]};`,
+        "",
+      ].join("\n"),
+    );
+    assert.deepEqual(materializePreviewConfigChunks({
+      candidatePath,
+      generatedFilesDirectory,
+    }), [chunkName]);
+    const chunkPath = resolve(candidatePath, `${chunkName}.js`);
+    assert.equal(
+      readFileSync(chunkPath, "utf8"),
+      `(self["webpackChunkfixture"] = self["webpackChunkfixture"] || []).push([["${chunkName}"],{}]);\n`,
+    );
+    assert.deepEqual(materializePreviewConfigChunks({
+      candidatePath,
+      generatedFilesDirectory,
+    }), []);
+    rmSync(chunkPath);
+    writeFixture(
+      candidatePath,
+      "main.js",
+      [
+        `(self["webpackChunkfixture"] = self["webpackChunkfixture"] || []);`,
+        `"../../transaction/generated/docusaurus.config.mjs"(module) {}`,
+        `eval("{\\n    \\"${chunkName}\\": [\\n        ()=>Promise.resolve(/* import() */).then(require.bind(require, \\"../../transaction/generated/docusaurus.config.mjs\\"))\\n    ]\\n}");`,
+        "",
+      ].join("\n"),
+    );
+    assert.deepEqual(materializePreviewConfigChunks({
+      candidatePath,
+      generatedFilesDirectory,
+    }), [chunkName]);
+    rmSync(chunkPath);
+    writeFixture(candidatePath, "main.js", `(self["webpackChunkfixture"] = []);\n`);
+    assert.throws(
+      () => materializePreviewConfigChunks({candidatePath, generatedFilesDirectory}),
+      hasBuildCode("BUILD_PREVIEW_CONFIG_CHUNK"),
+    );
+    assert.equal(existsSync(chunkPath), false);
+  } finally {
+    rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("I-12/E-009 构建参数封闭解析 production/preview 且两种模式均可执行", () => {
   assert.deepEqual(parseBuildArguments(["--mode", "production"]), {mode: "production"});
   assert.deepEqual(parseBuildArguments(["--mode", "preview"]), {mode: "preview"});
   assert.doesNotThrow(() => assertBuildModeAvailable("production"));
-  assert.throws(() => assertBuildModeAvailable("preview"), hasBuildCode("BUILD_MODE_UNAVAILABLE"));
+  assert.doesNotThrow(() => assertBuildModeAvailable("preview"));
   assert.throws(() => parseBuildArguments([]), hasBuildCode("BUILD_ARGUMENTS"));
   assert.throws(
     () => parseBuildArguments(["--mode", "other"]),
     hasBuildCode("BUILD_MODE"),
   );
+});
+
+test("E-009 preview 请求绑定仓库外私有状态根与 sha.pid 候选", {
+  skip: process.platform !== "linux",
+}, () => {
+  const outer = mkdtempSync(join(tmpdir(), "axial-muse-preview-request-"));
+  const root = resolve(outer, "repository");
+  const systemTemporaryRoot = resolve(outer, "system-temporary");
+  const stateRoot = resolve(outer, "state");
+  const commitSha = "9".repeat(40);
+  const controllerPid = "4321";
+  try {
+    for (const path of [root, systemTemporaryRoot, stateRoot]) {
+      mkdirSync(path, {mode: 0o700});
+      chmodSync(path, 0o700);
+    }
+    for (const name of ["candidates", "releases", "run", "logs"]) {
+      const path = resolve(stateRoot, name);
+      mkdirSync(path, {mode: 0o700});
+      chmodSync(path, 0o700);
+    }
+    const candidatePath = resolve(
+      stateRoot,
+      "candidates",
+      `${commitSha}.${controllerPid}`,
+    );
+    const environment = {
+      PREVIEW_STATE_DIR: stateRoot,
+      AXIAL_MUSE_PREVIEW_CANDIDATE: candidatePath,
+      AXIAL_MUSE_PREVIEW_COMMIT_SHA: commitSha,
+      AXIAL_MUSE_PREVIEW_CONTROLLER_PID: controllerPid,
+      AXIAL_MUSE_PREVIEW_ACCESS_HOST: "192.168.0.162",
+      AXIAL_MUSE_PREVIEW_ACCESS_PORT: "8088",
+    };
+    assert.deepEqual(readPreviewBuildRequest({
+      root,
+      environment,
+      systemTemporaryRoot,
+    }), {
+      accessHost: "192.168.0.162",
+      accessPort: "8088",
+      candidatePath,
+      candidatesRoot: resolve(stateRoot, "candidates"),
+      commitSha,
+      controllerPid,
+      stateRoot,
+    });
+    assert.throws(
+      () => readPreviewBuildRequest({
+        root,
+        environment: {
+          ...environment,
+          AXIAL_MUSE_PREVIEW_CANDIDATE: resolve(stateRoot, "candidates", commitSha),
+        },
+        systemTemporaryRoot,
+      }),
+      hasBuildCode("BUILD_PREVIEW_CANDIDATE_PATH"),
+    );
+  } finally {
+    rmSync(outer, {recursive: true, force: true});
+  }
 });
 
 test("D-067 构建入口只接受主 Node 与 engines 下界", () => {
@@ -62,13 +195,17 @@ test("D-067 构建入口只接受主 Node 与 engines 下界", () => {
   );
 });
 
-test("CODE-014 production build 在读取内容前拒绝作者 lock", () => {
+test("CODE-014 production/preview build 在读取内容前拒绝作者 lock", () => {
   const root = mkdtempSync(join(tmpdir(), "axial-muse-build-author-lock-"));
   try {
     mkdirSync(resolve(root, "site-content/writing"), {recursive: true});
     writeFixture(root, ".axial-muse-author.lock", "fixture\n");
     assert.throws(
       () => runProductionBuild({root}),
+      hasBuildCode("BUILD_AUTHOR_TRANSACTION"),
+    );
+    assert.throws(
+      () => runPreviewBuild({root}),
       hasBuildCode("BUILD_AUTHOR_TRANSACTION"),
     );
   } finally {
@@ -109,6 +246,137 @@ test("CODE-014 production build 持有 build lock 后二次拒绝并发作者 lo
       readFileSync(resolve(root, ".axial-muse-author.lock"), "utf8"),
       "fixture\n",
     );
+  } finally {
+    rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("#33 production artifact checker 只持验证锁并保留既有 retired 状态", () => {
+  const root = mkdtempSync(join(tmpdir(), "axial-muse-production-check-"));
+  try {
+    writeFixture(root, ".nvmrc", readFileSync(resolve(PROJECT_ROOT, ".nvmrc")));
+    writeFixture(
+      root,
+      "package.json",
+      readFileSync(resolve(PROJECT_ROOT, "package.json")),
+    );
+    mkdirSync(resolve(root, "site-content/writing"), {recursive: true});
+    writeFixture(root, "build/index.html", "<!doctype html>\n");
+    writeFixture(root, ".axial-muse-build-retired/identity.txt", "retired\n");
+    writeFixture(
+      root,
+      "node_modules/@docusaurus/core/bin/docusaurus.mjs",
+      [
+        "import {writeFileSync} from \"node:fs\";",
+        "import {resolve} from \"node:path\";",
+        "if (process.argv.slice(2).join(\" \") !== \"axial-muse:check-production\") process.exit(9);",
+        "const transactionRoot = process.env.AXIAL_MUSE_BUILD_TRANSACTION_ROOT;",
+        "writeFileSync(resolve(transactionRoot, \".axial-muse-content-input-seal\"), [",
+        "  \"axial-muse-content-input-v1\",",
+        "  \"owner:\" + process.env.AXIAL_MUSE_BUILD_OWNER,",
+        "  \"sha256:\" + \"f\".repeat(64),",
+        "  \"\",",
+        "].join(\"\\n\"), {encoding: \"utf8\", flag: \"wx\", mode: 0o600});",
+        "writeFileSync(\"production-check-call.json\", JSON.stringify({",
+        "  phase: process.env.AXIAL_MUSE_BUILD_PHASE,",
+        "  output: process.env.AXIAL_MUSE_BUILD_OUTPUT,",
+        "  transactionRoot,",
+        "}));",
+      ].join("\n"),
+    );
+
+    assert.equal(runProductionArtifactCheck({root}), undefined);
+    const call = JSON.parse(
+      readFileSync(resolve(root, "production-check-call.json"), "utf8"),
+    );
+    assert.deepEqual(
+      {phase: call.phase, output: call.output},
+      {phase: "release", output: resolve(root, "build")},
+    );
+    assert.equal(existsSync(call.transactionRoot), false);
+    assert.equal(existsSync(resolve(root, ".axial-muse-build.lock")), false);
+    assert.equal(
+      readFileSync(
+        resolve(root, ".axial-muse-build-retired/identity.txt"),
+        "utf8",
+      ),
+      "retired\n",
+    );
+  } finally {
+    rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("#33 production artifact checker 拒绝退出 0 但未生成输入 seal 的空操作", () => {
+  const root = mkdtempSync(join(tmpdir(), "axial-muse-production-check-no-seal-"));
+  try {
+    writeFixture(root, ".nvmrc", readFileSync(resolve(PROJECT_ROOT, ".nvmrc")));
+    writeFixture(
+      root,
+      "package.json",
+      readFileSync(resolve(PROJECT_ROOT, "package.json")),
+    );
+    mkdirSync(resolve(root, "site-content/writing"), {recursive: true});
+    writeFixture(root, "build/index.html", "<!doctype html>\n");
+    writeFixture(
+      root,
+      "node_modules/@docusaurus/core/bin/docusaurus.mjs",
+      [
+        "import {writeFileSync} from \"node:fs\";",
+        "if (process.argv.slice(2).join(\" \") !== \"axial-muse:check-production\") process.exit(9);",
+        "writeFileSync(\"production-check-call.json\", JSON.stringify({",
+        "  transactionRoot: process.env.AXIAL_MUSE_BUILD_TRANSACTION_ROOT,",
+        "}));",
+      ].join("\n"),
+    );
+
+    assert.throws(
+      () => runProductionArtifactCheck({root}),
+      hasBuildCode("BUILD_ARTIFACT_CHECK_SEAL"),
+    );
+    const call = JSON.parse(
+      readFileSync(resolve(root, "production-check-call.json"), "utf8"),
+    );
+    assert.equal(existsSync(call.transactionRoot), false);
+    assert.equal(existsSync(resolve(root, ".axial-muse-build.lock")), false);
+  } finally {
+    rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("#33 production artifact checker 拒绝不属于当前 owner 的输入 seal", () => {
+  const root = mkdtempSync(join(tmpdir(), "axial-muse-production-check-wrong-seal-"));
+  try {
+    writeFixture(root, ".nvmrc", readFileSync(resolve(PROJECT_ROOT, ".nvmrc")));
+    writeFixture(
+      root,
+      "package.json",
+      readFileSync(resolve(PROJECT_ROOT, "package.json")),
+    );
+    mkdirSync(resolve(root, "site-content/writing"), {recursive: true});
+    writeFixture(root, "build/index.html", "<!doctype html>\n");
+    writeFixture(
+      root,
+      "node_modules/@docusaurus/core/bin/docusaurus.mjs",
+      [
+        "import {writeFileSync} from \"node:fs\";",
+        "import {resolve} from \"node:path\";",
+        "if (process.argv.slice(2).join(\" \") !== \"axial-muse:check-production\") process.exit(9);",
+        "const transactionRoot = process.env.AXIAL_MUSE_BUILD_TRANSACTION_ROOT;",
+        "writeFileSync(resolve(transactionRoot, \".axial-muse-content-input-seal\"), [",
+        "  \"axial-muse-content-input-v1\",",
+        "  \"owner:not-current-owner\",",
+        "  \"sha256:\" + \"f\".repeat(64),",
+        "  \"\",",
+        "].join(\"\\n\"), {encoding: \"utf8\", flag: \"wx\", mode: 0o600});",
+      ].join("\n"),
+    );
+
+    assert.throws(
+      () => runProductionArtifactCheck({root}),
+      hasBuildCode("BUILD_ARTIFACT_CHECK_SEAL"),
+    );
+    assert.equal(existsSync(resolve(root, ".axial-muse-build.lock")), false);
   } finally {
     rmSync(root, {recursive: true, force: true});
   }

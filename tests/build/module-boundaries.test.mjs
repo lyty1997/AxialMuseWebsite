@@ -82,6 +82,8 @@ function createFixture() {
       typecheck: "tsc --noEmit",
       test: "node scripts/quality/run-tests.mjs",
       build: "node scripts/build/build-site.mjs --mode production",
+      "package:artifact": "node scripts/release/package-site.mjs",
+      "check:artifact": "node scripts/quality/check-release-package.mjs",
     },
     dependencies: {
       "@docusaurus/core": "3.10.2",
@@ -105,7 +107,7 @@ function createFixture() {
   writeFixture(
     root,
     "docusaurus.config.ts",
-    "import type {Config} from \"@docusaurus/types\";\nconst config: Config = {\n  noIndex: false,\n} as Config;\nexport default config;\n",
+    "import type {Config} from \"@docusaurus/types\";\nconst buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode === \"preview\";\nconst config: Config = {\n  noIndex: isPreview,\n  presets: [[\"fixture\", {\n        debug: false,\n        sitemap: isPreview ? false : {},\n  }]],\n} as Config;\nexport default config;\n",
   );
   writeFixture(
     root,
@@ -363,10 +365,15 @@ test("CODE-013 根侧栏拒绝手写 doc ID 与额外 sidebar", () => {
   });
 });
 
-test("E-009 根配置必须显式保持 production 可索引", () => {
+test("E-009 根配置以唯一 preview 判据绑定索引、sitemap 与 debug 路由", () => {
   for (const source of [
     "import type {Config} from \"@docusaurus/types\";\nconst config: Config = {} as Config;\nexport default config;\n",
     "import type {Config} from \"@docusaurus/types\";\nconst config: Config = {\n  noIndex: true,\n} as Config;\nexport default config;\n",
+    "const buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode !== \"preview\";\nconst config = {\n  noIndex: isPreview,\n        sitemap: isPreview ? false : {},\n};\nexport default config;\n",
+    "const buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode === \"preview\";\nconst config = {\n  noIndex: !isPreview,\n        sitemap: isPreview ? false : {},\n};\nexport default config;\n",
+    "const buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode === \"preview\";\nconst config = {\n  noIndex: isPreview,\n        sitemap: {},\n};\nexport default config;\n",
+    "const buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode === \"preview\";\nconst config = {\n  noIndex: isPreview,\n        debug: true,\n        sitemap: isPreview ? false : {},\n};\nexport default config;\n",
+    "const buildContext = {mode: \"production\"};\nconst isPreview = buildContext.mode === \"preview\";\nconst config = {\n  noIndex: isPreview,\n  generatedFilesDir: \"fixture\",\n        sitemap: isPreview ? false : {},\n};\nexport default config;\n",
   ]) {
     withFixture((root) => {
       writeFixture(root, "docusaurus.config.ts", source);
@@ -1167,6 +1174,63 @@ test("I-06 仅允许固定 fixture 以 import type 消费解码器声明", () =>
 
   withFixture((root) => {
     rmSync(resolve(root, "scripts/content/frontmatter.d.mts"));
+    assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_UNRESOLVED_IMPORT"));
+  });
+});
+
+test("CODE-019 仅允许固定 build adapter 运行时导入相邻重定向实现与声明", () => {
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "scripts/release/lib/runtime-redirects.mjs",
+      "export const fixture = true;\n",
+    );
+    writeFixture(
+      root,
+      "scripts/release/lib/runtime-redirects.d.mts",
+      "export declare const fixture: boolean;\n",
+    );
+    writeFixture(
+      root,
+      "src/build/content/runtime-redirects.ts",
+      "import {fixture} from \"../../../scripts/release/lib/runtime-redirects.mjs\";\nexport const value = fixture;\n",
+    );
+    const issues = checkModuleBoundaries({root}).issues.filter(
+      (issue) => issue.sourcePath === "src/build/content/runtime-redirects.ts",
+    );
+    assert.deepEqual(issues, []);
+  });
+
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "scripts/release/lib/runtime-redirects.mjs",
+      "export const fixture = true;\n",
+    );
+    writeFixture(
+      root,
+      "scripts/release/lib/runtime-redirects.d.mts",
+      "export declare const fixture: boolean;\n",
+    );
+    writeFixture(
+      root,
+      "src/build/content/runtime-redirects-copy.ts",
+      "import {fixture} from \"../../../scripts/release/lib/runtime-redirects.mjs\";\nexport const value = fixture;\n",
+    );
+    assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_NODE_SPECIFIER"));
+  });
+
+  withFixture((root) => {
+    writeFixture(
+      root,
+      "scripts/release/lib/runtime-redirects.mjs",
+      "export const fixture = true;\n",
+    );
+    writeFixture(
+      root,
+      "src/build/content/runtime-redirects.ts",
+      "import {fixture} from \"../../../scripts/release/lib/runtime-redirects.mjs\";\nexport const value = fixture;\n",
+    );
     assert.ok(issueCodes(root).includes("MODULE_BOUNDARY_UNRESOLVED_IMPORT"));
   });
 });

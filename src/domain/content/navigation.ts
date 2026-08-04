@@ -95,18 +95,22 @@ function createArticleDisplayIndexes(input: WritingNavigationInput): ArticleDisp
   const visibleArticles = input.mode === "preview"
     ? input.articles
     : input.articles.filter(isPublicArticle);
+  const projectsWithSources = new Set(
+    input.catalog.projectSources.map((source) => source.projectId),
+  );
+  const visibleProjects = input.mode === "preview"
+    ? input.catalog.projects.filter((project) => projectsWithSources.has(project.id))
+    : input.catalog.projects.filter(isPublicProject);
   return {
     authors: new Map(input.catalog.authors.map((author) => [author.id, author])),
     topics: new Map(input.catalog.topics.map((topic) => [topic.id, topic])),
-    projects: new Map(input.catalog.projects
-      .filter(isPublicProject)
-      .map((project) => [
-        project.id,
-        {
-          title: project.title,
-          canonicalPath: canonicalProjectPath(project.slug),
-        },
-      ])),
+    projects: new Map(visibleProjects.map((project) => [
+      project.id,
+      {
+        title: project.title,
+        canonicalPath: canonicalProjectPath(project.slug),
+      },
+    ])),
     articles: new Map(visibleArticles.map((article) => [
       article.articleId,
       {
@@ -265,6 +269,14 @@ export function buildProjectNavigation(
     addArticleCollectionIssue(collector);
     return failure(collector);
   }
+  if (input.mode !== "production" && input.mode !== "preview") {
+    collector.add(
+      "CONTENT_NAVIGATION_MODE_INVALID",
+      PROJECTS_PATH,
+      "mode",
+      "导航构建模式必须是 production 或 preview。",
+    );
+  }
   const catalogIsValid = isValidatedProjectCatalog(input.catalog);
   if (!catalogIsValid) addCatalogIssue(collector);
   if (!isValidatedArticleCollection(
@@ -278,13 +290,14 @@ export function buildProjectNavigation(
   const sourceByProjectId = new Map(
     input.catalog.projectSources.map((source) => [source.projectId, source.sourcePath]),
   );
-  const publicArticlesById = new Map(input.articles
-    .filter(isPublicArticle)
+  const visibleArticlesById = new Map(input.articles
+    .filter((article) => input.mode === "preview" || isPublicArticle(article))
     .map((article) => [article.articleId, article]));
   const items: ProjectNavigationItem[] = [];
   for (const project of input.catalog.projects) {
-    if (!isPublicProject(project)) continue;
     const sourcePath = sourceByProjectId.get(project.id);
+    if (input.mode === "production" && !isPublicProject(project)) continue;
+    if (input.mode === "preview" && sourcePath === undefined) continue;
     if (sourcePath === undefined) {
       collector.add(
         "CONTENT_PROJECT_NAVIGATION_SOURCE_MISSING",
@@ -294,7 +307,7 @@ export function buildProjectNavigation(
       );
       continue;
     }
-    if (project.previewImage === undefined) {
+    if (isPublicProject(project) && project.previewImage === undefined) {
       collector.add(
         "CONTENT_PROJECT_NAVIGATION_DISPLAY_INVALID",
         PROJECTS_PATH,
@@ -305,13 +318,13 @@ export function buildProjectNavigation(
     }
     const relatedWriting: ContentNavigationLink[] = [];
     for (const [index, articleId] of project.relatedWriting.entries()) {
-      const article = publicArticlesById.get(articleId);
+      const article = visibleArticlesById.get(articleId);
       if (article === undefined) {
         collector.add(
           "CONTENT_PROJECT_NAVIGATION_RELATION_UNAVAILABLE",
           PROJECTS_PATH,
           `projectsById.${project.id}.relatedWriting.${index}`,
-          "公开项目相关技术分享不属于当前公开展示投影。",
+          "项目相关技术分享不属于当前模式的安全展示投影。",
         );
         continue;
       }
@@ -332,12 +345,16 @@ export function buildProjectNavigation(
       updatedAt: project.updatedAt,
       ...(project.repositoryUrl === undefined ? {} : {repositoryUrl: project.repositoryUrl}),
       relatedWriting,
-      previewImage: {
-        publicUrl: `/assets/${project.previewImage.sourcePath}`,
-        width: project.previewImage.width,
-        height: project.previewImage.height,
-        alt: project.previewImage.alt,
-      },
+      ...(project.previewImage === undefined
+        ? {}
+        : {
+            previewImage: {
+              publicUrl: `/assets/${project.previewImage.sourcePath}`,
+              width: project.previewImage.width,
+              height: project.previewImage.height,
+              alt: project.previewImage.alt,
+            },
+          }),
     });
   }
 

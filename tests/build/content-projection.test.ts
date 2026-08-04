@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs, {
   chmodSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -30,6 +31,7 @@ import {
 import {
   createProjectPreviewRemarkPluginForTest,
 } from "../../src/build/content/project-preview-projection.js";
+import {assertPreviewIndexing} from "../../src/build/content/preview-artifact-check.js";
 
 const ARTICLE_DATE_INDEX_SOURCE_PATH = "axial-muse/article-date-index.json";
 const ARTICLE_IDS = Object.freeze({
@@ -293,6 +295,13 @@ function createFixture(options: FixtureOptions = {}): string {
     roleValues: ["brand", "operational"],
     assets: [],
   });
+  writeJson(repositoryRoot, "docs/contracts/redirects.json", {
+    version: "0.1.0",
+    kind: "axial_muse_redirects",
+    status: "active",
+    owner: "AxialMuseWebsite",
+    redirects: [],
+  });
 
   for (const projectId of ["archived-project", "draft-project", "published-project"]) {
     writeText(
@@ -381,6 +390,23 @@ function assertBuildError(
     return true;
   };
 }
+
+test("E-009 preview HTML 必须恰有一条 noindex, nofollow", () => {
+  assert.doesNotThrow(() => assertPreviewIndexing(
+    '<!doctype html><html><head><meta name="robots" content="nofollow, noindex"></head></html>',
+    "build/index.html",
+  ));
+  for (const html of [
+    '<meta name="robots" content="noindex">',
+    '<meta name="robots" content="noindex, nofollow"><meta name="robots" content="noindex, nofollow">',
+    "<html><head></head></html>",
+  ]) {
+    assert.throws(
+      () => assertPreviewIndexing(html, "build/index.html"),
+      assertBuildError("CONTENT_PREVIEW_NOINDEX"),
+    );
+  }
+});
 
 function assertBuildErrorCause(
   expectedCode: string,
@@ -506,15 +532,23 @@ interface ArtifactSidebarLink {
 function artifactNavigationLabel(
   item: Readonly<{title: string; publicationStatus: string}>,
 ): string {
-  return item.publicationStatus === "archived"
-    ? `${item.title}（归档）`
-    : item.title;
+  if (item.publicationStatus === "archived") return `${item.title}（归档）`;
+  return item.title;
+}
+
+function artifactProjectNavigationLabel(
+  item: Readonly<{title: string; publicationStatus: string}>,
+): string {
+  if (item.publicationStatus === "archived") return `${item.title}（归档）`;
+  if (item.publicationStatus === "draft") return `${item.title}（草稿）`;
+  if (item.publicationStatus === "planned") return `${item.title}（计划）`;
+  return item.title;
 }
 
 function artifactProjectSidebar(content: LoadedContent): readonly ArtifactSidebarLink[] {
   return content.projectNavigation.map((item) => ({
     href: item.canonicalPath,
-    label: artifactNavigationLabel(item),
+    label: artifactProjectNavigationLabel(item),
   }));
 }
 
@@ -654,10 +688,12 @@ function artifactRelatedList(
 function artifactProjectCard(
   project: LoadedContent["projectNavigation"][number],
 ): string {
+  const preview = project.previewImage;
+  assert.ok(preview);
   return "<article>"
-    + `<img src="${escapeFixtureHtml(project.previewImage.publicUrl)}" `
-    + `alt="${escapeFixtureHtml(project.previewImage.alt)}" `
-    + `width="${project.previewImage.width}" height="${project.previewImage.height}">`
+    + `<img src="${escapeFixtureHtml(preview.publicUrl)}" `
+    + `alt="${escapeFixtureHtml(preview.alt)}" `
+    + `width="${preview.width}" height="${preview.height}">`
     + `<h3><a href="${escapeFixtureHtml(project.canonicalPath)}">`
     + `${escapeFixtureHtml(project.title)}</a></h3>`
     + `<p>项目状态：${ARTIFACT_PROJECT_STATUS_LABELS[project.status]}</p>`
@@ -791,12 +827,14 @@ function artifactExpectedPageHtml(
   }
   const project = content.projectNavigation.find((item) => item.canonicalPath === route);
   if (project !== undefined) {
+    const preview = project.previewImage;
+    assert.ok(preview);
     return artifactPageHtml(route, sidebar, {
       title: `${project.title} | Axial Muse`,
       description: project.summary,
       socialDescription: project.summary,
       openGraphType: "website",
-      openGraphImage: `https://www.axialmuse.com${project.previewImage.publicUrl}`,
+      openGraphImage: `https://www.axialmuse.com${preview.publicUrl}`,
       main: `<h1>${escapeFixtureHtml(project.title)}</h1>`
         + `<p>${escapeFixtureHtml(project.summary)}</p>`
         + `<p>项目状态：${ARTIFACT_PROJECT_STATUS_LABELS[project.status]}</p>`
@@ -808,9 +846,9 @@ function artifactExpectedPageHtml(
         + (project.repositoryUrl === undefined
           ? ""
           : `<a href="${escapeFixtureHtml(project.repositoryUrl)}">查看源码</a>`)
-        + `<img src="${escapeFixtureHtml(project.previewImage.publicUrl)}" `
-        + `alt="${escapeFixtureHtml(project.previewImage.alt)}" `
-        + `width="${project.previewImage.width}" height="${project.previewImage.height}">`
+        + `<img src="${escapeFixtureHtml(preview.publicUrl)}" `
+        + `alt="${escapeFixtureHtml(preview.alt)}" `
+        + `width="${preview.width}" height="${preview.height}">`
         + (project.relatedWriting.length === 0
           ? ""
           : `<dl>${artifactRelatedList("相关技术分享", project.relatedWriting)}</dl>`),
@@ -907,6 +945,8 @@ async function invokeArtifactCheck(
   generatedFilesDirectory: string,
   options: Readonly<{
     failSealAssertionAt?: number;
+    onWriteBuildSeal?: () => void;
+    phase?: "check" | "release";
     trace?: {sealAssertions: number; staticAssertions: number; disposals: number};
   }> = {},
 ): Promise<Readonly<{
@@ -931,18 +971,23 @@ async function invokeArtifactCheck(
       assert.equal(actual, buildDirectory);
       trace.staticAssertions += 1;
     },
+    assertPreviewBuild() {
+      throw new Error("production artifact fixture must not run preview checks");
+    },
     dispose() {
       trace.disposals += 1;
     },
   });
+  const phase = options.phase ?? "check";
   const session = Object.freeze({
     content,
     docsAdapterSession: Object.freeze({}),
     outputDirectory: buildDirectory,
-    phase: "check" as const,
+    phase,
     staticPlan,
     writeBuildSeal() {
-      throw new Error("check fixture must not write seal");
+      if (phase !== "release") throw new Error("check fixture must not write seal");
+      options.onWriteBuildSeal?.();
     },
     assertBuildSeal() {
       trace.sealAssertions += 1;
@@ -954,22 +999,26 @@ async function invokeArtifactCheck(
   const pluginModule = createContentDataPluginForTest(session as never);
   const plugin = await pluginModule({generatedFilesDir: generatedFilesDirectory} as never, undefined);
   assert.ok(plugin?.extendCli);
-  let action: (() => Promise<void>) | undefined;
-  const command = {
-    description() {
-      return command;
-    },
-    action(callback: () => Promise<void>) {
-      action = callback;
-      return command;
-    },
-  };
+  const actions = new Map<string, () => Promise<void>>();
   plugin.extendCli({
     command(name: string) {
-      assert.equal(name, "axial-muse:check-production");
+      assert.ok([
+        "axial-muse:check-production",
+        "axial-muse:check-preview",
+      ].includes(name));
+      const command = {
+        description() {
+          return command;
+        },
+        action(callback: () => Promise<void>) {
+          actions.set(name, callback);
+          return command;
+        },
+      };
       return command;
     },
   } as never);
+  const action = actions.get("axial-muse:check-production");
   assert.ok(action);
   await action();
   return Object.freeze({...trace});
@@ -1000,6 +1049,18 @@ test("E-016 loader 每次形成唯一深冻结链，production/preview 投影不
       "general",
       "project",
     ]);
+    assert.deepEqual(
+      preview.projectNavigation.map((project) => [
+        project.projectId,
+        project.publicationStatus,
+        Object.hasOwn(project, "previewImage"),
+      ]),
+      [
+        ["archived-project", "archived", true],
+        ["published-project", "published", true],
+        ["draft-project", "draft", false],
+      ],
+    );
     assert.deepEqual(preview.writingNavigation.map((group) => group.kind), [
       "general",
       "project",
@@ -1722,6 +1783,13 @@ test("CODE-013 sidebar 只消费当前 docs[].id，并保持 production/preview 
           type: "doc",
           id: ids.get("site-content/projects/published-project/index.md"),
         },
+        ...(mode === "preview"
+          ? [{
+              type: "doc",
+              id: ids.get("site-content/projects/draft-project/index.md"),
+              label: "Draft Project（草稿）",
+            }]
+          : []),
       ]);
 
       const writing = await generator(sidebarArguments(content, "writing", docs) as never);
@@ -1944,6 +2012,45 @@ test("E-016 日期索引只在 postBuild 原子写入私有 generated files", as
     assert.equal(privateIndex.includes(ARTICLE_IDS.draft), false);
     assert.equal(sealWrites, 1);
     assert.deepEqual(postBuildOrder, ["static", "seal"]);
+  });
+});
+
+test("#33 release 验证在 fresh generated files 中重建私有日期索引", async () => {
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    rmSync(fixture.generatedFilesDirectory, {recursive: true, force: false});
+    mkdirSync(fixture.generatedFilesDirectory, {mode: 0o700});
+    chmodSync(fixture.generatedFilesDirectory, 0o700);
+    let sealWrites = 0;
+
+    await invokeArtifactCheck(
+      content,
+      fixture.buildDirectory,
+      fixture.generatedFilesDirectory,
+      {
+        phase: "release",
+        onWriteBuildSeal() {
+          assert.equal(
+            readFileSync(
+              resolve(fixture.generatedFilesDirectory, ARTICLE_DATE_INDEX_SOURCE_PATH),
+              "utf8",
+            ),
+            `${JSON.stringify(content.articleDateIndex, null, 2)}\n`,
+          );
+          sealWrites += 1;
+        },
+      },
+    );
+
+    assert.equal(sealWrites, 1);
+    assert.equal(
+      readFileSync(
+        resolve(fixture.generatedFilesDirectory, ARTICLE_DATE_INDEX_SOURCE_PATH),
+        "utf8",
+      ),
+      `${JSON.stringify(content.articleDateIndex, null, 2)}\n`,
+    );
   });
 });
 
@@ -2249,6 +2356,94 @@ test("E-016 production artifact 验收全部公开页面 canonical 并保持 sid
   });
 });
 
+test("E-014 production artifact 复用唯一运行时实现校验 registry 与同 payload 路由", async () => {
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    writeJson(repositoryRoot, "docs/contracts/redirects.json", {
+      version: "0.1.0",
+      kind: "axial_muse_redirects",
+      status: "active",
+      owner: "AxialMuseWebsite",
+      redirects: [{
+        from: "/legacy-projects/",
+        to: "/projects/",
+        reason: "历史项目入口迁移",
+      }],
+    });
+    await assert.doesNotReject(() => invokeArtifactCheck(
+      content,
+      fixture.buildDirectory,
+      fixture.generatedFilesDirectory,
+    ));
+  });
+
+  for (const [redirect, upstreamCode] of [
+    [{
+      from: "/projects/",
+      to: "/writing/",
+      reason: "活动页面不得成为 source",
+    }, "RELEASE_REDIRECT_SOURCE_PAGE"],
+    [{
+      from: "/legacy-missing/",
+      to: "/missing/",
+      reason: "目标必须存在于同一 payload",
+    }, "RELEASE_REDIRECT_TARGET_MISSING"],
+  ] as const) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      writeJson(repositoryRoot, "docs/contracts/redirects.json", {
+        version: "0.1.0",
+        kind: "axial_muse_redirects",
+        status: "active",
+        owner: "AxialMuseWebsite",
+        redirects: [redirect],
+      });
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_REDIRECTS", upstreamCode),
+      );
+    });
+  }
+});
+
+test("CODE-019 production artifact 拒绝固定 registry 的符号链接与硬链接旁路", async () => {
+  for (const linkKind of ["symbolic", "hard"] as const) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const registryPath = resolve(
+        repositoryRoot,
+        "docs/contracts/redirects.json",
+      );
+      const targetPath = resolve(repositoryRoot, "redirects-link-target.json");
+      writeFileSync(targetPath, readFileSync(registryPath), {mode: 0o600});
+      rmSync(registryPath);
+      if (linkKind === "symbolic") {
+        symlinkSync(targetPath, registryPath);
+      } else {
+        linkSync(targetPath, registryPath);
+      }
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError(
+          "CONTENT_ARTIFACT_REDIRECTS",
+          "RELEASE_REDIRECT_REGISTRY_READ",
+        ),
+      );
+    });
+  }
+});
+
 test("I-14 production artifact 同时验收公开 fixture 与真实零内容空状态", async () => {
   await withFixture(async (repositoryRoot) => {
     const content = await loadFixtureContent({repositoryRoot, mode: "production"});
@@ -2384,6 +2579,7 @@ test("I-14 production artifact 拒绝任一页面缺失、重复或伪造统一 
     const fixture = createArtifactFixture(repositoryRoot, content);
     const project = content.projectNavigation[0];
     assert.ok(project);
+    assert.ok(project.previewImage);
     assert.equal(project.status, "completed");
     assert.equal(project.publicationStatus, "archived");
     const projectPath = resolve(
@@ -2464,6 +2660,7 @@ test("I-14 production artifact 锁定项目图片与项目文章安全显示字�
     const fixture = createArtifactFixture(repositoryRoot, content);
     const project = content.projectNavigation[0];
     assert.ok(project);
+    assert.ok(project.previewImage);
     const projectPath = resolve(
       fixture.buildDirectory,
       artifactHtmlPath(project.canonicalPath),
@@ -2865,6 +3062,7 @@ test("I-14 production artifact 从行内格式、图片替代文本与修饰短�
       const project = content.projectNavigation[0];
       assert.ok(article);
       assert.ok(project);
+      assert.ok(project.previewImage);
       const articlePath = resolve(
         fixture.buildDirectory,
         artifactHtmlPath(article.canonicalPath),
@@ -3494,7 +3692,10 @@ test("E-016 production artifact 拒绝大小写 HTML 旁路与非受控 sitemap 
         fixture.buildDirectory,
         fixture.generatedFilesDirectory,
       ),
-      assertBuildError("CONTENT_ARTIFACT_ROUTE_SET"),
+      assertBuildError(
+        "CONTENT_ARTIFACT_REDIRECTS",
+        "RELEASE_REDIRECT_HTML_LAYOUT",
+      ),
     );
   });
 

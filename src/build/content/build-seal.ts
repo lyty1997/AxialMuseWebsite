@@ -22,11 +22,12 @@ const TRANSACTION_ROOT_ENV = "AXIAL_MUSE_BUILD_TRANSACTION_ROOT";
 const TRANSACTION_ROOT_PREFIX = "axial-muse-build-transaction-";
 const TRANSACTION_OWNER_FILE = ".axial-muse-build-transaction-owner";
 const INPUT_SEAL_FILE = ".axial-muse-content-input-seal";
+const GENERATED_FILES_DIRECTORY = "generated";
 const BUILD_LOCK_FILE = ".axial-muse-build.lock";
 const OWNER_PATTERN = /^[0-9a-f]{64}$/u;
 const DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
 
-export type ContentSealPhase = "build" | "check" | "verify";
+export type ContentSealPhase = "build" | "check" | "verify" | "release";
 
 export interface ContentBuildSealController {
   readonly transactionRoot: string;
@@ -201,8 +202,8 @@ function validateTransactionRoot(
       throw new TypeError("transaction root path mismatch");
     }
     const expectedEntries = expectSeal
-      ? [INPUT_SEAL_FILE, TRANSACTION_OWNER_FILE].sort()
-      : [TRANSACTION_OWNER_FILE];
+      ? [GENERATED_FILES_DIRECTORY, INPUT_SEAL_FILE, TRANSACTION_OWNER_FILE].sort()
+      : [GENERATED_FILES_DIRECTORY, TRANSACTION_OWNER_FILE].sort();
     const actualEntries = readdirSync(realRoot).sort();
     if (actualEntries.join("\n") !== expectedEntries.join("\n")) {
       throw new TypeError("transaction root member mismatch");
@@ -214,6 +215,11 @@ function validateTransactionRoot(
     const seal = expectSeal
       ? readStablePrivateFile(resolve(realRoot, INPUT_SEAL_FILE))
       : undefined;
+    const generatedMetadata = lstatSync(
+      resolve(realRoot, GENERATED_FILES_DIRECTORY),
+      {bigint: true},
+    );
+    assertPrivateMetadata(generatedMetadata, "directory", 0o700n);
     return Object.freeze({
       rootIdentity: identityOf(metadata),
       markerIdentity: marker.identity,
@@ -256,7 +262,12 @@ export function createContentBuildSealController(input: Readonly<{
     || !OWNER_PATTERN.test(input.owner)
     || !DIGEST_PATTERN.test(input.inputDigest)
     || (input.mode !== "production" && input.mode !== "preview")
-    || (input.phase !== "build" && input.phase !== "check" && input.phase !== "verify")
+    || (
+      input.phase !== "build"
+      && input.phase !== "check"
+      && input.phase !== "verify"
+      && input.phase !== "release"
+    )
     || typeof input.assertInputsCurrent !== "function"
   ) {
     failContentBuild("CONTENT_SESSION_TRANSACTION_ENV", "内容构建 transaction 环境不完整。", {
@@ -265,7 +276,7 @@ export function createContentBuildSealController(input: Readonly<{
   }
   const sealPath = resolve(transactionRoot, INPUT_SEAL_FILE);
   const seal = expectedSeal(input.owner, input.inputDigest);
-  const expectSeal = input.phase !== "build";
+  const expectSeal = input.phase === "check" || input.phase === "verify";
   const lockIdentity = readLockIdentity(input.repositoryRoot, input.owner);
   const initialTransactionEvidence = validateTransactionRoot(
     transactionRoot,
@@ -273,6 +284,7 @@ export function createContentBuildSealController(input: Readonly<{
     input.owner,
     expectSeal,
   );
+  let ownedSealIdentity = initialTransactionEvidence.seal?.identity;
 
   const assertControlIdentity = (
     currentExpectSeal: boolean,
@@ -299,14 +311,11 @@ export function createContentBuildSealController(input: Readonly<{
         current.markerIdentity,
       )
       || (
-        expectSeal
+        currentExpectSeal
+        && ownedSealIdentity !== undefined
         && (
-          initialTransactionEvidence.seal === undefined
-          || current.seal === undefined
-          || !sameIdentity(
-            initialTransactionEvidence.seal.identity,
-            current.seal.identity,
-          )
+          current.seal === undefined
+          || !sameIdentity(ownedSealIdentity, current.seal.identity)
         )
       )
     ) {
@@ -340,8 +349,8 @@ export function createContentBuildSealController(input: Readonly<{
   };
 
   const writeSeal = (): void => {
-    if (input.phase !== "build") {
-      failContentBuild("CONTENT_SEAL_PHASE", "只有 build postBuild 可以写入输入 seal。", {
+    if (input.phase !== "build" && input.phase !== "release") {
+      failContentBuild("CONTENT_SEAL_PHASE", "只有 build postBuild 或 release 验证事务可以写入输入 seal。", {
         sourcePath: "build",
       });
     }
@@ -380,6 +389,7 @@ export function createContentBuildSealController(input: Readonly<{
         sourcePath: "build",
       });
     }
+    ownedSealIdentity = written.seal.identity;
   };
 
   return Object.freeze({

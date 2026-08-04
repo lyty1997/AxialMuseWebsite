@@ -21,12 +21,14 @@ import {
   assertProductionArtifact,
   canonicalArticleDateIndex,
 } from "./production-artifact-check.js";
+import {assertPreviewArtifact} from "./preview-artifact-check.js";
 import {assertLoadedValidatedContent} from "./loader.js";
 import {assertContentBuildSession} from "./session.js";
 import type {ContentBuildSession} from "./session.js";
 
 const PLUGIN_NAME = "axial-muse-content-data";
 const CHECK_COMMAND = "axial-muse:check-production";
+const PREVIEW_CHECK_COMMAND = "axial-muse:check-preview";
 
 function privateDateIndexTarget(generatedFilesDirectory: string): string {
   if (
@@ -144,7 +146,11 @@ function createContentDataPluginModule(
           .description("串行验收 Axial Muse production 候选制品")
           .action(async () => {
             if (
-              (session.phase !== "check" && session.phase !== "verify")
+              (
+                session.phase !== "check"
+                && session.phase !== "verify"
+                && session.phase !== "release"
+              )
               || session.content.mode !== "production"
             ) {
               failContentBuild("CONTENT_PLUGIN_CHECK_PHASE", "production checker 只接受受控 check 阶段。", {
@@ -152,8 +158,37 @@ function createContentDataPluginModule(
               });
             }
             try {
+              if (session.phase === "release") {
+                writePrivateDateIndex(context.generatedFilesDir, session);
+                session.writeBuildSeal();
+              }
               session.assertBuildSeal();
               assertProductionArtifact(
+                session.content,
+                session.staticPlan,
+                session.outputDirectory,
+                context.generatedFilesDir,
+              );
+              session.assertBuildSeal();
+            } finally {
+              session.staticPlan.dispose();
+            }
+          });
+        cli
+          .command(PREVIEW_CHECK_COMMAND)
+          .description("串行验收 Axial Muse preview 候选制品")
+          .action(async () => {
+            if (
+              session.phase !== "check"
+              || session.content.mode !== "preview"
+            ) {
+              failContentBuild("CONTENT_PLUGIN_PREVIEW_CHECK_PHASE", "preview checker 只接受受控 preview check 阶段。", {
+                sourcePath: "build",
+              });
+            }
+            try {
+              session.assertBuildSeal();
+              assertPreviewArtifact(
                 session.content,
                 session.staticPlan,
                 session.outputDirectory,
