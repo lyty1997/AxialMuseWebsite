@@ -4,11 +4,42 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-08-04 — D-136 确认 #36 两阶段晋级方案（第一阶段 Git 已授权）
+
+- **决策**：用户确认方案 A，保留 D-123 的历史事实，但以两阶段晋级取代其面向未来的单 PR 节奏。只读审计证明 canonical `main` 尚不含 bootstrap、verifier 与 golden，而 D-121 要求三者先进入同一 canonical `main` 精确提交才能安装；#36 又属于 #18 完成条件，安装结果还须回填文档，因此不能在“#18 全部完成后才首次合入”的同时只使用一个 PR。
+- **阶段边界**：第一阶段按 `codex/* -> dev -> main` 晋级仓库前置，依次要求 topic 提交、`dev` push CI、`dev -> main` PR checks 和合并后的 `main` push CI 成功；当前远端 `dev` 的既有 preview 工作必须保留并解决集成冲突。`production-artifact` 只会在 `main` push 运行，活动 workflow 尚无 `deploy-production`，第一阶段不会自动写服务器。第二阶段从最终 `main` 独立认证三项 Git blob 后，仍须重新确认快照/恢复通道并取得新的服务器写授权，才可执行 D-121 bootstrap；安装完成事实通过后续 evidence 晋级回填，可与 #37/#18 后续批次合并。
+- **当前授权**：用户随后明确授权第一阶段 Git 晋级：提交并普通推送当前 topic；保留 `origin/dev` 的既有 #8 工作，在不改变既定设计的边界内解决普通 merge 冲突后推送 `dev`；精确 `dev` CI 全绿后创建并在 checks 全绿且 head/base 未漂移时合并 `dev -> main` PR，再观察精确 `main` CI。禁止 force、rebase、直推 `main` 或绕过失败/跳过的门禁；冲突不能按既定设计消解、CI 红灯或远端漂移时停止。本授权不包含 Issue 写入、服务器或云资源写操作、verifier 安装及 #37。#36 仍只差 verifier 现场安装，#37 继续暂停。
+
+## 2026-08-04 — D-135 D-130 unit-aware v2 formal 通过（#36 仅剩 verifier 现场安装）
+
+- **授权与执行**：用户明确授权执行更新后的 D-130 formal 只读验收。本地先复核 unit-aware v2 候选与三项冻结依赖封印、v1/v2 receipt 缺席并重新通过审计；随后唯一一轮正式入口通过已核对 host key 的公钥 SSH 与 `sudo -n` 完成两条 fresh、同一记录 boot、间隔至少 10 秒的只读语义观测。结果精确为 `status=accepted-with-residuals`、`vendorState=fully_absent`、`aggregateDisposition=accepted_residual_unattributed`，全部逐组件 gates 为真。
+- **证据与边界**：私有 ignored 的 `.local/issue-36-ufw/.d130-semantic-acceptance-v2.json` 已以 `0600` 原子生成，并通过独立 live-state、来源封印、字段闭包和 D-129 pending 绑定复验；receipt 记录 `serverMutationPerformed=false` 与两条 fresh session。被接受但不伪归因的残余仅为 vendor component 完全缺席和重启前后聚合 posture 不等。D-129 永久保持 `post-reboot-pending` / `formalAccepted=false`，D-132 历史失败不改写；除正常 SSH/sudo 审计副作用和既定短暂包管理锁外，没有服务器或云资源写操作、第二次重启、reload、恢复、verifier 或 #37。
+- **剩余门禁**：D-130 有效 v2 receipt 门禁已经关闭，formal 授权已消费。#36 现在只剩 bootstrap、#35 verifier 与 golden 来自 canonical `main` 同一精确提交后的 verifier 现场安装与验收；该服务器写操作仍须新的明确授权。#37 继续暂停，Git commit/push/PR/merge 与 Issue 写入也未获本轮授权。
+
+## 2026-08-04 — D-134 D-130 unit-aware v2 契约完成本地审计（#36 整体仍为 GAP）
+
+- **授权与范围**：用户只授权在本地修改并审计 D-130 的 unit-aware 验收契约，不授权连接服务器、执行 formal、生成 receipt、修改服务器或云资源、推进 verifier/#37，或执行 Git 发布操作。D-129 继续保持 `post-reboot-pending` / `formalAccepted=false`，D-132 的失败事实不改写。
+- **v2 契约**：outer normalizer 现在必须显式接收 unit。`tat_agent.service` 只接受整条记录尾部唯一单值 `status=0`，`unattended-upgrades.service` 只接受唯一数字对；固定字段、顺序、systemd code 枚举、非空时间、数字 PID 与整串边界同时校验，未知 unit、交叉 status、缺失、重复、乱序、额外字段、第二记录、文本/混合 status 和尾随内容均以 `posture-exec-start-shape` 失败关闭。通过值仍规范化为旧稳定表示，只把 TAT 的单值零当作该 unit 的展示等价值；Nginx 既有 inner 单值零/数字对边界不扩大，数字对本身不被解释为成功。
+- **证据与本地验收**：policy、remote/local schema、component 域分隔和私有 receipt 路径升级到 v2，入口同时拒绝已有 v1/v2 receipt；receipt 显式携带 unit policy。D-129、remainder 与 D-128 均从同一次 `O_NOFOLLOW` 安全读取的字节计算 seal 并加载，关闭 digest→path load 窗口。正反例覆盖 source call-site、remote v1/错误 policy/challenge、receipt schema/policy/source seal、live binding、vendor partial/换态和 unit grammar mutations；`python3 -B .local/issue-36-ufw/axialmuse-d130-semantic-acceptance.py --audit` 返回 `D130_SEMANTIC_ACCEPTANCE_AUDIT_OK`。本轮没有服务器连接、formal、receipt、重启、reload、恢复或云/Git 写操作。
+- **剩余边界**：本地候选通过不等于 D-130 formal acceptance。#36 仍缺另行授权后在同一记录 boot 上形成的有效 v2 receipt，以及 canonical `main` 前置满足后的 verifier 现场安装；#37 继续暂停。
+
+## 2026-08-04 — D-133 当前 ExecStart 形态分类完成（#36 整体仍为 GAP）
+
+- **授权与安全闭包**：用户只授权制作、本地审计并执行一次隐私安全只读分类，不授权修改 D-130 契约、重跑 formal 或任何服务器/云资源写操作。首轮独立复审在远端连接前发现 status 尾部未锚定的误分类并完成修正；最终候选通过固定依赖、同 boot、challenge、干净环境、命令白名单、异常/输出闭包和正反例审计，随后只建立一条新 SSH 会话且没有自动重试。
+- **当前分类结果**：同一记录 boot 上，`tat_agent.service` 为 `single-zero`，其 unit、fragment、process 门禁均为真；`unattended-upgrades.service` 为 `numeric-pair`，其 unit、fragment 门禁均为真。没有返回或保存原始 `ExecStart`、路径、PID、cmdline、主机或连接信息。该单次当前观测把后续候选修正范围收窄到 TAT 的 outer normalizer，但不追溯证明 D-132 观测瞬间的历史因果，也不能把 `numeric-pair` 单独解释为成功。
+- **剩余边界**：D-133 不是 D-130 formal，没有生成 D-130 或 D-133 receipt，也没有修改 D-129/D-132 历史结果；服务器与云控制面没有除正常 SSH/sudo 审计日志外的写入。D-134 后续已在独立授权下完成 unit-aware v2 本地契约，但仍未运行 formal。#36 仍缺有效 D-130 receipt 和 canonical `main` 前置满足后的 verifier 安装，#37 继续暂停；新的 formal 须另行取得明确授权。
+
+## 2026-08-03 — D-132 首轮 D-130 formal 失败关闭（#36 整体仍为 GAP）
+
+- **授权与执行**：用户明确授权使用既定 ignored 冻结候选执行一轮 D-130 formal，只允许远端状态读取和本地私有 receipt，不授权服务器或云资源写操作。本地审计重新通过；正式入口先完成只读 boot 绑定探针，再进入两条语义观测会话的既定流程。
+- **失败事实**：语义观测阶段返回 `D130_SEMANTIC_ACCEPTANCE status=failed code=remote-posture-exec-start-shape`，按契约立即失败关闭；没有生成 `.d130-semantic-acceptance-v1.json`，也没有自动重试。该错误只证明继承的 systemd `ExecStart` 形态谓词未命中。执行后的本地源码审计把触发范围收窄到 outer normalizer 处理的 `unattended-upgrades.service` 或 `tat_agent.service`，而非 Nginx；当前脱敏错误码仍不区分两者，也不能证明实际尾部形态、服务或主机故障，尚未完成的后续门禁同样不能记为通过。
+- **边界与遗留**：远端只产生常规 SSH/sudo 审计副作用并短暂持有既有包管理锁，没有修改服务器文件、配置、服务、防火墙、软件或云控制面；没有第二次重启、reload、补链、再基线、恢复、verifier 或 #37。D-129 继续保持 `post-reboot-pending` / `formalAccepted=false`。本次 formal 授权已消费；具体 unit 归因、验收源码/证据契约修正及再次 formal 都须新的决定与授权。#36 仍缺有效 D-130 receipt 和 canonical `main` verifier 现场安装，#37 继续暂停。
+
 ## 2026-08-03 — D-130 semantic acceptance 源码与证据契约获准（formal 待形成）
 
 - **所有者当前确认**：用户复核 D-129 的正式失败和 diagnostic-only remainder 后，确认按当前主机侧证据未发现问题，并在腾讯云控制面确认当前状态正常。该结论是用户人工确认，不把本机进程或 TAT 在线当作 Agent 对整个云控制面的独立证明，也不追溯解释 vendor 链缺席。
 - **获准契约**：用户选择新建 D-130 逐组件只读语义验收，并接受旧 preflight 只留聚合摘要造成的不可分解历史残余。vendor 只可为 `fully_absent` 或原严格 `rejecting`，任何 partial/换态失败关闭；其他 D-124/D-129 当前语义门禁继续精确执行，systemd 仅接受 Nginx `ExecStart status=0` 的精确成功表示等价。聚合摘要不等只记为 `accepted_residual_unattributed`，不声称匹配、已归因或已重新建立基线。
-- **授权和剩余边界**：本轮只授权修改、本地审计 D-130 源码、证据 schema 和反例，不授权连接服务器执行 formal。D-129 的 consumed/result 必须保持 `post-reboot-pending`/`formalAccepted=false`，不执行第二次重启、reload/补链/再基线、服务恢复或云写操作。D-130 formal receipt 尚未形成；#36 还需该 receipt 与 canonical `main` verifier 现场安装，#37 继续暂停。
+- **授权和剩余边界**：本轮只授权修改、本地审计 D-130 源码、证据 schema 和反例，不授权连接服务器执行 formal。D-129 的 consumed/result 必须保持 `post-reboot-pending`/`formalAccepted=false`，不执行第二次重启、reload/补链/再基线、服务恢复或云写操作。该时点 D-130 formal receipt 尚未形成；后续 D-132 首轮 formal 的失败关闭见上方独立条目。
 
 ## 2026-08-03 — D-129 唯一维护重启已执行，完整 post-reboot 失败关闭（#36 整体仍为 GAP）
 
@@ -42,7 +73,7 @@
 - **失败关闭与修复**：早期尝试分别暴露自动包任务锁竞争、SSH 标准输入被交互式 UFW dry-run 消费、dry-run 会改写 `ufw.conf`、Ubuntu vendor IPv6 规则中合法不存在 `ufw-not-local`，以及提交后清理错误假设 systemd wants 目录必然存在。所有提交前失败均由 watchdog 回滚或通过精确闭包恢复到写入前基线；提交后的目录假设只影响临时状态清理，不改变已经验收并提交的防火墙规则。修复后的冻结脚本与四组本地 fixture 均按事务摘要绑定。
 - **提交、清理与稳态**：最终事务启用 UFW 后，第二条全新严格公钥 SSH 会话逐项通过管理身份、`sudo -n`、SSH 策略、TAT、Nginx、failed units、监听面、双栈默认/用户规则和腾讯 YJ 链身份后才提交。包管理锁持有者按其原协议自然退出后，独立审计的清理事务只删除本事务两个运行时 marker 和 33 个精确绑定的状态成员；随后提交后重启前 steady verifier 再次通过。D-122 收口时服务器 UFW 为 active/enabled，目标规则与 vendor 链保持稳定；腾讯云轻量防火墙没有被改动。
 - **软件只读计划**：2026-08-01 的新鲜 apt 模拟显示六个升级候选：`distro-info-data`、`libssl-dev`、`libssl3t64`、`openssl`、`tzdata`、`tzdata-legacy`，零新增、零移除；这些升级在本条记录形成时尚未授权。Certbot `--no-install-recommends` 模拟显示新增 `certbot`、`python3-acme`、`python3-certbot`、`python3-configargparse`、`python3-josepy`、`python3-parsedatetime`、`python3-rfc3339` 七包，零升级、零移除，在该时点也尚未授权或安装；后续实际软件事务见 D-124。
-- **CI 与当时剩余门禁**：用户确认 GitHub Actions 额度恢复，并要求当前 `codex/issue-18-production-baseline` 暂不合并 `main`，待 #18 完成后一次性开 PR。topic push 本身不触发 workflow，故当时尚无本轮远端 CI 证据。本条记录形成时，#36 合并前仍须由用户手工闭合腾讯云轻量防火墙、决定六个升级候选和 Certbot、执行获准维护重启并完成重启后稳态；这些事项的后续结果见 D-124 至 D-130，当前仍待 D-130 formal receipt 与 canonical `main` 前置满足后的 verifier 安装。#37 的生产目录、发布、Nginx 站点、DNS/TLS 与公网闭环继续暂停；本轮未引入浏览器请求、访问者数据处理或第三方常驻服务。
+- **CI 与当时剩余门禁**：用户确认 GitHub Actions 额度恢复，并要求当前 `codex/issue-18-production-baseline` 暂不合并 `main`，待 #18 完成后一次性开 PR。topic push 本身不触发 workflow，故当时尚无本轮远端 CI 证据。本条记录形成时，#36 合并前仍须由用户手工闭合腾讯云轻量防火墙、决定六个升级候选和 Certbot、执行获准维护重启并完成重启后稳态；这些事项的后续结果见 D-124 至 D-135。D-132 时点仍待首轮 formal 失败后的有效 D-130 receipt，D-135 已关闭该门禁；当前只剩 canonical `main` 前置满足后的 verifier 现场安装。#37 的生产目录、发布、Nginx 站点、DNS/TLS 与公网闭环继续暂停；本轮未引入浏览器请求、访问者数据处理或第三方常驻服务。
 
 ## 2026-07-30 — #36 加固前复核与 verifier bootstrap 候选（整体仍为 GAP）
 
