@@ -113,6 +113,10 @@
 
   完整回退会同时移除 #18 及该 PR 中全部 `dev` 内容，但不改动 `dev`、专题分支、当前未提交的 #36 evidence、服务器、云资源、制品或 GitHub Issue。由于原提交仍通过已发布 merge 保留在 `main` 历史中，后续批准重新晋级时不能假定再次合并原分支会恢复内容；必须基于当时稳定 `main` 重新形成可审计的新提交，或另行确认精确的 revert-of-revert 方案。
 
+- **D-140 / 2026-08-04**：用户在 PR #62 已由 PR #63 完整回退后，确认只把 `codex/issue-18-production-baseline` 的 #18 支线直接晋级到 canonical `main`，不经过尚未完成的 `dev`。只读拓扑审计确认远端 `main@3acc6f2` 已包含旧 topic `e88386b` 的历史祖先关系，但当前树不含其被回退内容；因此普通 merge 只会得到 no-op，而反向回退 PR #63 会重新带入 PR #62 的完整 `dev`、超出本次授权。实施允许在隔离 worktree 中把原 topic 从 `e88386b` 普通快进到锁定的 `main@3acc6f2`，再按原始 `195656f..e88386b` 的 11 个线性提交顺序形成新的可审计重应用提交；不得使用 revert-of-revert、force、rebase、reset、直接推送 `main` 或夹带 topic 之外的 `dev` 内容。
+
+  重应用必须保留 D-139 与本决定，并证明除 `docs/architecture/open-decisions.md` 新增的 D-139/D-140 外，tracked 路径、文件 mode 和内容精确等于旧 topic `e88386b`；原 #18 范围固定为 76 个文件，不包含 #8 preview 或当前主工作区的 13 份未提交 #36 evidence。完成差异复核和固定 Node `24.18.0` 的完整本地质量门禁后，可普通非强制 push 同名 topic，创建 `codex/issue-18-production-baseline -> main` 的窄化例外 PR；required checks 全部成功、head/base 未漂移且 GitHub 仍报告可合并后使用普通 merge，不删除分支，并观察精确 `main` push CI 至 `completed/success`。任何内容范围漂移、冲突无法按旧 topic 与 D-139/D-140 同时保持、门禁失败或远端漂移都必须停止。本授权不包含 Issue 写操作、服务器或云资源写入、production 部署、DNS/TLS、TAT 调度、依赖变化、用户数据处理或第三方运行时服务。
+
 ## 依 D-078 形成的 M0 工程决定
 
 - **E-001 / 2026-07-18 — 项目内容职责拆分**：`docs/contracts/projects.json` 继续拥有项目 ID、短 slug、标题、摘要、状态、日期、仓库、展示开关、导航顺序和写作模块等结构化事实；项目长文位于 `site-content/projects/<project-id>/index.md` 或 `index.mdx`，只拥有背景、能力、取舍、限制、证据说明和复盘正文，不重复 H1、摘要、状态、日期、仓库或路由字段。构建期根据稳定 project ID 关联两者，并从注册表只读派生 Docusaurus 的 `title`、`description`、完整 `/projects/<project-slug>` 路径和草稿行为，不回写源文件。`published` 或 `archived` 项目必须恰有一个正文入口；`draft` 或 `planned` 可以暂缺正文但不能产生生产路由；孤儿正文、双入口和结构化字段双写均使构建失败。项目列表、项目侧栏和详情元数据读取同一注册表，正文文件路径不生成公开 URL。
