@@ -171,22 +171,10 @@ test("CODE-007 安全 global data 对畸形字段、非规范路由与跨类型�
   const invalidStatus = contentInput();
   const project = (invalidStatus.projectNavigation as Array<Record<string, unknown>>)[0];
   assert.ok(project);
-  project.publicationStatus = "private";
+  project.publicationStatus = "planned";
   assert.throws(
     () => readSiteContentData(invalidStatus),
     /\[SITE_CONTENT_DATA_INVALID\]/u,
-  );
-
-  const plannedPreview = contentInput();
-  const plannedProject = (
-    plannedPreview.projectNavigation as Array<Record<string, unknown>>
-  )[0];
-  assert.ok(plannedProject);
-  plannedProject.publicationStatus = "planned";
-  delete plannedProject.previewImage;
-  assert.equal(
-    readSiteContentData(plannedPreview).projectNavigation[0]?.publicationStatus,
-    "planned",
   );
 
   const invalidImage = contentInput();

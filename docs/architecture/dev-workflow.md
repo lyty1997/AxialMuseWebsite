@@ -1,7 +1,7 @@
 # 跨机协同开发预览工作流
 
 状态：active
-最近更新：2026-07-28
+最近更新：2026-07-18
 适用范围：Windows 机器与 Linux 托管机之间的本地开发预览闭环（编码会话可以在任意一端发起，托管固定在 Linux 一端）。本工作流只覆盖“改代码 → 本地渲染验证 → 再改”的迭代环节；生产目标已于 2026-07-12 确认为腾讯云轻量应用服务器，见 [域名与生产发布设计](../operations/domain-deployment.md)，两条链路独立运行。
 
 ## 背景与目标
@@ -10,7 +10,7 @@
 
 **一处曾经的误判（2026-07-05 现场验证后更正）**：本文件最初假设“当前 Claude Code CLI 所在环境”等同于“Linux 开发机”，即会话本身固定跑在 Linux 上。实测发现这个假设不成立——Claude Code CLI / Claude Desktop 的编码会话可以运行在 Windows 或 Linux 任意一端（取决于用户在哪台机器上发起对话），与“网站预览服务固定托管在哪台机器”是两回事，不能划等号。本文件后续把两者分开描述：**托管角色**（固定是 `192.168.0.162` 这台 Linux 机器）与**发起编码会话的机器**（可以是 Windows 也可以是 Linux，随时可能变化）。
 
-**实现状态**：E-009 的仓库实现已在 #8 落地：`scripts/dev/preview.sh` 已改为构建并检查 Docusaurus preview 候选，再通过 worktree 外的 release/current 原子激活；`build-site.mjs --mode preview`、冻结依赖证据和 preview 制品检查也已接线。前三个提交及其 CI 依次失败关闭于不受支持的 generated-files 配置、`build --dev` 自动 debug 页面，以及已合入 `main.js` 却仍被预取的缺失 pages config chunk。当前纠正版使用 Docusaurus 官方 generated-files 环境变量、显式关闭 classic debug 路由、让拥有正文的未发布项目以不伪造预览图的安全投影进入 preview，并只在生成映射、缺失目标和 bundle 合并证据全部闭合时登记该已合并 config chunk；同一 preview 候选在 Windows Chrome 150 已从稳定复现唯一 404 转为全部 11 个浏览器探针通过。Windows 工作区的 WSL Ubuntu 使用临时官方 nvm `0.40.6` 和精确 Node `24.18.0`；当前兼容修复尚待最终 pre-commit、纠正提交与精确远端 CI。Linux 托管机实际配置迁移、运行/失败注入与真实局域网浏览器验收仍未完成，不能把仓库实现写成现场可用能力。
+**实现状态**：2026-07-18 的目标已迁移为 E-009 的 Docusaurus 草稿预览制品，但当前 `scripts/dev/preview.sh` 仍直接服务 worktree 的 `public/`，尚不构建 Docusaurus、显示 draft 或执行原子制品切换。本节把目标协议与已验证的迁移前事实明确分开；在脚本和现场验收完成前，不把目标写成已可用能力。
 
 ## 工程量判断
 
@@ -78,16 +78,15 @@ AxialMuseWebsite.preview/          # 专门用于 checkout 待验收分支并构
 
 ## 预览服务脚本（目标协议，按需触发）
 
-- **配置来源**：`PREVIEW_HOST`、`PREVIEW_PORT` 与新的 `PREVIEW_STATE_DIR` 来自不进版本库的 `scripts/dev/dev-workflow.env`。`PREVIEW_STATE_DIR` 必须是仓库和所有 worktree 外的绝对路径，候选、release 与 `current` 必须位于同一文件系统；旧 `PREVIEW_SERVE_DIR` 已从已提交 example 删除。每台机器的实际 gitignored 配置必须在现场显式迁移；当前 Windows clone 没有该文件，Linux 托管机的真实值尚未改动或验证。
-- 状态目录固定分责：`candidates/<sha>.<pid>/` 保存本次未激活构建，`releases/<sha>/` 只保存不可变 Web Root，`current` 原子指向并直接编码活动 release SHA，`run/` 保存 PID、请求分支、worktree HEAD、候选 SHA、排他锁与最近失败，`logs/` 保存非公开日志。运行元数据不得放入 release 或被 HTTP 提供。
-- `scripts/dev/preview.sh` 继续只在 Linux 托管机使用，并保留四类子命令：
-  - `start <branch>`（兼容旧名 `serve <branch>`）：取得排他锁，严格验证远端分支，精确 fetch 和 detached checkout `origin/<branch>`，构建并检查候选；活动 `current` 就绪后才启动 Python 服务。已有服务或失败的首次候选都不得被误报为成功。
+- **配置来源**：`PREVIEW_HOST`、`PREVIEW_PORT` 与新的 `PREVIEW_STATE_DIR` 来自不进版本库的 `scripts/dev/dev-workflow.env`。`PREVIEW_STATE_DIR` 必须是仓库和所有 worktree 外的绝对路径，候选、release 与 `current` 必须位于同一文件系统；旧 `PREVIEW_SERVE_DIR` 在目标实现中删除。已提交 example 与真实 gitignored 配置在脚本实现时一并迁移，不能把当前未使用的变量先写成已生效。
+- 状态目录固定分责：`candidates/<sha>.<pid>/` 保存本次未激活构建，`releases/<sha>/` 只保存不可变 Web Root，`current` 原子指向活动 release，`run/` 保存 PID、请求分支、worktree HEAD、活动 SHA、排他锁与最近失败，`logs/` 保存非公开日志。运行元数据不得放入 release 或被 HTTP 提供。
+- `scripts/dev/preview.sh` 继续只在 Linux 托管机使用，并保留四个子命令：
+  - `serve <branch>`：取得排他锁，严格验证远端分支，精确 fetch 和 detached checkout `origin/<branch>`，构建并检查候选；活动 `current` 就绪后才启动 Python 服务。已有服务或失败的首次候选都不得被误报为成功。
   - `restart [branch]`：不传分支时读取上次请求分支；完成 checkout 后先断言 Node 精确匹配 `.nvmrc`、当前 manifest/lock 与已独立准备的本地冻结依赖一致，再通过 E-008 的 wrapper 执行 Docusaurus `build --dev`。候选通过制品门禁后，先原子 rename 为 `releases/<sha>`，再原子替换 `current`；服务已运行时不停止或更换 PID。
   - `stop`：只停止经命令行与服务目录双重确认属于本站的 Python 进程，保留 `current` 和 release 以便恢复。
   - `status`：分别显示请求分支、worktree HEAD、活动制品 SHA、`mode=preview`、PID、URL 和最近失败；checkout 已更新但候选未激活时不得显示为预览成功。
 - **失败与回滚**：fetch、checkout、Node、依赖、build 或候选检查失败时删除本次 candidate，保持旧 `current` 和 Python PID。切换后 localhost HTTP 冒烟失败时原子恢复旧 symlink；首次启动没有旧 release 时停止新服务。并发 `serve/restart` 由同一非阻塞排他锁拒绝，不能交错删除或切换候选。
-- **依赖边界**：预览脚本不运行 `npm install`、`npm ci`、`npm audit`、依赖解析或下载，不修复缺失依赖；只读解析当前 manifest/lock 是验证冻结安装证据的必要步骤，不会改写依赖图。冻结依赖必须在 D-077/#9 完成后由独立受控步骤准备，并与当前 checkout 的 manifest、lock、精确 Node/npm 证据绑定；不匹配时只报告并保留旧预览。
-  - 预览 worktree 的冻结安装由独立获准流程完成后，在该 worktree 使用主 Node 执行一次 `node scripts/dev/preview-dependencies.mjs prepare` 写入私有证据；证据绑定 manifest、lock、隐藏 lock、Node/npm，并对除证据文件自身外的完整 `node_modules` 路径、类型、权限、链接目标与普通文件字节形成确定性树摘要。正常 `start/restart` 只执行 `verify`；checkout 改变上述输入或安装树任一字节时验证失败，必须重新走独立安装/准备流程，不能由预览脚本自行修复。
+- **依赖边界**：预览脚本不运行 `npm install`、`npm ci`、`npm audit`、lockfile 解析或下载，不修复缺失依赖。冻结依赖必须在 D-077/#9 完成后由独立受控步骤准备，并与当前 checkout 的 manifest、lock、精确 Node/npm 证据绑定；不匹配时只报告并保留旧预览。
 - **索引边界**：preview 配置全站 `noIndex: true`、关闭 sitemap，所有 HTML 必须含 `noindex, nofollow`；canonical 仍使用生产 origin，局域网 IP/端口不进入制品。production 必须反向证明没有继承全站 noindex，预览的成功不能替代 production build、断链或发布门禁。
 - 现有端口占用和 PID 所有权保护继续保留，但目标 PID 校验的服务目录改为 `${PREVIEW_STATE_DIR}/current`，不再检查 worktree 的 `public/`。
 - 触发方式仍有两种：Linux 端直接执行，或 Windows 端 `restart-remote.ps1` 通过 SSH 触发同一 Linux 命令；后者只远程触发，不运行 Node 或建立第二套构建环境。
@@ -106,7 +105,7 @@ AxialMuseWebsite.preview/          # 专门用于 checkout 待验收分支并构
 
 ## 端到端迭代流程
 
-> 状态说明：Windows 编辑、普通提交与推送、Git 同步、浏览器审查和远程触发已在 2026-07-05 现场验证；图中的 Docusaurus 候选构建与原子切换已有 #8 仓库实现，当前本地纠正版尚待最终门禁、精确远端 CI、远端配置迁移和现场重新验收。该步骤不代表 production build 或 Ubuntu CI 质量门禁。
+> 状态说明：Windows 编辑、普通提交与推送、Git 同步、浏览器审查和远程触发已在 2026-07-05 现场验证；图中的 Docusaurus 候选构建与原子切换是 E-009 的目标设计，尚待脚本实现和重新验收。该步骤不代表 production build 或 Ubuntu CI 质量门禁。
 
 ```plantuml
 @startuml
@@ -161,7 +160,7 @@ deactivate Preview
 4. ~~两端各跑一次 `sync.sh` / `sync.ps1`，确认能互相看到对方的提交~~：**已完成**（此前验证时把 `dev` 推到了 origin，见 [项目进度](../progress.md)）。
 5. **新增并已验证**：Windows 端生成专用 SSH 密钥、用户手动装到 Linux 端 `authorized_keys`、`restart-remote.ps1` 通过 SSH 成功触发 Linux 端 `preview.sh restart`（从 `779407e` 拉到 `ee7b400` 并重启）。
 6. ~~走一轮完整"改动 → 推送 → 远程重启 → Windows 端渲染确认"的端到端验证~~：**已完成，2026-07-05**。Linux 托管机放行局域网到 8088 端口的访问后，`Test-NetConnection` 从 Windows 端确认端口可达；用已配对的 Chrome 扩展 `navigate` 到 `http://192.168.0.162:8088/`，标签页标题变为真实的 `Axial Muse`、正文内容读取正常，确认渲染链路完全打通。详细记录见 [项目进度](../progress.md)。
-7. **仓库实现已落地，待最终 CI 与现场验收**：`preview.sh`、环境示例、preview build/check 和冻结依赖证据已在 #8 实现；主 Node `24.18.0` 的严格类型、隔离测试和真实内容 preview 候选已经通过，仍需完成当前纠正版的最终 pre-commit 与精确双端点 CI。在 Linux 托管机还需迁移真实 gitignored 配置并准备冻结依赖证据，随后验证 draft/noindex、production 反向隔离、候选原子切换、失败保留旧页面、切换后回滚、并发拒绝、状态报告，以及 `360/768/1024/1440` 真实 Chrome 截图。
+7. **待实现与重新验收**：把 `preview.sh`、环境示例和实际 gitignored 配置迁移到 E-009；在 Docusaurus 3.10.2 与冻结依赖就绪后验证 draft/noindex、production 反向隔离、候选原子切换、失败保留旧页面、切换后回滚、并发拒绝、状态报告，以及桌面/平板/移动真实 Chrome 截图。
 
 
 ## 从开发预览晋级到生产

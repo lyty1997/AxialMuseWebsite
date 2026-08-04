@@ -1,7 +1,7 @@
 # 内容发布流程
 
 状态：active
-最近更新：2026-08-04
+最近更新：2026-07-27
 适用范围：M0-M2 项目、技术分享和页面文案的创建、审核、上线与修订
 
 ## 目的
@@ -138,7 +138,7 @@ Docusaurus schema、错误契约、文章命令、Node 24 门禁、路径检查�
 3. **起草**：修改正文与作者确定的领域字段；事实、观点、计划和未知信息使用不同表达，不从 articleId 推导 slug、分类或日期。
 4. **自检**：检查真实姓名、联系方式、截图、日志、路径和示例数据，移除密钥与隐私信息。
 5. **准备发布**：作者先手工把已审核文章改为 `publicationStatus: published`，且不手工填写首次日期；#25 进入共享分支后，在获准 Linux 环境以 `.nvmrc` 精确 Node 显式运行 `node scripts/author/set-article-dates.mjs --source-name <name> --action publish`，确认 Git diff 只增加两个相等日期。后续公开修订使用 `--action revise`，确认 `publishedAt` 未变且只有跨日修订更新 `updatedAt`。当前临时分支的实现已通过本地验收但尚未提交、推送或取得远端证据，因此本工作区之外仍不得把示例当作已发布能力；创建命令、CI、构建和发布自动化也不承担该步骤。
-6. **验证**：完成 Docusaurus 迁移后，在完整非浅 Git worktree 的 Linux 环境或 Ubuntu CI 中分别运行 `quality`、独立 `tsc --noEmit`、Node ESM 测试、完整历史门禁和 Docusaurus build，再以浏览器检查桌面、平板、移动端、链接和资源；涉及既有 slug 时还要从同一 production build 证明唯一 301、目标存在且 source 无静态 HTML。预览、类型检查、测试、历史、构建与 release 检查互不替代。D-097 至 D-099 已接入 Node 24 双端点，#33/#35/#14 已形成 release、服务器 verifier 和 producer 能力，但 canonical `main` 真实 upload/outputs/ZIP 与组合树远端 CI 尚待。#36 已完成盘点、SSH、OS UFW 与软件事务；D-125 历史正式回执仍为 `environmental_inconclusive`。D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已返回 `status=complete outcome=committed`。D-129 的唯一维护重启已执行，但完整 post-reboot 因 vendor declaration predicate 不满足而 pending；D-132 首轮 formal 以 `remote-posture-exec-start-shape` 失败且未形成 receipt，D-133/D-134 随后完成分类与严格 unit-aware v2 本地候选。后续获准的一轮 v2 formal 已用同一 boot、间隔至少 10 秒的两条 fresh SSH 会话通过所有 gates，生成并独立校验 `status=accepted-with-residuals`、`vendorState=fully_absent`、`aggregateDisposition=accepted_residual_unattributed`、`serverMutationPerformed=false` 的私有 receipt；D-129/D-132 历史不变，除正常 SSH/sudo 审计副作用外没有服务器或云资源写操作。#36 只剩 canonical `main` 后的 verifier 现场安装，#37 继续暂停；不得由该 formal 结果推导生产已就绪。
+6. **验证**：完成 Docusaurus 迁移后，在完整非浅 Git worktree 的 Linux 环境或 Ubuntu CI 中分别通过 E-010 `run-script` profile 运行 `quality`、D-074 的独立 `tsc --noEmit`、E-012 的 Node ESM 测试、E-013 的完整历史门禁和 Docusaurus build，再启动预览并通过浏览器检查桌面端、平板端、移动端、链接和资源；涉及既有 slug 时还要证明 E-014 注册表能从同一 production build 派生唯一 301、目标页面存在且 source 没有静态 HTML。预览、类型检查、测试、历史检查、静态构建与 release 检查互不替代。D-097 至 D-099 已在当前工作区把 `quality`、`typecheck`、Node ESM 测试、完整历史与 production build 接入 Node 24 主/最低端点并通过本地 fresh 验收；预览、真实浏览器、release/production artifact、远端 CI 与部署检查仍未闭环，不得从本地门禁通过推导生产就绪。
 7. **创建 PR**：说明设计文档依据、公开内容变化、来源、截图和验证结果。
 8. **预览审核**：使用分支预览确认排版、导航、SEO 元数据、图片和索引策略。
 9. **内容审核**：逐项核对标题、摘要、事实来源、状态、日期、版权和承诺边界。

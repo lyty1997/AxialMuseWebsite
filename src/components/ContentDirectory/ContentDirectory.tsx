@@ -13,15 +13,6 @@ export interface ContentDirectoryProps {
   readonly variant: "desktop" | "collapsible";
 }
 
-function projectDirectoryLabel(
-  project: Readonly<{title: string; publicationStatus: string}>,
-): string {
-  if (project.publicationStatus === "archived") return `${project.title}（归档）`;
-  if (project.publicationStatus === "draft") return `${project.title}（草稿）`;
-  if (project.publicationStatus === "planned") return `${project.title}（计划）`;
-  return project.title;
-}
-
 function DirectoryLink({
   article,
   currentPath,
@@ -106,7 +97,8 @@ function DirectoryNavigation() {
                 to={project.canonicalPath}
                 aria-current={project.canonicalPath === currentPath ? "page" : undefined}
               >
-                {projectDirectoryLabel(project)}
+                {project.title}
+                {project.publicationStatus === "archived" ? "（归档）" : null}
               </Link>
             </li>
           ))}

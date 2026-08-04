@@ -27,7 +27,7 @@
 ## 证据说明
 
 - 项目详情页的“查看源码”入口由项目注册表派生；目标公开仓库中的初始化脚本、质量脚本、CI 配置、Git hooks 和项目文档用于核对上述能力。
-- [项目展示设计](https://github.com/lyty1997/AxialMuseWebsite/blob/main/docs/projects/vibecoding-project-scaffold.md)继续记录仓库事实、页面动作、视觉证据要求、公开边界和验收门禁。
+- [项目展示设计](../../../docs/projects/vibecoding-project-scaffold.md)继续记录仓库事实、页面动作、视觉证据要求、公开边界和验收门禁。
 - 公开说明只覆盖仓库中实际存在并可以复现的行为，不把模板能力扩写为对所有项目都成立的保证。
 
 ## 复盘

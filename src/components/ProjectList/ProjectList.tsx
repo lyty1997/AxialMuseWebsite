@@ -11,11 +11,6 @@ const PROJECT_STATUS = {
   archived: "已归档",
 } as const;
 
-const PROJECT_PUBLICATION_STATUS = {
-  draft: "草稿预览",
-  planned: "计划预览",
-} as const;
-
 export interface ProjectListProps {
   readonly headingLevel: "h2" | "h3";
   readonly prioritizeFirstPreview: boolean;
@@ -29,6 +24,7 @@ export function ProjectList({
   if (projectNavigation.length === 0) {
     return <p className={styles.emptyState}>{EMPTY_PROJECTS}</p>;
   }
+
   const Heading = headingLevel;
   return (
     <ul className={styles.list}>
@@ -37,29 +33,22 @@ export function ProjectList({
         return (
           <li className={styles.item} key={project.projectId}>
             <article className={styles.card}>
-              {project.previewImage === undefined
-                ? null
-                : (
-                  <img
-                    className={styles.preview}
-                    src={project.previewImage.publicUrl}
-                    width={project.previewImage.width}
-                    height={project.previewImage.height}
-                    alt={project.previewImage.alt}
-                    loading={isPriorityPreview ? "eager" : "lazy"}
-                    fetchPriority={isPriorityPreview ? "high" : undefined}
-                    decoding="async"
-                  />
-                )}
+              <img
+                className={styles.preview}
+                src={project.previewImage.publicUrl}
+                width={project.previewImage.width}
+                height={project.previewImage.height}
+                alt={project.previewImage.alt}
+                loading={isPriorityPreview ? "eager" : "lazy"}
+                fetchPriority={isPriorityPreview ? "high" : undefined}
+                decoding="async"
+              />
               <Heading className={styles.title}>
                 <Link to={project.canonicalPath}>{project.title}</Link>
               </Heading>
               <p className={styles.status}>项目状态：{PROJECT_STATUS[project.status]}</p>
               {project.publicationStatus === "archived"
                 ? <p className={styles.status}>公开状态：已归档</p>
-                : null}
-              {project.publicationStatus === "draft" || project.publicationStatus === "planned"
-                ? <p className={styles.status}>公开状态：{PROJECT_PUBLICATION_STATUS[project.publicationStatus]}</p>
                 : null}
               <p className={styles.summary}>{project.summary}</p>
               <p className={styles.updated}>

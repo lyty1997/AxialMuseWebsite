@@ -29,10 +29,7 @@ export const RUN_SCRIPT_COMMANDS = Object.freeze({
   typecheck: Object.freeze(["tsc --noEmit"]),
   test: Object.freeze(["node scripts/quality/run-tests.mjs"]),
   build: Object.freeze(["node scripts/build/build-site.mjs --mode production"]),
-  "package:artifact": Object.freeze(["node scripts/release/package-site.mjs"]),
-  "check:artifact": Object.freeze([
-    "node scripts/quality/check-release-package.mjs",
-  ]),
+  "check:artifact": Object.freeze(["node scripts/quality/check-artifact.mjs"]),
 });
 
 export const RUN_SCRIPT_ALLOWLIST = Object.freeze(Object.keys(RUN_SCRIPT_COMMANDS));

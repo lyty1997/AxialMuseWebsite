@@ -26,11 +26,8 @@ import type {
 import type {StaticAssetPlan} from "../static-assets/index.js";
 import {failContentBuild} from "./errors.js";
 import type {LoadedValidatedContent} from "./types.js";
-import {
-  CANONICAL_ORIGIN,
-  deriveProductionRuntimeRedirects,
-} from "./runtime-redirects.js";
 
+const CANONICAL_ORIGIN = "https://www.axialmuse.com";
 export const ARTICLE_DATE_INDEX_RELATIVE_PATH = "axial-muse/article-date-index.json";
 const MIN_UNPUBLISHED_SEMANTIC_FRAGMENT_BYTES = 16;
 const UTF8_DECODER = new TextDecoder("utf-8", {fatal: true});
@@ -132,7 +129,7 @@ interface PublicArticleProjection {
   }>[];
 }
 
-export function expectedPageRoutes(repositoryRoot: string): readonly string[] {
+function expectedPageRoutes(repositoryRoot: string): readonly string[] {
   const pagesRoot = resolve(repositoryRoot, "src/pages");
   const routes = new Set<string>();
   const walk = (directory: string, segments: readonly string[]): void => {
@@ -189,7 +186,7 @@ function expectedRoutes(content: LoadedValidatedContent): readonly string[] {
   return Object.freeze([...routes].sort());
 }
 
-export function routeFromHtmlPath(path: string): string | undefined {
+function routeFromHtmlPath(path: string): string | undefined {
   if (path === "404.html") return undefined;
   if (path === "index.html") return "/";
   if (path.endsWith("/index.html")) return `/${path.slice(0, -"index.html".length)}`;
@@ -287,7 +284,7 @@ function readStableFileBytes(
   return value;
 }
 
-export function readStableTextFile(
+function readStableTextFile(
   absolutePath: string,
   sourcePath: string,
   expectedEvidence?: BuildFileEvidence,
@@ -469,7 +466,7 @@ function sanitizeHtmlTag(tag: string): string {
   return sanitized;
 }
 
-export function activeHtmlMarkup(html: string, sourcePath: string): string {
+function activeHtmlMarkup(html: string, sourcePath: string): string {
   let cursor = 0;
   let sanitized = "";
   let doctypeSeen = false;
@@ -673,7 +670,7 @@ export function activeHtmlMarkup(html: string, sourcePath: string): string {
   return sanitized;
 }
 
-export function htmlAttributes(tag: string, sourcePath: string): ReadonlyMap<string, string> {
+function htmlAttributes(tag: string, sourcePath: string): ReadonlyMap<string, string> {
   const attributes = new Map<string, string>();
   const opening = /^<[\t\n\f\r ]*\/?[\t\n\f\r ]*[A-Za-z][A-Za-z0-9:-]*/u.exec(tag);
   if (opening === null) {
@@ -893,7 +890,7 @@ function sidebarLinkLabel(innerHtml: string, sourcePath: string): string {
   return text;
 }
 
-export function extractSidebarLinks(html: string, sourcePath: string): readonly SidebarLink[] {
+function extractSidebarLinks(html: string, sourcePath: string): readonly SidebarLink[] {
   const sidebar = extractUniqueElementByClass(
     html,
     "aside",
@@ -983,7 +980,7 @@ export function extractSidebarLinks(html: string, sourcePath: string): readonly 
   return Object.freeze(links);
 }
 
-export function assertCanonical(html: string, route: string, sourcePath: string): void {
+function assertCanonical(html: string, route: string, sourcePath: string): void {
   const headOpenings = [...html.matchAll(/<head(?=[\t\n\f\r />])[^>]*>/giu)];
   const headClosings = [...html.matchAll(/<\/head[\t\n\f\r ]*>/giu)];
   const opening = headOpenings[0];
@@ -1390,13 +1387,6 @@ function expectedPageExpectation(
   }
   const project = content.projectNavigation.find((item) => item.canonicalPath === route);
   if (project !== undefined) {
-    if (project.previewImage === undefined) {
-      failContentBuild(
-        "CONTENT_ARTIFACT_PROJECT_IMAGE",
-        "production 项目投影缺少已验证主预览。",
-        {sourcePath: `build/${artifactHtmlPathForRoute(route)}`},
-      );
-    }
     return Object.freeze({
       title: `${project.title} | Axial Muse`,
       description: project.summary,
@@ -1504,27 +1494,19 @@ function assertProjectImage(
   project: LoadedValidatedContent["projectNavigation"][number],
   sourcePath: string,
 ): void {
-  const previewImage = project.previewImage;
-  if (previewImage === undefined) {
-    failContentBuild(
-      "CONTENT_ARTIFACT_PROJECT_IMAGE",
-      "production 项目投影缺少已验证主预览。",
-      {sourcePath},
-    );
-  }
   const images = [...main.matchAll(/<img(?=[\t\n\f\r />])[^>]*>/giu)]
     .map((match) => htmlAttributes(match[0], sourcePath))
     .filter((attributes) => (
       decodePageHtmlText(attributes.get("src") ?? "", sourcePath)
-      === previewImage.publicUrl
+      === project.previewImage.publicUrl
     ));
   const image = images[0];
   if (
     images.length !== 1
     || image === undefined
-    || decodePageHtmlText(image.get("alt") ?? "", sourcePath) !== previewImage.alt
-    || decodePageHtmlText(image.get("width") ?? "", sourcePath) !== String(previewImage.width)
-    || decodePageHtmlText(image.get("height") ?? "", sourcePath) !== String(previewImage.height)
+    || decodePageHtmlText(image.get("alt") ?? "", sourcePath) !== project.previewImage.alt
+    || decodePageHtmlText(image.get("width") ?? "", sourcePath) !== String(project.previewImage.width)
+    || decodePageHtmlText(image.get("height") ?? "", sourcePath) !== String(project.previewImage.height)
   ) {
     failContentBuild(
       "CONTENT_ARTIFACT_PROJECT_IMAGE",
@@ -2491,7 +2473,7 @@ function privateDateIndexPath(generatedFilesDirectory: string): string {
   return target;
 }
 
-export function assertPrivateDateIndex(
+function assertPrivateDateIndex(
   content: LoadedValidatedContent,
   generatedFilesDirectory: string,
   expectedEvidence?: BuildFileEvidence,
@@ -2554,7 +2536,7 @@ function permutations<T>(values: readonly T[]): readonly (readonly T[])[] {
   ]).map((tail) => [value, ...tail]));
 }
 
-export function hasPrivateDateIndexSignature(
+function hasPrivateDateIndexSignature(
   value: string,
   content: LoadedValidatedContent,
 ): boolean {
@@ -2581,7 +2563,7 @@ function sameIndexSet(left: ReadonlySet<number>, right: ReadonlySet<number>): bo
   return left.size === right.size && [...left].every((value) => right.has(value));
 }
 
-export function sameTreeEvidence(left: BuildTreeEvidence, right: BuildTreeEvidence): boolean {
+function sameTreeEvidence(left: BuildTreeEvidence, right: BuildTreeEvidence): boolean {
   return left.hasLeakedToken === right.hasLeakedToken
     && left.hasLeakedPathToken === right.hasLeakedPathToken
     && left.hasLeakedContentToken === right.hasLeakedContentToken
@@ -2964,7 +2946,7 @@ function markdownSemanticValues(value: string): readonly string[] {
   return Object.freeze([decoded, normalized, ...lexical].filter((candidate) => candidate !== ""));
 }
 
-export function visibleHtmlSemanticText(html: string): string {
+function visibleHtmlSemanticText(html: string): string {
   const withBlockBoundaries = html.replace(
     /<\/?(?:address|article|aside|blockquote|body|br|dd|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|html|li|main|nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul)(?=[\t\n\f\r />])[^>]*>/giu,
     " ",
@@ -3235,23 +3217,24 @@ export function assertProductionArtifact(
         {sourcePath: "site-content"},
       );
     }
-    const runtimeRedirects = deriveProductionRuntimeRedirects(
-      content.repositoryRoot,
-      buildDirectory,
-    );
-    const actual = [...runtimeRedirects.publicRoutes];
-    for (const route of actual) {
-      const relativePath = route === "/"
-        ? "index.html"
-        : `${route.slice(1)}index.html`;
-      const file = evidenceByPath.get(relativePath);
-      if (file === undefined) {
-        failContentBuild(
-          "CONTENT_ARTIFACT_ROUTE_SET",
-          "运行时公开路由无法一一映射到已复核的 HTML 文件。",
-          {sourcePath: `build/${relativePath}`},
-        );
-      }
+    if (evidence.files.some((file) => {
+      const lower = file.relativePath.toLowerCase();
+      return (lower.endsWith(".html") && !file.relativePath.endsWith(".html"))
+        || lower.endsWith(".htm")
+        || lower.endsWith(".xhtml");
+    })) {
+      failContentBuild(
+        "CONTENT_ARTIFACT_ROUTE_SET",
+        "production 制品含不受控的 HTML 后缀。",
+        {sourcePath: "build"},
+      );
+    }
+    const htmlFiles = evidence.files.filter((file) => file.relativePath.endsWith(".html"));
+    const actual: string[] = [];
+    for (const file of htmlFiles) {
+      const route = routeFromHtmlPath(file.relativePath);
+      if (route === undefined) continue;
+      actual.push(route);
       const sourcePath = `build/${file.relativePath}`;
       const html = readStableTextFile(
         resolve(buildDirectory, file.relativePath),
@@ -3284,6 +3267,7 @@ export function assertProductionArtifact(
         sourcePath,
       );
     }
+    actual.sort();
     if (
       actual.length !== expected.length
       || actual.some((route, index) => route !== expected[index])

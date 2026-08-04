@@ -11,9 +11,7 @@ export default function DocItemMetadata() {
         socialDescription: detail.item.summary,
         canonicalPath: detail.item.canonicalPath,
         type: "website" as const,
-        ...(detail.item.previewImage === undefined
-          ? {}
-          : {imagePath: detail.item.previewImage.publicUrl}),
+        imagePath: detail.item.previewImage.publicUrl,
       }
     : {
         title: `${detail.item.title} | Axial Muse`,
