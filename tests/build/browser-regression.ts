@@ -1145,7 +1145,7 @@ async function probeNoHydrationStaticContent(
       };
     })()`);
     assert.deepEqual(home, {
-      h1: "Axial Muse",
+      h1: "用全栈技术 + AI，让所有人用上好用的工具。",
       h1Visible: true,
       hasHydrated: false,
       pageOverflows: false,
