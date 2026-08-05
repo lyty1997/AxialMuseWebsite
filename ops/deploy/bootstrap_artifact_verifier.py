@@ -41,6 +41,7 @@ MAX_GOLDEN_BYTES = 8 * 1024 * 1024
 MAX_RECEIPT_BYTES = 64 * 1024
 MAX_SELF_TEST_OUTPUT_BYTES = 64 * 1024
 SELF_TEST_TIMEOUT_SECONDS = 30
+SELF_TEST_GOLDEN_FD_ENVIRONMENT = "AXIALMUSE_SELF_TEST_GOLDEN_FD"
 RENAME_NOREPLACE = 1
 INTERRUPT_SIGNALS = frozenset((signal.SIGINT, signal.SIGTERM))
 
@@ -1324,24 +1325,55 @@ def _assert_path_identity(parent_descriptor, basename, held_descriptor, source_p
 def _default_self_test_runner(system_python, verifier_path):
     process = None
     try:
+        self_test_target = verifier_path
+        verifier_path = os.fspath(self_test_target)
+        inherited_descriptors = tuple(
+            getattr(self_test_target, "inherited_descriptors", ())
+        )
+        golden_descriptor = getattr(
+            self_test_target,
+            "golden_descriptor",
+            None,
+        )
+        if (
+            any(
+                not isinstance(descriptor, int)
+                or isinstance(descriptor, bool)
+                or descriptor < 0
+                for descriptor in inherited_descriptors
+            )
+            or len(set(inherited_descriptors))
+            != len(inherited_descriptors)
+            or (
+                golden_descriptor is not None
+                and golden_descriptor not in inherited_descriptors
+            )
+        ):
+            raise ValueError("self-test inherited descriptors are invalid")
+        environment = {
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+            "PATH": "/usr/bin:/bin",
+        }
+        if golden_descriptor is not None:
+            environment[SELF_TEST_GOLDEN_FD_ENVIRONMENT] = str(
+                golden_descriptor
+            )
         process = subprocess.Popen(
             [
                 system_python,
                 "-I",
                 "-B",
-                str(verifier_path),
+                verifier_path,
                 "--self-test",
             ],
             cwd="/",
-            env={
-                "LANG": "C.UTF-8",
-                "LC_ALL": "C.UTF-8",
-                "PATH": "/usr/bin:/bin",
-            },
+            env=environment,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             close_fds=True,
+            pass_fds=inherited_descriptors,
             start_new_session=True,
         )
         streams = {
@@ -1410,6 +1442,12 @@ def _default_self_test_runner(system_python, verifier_path):
                     pass
         if isinstance(cause, VerifierBootstrapError):
             raise
+        if isinstance(cause, KeyboardInterrupt):
+            _fail(
+                "VERIFIER_BOOTSTRAP_INTERRUPTED",
+                "process/keyboard-interrupt",
+                cause,
+            )
         _fail("VERIFIER_BOOTSTRAP_SELF_TEST", "self-test/process", cause)
     finally:
         if process is not None:
@@ -1925,7 +1963,16 @@ def _resume_transaction(
                 success_stream,
                 disposition,
             )
-        except VerifierBootstrapError as error:
+        except (VerifierBootstrapError, KeyboardInterrupt) as caught:
+            error = (
+                caught
+                if isinstance(caught, VerifierBootstrapError)
+                else VerifierBootstrapError(
+                    "VERIFIER_BOOTSTRAP_INTERRUPTED",
+                    "process/keyboard-interrupt",
+                    cause=caught,
+                )
+            )
             if signal_state["commitCompleted"]:
                 return _finish_committed(
                     transaction,
@@ -1934,6 +1981,20 @@ def _resume_transaction(
                     disposition,
                 )
             if not commit_transition_started:
+                if (
+                    transaction.marker_name == PREPARED_BASENAME
+                    and not transaction.name.startswith(ISOLATION_PREFIX)
+                ):
+                    _isolate_transaction(
+                        tree,
+                        transaction,
+                        expected_commit_sha=expected_commit_sha,
+                        expected_verifier_sha256=expected_verifier_sha256,
+                        expected_golden_sha256=expected_golden_sha256,
+                        system_python=system_python,
+                        self_test_runner=self_test_runner,
+                        lock_descriptor=lock_descriptor,
+                    )
                 raise error
             return _recover_commit_transition(
                 tree,
@@ -1949,7 +2010,7 @@ def _resume_transaction(
             )
 
 
-def bootstrap_artifact_verifier(
+def _bootstrap_artifact_verifier_impl(
     *,
     source_root,
     expected_commit_sha,
@@ -2049,9 +2110,19 @@ def bootstrap_artifact_verifier(
                         lock_descriptor=lock_descriptor,
                         disposition=disposition,
                     )
-                except VerifierBootstrapError:
+                except (VerifierBootstrapError, KeyboardInterrupt) as caught:
+                    error = (
+                        caught
+                        if isinstance(caught, VerifierBootstrapError)
+                        else VerifierBootstrapError(
+                            "VERIFIER_BOOTSTRAP_INTERRUPTED",
+                            "process/keyboard-interrupt",
+                            cause=caught,
+                        )
+                    )
                     if (
-                        not signal_state["commitCompleted"]
+                        error.code != "VERIFIER_BOOTSTRAP_ISOLATE"
+                        and not signal_state["commitCompleted"]
                         and transaction.marker_name == PREPARED_BASENAME
                         and not transaction.name.startswith(ISOLATION_PREFIX)
                     ):
@@ -2070,9 +2141,49 @@ def bootstrap_artifact_verifier(
                                 self_test_runner=_self_test_runner,
                                 lock_descriptor=lock_descriptor,
                             )
-                    raise
+                    raise error
             finally:
                 transaction.close()
+
+
+def bootstrap_artifact_verifier(
+    *,
+    source_root,
+    expected_commit_sha,
+    expected_verifier_sha256,
+    expected_golden_sha256,
+    success_stream=None,
+    _root_path="/",
+    _expected_uid=0,
+    _expected_gid=0,
+    _system_python="/usr/bin/python3",
+    _self_test_runner=_default_self_test_runner,
+    _transaction_id_factory=lambda: secrets.token_hex(16),
+    _enforce_runtime=True,
+    _signal_state=None,
+):
+    try:
+        return _bootstrap_artifact_verifier_impl(
+            source_root=source_root,
+            expected_commit_sha=expected_commit_sha,
+            expected_verifier_sha256=expected_verifier_sha256,
+            expected_golden_sha256=expected_golden_sha256,
+            success_stream=success_stream,
+            _root_path=_root_path,
+            _expected_uid=_expected_uid,
+            _expected_gid=_expected_gid,
+            _system_python=_system_python,
+            _self_test_runner=_self_test_runner,
+            _transaction_id_factory=_transaction_id_factory,
+            _enforce_runtime=_enforce_runtime,
+            _signal_state=_signal_state,
+        )
+    except KeyboardInterrupt as cause:
+        _fail(
+            "VERIFIER_BOOTSTRAP_INTERRUPTED",
+            "process/keyboard-interrupt",
+            cause,
+        )
 
 
 def _parse_cli_arguments(arguments):
@@ -2103,11 +2214,19 @@ def _install_signal_handlers():
             return
         _fail("VERIFIER_BOOTSTRAP_INTERRUPTED", "process/signal")
 
-    for signal_number in INTERRUPT_SIGNALS:
-        previous[signal_number] = signal.signal(
-            signal_number,
-            interrupt_handler,
-        )
+    try:
+        for signal_number in sorted(INTERRUPT_SIGNALS):
+            previous[signal_number] = signal.signal(
+                signal_number,
+                interrupt_handler,
+            )
+    except BaseException:
+        for signal_number, handler in reversed(tuple(previous.items())):
+            try:
+                signal.signal(signal_number, handler)
+            except BaseException:
+                pass
+        raise
     return previous, state
 
 

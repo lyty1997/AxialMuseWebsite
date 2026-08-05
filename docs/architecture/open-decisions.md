@@ -266,6 +266,16 @@
 
   重应用必须保留 D-139 与本决定，并证明除 `docs/architecture/open-decisions.md` 新增的 D-139/D-140 外，tracked 路径、文件 mode 和内容精确等于旧 topic `e88386b`；原 #18 范围固定为 76 个文件，不包含 #8 preview 或当前主工作区的 13 份未提交 #36 evidence。完成差异复核和固定 Node `24.18.0` 的完整本地质量门禁后，可普通非强制 push 同名 topic，创建 `codex/issue-18-production-baseline -> main` 的窄化例外 PR；required checks 全部成功、head/base 未漂移且 GitHub 仍报告可合并后使用普通 merge，不删除分支，并观察精确 `main` push CI 至 `completed/success`。任何内容范围漂移、冲突无法按旧 topic 与 D-139/D-140 同时保持、门禁失败或远端漂移都必须停止。本授权不包含 Issue 写操作、服务器或云资源写入、production 部署、DNS/TLS、TAT 调度、依赖变化、用户数据处理或第三方运行时服务。
 
+- **D-143 / 2026-08-05**：#36 完整验收复现服务器 verifier 的 staging 父目录替换竞态，并确认 bootstrap 独立测试未覆盖真实 SIGINT/SIGTERM；用户随后授权仓库侧修复与已安装组件的升级设计。授权范围包括设计记录、`ops/deploy/` 实现、独立 Python fixture 和本地质量验证；不包含 commit、push、Issue/PR 写入、GitHub 配置、服务器/TAT、DNS、云资源或其他外部写操作。
+
+  verifier 从入口到成功输出或失败清理必须持续持有首次安全打开的 staging directory fd；`artifact.zip` 的 stat/open、候选创建与提取、整树捕获、metadata 读取、正式激活、父目录同步和身份绑定清理全部从该 fd 或其子 fd 派生，不再以重新解析的 staging 字符串路径决定受控对象。激活继续使用同一父 fd 上的 `renameat2(RENAME_NOREPLACE)`；同步后、成功输出前必须最后证明 live staging 路径仍绑定 held inode。父路径替换、held/live 身份漂移或同步失败都以既有稳定错误失败，清理只能作用于 held 父目录中的本事务 inode，不能触碰替换目录中的同名对象。
+
+  bootstrap 的首次安装 CLI、精确两 payload 和不覆盖语义保持不变。SIGINT/SIGTERM 的同一屏蔽区必须从正式 namespace 激活前连续覆盖到 committed marker 持久化或 prepared namespace 完成身份绑定隔离，不能在激活后失败与隔离之间恢复 mask；commit 前中断稳定报 `VERIFIER_BOOTSTRAP_INTERRUPTED`，commit point 后到达或待处理的中断保持成功。独立测试以真实信号覆盖 commit 前隔离、屏蔽区延迟、commit 后成功、handler 恢复和第二信号窗口；直接 `KeyboardInterrupt` 在库入口按同一提交边界分类，但不把不可捕获的进程崩溃伪装为可恢复中断。
+
+  已安装 verifier 的字节变化不得复用首次 bootstrap，也不得加入 force/replace。仓库另设显式 component upgrader：调用方同时提供并独立认证当前 committed receipt 所绑定的 commit/verifier/golden 三项身份与下一版本三项身份；runner 复用 held `/usr/local/lib` fd、持久 lock、严格 source 捕获和候选自测，在 receipt 中持久绑定升级来源后才允许原子交换 `artifact-verifier` component directory，包含 `.bootstrap/` 的 `axialmuse` namespace 本身不交换。升级必须保持旧正式版本可恢复，有限的 prepared/exchanged/committed 状态均可由两端 receipt、inode 和 marker 唯一判定；任一 bootstrap candidate、isolation、未知保留名、来源漂移或状态歧义都停止人工处置。升级脚本、其依赖 runner、下一版 verifier/golden 必须来自同一已认证 canonical `main` 提交；本决定只批准仓库实现与本地 fixture，不授权在已安装主机上执行升级或清理旧副本。
+
+- **D-144 / 2026-08-05**：D-143 的仓库修复与本地验收闭合后，用户另行授权把本轮 #36 verifier、bootstrap、component upgrader、对应测试和契约文档形成一个本地提交。提交必须以精确 staged diff 排除工作区此前已有的 D-141/D-142、#37 账本、Git 工作流、预览、架构图和内容发布改动，沿用 D-137 已确认的 canonical GitHub noreply 身份，并由提交钩子复跑质量门禁。本授权不包含 push、PR、Issue、分支切换或合并，也不扩展到服务器/TAT、DNS、云资源、已安装组件升级、residue 清理或其他外部写操作。
+
 ## 依 D-078 形成的 M0 工程决定
 
 - **E-001 / 2026-07-18 — 项目内容职责拆分**：`docs/contracts/projects.json` 继续拥有项目 ID、短 slug、标题、摘要、状态、日期、仓库、展示开关、导航顺序和写作模块等结构化事实；项目长文位于 `site-content/projects/<project-id>/index.md` 或 `index.mdx`，只拥有背景、能力、取舍、限制、证据说明和复盘正文，不重复 H1、摘要、状态、日期、仓库或路由字段。构建期根据稳定 project ID 关联两者，并从注册表只读派生 Docusaurus 的 `title`、`description`、完整 `/projects/<project-slug>` 路径和草稿行为，不回写源文件。`published` 或 `archived` 项目必须恰有一个正文入口；`draft` 或 `planned` 可以暂缺正文但不能产生生产路由；孤儿正文、双入口和结构化字段双写均使构建失败。项目列表、项目侧栏和详情元数据读取同一注册表，正文文件路径不生成公开 URL。

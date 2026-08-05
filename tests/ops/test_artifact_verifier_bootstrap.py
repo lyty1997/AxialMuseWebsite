@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 import os
+import signal
 import stat
 import tempfile
 import unittest
@@ -1047,6 +1048,343 @@ class ArtifactVerifierBootstrapTests(unittest.TestCase):
                 sentinel.read_text(encoding="utf-8"),
                 "keep",
             )
+
+    def test_real_interrupt_before_commit_isolates_and_restores_handlers(self):
+        for signal_number in (signal.SIGINT, signal.SIGTERM):
+            with self.subTest(signal_number=signal_number), tempfile.TemporaryDirectory(
+                prefix="axial-muse-bootstrap-test-"
+            ) as temporary_root:
+                fixture = BootstrapFixture(temporary_root)
+                previous, signal_state = BOOTSTRAP._install_signal_handlers()
+
+                def interrupt_self_test(_python, _path):
+                    os.kill(os.getpid(), signal_number)
+                    raise AssertionError("signal handler must interrupt self-test")
+
+                try:
+                    error = self.assert_error(
+                        "VERIFIER_BOOTSTRAP_INTERRUPTED",
+                        lambda: fixture.run(
+                            _self_test_runner=interrupt_self_test,
+                            _signal_state=signal_state,
+                        ),
+                    )
+                finally:
+                    BOOTSTRAP._restore_signal_handlers(previous)
+
+                self.assertEqual(error.source_path, "process/signal")
+                self.assertFalse(fixture.formal.exists())
+                isolation_names = [
+                    name
+                    for name in fixture.reserved_names()
+                    if name.startswith(BOOTSTRAP.ISOLATION_PREFIX)
+                ]
+                self.assertEqual(len(isolation_names), 1)
+                self.assertEqual(
+                    stat.S_IMODE((fixture.lib / isolation_names[0]).stat().st_mode),
+                    0o700,
+                )
+                self.assert_error("VERIFIER_BOOTSTRAP_STATE", fixture.run)
+                for installed_signal, handler in previous.items():
+                    self.assertIs(signal.getsignal(installed_signal), handler)
+
+    def test_masked_interrupts_are_delayed_until_commit(self):
+        for signal_number in (signal.SIGINT, signal.SIGTERM):
+            with self.subTest(signal_number=signal_number), tempfile.TemporaryDirectory(
+                prefix="axial-muse-bootstrap-test-"
+            ) as temporary_root:
+                fixture = BootstrapFixture(temporary_root)
+                previous, signal_state = BOOTSTRAP._install_signal_handlers()
+                calls = []
+
+                def interrupt_formal_self_test(system_python, verifier_path):
+                    fixture.assert_self_test_path(system_python, verifier_path)
+                    calls.append(Path(verifier_path))
+                    if Path(verifier_path).parts[-3] == BOOTSTRAP.FORMAL_NAMESPACE:
+                        os.kill(os.getpid(), signal_number)
+                    return {
+                        "schemaVersion": "1.0.0",
+                        "wireMagic": "AXIALMUSE-FILE-TREE-V1",
+                        "vectorCount": 6,
+                    }
+
+                try:
+                    result = fixture.run(
+                        _self_test_runner=interrupt_formal_self_test,
+                        _signal_state=signal_state,
+                    )
+                finally:
+                    BOOTSTRAP._restore_signal_handlers(previous)
+
+                self.assertEqual(result["status"], "committed")
+                self.assertTrue(signal_state["commitCompleted"])
+                self.assertTrue(
+                    (
+                        fixture.formal
+                        / BOOTSTRAP.STATE_DIRECTORY
+                        / BOOTSTRAP.COMMITTED_BASENAME
+                    ).is_file()
+                )
+                self.assertEqual(len(calls), 2)
+
+    def test_real_interrupt_after_durable_commit_is_success(self):
+        for signal_number in (signal.SIGINT, signal.SIGTERM):
+            with self.subTest(signal_number=signal_number), tempfile.TemporaryDirectory(
+                prefix="axial-muse-bootstrap-test-"
+            ) as temporary_root:
+                fixture = BootstrapFixture(temporary_root)
+                previous, signal_state = BOOTSTRAP._install_signal_handlers()
+                original_commit = BOOTSTRAP._commit_marker
+                sent = False
+
+                def commit_then_signal(transaction):
+                    nonlocal sent
+                    original_commit(transaction)
+                    sent = True
+                    os.kill(os.getpid(), signal_number)
+
+                try:
+                    with mock.patch.object(
+                        BOOTSTRAP,
+                        "_commit_marker",
+                        side_effect=commit_then_signal,
+                    ):
+                        result = fixture.run(_signal_state=signal_state)
+                finally:
+                    BOOTSTRAP._restore_signal_handlers(previous)
+
+                self.assertTrue(sent)
+                self.assertEqual(result["status"], "committed")
+                self.assertTrue(signal_state["commitCompleted"])
+                self.assertTrue(
+                    (
+                        fixture.formal
+                        / BOOTSTRAP.STATE_DIRECTORY
+                        / BOOTSTRAP.COMMITTED_BASENAME
+                    ).is_file()
+                )
+
+    def test_post_activation_failure_stays_masked_through_isolation(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-bootstrap-test-"
+        ) as temporary_root:
+            fixture = BootstrapFixture(temporary_root)
+            original_mask = BOOTSTRAP.signal.pthread_sigmask
+            original_rename = BOOTSTRAP._rename_noreplace_at
+            original_isolate = BOOTSTRAP._isolate_transaction
+            mask_before = original_mask(signal.SIG_BLOCK, ())
+            events = []
+            self_test_calls = 0
+
+            def record_mask(operation, signals):
+                events.append(("mask", operation, frozenset(signals)))
+                return original_mask(operation, signals)
+
+            def record_rename(*arguments, **keywords):
+                result = original_rename(*arguments, **keywords)
+                if arguments[3] == BOOTSTRAP.FORMAL_NAMESPACE:
+                    events.append(("activated",))
+                return result
+
+            def fail_formal_self_test(system_python, verifier_path):
+                nonlocal self_test_calls
+                fixture.assert_self_test_path(system_python, verifier_path)
+                self_test_calls += 1
+                if self_test_calls == 2:
+                    BOOTSTRAP._fail(
+                        "VERIFIER_BOOTSTRAP_SELF_TEST",
+                        "self-test/result",
+                    )
+                return {
+                    "schemaVersion": "1.0.0",
+                    "wireMagic": "AXIALMUSE-FILE-TREE-V1",
+                    "vectorCount": 6,
+                }
+
+            def record_isolate(*arguments, **keywords):
+                current = original_mask(signal.SIG_BLOCK, ())
+                self.assertTrue(BOOTSTRAP.INTERRUPT_SIGNALS.issubset(current))
+                result = original_isolate(*arguments, **keywords)
+                events.append(("isolated",))
+                return result
+
+            with (
+                mock.patch.object(
+                    BOOTSTRAP.signal,
+                    "pthread_sigmask",
+                    side_effect=record_mask,
+                ),
+                mock.patch.object(
+                    BOOTSTRAP,
+                    "_rename_noreplace_at",
+                    side_effect=record_rename,
+                ),
+                mock.patch.object(
+                    BOOTSTRAP,
+                    "_isolate_transaction",
+                    side_effect=record_isolate,
+                ),
+            ):
+                self.assert_error(
+                    "VERIFIER_BOOTSTRAP_SELF_TEST",
+                    lambda: fixture.run(
+                        _self_test_runner=fail_formal_self_test
+                    ),
+                )
+
+            activated_index = events.index(("activated",))
+            isolated_index = events.index(("isolated",))
+            self.assertFalse(
+                any(
+                    event[0] == "mask" and event[1] == signal.SIG_SETMASK
+                    for event in events[activated_index:isolated_index]
+                )
+            )
+            self.assertFalse(fixture.formal.exists())
+            self.assertEqual(
+                original_mask(signal.SIG_BLOCK, ()),
+                mask_before,
+            )
+
+    def test_keyboard_interrupt_observes_commit_boundary(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-bootstrap-test-"
+        ) as temporary_root:
+            fixture = BootstrapFixture(temporary_root)
+
+            def interrupt_self_test(_python, _path):
+                raise KeyboardInterrupt()
+
+            self.assert_error(
+                "VERIFIER_BOOTSTRAP_INTERRUPTED",
+                lambda: fixture.run(_self_test_runner=interrupt_self_test),
+            )
+            self.assertFalse(fixture.formal.exists())
+            self.assertTrue(
+                any(
+                    name.startswith(BOOTSTRAP.ISOLATION_PREFIX)
+                    for name in fixture.reserved_names()
+                )
+            )
+
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-bootstrap-test-"
+        ) as temporary_root:
+            fixture = BootstrapFixture(temporary_root)
+            original_commit = BOOTSTRAP._commit_marker
+
+            def commit_then_interrupt(transaction):
+                original_commit(transaction)
+                raise KeyboardInterrupt()
+
+            with mock.patch.object(
+                BOOTSTRAP,
+                "_commit_marker",
+                side_effect=commit_then_interrupt,
+            ):
+                result = fixture.run()
+            self.assertEqual(result["status"], "committed")
+            self.assertTrue(
+                (
+                    fixture.formal
+                    / BOOTSTRAP.STATE_DIRECTORY
+                    / BOOTSTRAP.COMMITTED_BASENAME
+                ).is_file()
+            )
+
+    def test_signal_handler_install_rolls_back_partial_failure(self):
+        before = {
+            signal_number: signal.getsignal(signal_number)
+            for signal_number in BOOTSTRAP.INTERRUPT_SIGNALS
+        }
+        original_signal = signal.signal
+        calls = 0
+
+        def fail_second_install(signal_number, handler):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError("controlled handler install failure")
+            return original_signal(signal_number, handler)
+
+        with mock.patch.object(
+            BOOTSTRAP.signal,
+            "signal",
+            side_effect=fail_second_install,
+        ):
+            with self.assertRaises(OSError):
+                BOOTSTRAP._install_signal_handlers()
+
+        self.assertGreaterEqual(calls, 3)
+        for signal_number, handler in before.items():
+            self.assertIs(signal.getsignal(signal_number), handler)
+
+    def test_main_installs_and_restores_signal_handlers(self):
+        arguments = [
+            "--source-root",
+            "/private/source",
+            "--expected-commit-sha",
+            COMMIT_SHA,
+            "--expected-verifier-sha256",
+            "1" * 64,
+            "--expected-golden-sha256",
+            "2" * 64,
+        ]
+        for signal_number in (signal.SIGINT, signal.SIGTERM):
+            with self.subTest(signal_number=signal_number):
+                def sentinel_handler(_signal_number, _frame):
+                    return None
+
+                original_handler = signal.signal(
+                    signal_number,
+                    sentinel_handler,
+                )
+                standard_output = io.StringIO()
+                standard_error = io.StringIO()
+
+                def interrupt_entry(**_keywords):
+                    os.kill(os.getpid(), signal_number)
+                    raise AssertionError("installed handler must interrupt entry")
+
+                try:
+                    with (
+                        mock.patch.object(
+                            BOOTSTRAP,
+                            "bootstrap_artifact_verifier",
+                            side_effect=interrupt_entry,
+                        ),
+                        contextlib.redirect_stdout(standard_output),
+                        contextlib.redirect_stderr(standard_error),
+                    ):
+                        exit_code = BOOTSTRAP.main(arguments)
+                    self.assertEqual(exit_code, 1)
+                    self.assertEqual(standard_output.getvalue(), "")
+                    self.assertRegex(
+                        standard_error.getvalue(),
+                        r"^\[VERIFIER_BOOTSTRAP_INTERRUPTED\] "
+                        r"\(process/signal\) .+\n$",
+                    )
+                    self.assertIs(
+                        signal.getsignal(signal_number),
+                        sentinel_handler,
+                    )
+                finally:
+                    signal.signal(signal_number, original_handler)
+
+    def test_default_self_test_runner_classifies_keyboard_interrupt(self):
+        with mock.patch.object(
+            BOOTSTRAP.subprocess,
+            "Popen",
+            side_effect=KeyboardInterrupt(),
+        ):
+            error = self.assert_error(
+                "VERIFIER_BOOTSTRAP_INTERRUPTED",
+                lambda: BOOTSTRAP._default_self_test_runner(
+                    "/usr/bin/python3",
+                    "/private/verify_artifact.py",
+                ),
+            )
+        self.assertEqual(error.source_path, "process/keyboard-interrupt")
 
     def test_fixed_cli_and_failure_diagnostic_are_closed(self):
         valid = [

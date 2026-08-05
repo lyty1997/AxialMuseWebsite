@@ -148,6 +148,8 @@ M0-P 实施时按以下路径纳入仓库；表中路径是设计契约，文件
 | `ops/nginx/axialmuse.conf` | 精确 Host、ACME 边界、release include、兜底跳转、错误页和缓存规则 |
 | `ops/nginx/snippets/security-headers.conf` | CSP、HSTS 以外的安全响应头；HSTS 由启用步骤单独控制 |
 | `ops/deploy/bootstrap_artifact_verifier.py` | 以系统 Python、held directory fd、父目录与持久文件双重非阻塞 `flock`、`renameat2(RENAME_NOREPLACE)`、目录同步和 receipt 状态机完成 verifier 的一次性首次安装或崩溃恢复；不提供 force、replace、cleanup 或目标路径参数，也不作为长期服务器组件安装 |
+| `ops/deploy/artifact-verifier-component.json` | 固定 verifier/golden 的路径、安装 mode、长度、SHA-256、接口和自测 wire 契约；目标 commit 由升级 CLI 的独立外部认证参数绑定，不在 manifest 内自证 |
+| `ops/deploy/upgrade_artifact_verifier.py` | 复用 bootstrap lifecycle lock，以当前 committed receipt 摘要作 CAS head，验证目标 component manifest 后通过 `renameat2(RENAME_EXCHANGE)` 升级已安装 verifier；保留旧/失败 slot，不提供 force、cleanup、任意目标路径或跳过自测参数 |
 | `ops/deploy/verify_artifact.py` | 以系统 Python 标准库独立校验外层 artifact、ZIP 路径、完整 release tree、内部 metadata/清单和运行规则，只在全部通过后产生固定 `verified-release/` staging |
 | `ops/deploy/deploy.sh` | 编排固定 workflow/artifact 身份与下载并调用独立 verifier；在锁内复核 `verified-release/` 身份和整树摘要后负责不可变安装、暴露账本、精确 SHA 包装、隔离预检、`nginx -t`、reload、冒烟与受控恢复，不重复安全解包或内部清单解析 |
 | `ops/deploy/rollback.sh` | 只整版切换到已存在、通过校验且使账本中历史 source/target 收敛到同一当前 200 终点的兼容 release |
@@ -182,7 +184,7 @@ bootstrap 必须实现失败关闭的首次安装事务：
    - 任一隔离对象存在、正式与候选并存、多个候选/事务、无标记、双标记、receipt/身份/摘要不符、receipt 绑定的持久 lock inode 已被替换或隔离失败：一律失败并等待人工处置；隔离对象或 lock 身份漂移经独立核验和授权处置前，后续全新 bootstrap 一律拒绝运行。
 
    进程崩溃、SIGKILL、掉电或任一 fsync 结果不明都只能进入上述状态机，不能使用目录存在性猜测成功，也不能删除或覆盖无法绑定到唯一 receipt 的对象。
-8. 首次安装只允许上述“候选完整命名空间 -> `axialmuse` 正式命名空间”事务；不得预先留下空父目录，不就地覆盖。固定 lock 文件及其已写入 receipt 的 device/inode、已提交 receipt 是事务审计状态，不是传递来的仓库文件，安装成功后保留；后续升级、添加其他服务器组件，或替换/清理 lock、receipt、隔离对象必须另行设计和授权。
+8. 首次安装只允许上述“候选完整命名空间 -> `axialmuse` 正式命名空间”事务；不得预先留下空父目录，不就地覆盖。固定 lock 文件及其已写入 receipt 的 device/inode、已提交 receipt 是事务审计状态，不是传递来的仓库文件，安装成功后保留；已安装 verifier 的升级协议见下节，实际升级、添加其他服务器组件，或替换/清理 lock、receipt、旧 slot、失败 slot 与隔离对象仍必须另行授权。
 
 候选和正式目标的现场自测分别使用各自绝对路径；正式目标验收命令固定为：
 
@@ -191,6 +193,20 @@ bootstrap 必须实现失败关闭的首次安装事务：
 ```
 
 命令成功、两文件 source/installed 摘要分别相等、解释器/目录/文件 owner/mode 和无链接边界全部通过、root-only receipt 显示同一事务已经越过上述 commit point，才算 #36 安装验收；本设计本身不授权传输或安装。
+
+### 已安装 verifier 的升级边界
+
+`ops/deploy/upgrade_artifact_verifier.py` 只处理已经存在且可由 bootstrap genesis receipt 与追加升级 receipt 链完整证明的 `/usr/local/lib/axialmuse/artifact-verifier/`。它与一次性 bootstrap 分离，不能把首次安装的 `already-committed` 当作替换接口，也不能逐文件覆盖正式组件。运行载荷必须包含同一已认证 canonical `main` 精确提交中的 upgrader、其相邻 bootstrap 依赖、component manifest、verifier 和 golden；调用方分别认证这五个 Git blob，receipt 中记录的 runner 摘要不能替代执行前认证。mode `0700` 的私有 source root 精确只含三个 mode `0600` 普通单链接文件：`artifact-verifier-component.json`、`verify_artifact.py` 和 `file-tree-v1-golden.json`；仓库中 manifest 的普通 `100644` mode 与这一现场传输 mode 不混同。manifest 使用 canonical ASCII JSON 加单个 LF，硬上限为 64 KiB；每个 payload 硬上限为 8 MiB。解析拒绝重复键和任何 schema/成员漂移，固定有序的 golden `0644`、verifier `0755` 两项摘要、长度、接口与自测 wire。CLI 另以目标 manifest SHA-256 和目标 commit SHA 绑定本次事务，因此 manifest 不自行声称它来自哪个 commit。
+
+CLI 只按固定顺序接受 `--source-root`、`--expected-current-receipt-sha256`、`--expected-target-commit-sha` 与 `--expected-target-manifest-sha256`。当前 receipt 摘要是 CAS head：首次升级取 bootstrap genesis receipt 原始字节的 SHA-256，并以 `bootstrap-receipt-v1` provenance 兼容表达没有 component manifest 的初始版本；后续升级才取最后一个 committed event receipt 原始字节的 SHA-256。不匹配时在创建升级状态前失败。成功只输出一行脱敏 JSON，区分 `upgraded`、`recovered` 与 `already-current`。参数只形成事务绑定，canonical `main`、当前服务器 receipt 和五个 Git blob 的真实性、目标 commit 是获准的前向祖先后继关系仍须由调用方在执行前独立证明；不得把旧 manifest 作为普通 upgrade 绕过显式 rollback。
+
+升级器从 held `/usr/local/lib` fd 取得与 bootstrap 相同的父目录锁和固定 `.axialmuse-artifact-verifier-bootstrap.lock` 独占锁；任一并存 bootstrap candidate、isolation 或未知保留前缀先阻断。它在整个事务中从 fresh live system root 逐层复核 live/held/receipt 的 system tree、namespace、`.bootstrap` genesis state/receipt/committed、`.artifact-verifier-upgrades/`、事件名与 transaction inode、lock、formal 和组件身份。root-only `.artifact-verifier-upgrades/` 只含连续编号的追加事件；每个事件保存完整 `slot/`、canonical receipt 和唯一 `prepared`、`committed` 或 `rolled-back` 空标记。receipt 绑定 genesis、前一事件、当前组件 head、from/to commit/manifest/文件规格、from/to 目录与文件 inode、namespace/lock/事务身份、自测结果及两个 runner 摘要。从创建可见 event 前开始，SIGINT/SIGTERM 保持连续屏蔽；目标 slot 的写入、同步、候选自测与完整 prepared event 的持久化都在该屏蔽区内。候选与正式自测分别从继承到系统 Python 子进程的 held verifier/golden fd 读取，自测后重读 held 内容与操作身份，不以可替换的 live 绝对路径重新选择字节。
+
+激活只允许在 held dirfd 上以 `renameat2(RENAME_EXCHANGE)` 交换 `slot` 与正式 `artifact-verifier`，所以正式路径不会出现空窗。交换前后必须重验 live system tree、held namespace、upgrade root 与事件路径，交换后同步 event 与 namespace，分别按 receipt 重验新 formal 和 slot 中旧组件，再用系统 Python 对 held 新 formal 执行固定 `--self-test`；随后再次重验双端、live parent 与 lifecycle lock，最后把 `prepared` 原子改名为 `committed`、同步 event 目录，并在成功输出前最后重验 live/held 绑定。该 committed marker 的持久化是唯一 commit point。marker 结果不明但可证明已经 committed 且 live 绑定仍成立时只允许恢复为成功；只有已经形成完整 prepared event 且 marker 仍为 prepared 的 commit 前已知失败，才把映射恢复为“旧 formal / 新 slot”并记录 `rolled-back`。崩溃后若只剩 prepared，无论交换是否已经发生，下一次都只自动恢复旧 formal 并记录回滚，不猜测继续升级。
+
+任一 receipt/lineage、owner/mode、普通单链接、摘要、inode、marker、双路径映射或 lock 身份无法唯一证明时保留现场并停止；rolled-back tail、未知成员和部分创建 residue 同样阻断新事件。若 event 已创建但完整 prepared 尚未形成，失败只保留该 partial residue 并阻断，不伪造 rolled-back 记录。旧组件、失败候选和升级 receipt 不自动清理；没有 `--force`、`--cleanup`、rollback 捷径或任意路径参数。当前脚本尚未实现 commit 后 rollback；未来只能另行设计成追加 receipt 的显式事务，不能把旧 slot 直接换回。升级前，所有 verifier 调用方必须在打开组件前持有同一固定 lock 的共享锁；该调用方接线当前尚未实现，首次把约束引入既有安装时，现场须在独立维护窗口证明没有在途旧进程。仓库实现及本地 fixture 不授权传输、服务器执行、residue 清理或回退。
+
+目标 Ubuntu 的独立仓库验收入口为 `/usr/bin/python3 -I -B ops/deploy/verify_artifact.py --self-test` 和 `/usr/bin/python3 -B -m unittest discover -s tests/ops -p 'test_artifact_verifier*.py' -v`；它们按 CODE-020 保持在 Node-only `quality`、pre-commit 和现有双 Node CI 之外。当前仓库没有强制运行 `tests/ops` 的远端 Python job；若未来要求 required check，须另行设计并授权 workflow 变更。未锁定进依赖图的本机 Ruff 只能作为辅助静态证据，不能替代上述系统 Python 入口或 canonical `main` 现场复核。
 
 ### #36 Certbot 安装边界
 

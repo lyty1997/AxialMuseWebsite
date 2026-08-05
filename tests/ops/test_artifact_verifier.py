@@ -1,3 +1,4 @@
+import base64
 import contextlib
 import hashlib
 import importlib.util
@@ -296,6 +297,63 @@ class ArtifactVerifierTests(unittest.TestCase):
             },
         )
         self.assertEqual(result.stdout.count("\n"), 1)
+
+    def test_descriptor_file_tree_capture_preserves_utf8_contract(self):
+        golden = json.loads(
+            VERIFIER_PATH.with_name("file-tree-v1-golden.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        vector = next(
+            item
+            for item in golden["vectors"]
+            if item["name"] == "raw-utf8-byte-order"
+        )
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-server-artifact-test-"
+        ) as temporary_root:
+            root = Path(temporary_root) / "tree"
+            root.mkdir(mode=0o700)
+            for file in vector["files"]:
+                path = root / file["path"]
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(base64.b64decode(file["contentBase64"]))
+            descriptor = os.open(
+                root,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+            )
+            try:
+                capture = VERIFIER._capture_file_tree(descriptor, "release")
+            finally:
+                os.close(descriptor)
+            self.assertEqual(capture.tree_sha256, vector["treeSha256"])
+
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-server-artifact-test-"
+        ) as temporary_root:
+            root = Path(temporary_root) / "tree"
+            root.mkdir(mode=0o700)
+            descriptor = os.open(
+                root,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+            )
+            invalid_descriptor = os.open(
+                b"invalid-\xff.txt",
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC,
+                0o600,
+                dir_fd=descriptor,
+            )
+            os.close(invalid_descriptor)
+            try:
+                self.assert_error(
+                    "SERVER_ARTIFACT_FILE_TREE",
+                    lambda: VERIFIER._capture_file_tree(
+                        descriptor,
+                        "release",
+                    ),
+                )
+            finally:
+                os.close(descriptor)
 
     def test_valid_archive_matches_node_tree_and_produces_verified_staging(self):
         with tempfile.TemporaryDirectory(
@@ -689,17 +747,25 @@ class ArtifactVerifierTests(unittest.TestCase):
             prefix="axial-muse-server-artifact-test-"
         ) as temporary_root:
             fixture = StagingFixture(temporary_root)
-            original_rename = VERIFIER._rename_noreplace
+            original_rename = VERIFIER._rename_noreplace_at
             target_identity = {}
 
-            def race_target(source_path, target_path):
-                Path(target_path).mkdir(mode=0o700)
-                target_identity["before"] = os.lstat(target_path).st_ino
-                return original_rename(source_path, target_path)
+            def race_target(directory_descriptor, source_name, target_name):
+                self.assertEqual(
+                    os.fstat(directory_descriptor).st_ino,
+                    fixture.root.stat().st_ino,
+                )
+                fixture.verified_root.mkdir(mode=0o700)
+                target_identity["before"] = fixture.verified_root.stat().st_ino
+                return original_rename(
+                    directory_descriptor,
+                    source_name,
+                    target_name,
+                )
 
             with mock.patch.object(
                 VERIFIER,
-                "_rename_noreplace",
+                "_rename_noreplace_at",
                 side_effect=race_target,
             ):
                 self.assert_error("SERVER_ARTIFACT_ACTIVATE", fixture.verify)
@@ -717,23 +783,173 @@ class ArtifactVerifierTests(unittest.TestCase):
             prefix="axial-muse-server-artifact-test-"
         ) as temporary_root:
             fixture = StagingFixture(temporary_root)
-            original_rename = VERIFIER._rename_noreplace
+            original_rename = VERIFIER._rename_noreplace_at
 
-            def mutate_before_rename(source_path, target_path):
-                Path(source_path, "payload", "index.html").write_bytes(
+            def mutate_before_rename(
+                directory_descriptor,
+                source_name,
+                target_name,
+            ):
+                (fixture.root / source_name / "payload" / "index.html").write_bytes(
                     b"changed after final candidate capture\n"
                 )
-                return original_rename(source_path, target_path)
+                return original_rename(
+                    directory_descriptor,
+                    source_name,
+                    target_name,
+                )
 
             with mock.patch.object(
                 VERIFIER,
-                "_rename_noreplace",
+                "_rename_noreplace_at",
                 side_effect=mutate_before_rename,
             ):
                 self.assert_error("SERVER_ARTIFACT_CHANGED", fixture.verify)
             self.assertEqual(
                 sorted(path.name for path in fixture.root.iterdir()),
                 ["artifact.zip"],
+            )
+
+    def test_staging_parent_swap_after_sync_fails_and_cleans_held_tree(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-server-artifact-test-"
+        ) as temporary_root:
+            fixture = StagingFixture(temporary_root)
+            original_fsync = os.fsync
+            staging_inode = fixture.root.stat().st_ino
+            displaced = Path(temporary_root) / "displaced-staging"
+            replacement_marker = b"external replacement\n"
+            swapped = False
+
+            def swap_after_staging_sync(descriptor):
+                nonlocal swapped
+                result = original_fsync(descriptor)
+                if (
+                    not swapped
+                    and stat.S_ISDIR(os.fstat(descriptor).st_mode)
+                    and os.fstat(descriptor).st_ino == staging_inode
+                    and sorted(os.listdir(descriptor))
+                    == ["artifact.zip", "verified-release"]
+                ):
+                    swapped = True
+                    fixture.root.rename(displaced)
+                    fixture.root.mkdir(mode=0o700)
+                    replacement_artifact = fixture.root / "artifact.zip"
+                    replacement_artifact.write_bytes(
+                        (displaced / "artifact.zip").read_bytes()
+                    )
+                    replacement_artifact.chmod(0o600)
+                    fixture.verified_root.mkdir(mode=0o700)
+                    (fixture.verified_root / "owner-marker").write_bytes(
+                        replacement_marker
+                    )
+                return result
+
+            with mock.patch.object(
+                VERIFIER.os,
+                "fsync",
+                side_effect=swap_after_staging_sync,
+            ):
+                self.assert_error("SERVER_ARTIFACT_CHANGED", fixture.verify)
+
+            self.assertTrue(swapped)
+            self.assertEqual(
+                sorted(path.name for path in displaced.iterdir()),
+                ["artifact.zip"],
+            )
+            self.assertEqual(
+                (fixture.verified_root / "owner-marker").read_bytes(),
+                replacement_marker,
+            )
+
+    def test_staging_parent_swap_before_activation_uses_held_parent_only(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-server-artifact-test-"
+        ) as temporary_root:
+            fixture = StagingFixture(temporary_root)
+            displaced = Path(temporary_root) / "displaced-staging"
+            replacement_marker = b"external pre-activation replacement\n"
+            original_rename = VERIFIER._rename_noreplace_at
+
+            def swap_before_activation(
+                directory_descriptor,
+                source_name,
+                target_name,
+            ):
+                self.assertEqual(
+                    os.fstat(directory_descriptor).st_ino,
+                    fixture.root.stat().st_ino,
+                )
+                fixture.root.rename(displaced)
+                fixture.root.mkdir(mode=0o700)
+                replacement_artifact = fixture.root / "artifact.zip"
+                replacement_artifact.write_bytes(
+                    (displaced / "artifact.zip").read_bytes()
+                )
+                replacement_artifact.chmod(0o600)
+                fixture.verified_root.mkdir(mode=0o700)
+                (fixture.verified_root / "owner-marker").write_bytes(
+                    replacement_marker
+                )
+                return original_rename(
+                    directory_descriptor,
+                    source_name,
+                    target_name,
+                )
+
+            with mock.patch.object(
+                VERIFIER,
+                "_rename_noreplace_at",
+                side_effect=swap_before_activation,
+            ):
+                self.assert_error("SERVER_ARTIFACT_CHANGED", fixture.verify)
+
+            self.assertEqual(
+                sorted(path.name for path in displaced.iterdir()),
+                ["artifact.zip"],
+            )
+            self.assertEqual(
+                (fixture.verified_root / "owner-marker").read_bytes(),
+                replacement_marker,
+            )
+
+    def test_output_failure_cleanup_stays_anchored_after_parent_swap(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-server-artifact-test-"
+        ) as temporary_root:
+            fixture = StagingFixture(temporary_root)
+            displaced = Path(temporary_root) / "displaced-staging"
+            replacement_marker = b"external output replacement\n"
+
+            class SwappingOutput:
+                def write(self, _value):
+                    fixture.root.rename(displaced)
+                    fixture.root.mkdir(mode=0o700)
+                    replacement_artifact = fixture.root / "artifact.zip"
+                    replacement_artifact.write_bytes(
+                        (displaced / "artifact.zip").read_bytes()
+                    )
+                    replacement_artifact.chmod(0o600)
+                    fixture.verified_root.mkdir(mode=0o700)
+                    (fixture.verified_root / "owner-marker").write_bytes(
+                        replacement_marker
+                    )
+                    raise OSError("controlled output failure")
+
+                def flush(self):
+                    raise AssertionError("flush must not follow failed write")
+
+            self.assert_error(
+                "SERVER_ARTIFACT_ACTIVATE",
+                lambda: fixture.verify(success_stream=SwappingOutput()),
+            )
+            self.assertEqual(
+                sorted(path.name for path in displaced.iterdir()),
+                ["artifact.zip"],
+            )
+            self.assertEqual(
+                (fixture.verified_root / "owner-marker").read_bytes(),
+                replacement_marker,
             )
 
     def test_signal_during_hash_is_not_reclassified(self):
@@ -757,9 +973,9 @@ class ArtifactVerifierTests(unittest.TestCase):
             fixture = StagingFixture(temporary_root)
             original_open = VERIFIER._open_stable_artifact
 
-            def open_signalling_stream(staging_root):
-                path, stream, identity = original_open(staging_root)
-                return path, SignalReadStream(stream), identity
+            def open_signalling_stream(staging_descriptor):
+                stream, identity = original_open(staging_descriptor)
+                return SignalReadStream(stream), identity
 
             standard_output = io.StringIO()
             standard_error = io.StringIO()

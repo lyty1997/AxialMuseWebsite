@@ -6,12 +6,12 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import signal
 import stat
 import struct
 import sys
-import tempfile
 import unicodedata
 import zipfile
 from dataclasses import dataclass
@@ -84,7 +84,7 @@ EXPECTED_PYTHON_REALPATH = "/usr/bin/python3.12"
 GOLDEN_BASENAME = "file-tree-v1-golden.json"
 PATH_UNICODE_VERSION = "15.0.0"
 INTERRUPT_SIGNALS = frozenset((signal.SIGINT, signal.SIGTERM))
-AT_FDCWD = -100
+SELF_TEST_GOLDEN_FD_ENVIRONMENT = "AXIALMUSE_SELF_TEST_GOLDEN_FD"
 RENAME_NOREPLACE = 1
 ZIP_EOCD_SIGNATURE = b"PK\x05\x06"
 ZIP64_EOCD_SIGNATURE = b"PK\x06\x06"
@@ -246,7 +246,17 @@ def _same_file_identity(left, right):
     return _stat_identity(left) == _stat_identity(right)
 
 
-def _assert_owned_private_directory(path):
+def _list_directory_bytes(descriptor):
+    names = []
+    for name in os.listdir(descriptor):
+        encoded = os.fsencode(name)
+        encoded.decode("utf-8", "strict")
+        names.append(encoded)
+    return tuple(sorted(names))
+
+
+def _open_owned_private_directory(path):
+    descriptor = None
     try:
         if (
             not isinstance(path, str)
@@ -255,65 +265,122 @@ def _assert_owned_private_directory(path):
             or os.path.realpath(path) != path
         ):
             raise ValueError("staging root is not canonical")
-        metadata = os.lstat(path)
+        path_before = os.lstat(path)
+        descriptor = os.open(
+            path,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+        )
+        held_metadata = os.fstat(descriptor)
+        path_after = os.lstat(path)
+        expected_identity = _directory_ownership_identity(held_metadata)
         if (
-            stat.S_ISLNK(metadata.st_mode)
-            or not stat.S_ISDIR(metadata.st_mode)
-            or metadata.st_uid != os.geteuid()
-            or stat.S_IMODE(metadata.st_mode) != 0o700
+            stat.S_ISLNK(path_before.st_mode)
+            or not stat.S_ISDIR(path_before.st_mode)
+            or not stat.S_ISDIR(held_metadata.st_mode)
+            or stat.S_ISLNK(path_after.st_mode)
+            or not stat.S_ISDIR(path_after.st_mode)
+            or _directory_ownership_identity(path_before) != expected_identity
+            or _directory_ownership_identity(path_after) != expected_identity
+            or held_metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(held_metadata.st_mode) != 0o700
+            or _list_directory_bytes(descriptor)
+            != (ARTIFACT_BASENAME.encode("ascii"),)
         ):
             raise ValueError("staging root ownership is invalid")
-        members = sorted(os.listdir(os.fsencode(path)))
-        if members != [ARTIFACT_BASENAME.encode("ascii")]:
-            raise ValueError("staging root has unexpected members")
-        return _directory_ownership_identity(metadata)
+        result = (descriptor, expected_identity)
+        descriptor = None
+        return result
     except ServerArtifactError:
         raise
     except Exception as cause:
         _fail("SERVER_ARTIFACT_STAGING", "staging", cause)
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
 
 
-def _assert_staging_root_identity(path, expected, expected_members):
+def _assert_staging_root_identity(
+    path,
+    held_descriptor,
+    expected,
+    expected_members,
+):
+    fresh_descriptor = None
     try:
-        metadata = os.lstat(path)
+        held_metadata = os.fstat(held_descriptor)
+        path_before = os.lstat(path)
+        fresh_descriptor = os.open(
+            path,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+        )
+        fresh_metadata = os.fstat(fresh_descriptor)
+        held_members = _list_directory_bytes(held_descriptor)
+        fresh_members = _list_directory_bytes(fresh_descriptor)
+        path_after = os.lstat(path)
         if (
-            not stat.S_ISDIR(metadata.st_mode)
-            or stat.S_ISLNK(metadata.st_mode)
-            or _directory_ownership_identity(metadata) != expected
-            or sorted(os.listdir(os.fsencode(path))) != sorted(expected_members)
+            not stat.S_ISDIR(held_metadata.st_mode)
+            or not stat.S_ISDIR(fresh_metadata.st_mode)
+            or stat.S_ISLNK(path_before.st_mode)
+            or not stat.S_ISDIR(path_before.st_mode)
+            or stat.S_ISLNK(path_after.st_mode)
+            or not stat.S_ISDIR(path_after.st_mode)
+            or any(
+                _directory_ownership_identity(metadata) != expected
+                for metadata in (
+                    held_metadata,
+                    path_before,
+                    fresh_metadata,
+                    path_after,
+                )
+            )
+            or held_members != tuple(sorted(expected_members))
+            or fresh_members != held_members
         ):
             raise ValueError("staging root changed")
     except ServerArtifactError:
         raise
     except Exception as cause:
         _fail("SERVER_ARTIFACT_CHANGED", "staging", cause)
+    finally:
+        if fresh_descriptor is not None:
+            try:
+                os.close(fresh_descriptor)
+            except OSError as cause:
+                _fail("SERVER_ARTIFACT_CHANGED", "staging", cause)
 
 
-def _open_stable_artifact(staging_root):
-    artifact_path = os.path.join(staging_root, ARTIFACT_BASENAME)
+def _open_stable_artifact(staging_descriptor):
     descriptor = None
     stream = None
     try:
-        path_metadata = os.lstat(artifact_path)
+        basename = ARTIFACT_BASENAME.encode("ascii")
+        path_metadata = os.stat(
+            basename,
+            dir_fd=staging_descriptor,
+            follow_symlinks=False,
+        )
         if (
             stat.S_ISLNK(path_metadata.st_mode)
             or not stat.S_ISREG(path_metadata.st_mode)
             or path_metadata.st_nlink != 1
             or path_metadata.st_uid != os.geteuid()
             or stat.S_IMODE(path_metadata.st_mode) != 0o600
-            or os.path.realpath(artifact_path) != artifact_path
         ):
             raise ValueError("artifact path identity is invalid")
         descriptor = os.open(
-            artifact_path,
+            basename,
             os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+            dir_fd=staging_descriptor,
         )
         descriptor_metadata = os.fstat(descriptor)
         if not _same_file_identity(path_metadata, descriptor_metadata):
             raise ValueError("artifact changed before open")
         stream = os.fdopen(descriptor, "rb", closefd=True)
         descriptor = None
-        return artifact_path, stream, _stat_identity(descriptor_metadata)
+        return stream, _stat_identity(descriptor_metadata)
     except Exception as cause:
         if stream is not None:
             try:
@@ -330,16 +397,19 @@ def _open_stable_artifact(staging_root):
         _fail("SERVER_ARTIFACT_ARCHIVE", ARTIFACT_BASENAME, cause)
 
 
-def _assert_artifact_identity(artifact_path, stream, expected):
+def _assert_artifact_identity(staging_descriptor, stream, expected):
     try:
         descriptor_metadata = os.fstat(stream.fileno())
-        path_metadata = os.lstat(artifact_path)
+        path_metadata = os.stat(
+            ARTIFACT_BASENAME.encode("ascii"),
+            dir_fd=staging_descriptor,
+            follow_symlinks=False,
+        )
         if (
             _stat_identity(descriptor_metadata) != expected
             or _stat_identity(path_metadata) != expected
             or not stat.S_ISREG(descriptor_metadata.st_mode)
             or descriptor_metadata.st_nlink != 1
-            or os.path.realpath(artifact_path) != artifact_path
         ):
             raise ValueError("artifact identity changed")
     except ServerArtifactError:
@@ -860,51 +930,33 @@ def _extract_file(archive, entry, root_descriptor):
                 _fail("SERVER_ARTIFACT_EXTRACT", "artifact.zip#entry", cause)
 
 
-def _fsync_directory_tree(root):
+def _fsync_directory_tree(root_descriptor, directory_paths):
     try:
-        directories = []
-        for directory, child_directories, files in os.walk(
-            root,
-            topdown=False,
-            followlinks=False,
+        for relative_path in sorted(
+            directory_paths,
+            key=lambda value: value.count("/"),
+            reverse=True,
         ):
-            for name in child_directories:
-                metadata = os.lstat(os.path.join(directory, name))
-                if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
-                    raise ValueError("directory tree changed while syncing")
-            for name in files:
-                metadata = os.lstat(os.path.join(directory, name))
-                if (
-                    stat.S_ISLNK(metadata.st_mode)
-                    or not stat.S_ISREG(metadata.st_mode)
-                    or metadata.st_nlink != 1
-                ):
-                    raise ValueError("file tree changed while syncing")
-            directories.append(directory)
-        for directory in directories:
-            descriptor = os.open(
-                directory,
-                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            descriptor = _open_relative_directory(
+                root_descriptor,
+                relative_path.split("/"),
+                create=False,
             )
             try:
                 os.fsync(descriptor)
             finally:
                 os.close(descriptor)
+        os.fsync(root_descriptor)
     except ServerArtifactError:
         raise
     except Exception as cause:
         _fail("SERVER_ARTIFACT_EXTRACT", "verified-candidate", cause)
 
 
-def _extract_archive(archive, plan, candidate_root):
-    root_descriptor = None
+def _extract_archive(archive, plan, candidate_descriptor):
     try:
-        root_descriptor = os.open(
-            candidate_root,
-            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
-        )
         for directory in plan.directories:
-            _ensure_relative_directory(root_descriptor, directory)
+            _ensure_relative_directory(candidate_descriptor, directory)
         for entry in plan.entries:
             if not entry.is_directory:
                 continue
@@ -920,35 +972,33 @@ def _extract_archive(archive, plan, candidate_root):
             ) as cause:
                 _fail("SERVER_ARTIFACT_EXTRACT", "artifact.zip#directory", cause)
         for entry in plan.files:
-            _extract_file(archive, entry, root_descriptor)
+            _extract_file(archive, entry, candidate_descriptor)
     except ServerArtifactError:
         raise
     except Exception as cause:
         _fail("SERVER_ARTIFACT_EXTRACT", "verified-candidate", cause)
-    finally:
-        if root_descriptor is not None:
-            try:
-                os.close(root_descriptor)
-            except OSError as cause:
-                _fail("SERVER_ARTIFACT_EXTRACT", "verified-candidate", cause)
-    _fsync_directory_tree(candidate_root)
+    _fsync_directory_tree(candidate_descriptor, plan.directories)
 
 
-def _read_stable_file(path, source_path):
+def _read_stable_file(parent_descriptor, basename, source_path):
     descriptor = None
     try:
-        path_before = os.lstat(path)
+        path_before = os.stat(
+            basename,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
         if (
             stat.S_ISLNK(path_before.st_mode)
             or not stat.S_ISREG(path_before.st_mode)
             or path_before.st_nlink != 1
             or path_before.st_size > FILE_TREE_MAX_FILE_BYTES
-            or os.path.realpath(path) != path
         ):
-            raise ValueError("file path is not a canonical ordinary file")
+            raise ValueError("file is not an ordinary single-link member")
         descriptor = os.open(
-            path,
+            basename,
             os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+            dir_fd=parent_descriptor,
         )
         descriptor_before = os.fstat(descriptor)
         if not _same_file_identity(path_before, descriptor_before):
@@ -968,11 +1018,14 @@ def _read_stable_file(path, source_path):
         if os.read(descriptor, 1):
             raise ValueError("file grew during read")
         descriptor_after = os.fstat(descriptor)
-        path_after = os.lstat(path)
+        path_after = os.stat(
+            basename,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
         if (
             not _same_file_identity(descriptor_before, descriptor_after)
             or not _same_file_identity(descriptor_after, path_after)
-            or os.path.realpath(path) != path
             or byte_length != expected_bytes
         ):
             raise ValueError("file changed while read")
@@ -1045,16 +1098,10 @@ def digest_file_tree_records(records):
     return digest.hexdigest()
 
 
-def _capture_file_tree(root, source_path):
+def _capture_file_tree(root_descriptor, source_path):
     try:
-        if (
-            not os.path.isabs(root)
-            or os.path.normpath(root) != root
-            or os.path.realpath(root) != root
-        ):
-            raise ValueError("file tree root is not canonical")
-        root_metadata = os.lstat(root)
-        if stat.S_ISLNK(root_metadata.st_mode) or not stat.S_ISDIR(root_metadata.st_mode):
+        root_metadata = os.fstat(root_descriptor)
+        if not stat.S_ISDIR(root_metadata.st_mode):
             raise ValueError("file tree root is not an ordinary directory")
     except ServerArtifactError:
         raise
@@ -1068,19 +1115,13 @@ def _capture_file_tree(root, source_path):
     directory_count = 0
     total_bytes = 0
 
-    def walk(directory_bytes, segments):
+    def walk(directory_descriptor, segments):
         nonlocal directory_count, total_bytes
         try:
-            directory_path = os.fsdecode(directory_bytes)
-            if os.path.realpath(directory_path) != directory_path:
-                raise ValueError("directory path traverses a link")
-            directory_before = os.lstat(directory_bytes)
-            if (
-                stat.S_ISLNK(directory_before.st_mode)
-                or not stat.S_ISDIR(directory_before.st_mode)
-            ):
+            directory_before = os.fstat(directory_descriptor)
+            if not stat.S_ISDIR(directory_before.st_mode):
                 raise ValueError("tree member is not a directory")
-            names_before = sorted(os.listdir(directory_bytes))
+            names_before = _list_directory_bytes(directory_descriptor)
         except ServerArtifactError:
             raise
         except Exception as cause:
@@ -1102,9 +1143,12 @@ def _capture_file_tree(root, source_path):
                 _fail("SERVER_ARTIFACT_FILE_TREE", source_path)
             exact_paths.add(path_bytes)
             folded_paths.add(folded_path)
-            path = os.path.join(directory_bytes, name_bytes)
             try:
-                metadata = os.lstat(path)
+                metadata = os.stat(
+                    name_bytes,
+                    dir_fd=directory_descriptor,
+                    follow_symlinks=False,
+                )
             except ServerArtifactError:
                 raise
             except Exception as cause:
@@ -1115,14 +1159,44 @@ def _capture_file_tree(root, source_path):
                 directory_count += 1
                 if directory_count > MAX_ARCHIVE_DIRECTORIES:
                     _fail("SERVER_ARTIFACT_FILE_TREE", source_path)
-                walk(path, (*segments, name))
+                child_descriptor = None
+                try:
+                    child_descriptor = os.open(
+                        name_bytes,
+                        os.O_RDONLY
+                        | os.O_DIRECTORY
+                        | os.O_NOFOLLOW
+                        | os.O_CLOEXEC,
+                        dir_fd=directory_descriptor,
+                    )
+                    if not _same_file_identity(
+                        metadata,
+                        os.fstat(child_descriptor),
+                    ):
+                        raise ValueError("directory changed before open")
+                    walk(child_descriptor, (*segments, name))
+                except ServerArtifactError:
+                    raise
+                except Exception as cause:
+                    _fail("SERVER_ARTIFACT_FILE_TREE", source_path, cause)
+                finally:
+                    if child_descriptor is not None:
+                        try:
+                            os.close(child_descriptor)
+                        except OSError as cause:
+                            _fail(
+                                "SERVER_ARTIFACT_FILE_TREE",
+                                source_path,
+                                cause,
+                            )
                 continue
             if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
                 _fail("SERVER_ARTIFACT_FILE_TREE", source_path)
             if len(records) >= FILE_TREE_MAX_FILES:
                 _fail("SERVER_ARTIFACT_FILE_TREE", source_path)
             file_record, file_identity = _read_stable_file(
-                os.fsdecode(path),
+                directory_descriptor,
+                name_bytes,
                 source_path,
             )
             total_bytes += file_record.byte_length
@@ -1138,8 +1212,8 @@ def _capture_file_tree(root, source_path):
             operational_entries.append(("file", relative_path, file_identity))
 
         try:
-            names_after = sorted(os.listdir(directory_bytes))
-            directory_after = os.lstat(directory_bytes)
+            names_after = _list_directory_bytes(directory_descriptor)
+            directory_after = os.fstat(directory_descriptor)
             if (
                 names_after != names_before
                 or not _same_file_identity(directory_before, directory_after)
@@ -1158,7 +1232,7 @@ def _capture_file_tree(root, source_path):
             )
         )
 
-    walk(os.fsencode(root), ())
+    walk(root_descriptor, ())
     normalized_records = tuple(sorted(records, key=lambda item: item.path.encode("utf-8")))
     return FileTreeCapture(
         root_identity=_stat_identity(root_metadata),
@@ -1168,25 +1242,44 @@ def _capture_file_tree(root, source_path):
     )
 
 
-def _read_captured_file(root, capture, relative_path, maximum_bytes):
+def _read_captured_file(
+    root_descriptor,
+    capture,
+    relative_path,
+    maximum_bytes,
+):
     record = next(
         (item for item in capture.records if item.path == relative_path),
         None,
     )
     if record is None or record.byte_length > maximum_bytes:
         _fail("SERVER_ARTIFACT_LAYOUT", relative_path)
-    path = os.path.join(root, *relative_path.split("/"))
+    segments = relative_path.split("/")
+    parent_descriptor = None
     descriptor = None
     try:
+        parent_descriptor = _open_relative_directory(
+            root_descriptor,
+            segments[:-1],
+            create=False,
+        )
+        basename = segments[-1].encode("utf-8")
+        path_before = os.stat(
+            basename,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
         descriptor = os.open(
-            path,
+            basename,
             os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+            dir_fd=parent_descriptor,
         )
         before = os.fstat(descriptor)
         if (
             not stat.S_ISREG(before.st_mode)
             or before.st_nlink != 1
             or before.st_size != record.byte_length
+            or not _same_file_identity(path_before, before)
         ):
             raise ValueError("captured file identity is invalid")
         chunks = []
@@ -1205,7 +1298,11 @@ def _read_captured_file(root, capture, relative_path, maximum_bytes):
         if os.read(descriptor, 1):
             raise ValueError("captured file grew during read")
         after = os.fstat(descriptor)
-        path_after = os.lstat(path)
+        path_after = os.stat(
+            basename,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
         if (
             not _same_file_identity(before, after)
             or not _same_file_identity(after, path_after)
@@ -1222,6 +1319,11 @@ def _read_captured_file(root, capture, relative_path, maximum_bytes):
         if descriptor is not None:
             try:
                 os.close(descriptor)
+            except OSError as cause:
+                _fail("SERVER_ARTIFACT_CHANGED", relative_path, cause)
+        if parent_descriptor is not None:
+            try:
+                os.close(parent_descriptor)
             except OSError as cause:
                 _fail("SERVER_ARTIFACT_CHANGED", relative_path, cause)
 
@@ -1491,7 +1593,7 @@ def _validate_runtime_redirects(raw_bytes, public_routes):
     }
 
 
-def _validate_release(candidate_root, release_capture, expected_commit):
+def _validate_release(candidate_descriptor, release_capture, expected_commit):
     actual_paths = {record.path for record in release_capture.records}
     required_metadata = {
         RELEASE_JSON_PATH,
@@ -1516,7 +1618,7 @@ def _validate_release(candidate_root, release_capture, expected_commit):
         _fail("SERVER_ARTIFACT_LAYOUT", "payload")
 
     manifest_bytes = _read_captured_file(
-        candidate_root,
+        candidate_descriptor,
         release_capture,
         RELEASE_FILES_PATH,
         MAX_METADATA_BYTES,
@@ -1543,8 +1645,27 @@ def _validate_release(candidate_root, release_capture, expected_commit):
     ):
         _fail("SERVER_ARTIFACT_MANIFEST", RELEASE_FILES_PATH)
 
-    payload_root = os.path.join(candidate_root, RELEASE_PAYLOAD_ROOT)
-    payload_capture = _capture_file_tree(payload_root, RELEASE_PAYLOAD_ROOT)
+    payload_descriptor = None
+    try:
+        payload_descriptor = _open_relative_directory(
+            candidate_descriptor,
+            [RELEASE_PAYLOAD_ROOT],
+            create=False,
+        )
+        payload_capture = _capture_file_tree(
+            payload_descriptor,
+            RELEASE_PAYLOAD_ROOT,
+        )
+    except ServerArtifactError:
+        raise
+    except Exception as cause:
+        _fail("SERVER_ARTIFACT_LAYOUT", RELEASE_PAYLOAD_ROOT, cause)
+    finally:
+        if payload_descriptor is not None:
+            try:
+                os.close(payload_descriptor)
+            except OSError as cause:
+                _fail("SERVER_ARTIFACT_LAYOUT", RELEASE_PAYLOAD_ROOT, cause)
     prefixed_payload_records = tuple(
         FileRecord(
             path=f"payload/{record.path}",
@@ -1564,13 +1685,13 @@ def _validate_release(candidate_root, release_capture, expected_commit):
     public_routes = _collect_public_routes(payload_capture.records)
     public_routes_sha256 = _digest_public_routes(public_routes)
     runtime_bytes = _read_captured_file(
-        candidate_root,
+        candidate_descriptor,
         release_capture,
         RELEASE_RUNTIME_REDIRECTS_PATH,
         MAX_METADATA_BYTES,
     )
     nginx_bytes = _read_captured_file(
-        candidate_root,
+        candidate_descriptor,
         release_capture,
         RELEASE_NGINX_REDIRECTS_PATH,
         MAX_METADATA_BYTES,
@@ -1580,7 +1701,7 @@ def _validate_release(candidate_root, release_capture, expected_commit):
         _fail("SERVER_ARTIFACT_NGINX", RELEASE_NGINX_REDIRECTS_PATH)
 
     metadata_bytes = _read_captured_file(
-        candidate_root,
+        candidate_descriptor,
         release_capture,
         RELEASE_JSON_PATH,
         MAX_METADATA_BYTES,
@@ -1661,64 +1782,146 @@ def _validate_release(candidate_root, release_capture, expected_commit):
     }
 
 
-def _candidate_identity(path):
+def _candidate_identity(
+    parent_descriptor,
+    basename,
+    held_descriptor,
+):
     try:
-        metadata = os.lstat(path)
+        path_metadata = os.stat(
+            basename,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        held_metadata = os.fstat(held_descriptor)
+        identity = _directory_ownership_identity(held_metadata)
         if (
-            stat.S_ISLNK(metadata.st_mode)
-            or not stat.S_ISDIR(metadata.st_mode)
-            or metadata.st_uid != os.geteuid()
-            or stat.S_IMODE(metadata.st_mode) != 0o700
+            stat.S_ISLNK(path_metadata.st_mode)
+            or not stat.S_ISDIR(path_metadata.st_mode)
+            or not stat.S_ISDIR(held_metadata.st_mode)
+            or path_metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(path_metadata.st_mode) != 0o700
+            or _directory_ownership_identity(path_metadata) != identity
         ):
             raise ValueError("candidate root is not private")
-        return _directory_ownership_identity(metadata)
+        return identity
     except ServerArtifactError:
         raise
     except Exception as cause:
         _fail("SERVER_ARTIFACT_EXTRACT", "verified-candidate", cause)
 
 
-def _safe_remove_tree(path, expected_identity):
-    if not os.path.lexists(path):
-        return
+def _safe_remove_tree(
+    parent_descriptor,
+    basename,
+    held_descriptor,
+    expected_identity,
+):
     try:
-        metadata = os.lstat(path)
+        if not (
+            basename == VERIFIED_RELEASE_BASENAME
+            or basename.startswith(".verify-candidate-")
+        ):
+            raise ValueError("cleanup basename is outside transaction namespace")
+        try:
+            metadata = os.stat(
+                basename,
+                dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            return
+        held_metadata = os.fstat(held_descriptor)
         if (
             stat.S_ISLNK(metadata.st_mode)
             or not stat.S_ISDIR(metadata.st_mode)
             or _directory_ownership_identity(metadata) != expected_identity
+            or _directory_ownership_identity(held_metadata)
+            != expected_identity
             or not shutil.rmtree.avoids_symlink_attacks
         ):
             raise ValueError("cleanup root identity is uncertain")
-        shutil.rmtree(path)
-        if os.path.lexists(path):
+        shutil.rmtree(basename, dir_fd=parent_descriptor)
+        try:
+            os.stat(
+                basename,
+                dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            pass
+        else:
             raise ValueError("cleanup target still exists")
+        os.fsync(parent_descriptor)
     except ServerArtifactError:
         raise
     except Exception as cause:
         _fail("SERVER_ARTIFACT_CLEANUP", "verified-candidate", cause)
 
 
-def _create_candidate(staging_root):
-    candidate_root = None
+def _create_candidate(staging_descriptor):
+    candidate_name = None
+    candidate_descriptor = None
     try:
-        candidate_root = tempfile.mkdtemp(
-            prefix=".verify-candidate-",
-            dir=staging_root,
-        )
-        os.chmod(candidate_root, 0o700)
-        identity = _candidate_identity(candidate_root)
-        return candidate_root, identity
-    except Exception as cause:
-        if candidate_root is not None:
+        for _attempt in range(128):
+            candidate_name = f".verify-candidate-{secrets.token_hex(16)}"
             try:
-                identity = _candidate_identity(candidate_root)
-                _safe_remove_tree(candidate_root, identity)
+                os.mkdir(candidate_name, 0o700, dir_fd=staging_descriptor)
+                break
+            except FileExistsError:
+                candidate_name = None
+        if candidate_name is None:
+            raise FileExistsError("candidate namespace exhausted")
+        candidate_descriptor = os.open(
+            candidate_name,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            dir_fd=staging_descriptor,
+        )
+        os.fchmod(candidate_descriptor, 0o700)
+        identity = _candidate_identity(
+            staging_descriptor,
+            candidate_name,
+            candidate_descriptor,
+        )
+        if _list_directory_bytes(candidate_descriptor):
+            raise ValueError("new candidate is not empty")
+        result = (candidate_name, candidate_descriptor, identity)
+        candidate_descriptor = None
+        return result
+    except Exception as cause:
+        if candidate_name is not None:
+            try:
+                if candidate_descriptor is None:
+                    candidate_descriptor = os.open(
+                        candidate_name,
+                        os.O_RDONLY
+                        | os.O_DIRECTORY
+                        | os.O_NOFOLLOW
+                        | os.O_CLOEXEC,
+                        dir_fd=staging_descriptor,
+                    )
+                identity = _candidate_identity(
+                    staging_descriptor,
+                    candidate_name,
+                    candidate_descriptor,
+                )
+                _safe_remove_tree(
+                    staging_descriptor,
+                    candidate_name,
+                    candidate_descriptor,
+                    identity,
+                )
             except ServerArtifactError as cleanup_error:
                 raise cleanup_error from cause
         if isinstance(cause, ServerArtifactError):
             raise
         _fail("SERVER_ARTIFACT_EXTRACT", "verified-candidate", cause)
+    finally:
+        if candidate_descriptor is not None:
+            try:
+                os.close(candidate_descriptor)
+            except OSError:
+                pass
 
 
 def _emit_json_line(stream, value):
@@ -1731,7 +1934,11 @@ def _emit_json_line(stream, value):
     stream.flush()
 
 
-def _rename_noreplace(source_path, target_path):
+def _rename_noreplace_at(
+    directory_descriptor,
+    source_name,
+    target_name,
+):
     try:
         library = ctypes.CDLL(None, use_errno=True)
         renameat2 = library.renameat2
@@ -1745,10 +1952,10 @@ def _rename_noreplace(source_path, target_path):
         renameat2.restype = ctypes.c_int
         ctypes.set_errno(0)
         result = renameat2(
-            AT_FDCWD,
-            os.fsencode(source_path),
-            AT_FDCWD,
-            os.fsencode(target_path),
+            directory_descriptor,
+            os.fsencode(source_name),
+            directory_descriptor,
+            os.fsencode(target_name),
             RENAME_NOREPLACE,
         )
         if result != 0:
@@ -1807,22 +2014,28 @@ def verify_artifact(
         expected_commit_sha,
         "arguments/expected-commit-sha",
     )
-    staging_identity = _assert_owned_private_directory(staging_root)
-    artifact_path, artifact_stream, artifact_identity = _open_stable_artifact(
-        staging_root
-    )
-    candidate_root = None
+    staging_descriptor = None
+    staging_identity = None
+    artifact_stream = None
+    artifact_identity = None
+    candidate_name = None
+    candidate_descriptor = None
     candidate_identity = None
     activated_output_owned = False
-    verified_root = os.path.join(staging_root, VERIFIED_RELEASE_BASENAME)
     committed = False
     previous_signal_mask = None
     try:
+        staging_descriptor, staging_identity = _open_owned_private_directory(
+            staging_root
+        )
+        artifact_stream, artifact_identity = _open_stable_artifact(
+            staging_descriptor
+        )
         artifact_digest = _hash_open_stream(artifact_stream)
         if artifact_digest != expected_artifact_digest:
             _fail("SERVER_ARTIFACT_DIGEST", ARTIFACT_BASENAME)
         _assert_artifact_identity(
-            artifact_path,
+            staging_descriptor,
             artifact_stream,
             artifact_identity,
         )
@@ -1835,47 +2048,61 @@ def verify_artifact(
             _fail("SERVER_ARTIFACT_ARCHIVE_FORMAT", ARTIFACT_BASENAME, cause)
         with archive:
             plan = _plan_archive(archive, envelope)
-            candidate_root, candidate_identity = _create_candidate(staging_root)
+            (
+                candidate_name,
+                candidate_descriptor,
+                candidate_identity,
+            ) = _create_candidate(staging_descriptor)
             _assert_staging_root_identity(
                 staging_root,
+                staging_descriptor,
                 staging_identity,
                 (
                     ARTIFACT_BASENAME.encode("ascii"),
-                    os.path.basename(candidate_root).encode("ascii"),
+                    candidate_name.encode("ascii"),
                 ),
             )
-            _extract_archive(archive, plan, candidate_root)
+            _extract_archive(archive, plan, candidate_descriptor)
 
         _assert_artifact_identity(
-            artifact_path,
+            staging_descriptor,
             artifact_stream,
             artifact_identity,
         )
-        release_before = _capture_file_tree(candidate_root, "release")
+        release_before = _capture_file_tree(candidate_descriptor, "release")
         if release_before.tree_sha256 != expected_release_content_sha256:
             _fail("SERVER_ARTIFACT_RELEASE_DIGEST", "release")
         validated = _validate_release(
-            candidate_root,
+            candidate_descriptor,
             release_before,
             expected_commit_sha,
         )
-        release_after = _capture_file_tree(candidate_root, "release")
+        release_after = _capture_file_tree(candidate_descriptor, "release")
         if release_after != release_before:
             _fail("SERVER_ARTIFACT_CHANGED", "release")
         _assert_artifact_identity(
-            artifact_path,
+            staging_descriptor,
             artifact_stream,
             artifact_identity,
         )
         _assert_staging_root_identity(
             staging_root,
+            staging_descriptor,
             staging_identity,
             (
                 ARTIFACT_BASENAME.encode("ascii"),
-                os.path.basename(candidate_root).encode("ascii"),
+                candidate_name.encode("ascii"),
             ),
         )
-        if os.path.lexists(verified_root):
+        try:
+            os.stat(
+                VERIFIED_RELEASE_BASENAME,
+                dir_fd=staging_descriptor,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            pass
+        else:
             _fail("SERVER_ARTIFACT_STAGING", VERIFIED_RELEASE_BASENAME)
 
         result = {
@@ -1901,18 +2128,31 @@ def verify_artifact(
                 signal.SIG_BLOCK,
                 INTERRUPT_SIGNALS,
             )
-            activation_before = _capture_file_tree(candidate_root, "release")
+            activation_before = _capture_file_tree(
+                candidate_descriptor,
+                "release",
+            )
             if activation_before != release_after:
                 _fail("SERVER_ARTIFACT_CHANGED", "release")
-            artifact_stream.close()
-            artifact_stream = None
-            _rename_noreplace(candidate_root, verified_root)
-            candidate_root = None
+            _rename_noreplace_at(
+                staging_descriptor,
+                candidate_name,
+                VERIFIED_RELEASE_BASENAME,
+            )
+            candidate_name = VERIFIED_RELEASE_BASENAME
             activated_output_owned = True
-            if _candidate_identity(verified_root) != candidate_identity:
+            if (
+                _candidate_identity(
+                    staging_descriptor,
+                    VERIFIED_RELEASE_BASENAME,
+                    candidate_descriptor,
+                )
+                != candidate_identity
+            ):
                 _fail("SERVER_ARTIFACT_ACTIVATE", VERIFIED_RELEASE_BASENAME)
             _assert_staging_root_identity(
                 staging_root,
+                staging_descriptor,
                 staging_identity,
                 (
                     ARTIFACT_BASENAME.encode("ascii"),
@@ -1920,7 +2160,7 @@ def verify_artifact(
                 ),
             )
             activated_release = _capture_file_tree(
-                verified_root,
+                candidate_descriptor,
                 VERIFIED_RELEASE_BASENAME,
             )
             if not _capture_survived_activation(
@@ -1928,14 +2168,30 @@ def verify_artifact(
                 activated_release,
             ):
                 _fail("SERVER_ARTIFACT_CHANGED", VERIFIED_RELEASE_BASENAME)
-            staging_descriptor = os.open(
-                staging_root,
-                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            os.fsync(staging_descriptor)
+            _assert_artifact_identity(
+                staging_descriptor,
+                artifact_stream,
+                artifact_identity,
             )
-            try:
-                os.fsync(staging_descriptor)
-            finally:
-                os.close(staging_descriptor)
+            if (
+                _candidate_identity(
+                    staging_descriptor,
+                    VERIFIED_RELEASE_BASENAME,
+                    candidate_descriptor,
+                )
+                != candidate_identity
+            ):
+                _fail("SERVER_ARTIFACT_CHANGED", VERIFIED_RELEASE_BASENAME)
+            _assert_staging_root_identity(
+                staging_root,
+                staging_descriptor,
+                staging_identity,
+                (
+                    ARTIFACT_BASENAME.encode("ascii"),
+                    VERIFIED_RELEASE_BASENAME.encode("ascii"),
+                ),
+            )
             if success_stream is not None:
                 _emit_json_line(success_stream, result)
             committed = True
@@ -1956,16 +2212,37 @@ def verify_artifact(
         cleanup_error = None
         if not committed:
             try:
-                if candidate_root is not None and candidate_identity is not None:
-                    _safe_remove_tree(candidate_root, candidate_identity)
                 if (
-                    activated_output_owned
-                    and os.path.lexists(verified_root)
+                    staging_descriptor is not None
+                    and candidate_name is not None
+                    and candidate_descriptor is not None
                     and candidate_identity is not None
                 ):
-                    _safe_remove_tree(verified_root, candidate_identity)
+                    if (
+                        activated_output_owned
+                        and candidate_name != VERIFIED_RELEASE_BASENAME
+                    ):
+                        _fail(
+                            "SERVER_ARTIFACT_CLEANUP",
+                            "verified-candidate",
+                        )
+                    _safe_remove_tree(
+                        staging_descriptor,
+                        candidate_name,
+                        candidate_descriptor,
+                        candidate_identity,
+                    )
             except ServerArtifactError as error:
                 cleanup_error = error
+        descriptor_close_error = None
+        for descriptor in (candidate_descriptor, staging_descriptor):
+            if descriptor is None:
+                continue
+            try:
+                os.close(descriptor)
+            except OSError as cause:
+                if descriptor_close_error is None:
+                    descriptor_close_error = cause
         if previous_signal_mask is not None:
             signal.pthread_sigmask(
                 signal.SIG_SETMASK,
@@ -1975,19 +2252,90 @@ def verify_artifact(
             raise cleanup_error
         if close_error is not None and not committed:
             _fail("SERVER_ARTIFACT_ARCHIVE", ARTIFACT_BASENAME, close_error)
+        if descriptor_close_error is not None and not committed:
+            _fail(
+                "SERVER_ARTIFACT_CLEANUP",
+                "verified-candidate",
+                descriptor_close_error,
+            )
 
 
 def _load_golden_vectors():
-    golden_path = Path(__file__).resolve().with_name(GOLDEN_BASENAME)
+    descriptor = None
     try:
-        if golden_path.is_symlink() or not golden_path.is_file():
+        inherited = os.environ.get(SELF_TEST_GOLDEN_FD_ENVIRONMENT)
+        proc_match = re.fullmatch(r"/proc/self/fd/([0-9]+)", __file__)
+        if inherited is None:
+            golden_path = Path(__file__).resolve().with_name(GOLDEN_BASENAME)
+            if golden_path.is_symlink() or not golden_path.is_file():
+                raise ValueError("golden file is not ordinary")
+            descriptor = os.open(
+                golden_path,
+                os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+            )
+        else:
+            if (
+                proc_match is None
+                or re.fullmatch(r"[0-9]+", inherited) is None
+                or str(int(inherited)) != inherited
+                or int(inherited) == int(proc_match.group(1))
+            ):
+                raise ValueError("inherited golden descriptor is invalid")
+            verifier_metadata = os.fstat(int(proc_match.group(1)))
+            descriptor = os.dup(int(inherited))
+            golden_metadata = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(verifier_metadata.st_mode)
+                or verifier_metadata.st_nlink != 1
+                or not stat.S_ISREG(golden_metadata.st_mode)
+                or golden_metadata.st_nlink != 1
+                or verifier_metadata.st_dev != golden_metadata.st_dev
+            ):
+                raise ValueError("inherited self-test files are invalid")
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_nlink != 1
+            or before.st_size < 0
+            or before.st_size > FILE_TREE_MAX_FILE_BYTES
+        ):
             raise ValueError("golden file is not ordinary")
-        raw_bytes = golden_path.read_bytes()
+        chunks = []
+        total = 0
+        while total < before.st_size:
+            chunk = os.pread(
+                descriptor,
+                min(READ_CHUNK_BYTES, before.st_size - total),
+                total,
+            )
+            if not chunk:
+                raise ValueError("golden file ended during read")
+            chunks.append(chunk)
+            total += len(chunk)
+        if os.pread(descriptor, 1, total):
+            raise ValueError("golden file grew during read")
+        after = os.fstat(descriptor)
+        if (
+            _stat_identity(before) != _stat_identity(after)
+            or total != before.st_size
+        ):
+            raise ValueError("golden file changed during read")
+        raw_bytes = b"".join(chunks)
         value = json.loads(raw_bytes.decode("utf-8", "strict"))
     except ServerArtifactError:
         raise
     except Exception as cause:
         _fail("SERVER_ARTIFACT_FILE_TREE", "self-test/golden", cause)
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError as cause:
+                _fail(
+                    "SERVER_ARTIFACT_FILE_TREE",
+                    "self-test/golden",
+                    cause,
+                )
     if (
         not isinstance(value, dict)
         or tuple(value.keys())

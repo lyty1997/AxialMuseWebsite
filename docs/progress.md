@@ -4,6 +4,13 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-08-05 — D-143 #36 完整验收复核与仓库侧修复候选
+
+- **验收发现与授权**：#36 完整验收复现了 `verify_artifact.py` 在 staging 字符串父路径被替换后仍可能对 displaced tree 完成激活的竞态，并确认 bootstrap 独立 fixture 未以真实 SIGINT/SIGTERM 覆盖提交边界；尝试刷新服务器只读事实时 SSH transport 返回 255，未取得新的 live 证据。用户先授权仓库侧修复、已安装 verifier 的升级设计和本地验证，随后以 D-144 另行授权把本轮 #36 修复、测试和契约文档形成一个本地提交；该提交须排除工作区原有的 D-141/D-142、#37 和其他改动，且仍不包含 push、Issue/PR、GitHub 配置、服务器/TAT、DNS、云资源和其他外部写操作。
+- **仓库修复**：verifier 的 archive、候选、提取、整树验证、激活、同步、最终 live 绑定和身份绑定清理现全部从首次 held staging fd 派生，父路径替换只清理 held 事务 inode。bootstrap 保持首次安装 CLI 和两 payload 不变，把激活到 committed 或隔离完成收进连续信号屏蔽区，并以真实 SIGINT/SIGTERM、直接 `KeyboardInterrupt`、handler 安装/恢复及提交后窗口验证边界。新增 canonical component manifest 与独立 upgrader；升级器以 genesis/current receipt CAS、固定 legacy lock、append-only lineage、held-fd 自测和 `RENAME_EXCHANGE` 处理字节升级，并对 bootstrap 保留状态、genesis、live system tree、formal、upgrade root 和 event 链逐层重绑。commit 前且 marker 可证明仍为 prepared 的已知失败恢复旧 formal，并在恢复持久化可证明时记录 rolled-back；pre-prepared residue、rolled-back tail、身份歧义、恢复持久化失败和其他结果不明均保留现场阻断，没有 force、cleanup 或 commit 后 rollback。
+- **本地证据**：Ubuntu 基线 `/usr/bin/python3` 的 verifier self-test 通过 6 个固定向量；verifier/bootstrap/upgrader 独立 fixture 共 86/86（24+31+31）。本提交范围的六个 Python 实现/测试文件通过本机 Ruff 辅助检查，`git diff --check`、固定 Node `24.18.0` 的完整 `quality` 与 `typecheck` 均通过；混合工作区中另含 #37 账本的 `tests/ops` 101/101 只作为辅助回归证据，不属于本提交范围。上述回归反例覆盖 verifier staging 父路径替换，以及 upgrader 的 lib/namespace/upgrade-root/event/genesis 替换、候选与正式自测漂移、prepared/交换/marker 崩溃恢复、父目录 fsync、真实信号、锁竞争、CAS/source 顺序和长 receipt 链句柄上限。
+- **结论与剩余边界**：上述结果只把仓库修复候选闭合，并由 D-144 授权的本地提交收束，不等于 #36 完整通过。提交尚未推送或进入 canonical `main`/CI；已安装服务器组件没有执行升级、清理、rollback 或重新验收，live 状态因 SSH transport 失败仍未刷新；调用方共享锁接线和 commit 后显式 rollback 也尚未实现。后续 Git 晋级、服务器维护窗口、传输、执行与现场复核仍需新的明确授权。未新增第三方运行时服务或依赖，也未处理用户数据。
+
 ## 2026-08-04 — D-137 授权未推送提交使用 noreply 身份重写
 
 - **失败事实**：D-136 首轮普通 topic push 被 GitHub `GH007` 邮箱隐私门禁拒绝，远端未改变。只读审计确认远端 topic 到本地 `68ee529` 之间恰有七个线性、未签名、尚未发布的提交，七者 author/committer 邮箱均不是 GitHub noreply，因此不能只修正最新提交。
