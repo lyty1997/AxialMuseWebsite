@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {spawn, spawnSync, type ChildProcess} from "node:child_process";
+import {spawn, type ChildProcess} from "node:child_process";
 import {createHash} from "node:crypto";
 import {
   accessSync,
@@ -157,29 +157,8 @@ function executableFromPath(name: string): string | undefined {
       accessSync(candidate, constants.X_OK);
       const metadata = statSync(candidate);
       if (!metadata.isFile()) continue;
-      const canonicalCandidate = realpathSync(candidate);
-      if (process.platform === "win32") return canonicalCandidate;
-      const version = spawnSync(canonicalCandidate, ["--version"], {
-        encoding: "utf8",
-        env: {
-          LANG: process.env.LANG ?? "C.UTF-8",
-          PATH: process.env.PATH,
-        },
-        maxBuffer: 64 * 1024,
-        stdio: ["ignore", "pipe", "ignore"],
-        timeout: COMMAND_TIMEOUT_MS,
-      });
-      assert.equal(
-        version.status,
-        0,
-        "[BROWSER_VERSION] Chromium 版本探针失败",
-      );
-      assert.match(
-        version.stdout,
-        /(?:Google Chrome|Chromium)[ /][0-9.]+/u,
-        "[BROWSER_VERSION] 浏览器产品不属于 Chromium",
-      );
-      return canonicalCandidate;
+      // 这里只解析可执行文件身份；产品与版本由成功启动后的 Browser.getVersion 校验。
+      return realpathSync(candidate);
     } catch {
       // 继续检查下一个受控 PATH 候选。
     }
