@@ -129,6 +129,46 @@ test("E-016 build postBuild 唯一写入 owner-bound 完整输入 seal，check/v
   }
 });
 
+test("#33 release 验证事务建立临时 seal 并拒绝同字节换 inode", () => {
+  const fixture = createFixture();
+  let currentnessChecks = 0;
+  try {
+    const release = createContentBuildSealController({
+      repositoryRoot: fixture.repositoryRoot,
+      mode: "production",
+      owner: OWNER,
+      phase: "release",
+      inputDigest: DIGEST,
+      environment: fixture.environment,
+      assertInputsCurrent() {
+        currentnessChecks += 1;
+      },
+    });
+    release.write();
+    release.assert();
+    assert.equal(currentnessChecks, 2);
+
+    const sealPath = resolve(
+      fixture.transactionRoot,
+      ".axial-muse-content-input-seal",
+    );
+    const originalBytes = readFileSync(sealPath);
+    renameSync(
+      sealPath,
+      resolve(fixture.repositoryRoot, "original-input-seal"),
+    );
+    writeFileSync(sealPath, originalBytes, {mode: 0o600});
+    chmodSync(sealPath, 0o600);
+    assert.throws(
+      () => release.assert(),
+      assertContentCode("CONTENT_SESSION_TRANSACTION_IDENTITY"),
+    );
+  } finally {
+    rmSync(fixture.repositoryRoot, {recursive: true, force: true});
+    rmSync(fixture.transactionRoot, {recursive: true, force: true});
+  }
+});
+
 test("E-016 build/check 间只变更正文 bytes 导致完整 input digest seal 失败关闭", () => {
   const fixture = createFixture();
   try {

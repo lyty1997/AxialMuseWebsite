@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs, {
   chmodSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -296,6 +297,13 @@ function createFixture(options: FixtureOptions = {}): string {
     owner: "AxialMuseWebsite",
     roleValues: ["brand", "operational"],
     assets: [],
+  });
+  writeJson(repositoryRoot, "docs/contracts/redirects.json", {
+    version: "0.1.0",
+    kind: "axial_muse_redirects",
+    status: "active",
+    owner: "AxialMuseWebsite",
+    redirects: [],
   });
 
   for (const projectId of ["archived-project", "draft-project", "published-project"]) {
@@ -967,6 +975,8 @@ async function invokeArtifactCheck(
   generatedFilesDirectory: string,
   options: Readonly<{
     failSealAssertionAt?: number;
+    onWriteBuildSeal?: () => void;
+    phase?: "check" | "release";
     trace?: {sealAssertions: number; staticAssertions: number; disposals: number};
   }> = {},
 ): Promise<Readonly<{
@@ -998,14 +1008,16 @@ async function invokeArtifactCheck(
       trace.disposals += 1;
     },
   });
+  const phase = options.phase ?? "check";
   const session = Object.freeze({
     content,
     docsAdapterSession: Object.freeze({}),
     outputDirectory: buildDirectory,
-    phase: "check" as const,
+    phase,
     staticPlan,
     writeBuildSeal() {
-      throw new Error("check fixture must not write seal");
+      if (phase !== "release") throw new Error("check fixture must not write seal");
+      options.onWriteBuildSeal?.();
     },
     assertBuildSeal() {
       trace.sealAssertions += 1;
@@ -2033,6 +2045,45 @@ test("E-016 日期索引只在 postBuild 原子写入私有 generated files", as
   });
 });
 
+test("#33 release 验证在 fresh generated files 中重建私有日期索引", async () => {
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    rmSync(fixture.generatedFilesDirectory, {recursive: true, force: false});
+    mkdirSync(fixture.generatedFilesDirectory, {mode: 0o700});
+    chmodSync(fixture.generatedFilesDirectory, 0o700);
+    let sealWrites = 0;
+
+    await invokeArtifactCheck(
+      content,
+      fixture.buildDirectory,
+      fixture.generatedFilesDirectory,
+      {
+        phase: "release",
+        onWriteBuildSeal() {
+          assert.equal(
+            readFileSync(
+              resolve(fixture.generatedFilesDirectory, ARTICLE_DATE_INDEX_SOURCE_PATH),
+              "utf8",
+            ),
+            `${JSON.stringify(content.articleDateIndex, null, 2)}\n`,
+          );
+          sealWrites += 1;
+        },
+      },
+    );
+
+    assert.equal(sealWrites, 1);
+    assert.equal(
+      readFileSync(
+        resolve(fixture.generatedFilesDirectory, ARTICLE_DATE_INDEX_SOURCE_PATH),
+        "utf8",
+      ),
+      `${JSON.stringify(content.articleDateIndex, null, 2)}\n`,
+    );
+  });
+});
+
 test("D-098 postBuild 静态白名单发布失败时不写私有索引或 seal", async () => {
   await withFixture(async (repositoryRoot) => {
     const content = await loadFixtureContent({repositoryRoot, mode: "production"});
@@ -2333,6 +2384,94 @@ test("E-016 production artifact 验收全部公开页面 canonical 并保持 sid
       assertBuildError("CONTENT_ARTIFACT_SIDEBAR_STRUCTURE"),
     );
   });
+});
+
+test("E-014 production artifact 复用唯一运行时实现校验 registry 与同 payload 路由", async () => {
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    writeJson(repositoryRoot, "docs/contracts/redirects.json", {
+      version: "0.1.0",
+      kind: "axial_muse_redirects",
+      status: "active",
+      owner: "AxialMuseWebsite",
+      redirects: [{
+        from: "/legacy-projects/",
+        to: "/projects/",
+        reason: "历史项目入口迁移",
+      }],
+    });
+    await assert.doesNotReject(() => invokeArtifactCheck(
+      content,
+      fixture.buildDirectory,
+      fixture.generatedFilesDirectory,
+    ));
+  });
+
+  for (const [redirect, upstreamCode] of [
+    [{
+      from: "/projects/",
+      to: "/writing/",
+      reason: "活动页面不得成为 source",
+    }, "RELEASE_REDIRECT_SOURCE_PAGE"],
+    [{
+      from: "/legacy-missing/",
+      to: "/missing/",
+      reason: "目标必须存在于同一 payload",
+    }, "RELEASE_REDIRECT_TARGET_MISSING"],
+  ] as const) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      writeJson(repositoryRoot, "docs/contracts/redirects.json", {
+        version: "0.1.0",
+        kind: "axial_muse_redirects",
+        status: "active",
+        owner: "AxialMuseWebsite",
+        redirects: [redirect],
+      });
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_REDIRECTS", upstreamCode),
+      );
+    });
+  }
+});
+
+test("CODE-019 production artifact 拒绝固定 registry 的符号链接与硬链接旁路", async () => {
+  for (const linkKind of ["symbolic", "hard"] as const) {
+    await withFixture(async (repositoryRoot) => {
+      const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+      const fixture = createArtifactFixture(repositoryRoot, content);
+      const registryPath = resolve(
+        repositoryRoot,
+        "docs/contracts/redirects.json",
+      );
+      const targetPath = resolve(repositoryRoot, "redirects-link-target.json");
+      writeFileSync(targetPath, readFileSync(registryPath), {mode: 0o600});
+      rmSync(registryPath);
+      if (linkKind === "symbolic") {
+        symlinkSync(targetPath, registryPath);
+      } else {
+        linkSync(targetPath, registryPath);
+      }
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content,
+          fixture.buildDirectory,
+          fixture.generatedFilesDirectory,
+        ),
+        assertBuildError(
+          "CONTENT_ARTIFACT_REDIRECTS",
+          "RELEASE_REDIRECT_REGISTRY_READ",
+        ),
+      );
+    });
+  }
 });
 
 test("I-14 production artifact 同时验收公开 fixture 与真实零内容空状态", async () => {
@@ -3583,7 +3722,10 @@ test("E-016 production artifact 拒绝大小写 HTML 旁路与非受控 sitemap 
         fixture.buildDirectory,
         fixture.generatedFilesDirectory,
       ),
-      assertBuildError("CONTENT_ARTIFACT_ROUTE_SET"),
+      assertBuildError(
+        "CONTENT_ARTIFACT_REDIRECTS",
+        "RELEASE_REDIRECT_HTML_LAYOUT",
+      ),
     );
   });
 

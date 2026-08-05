@@ -7,6 +7,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node scripts/quality/run-tests.mjs",
     "build": "node scripts/build/build-site.mjs --mode production",
+    "package:artifact": "node scripts/release/package-site.mjs",
+    "check:artifact": "node scripts/quality/check-release-package.mjs",
     "check:js": "node scripts/quality/check-javascript.mjs",
     "check:module-boundaries": "node scripts/quality/check-module-boundaries.mjs",
     "check:npm-isolation": "node scripts/quality/check-npm-isolation.mjs",

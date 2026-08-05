@@ -26,8 +26,11 @@ import type {
 import type {StaticAssetPlan} from "../static-assets/index.js";
 import {failContentBuild} from "./errors.js";
 import type {LoadedValidatedContent} from "./types.js";
+import {
+  CANONICAL_ORIGIN,
+  deriveProductionRuntimeRedirects,
+} from "./runtime-redirects.js";
 
-const CANONICAL_ORIGIN = "https://www.axialmuse.com";
 export const ARTICLE_DATE_INDEX_RELATIVE_PATH = "axial-muse/article-date-index.json";
 const MIN_UNPUBLISHED_SEMANTIC_FRAGMENT_BYTES = 16;
 const UTF8_DECODER = new TextDecoder("utf-8", {fatal: true});
@@ -3232,24 +3235,23 @@ export function assertProductionArtifact(
         {sourcePath: "site-content"},
       );
     }
-    if (evidence.files.some((file) => {
-      const lower = file.relativePath.toLowerCase();
-      return (lower.endsWith(".html") && !file.relativePath.endsWith(".html"))
-        || lower.endsWith(".htm")
-        || lower.endsWith(".xhtml");
-    })) {
-      failContentBuild(
-        "CONTENT_ARTIFACT_ROUTE_SET",
-        "production 制品含不受控的 HTML 后缀。",
-        {sourcePath: "build"},
-      );
-    }
-    const htmlFiles = evidence.files.filter((file) => file.relativePath.endsWith(".html"));
-    const actual: string[] = [];
-    for (const file of htmlFiles) {
-      const route = routeFromHtmlPath(file.relativePath);
-      if (route === undefined) continue;
-      actual.push(route);
+    const runtimeRedirects = deriveProductionRuntimeRedirects(
+      content.repositoryRoot,
+      buildDirectory,
+    );
+    const actual = [...runtimeRedirects.publicRoutes];
+    for (const route of actual) {
+      const relativePath = route === "/"
+        ? "index.html"
+        : `${route.slice(1)}index.html`;
+      const file = evidenceByPath.get(relativePath);
+      if (file === undefined) {
+        failContentBuild(
+          "CONTENT_ARTIFACT_ROUTE_SET",
+          "运行时公开路由无法一一映射到已复核的 HTML 文件。",
+          {sourcePath: `build/${relativePath}`},
+        );
+      }
       const sourcePath = `build/${file.relativePath}`;
       const html = readStableTextFile(
         resolve(buildDirectory, file.relativePath),
@@ -3282,7 +3284,6 @@ export function assertProductionArtifact(
         sourcePath,
       );
     }
-    actual.sort();
     if (
       actual.length !== expected.length
       || actual.some((route, index) => route !== expected[index])

@@ -43,6 +43,7 @@ const ROOT_DIRECTORIES = Object.freeze([
   "scripts/build",
   "scripts/content",
   "scripts/quality/lib",
+  "scripts/release/lib",
 ]);
 const ARTICLE_IDS = Object.freeze({
   archived: "018f0000-0000-7000-8000-000000000002",
@@ -189,6 +190,13 @@ function materializePublicContentFixture(root: string): Uint8Array {
     owner: "AxialMuseWebsite",
     roleValues: ["brand", "operational"],
     assets: [],
+  });
+  writeJson(root, "docs/contracts/redirects.json", {
+    version: "0.1.0",
+    kind: "axial_muse_redirects",
+    status: "active",
+    owner: "AxialMuseWebsite",
+    redirects: [],
   });
 
   writeText(
@@ -350,6 +358,15 @@ function sanitizedBuildDiagnostic(
 test("I-14/I-15 真实 production build 与 Chromium 回归覆盖公开展示和主题", async () => {
   assert.equal(process.platform, "linux", "真实 Docusaurus fixture 只允许在 Linux 运行");
   const repositoryRoot = assertOrdinaryDirectory(realpathSync(process.cwd()), "仓库根");
+  const primaryNodeVersion = readFileSync(
+    resolve(repositoryRoot, ".nvmrc"),
+    "utf8",
+  );
+  assert.match(
+    primaryNodeVersion,
+    /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\n$/u,
+  );
+  const isPrimaryRuntime = primaryNodeVersion === `${process.versions.node}\n`;
   const temporaryParent = realpathSync(tmpdir());
   const temporaryRoot = mkdtempSync(
     join(temporaryParent, "axial-muse-public-presentation-"),
@@ -634,60 +651,74 @@ test("I-14/I-15 真实 production build 与 Chromium 回归覆盖公开展示和
       "candidates",
       `${commitSha}.${controllerPid}`,
     );
-    const previewResult = spawnSync(
-      process.execPath,
-      [resolve(mirror, "scripts/build/build-site.mjs"), "--mode", "preview"],
-      {
-        cwd: mirror,
-        env: {
-          ...environment,
-          PREVIEW_STATE_DIR: previewStateRoot,
-          AXIAL_MUSE_PREVIEW_CANDIDATE: previewCandidate,
-          AXIAL_MUSE_PREVIEW_COMMIT_SHA: commitSha,
-          AXIAL_MUSE_PREVIEW_CONTROLLER_PID: controllerPid,
-          AXIAL_MUSE_PREVIEW_ACCESS_HOST: "192.168.0.162",
-          AXIAL_MUSE_PREVIEW_ACCESS_PORT: "8088",
-        },
-        encoding: "utf8",
-        maxBuffer: 16 * 1024 * 1024,
-        timeout: 10 * 60 * 1000,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-    assert.equal(
-      previewResult.status,
-      0,
-      [
-        "真实草稿 fixture preview build 失败。",
-        sanitizedBuildDiagnostic(previewResult.stdout, repositoryRoot, temporaryRoot),
-        sanitizedBuildDiagnostic(previewResult.stderr, repositoryRoot, temporaryRoot),
-      ].join("\n"),
-    );
+    const previewResult = (() => {
+      const previousUmask = process.umask(0o002);
+      try {
+        return spawnSync(
+          process.execPath,
+          [resolve(mirror, "scripts/build/build-site.mjs"), "--mode", "preview"],
+          {
+            cwd: mirror,
+            env: {
+              ...environment,
+              PREVIEW_STATE_DIR: previewStateRoot,
+              AXIAL_MUSE_PREVIEW_CANDIDATE: previewCandidate,
+              AXIAL_MUSE_PREVIEW_COMMIT_SHA: commitSha,
+              AXIAL_MUSE_PREVIEW_CONTROLLER_PID: controllerPid,
+              AXIAL_MUSE_PREVIEW_ACCESS_HOST: "192.168.0.162",
+              AXIAL_MUSE_PREVIEW_ACCESS_PORT: "8088",
+            },
+            encoding: "utf8",
+            maxBuffer: 16 * 1024 * 1024,
+            timeout: 10 * 60 * 1000,
+            stdio: ["ignore", "pipe", "pipe"],
+          },
+        );
+      } finally {
+        process.umask(previousUmask);
+      }
+    })();
     assert.equal(previewResult.signal, null);
     assert.equal(previewResult.error, undefined);
-    assert.equal(existsSync(resolve(previewCandidate, "__docusaurus")), false);
-    assert.equal(existsSync(resolve(previewCandidate, "sitemap.xml")), false);
-    const previewWriting = readFileSync(resolve(previewCandidate, "writing/index.html"), "utf8");
-    const previewDraft = readFileSync(
-      resolve(previewCandidate, "writing/draft-fixture-article/index.html"),
-      "utf8",
-    );
-    assertContainsAll(previewWriting, ["草稿", "Draft Fixture Article"]);
-    assertContainsAll(previewDraft, [
-      "Draft Fixture Article",
-      "DRAFT-PREVIEW-BODY-27",
-      "合法正文端口示例：8088",
-      "https://www.axialmuse.com/writing/draft-fixture-article/",
-    ]);
-    for (const previewHtml of listFilesWithSuffix(previewCandidate, ".html")) {
-      assertExactPreviewRobots(readFileSync(previewHtml, "utf8"));
+    if (!isPrimaryRuntime) {
+      assert.equal(previewResult.status, 1);
+      assert.match(previewResult.stderr, /\[BUILD_PREVIEW_RUNTIME_NODE\]/u);
+      assert.equal(existsSync(previewCandidate), false);
+    } else {
+      assert.equal(
+        previewResult.status,
+        0,
+        [
+          "真实草稿 fixture preview build 失败。",
+          sanitizedBuildDiagnostic(previewResult.stdout, repositoryRoot, temporaryRoot),
+          sanitizedBuildDiagnostic(previewResult.stderr, repositoryRoot, temporaryRoot),
+        ].join("\n"),
+      );
+      assert.equal(existsSync(resolve(previewCandidate, "__docusaurus")), false);
+      assert.equal(existsSync(resolve(previewCandidate, "sitemap.xml")), false);
+      assert.equal(lstatSync(resolve(previewCandidate, "main.js")).mode & 0o022, 0);
+      const previewWriting = readFileSync(resolve(previewCandidate, "writing/index.html"), "utf8");
+      const previewDraft = readFileSync(
+        resolve(previewCandidate, "writing/draft-fixture-article/index.html"),
+        "utf8",
+      );
+      assertContainsAll(previewWriting, ["草稿", "Draft Fixture Article"]);
+      assertContainsAll(previewDraft, [
+        "Draft Fixture Article",
+        "DRAFT-PREVIEW-BODY-27",
+        "合法正文端口示例：8088",
+        "https://www.axialmuse.com/writing/draft-fixture-article/",
+      ]);
+      for (const previewHtml of listFilesWithSuffix(previewCandidate, ".html")) {
+        assertExactPreviewRobots(readFileSync(previewHtml, "utf8"));
+      }
+      const previewBrowserReceipt = await runThemeBrowserRegression({
+        buildRoot: previewCandidate,
+      });
+      console.log(
+        `E-009 preview browser regression receipt: ${JSON.stringify(previewBrowserReceipt)}`,
+      );
     }
-    const previewBrowserReceipt = await runThemeBrowserRegression({
-      buildRoot: previewCandidate,
-    });
-    console.log(
-      `E-009 preview browser regression receipt: ${JSON.stringify(previewBrowserReceipt)}`,
-    );
   } catch (error) {
     operationError = error;
   } finally {

@@ -146,7 +146,11 @@ function createContentDataPluginModule(
           .description("串行验收 Axial Muse production 候选制品")
           .action(async () => {
             if (
-              (session.phase !== "check" && session.phase !== "verify")
+              (
+                session.phase !== "check"
+                && session.phase !== "verify"
+                && session.phase !== "release"
+              )
               || session.content.mode !== "production"
             ) {
               failContentBuild("CONTENT_PLUGIN_CHECK_PHASE", "production checker 只接受受控 check 阶段。", {
@@ -154,6 +158,10 @@ function createContentDataPluginModule(
               });
             }
             try {
+              if (session.phase === "release") {
+                writePrivateDateIndex(context.generatedFilesDir, session);
+                session.writeBuildSeal();
+              }
               session.assertBuildSeal();
               assertProductionArtifact(
                 session.content,
