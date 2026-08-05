@@ -1,0 +1,287 @@
+.header {
+  width: min(100%, 1240px);
+  height: 100%;
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 3vw, 2rem);
+}
+
+.topRow {
+  display: flex;
+  height: 4rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+:global(#__docusaurus#__docusaurus) .topRow :global(.navbar__brand) {
+  min-width: max-content;
+  margin: 0;
+  gap: 0.7rem;
+  color: var(--am-ink);
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+:global(#__docusaurus#__docusaurus) .topRow :global(.navbar__logo) {
+  width: 2.35rem;
+  height: 2.35rem;
+  margin: 0;
+}
+
+:global(#__docusaurus#__docusaurus) .topRow :global(.navbar__logo img) {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.topRow :global(.navbar__title) {
+  font-size: 1.05rem;
+  font-weight: 760;
+}
+
+.search {
+  position: relative;
+  width: min(100%, 29rem);
+  margin: 0;
+}
+
+.searchField {
+  display: grid;
+  min-height: 2.6rem;
+  grid-template-columns: 1.25rem minmax(0, 1fr) 1.75rem;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.1rem 0.55rem 0.1rem 0.8rem;
+  border: 1px solid var(--am-line-strong);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--am-surface) 92%, var(--am-accent-soft));
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.searchField:focus-within {
+  border-color: var(--am-accent);
+  background: var(--am-surface);
+  box-shadow: 0 0 0 3px var(--am-accent-soft);
+}
+
+.searchField > svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  stroke: var(--am-muted);
+  stroke-width: 1.8;
+}
+
+.searchField input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--am-ink);
+  font: inherit;
+  font-size: 0.92rem;
+}
+
+.searchField input::placeholder {
+  color: var(--am-muted);
+}
+
+.searchField button {
+  display: grid;
+  width: 1.65rem;
+  height: 1.65rem;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0.4rem;
+  background: var(--am-brand);
+  color: var(--am-surface);
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.searchField button:disabled {
+  background: var(--am-line);
+  color: var(--am-muted);
+  cursor: default;
+}
+
+.searchResults {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  left: 0;
+  display: grid;
+  max-height: min(28rem, calc(100vh - var(--ifm-navbar-height) - 2rem));
+  overflow-y: auto;
+  padding: 0.45rem;
+  border: 1px solid var(--am-line-strong);
+  border-radius: 0.8rem;
+  background: var(--am-surface);
+  box-shadow: 0 18px 48px rgb(21 58 91 / 14%);
+}
+
+.result,
+.result:visited {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.7rem 0.75rem;
+  border-radius: 0.55rem;
+  color: var(--am-ink);
+  text-decoration: none;
+}
+
+.result:hover,
+.resultActive {
+  background: var(--am-accent-soft);
+  color: var(--am-ink);
+  text-decoration: none;
+}
+
+.resultKind {
+  color: var(--am-accent);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+}
+
+.resultSummary {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--am-muted);
+  font-size: 0.82rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.noResults {
+  margin: 0;
+  padding: 0.75rem;
+  color: var(--am-muted);
+  font-size: 0.9rem;
+}
+
+.tabs {
+  display: flex;
+  height: 3rem;
+  align-items: stretch;
+  gap: 0.25rem;
+  border-top: 1px solid var(--am-line);
+}
+
+:global(#__docusaurus#__docusaurus) .tab,
+:global(#__docusaurus#__docusaurus) .tab:visited {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.48rem;
+  padding-inline: 0.9rem;
+  color: color-mix(in srgb, var(--am-accent) 62%, var(--am-muted));
+  font-size: 0.9rem;
+  font-weight: 680;
+  text-decoration: none;
+}
+
+.tab::after {
+  position: absolute;
+  right: 0.9rem;
+  bottom: -1px;
+  left: 0.9rem;
+  height: 2px;
+  background: transparent;
+  content: "";
+}
+
+:global(#__docusaurus#__docusaurus) .tab:hover {
+  color: color-mix(in srgb, var(--am-accent) 84%, var(--am-ink));
+  text-decoration: none;
+}
+
+:global(#__docusaurus#__docusaurus) .tab.tabActive,
+:global(#__docusaurus#__docusaurus) .tab.tabActive:visited {
+  color: var(--am-accent);
+}
+
+.tabActive::after {
+  background: var(--am-accent);
+}
+
+.icon {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+@media (max-width: 620px) {
+  .header {
+    padding-inline: 0.75rem;
+  }
+
+  .topRow {
+    height: 4.5rem;
+    gap: 0.7rem;
+  }
+
+  .topRow :global(.navbar__brand) {
+    gap: 0.45rem;
+  }
+
+  :global(#__docusaurus#__docusaurus) .topRow :global(.navbar__logo) {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .topRow :global(.navbar__title) {
+    font-size: 0.92rem;
+  }
+
+  .search {
+    width: min(100%, 15rem);
+  }
+
+  .searchField {
+    min-height: 2.45rem;
+    grid-template-columns: 1rem minmax(0, 1fr);
+    gap: 0.45rem;
+    padding-inline: 0.7rem;
+  }
+
+  .searchField button {
+    display: none;
+  }
+
+  .searchField input {
+    font-size: 0.86rem;
+  }
+
+  .searchField input::placeholder {
+    color: transparent;
+  }
+
+  .tabs {
+    height: 3rem;
+    justify-content: space-between;
+  }
+
+  :global(#__docusaurus#__docusaurus) .tab,
+  :global(#__docusaurus#__docusaurus) .tab:visited {
+    flex: 1 1 0;
+    justify-content: center;
+    gap: 0.35rem;
+    padding-inline: 0.35rem;
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+
+  .tab::after {
+    right: 0.5rem;
+    left: 0.5rem;
+  }
+}

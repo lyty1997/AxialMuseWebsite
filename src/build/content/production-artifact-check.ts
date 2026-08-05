@@ -47,31 +47,33 @@ const ARTICLE_STATUS_LABELS = Object.freeze({
 });
 const STATIC_PAGE_METADATA = Object.freeze({
   "/": Object.freeze({
-    title: "Axial Muse | 个人项目与技术分享",
-    description: "Axial Muse 记录个人项目的设计、实现、技术取舍与复盘，公开可核验的源码与工程资料。",
-    h1: "Axial Muse",
+    title: "Axial Muse | 全栈技术 + AI 的生产力工具",
+    description: "Axial Muse 以全栈技术与 AI 构建好用的工具，分享公开项目、技术取舍与工程复盘。",
+    h1: "用全栈技术 + AI，让所有人用上好用的工具。",
   }),
   "/projects/": Object.freeze({
-    title: "项目 | Axial Muse",
+    title: "项目介绍 | Axial Muse",
     description: "浏览 Axial Muse 中已完成公开审核的个人项目，查看问题、实现、技术取舍与源码资料。",
-    h1: "项目",
+    h1: "项目介绍",
   }),
   "/writing/": Object.freeze({
-    title: "技术分享 | Axial Muse",
+    title: "踩过的坑 | Axial Muse",
     description: "浏览 Axial Muse 的技术分享，查看来自真实项目的工程问题、实现取舍与复盘记录。",
-    h1: "技术分享",
+    h1: "踩过的坑",
   }),
 });
 const REQUIRED_GLOBAL_LINKS = Object.freeze([
   Object.freeze({href: "/", label: "Axial Muse"}),
-  Object.freeze({href: "/projects/", label: "项目"}),
-  Object.freeze({href: "/writing/", label: "技术分享"}),
-  Object.freeze({href: "/#roadmap", label: "路线"}),
-  Object.freeze({href: "/#about", label: "关于"}),
-  Object.freeze({href: "https://github.com/lyty1997", label: "GitHub"}),
+  Object.freeze({href: "/", label: "首页"}),
+  Object.freeze({href: "/projects/", label: "项目介绍"}),
+  Object.freeze({href: "/writing/", label: "踩过的坑"}),
+]);
+const REQUIRED_HOME_LINKS = Object.freeze([
+  Object.freeze({href: "#about", label: ""}),
+  Object.freeze({href: "mailto:lyzimin@outlook.com", label: "EMAIL lyzimin@outlook.com ↗"}),
+  Object.freeze({href: "https://github.com/lyty1997", label: "GITHUB github.com/lyty1997 ↗"}),
 ]);
 const REQUIRED_FOOTER_LINKS = Object.freeze([
-  Object.freeze({href: "https://github.com/lyty1997", label: "GitHub"}),
   Object.freeze({
     href: "https://beian.miit.gov.cn/",
     label: "沪ICP备2026029086号",
@@ -318,9 +320,7 @@ const INERT_HTML_ELEMENTS = new Set([
 ]);
 const FORBIDDEN_PUBLIC_ELEMENTS = new Set([
   "embed",
-  "form",
   "iframe",
-  "input",
   "object",
   "video",
 ]);
@@ -469,11 +469,70 @@ function sanitizeHtmlTag(tag: string): string {
   return sanitized;
 }
 
+function failUnapprovedSearchSurface(sourcePath: string): never {
+  failContentBuild(
+    "CONTENT_ARTIFACT_INTERACTIVE",
+    "production 页面只允许无提交端点、无持久化字段的固定本地搜索表面。",
+    {sourcePath},
+  );
+}
+
+function assertApprovedSearchFormTag(tag: string, sourcePath: string): void {
+  const attributes = htmlAttributes(tag, sourcePath);
+  const allowed = new Set(["class", "role"]);
+  if (
+    [...attributes.keys()].some((name) => !allowed.has(name))
+    || decodePageHtmlText(attributes.get("role") ?? "", sourcePath) !== "search"
+  ) {
+    failUnapprovedSearchSurface(sourcePath);
+  }
+}
+
+function assertApprovedSearchInputTag(tag: string, sourcePath: string): void {
+  const attributes = htmlAttributes(tag, sourcePath);
+  if (
+    decodePageHtmlText(attributes.get("type") ?? "", sourcePath) !== "search"
+    || decodePageHtmlText(attributes.get("aria-label") ?? "", sourcePath)
+      !== "搜索公开项目和文章"
+    || decodePageHtmlText(attributes.get("autocomplete") ?? "", sourcePath) !== "off"
+    || decodePageHtmlText(attributes.get("aria-autocomplete") ?? "", sourcePath)
+      !== "list"
+    || decodePageHtmlText(attributes.get("aria-controls") ?? "", sourcePath)
+      !== "site-search-results"
+    || decodePageHtmlText(attributes.get("aria-expanded") ?? "", sourcePath)
+      !== "false"
+    || attributes.has("name")
+    || attributes.has("form")
+    || attributes.has("formaction")
+  ) {
+    failUnapprovedSearchSurface(sourcePath);
+  }
+}
+
+function assertApprovedSearchButtonTag(tag: string, sourcePath: string): void {
+  const attributes = htmlAttributes(tag, sourcePath);
+  if (
+    decodePageHtmlText(attributes.get("type") ?? "", sourcePath) !== "submit"
+    || decodePageHtmlText(attributes.get("aria-label") ?? "", sourcePath)
+      !== "打开搜索结果"
+    || !attributes.has("disabled")
+    || attributes.has("name")
+    || attributes.has("form")
+    || attributes.has("formaction")
+  ) {
+    failUnapprovedSearchSurface(sourcePath);
+  }
+}
+
 export function activeHtmlMarkup(html: string, sourcePath: string): string {
   let cursor = 0;
   let sanitized = "";
   let doctypeSeen = false;
   let inRawHead = false;
+  let inApprovedSearchForm = false;
+  let approvedSearchFormCount = 0;
+  let approvedSearchInputCount = 0;
+  let approvedSearchButtonCount = 0;
   while (cursor < html.length) {
     const opening = html.indexOf("<", cursor);
     if (opening < 0) {
@@ -532,6 +591,45 @@ export function activeHtmlMarkup(html: string, sourcePath: string): string {
     }
     const closing = match[1] === "/";
     const name = (match[2] ?? "").toLowerCase();
+    if (name === "form") {
+      if (closing) {
+        if (
+          !inApprovedSearchForm
+          || approvedSearchInputCount !== 1
+          || approvedSearchButtonCount !== 1
+        ) {
+          failUnapprovedSearchSurface(sourcePath);
+        }
+        inApprovedSearchForm = false;
+      } else {
+        if (inApprovedSearchForm || approvedSearchFormCount !== 0) {
+          failUnapprovedSearchSurface(sourcePath);
+        }
+        assertApprovedSearchFormTag(tag, sourcePath);
+        inApprovedSearchForm = true;
+        approvedSearchFormCount += 1;
+        approvedSearchInputCount = 0;
+        approvedSearchButtonCount = 0;
+      }
+    } else if (!closing && name === "input") {
+      if (!inApprovedSearchForm || approvedSearchInputCount !== 0) {
+        failUnapprovedSearchSurface(sourcePath);
+      }
+      assertApprovedSearchInputTag(tag, sourcePath);
+      approvedSearchInputCount += 1;
+    } else if (!closing && name === "button" && inApprovedSearchForm) {
+      if (approvedSearchButtonCount !== 0) {
+        failUnapprovedSearchSurface(sourcePath);
+      }
+      assertApprovedSearchButtonTag(tag, sourcePath);
+      approvedSearchButtonCount += 1;
+    } else if (
+      !closing
+      && inApprovedSearchForm
+      && !["div", "span", "svg"].includes(name)
+    ) {
+      failUnapprovedSearchSurface(sourcePath);
+    }
     if (!closing && FORBIDDEN_PUBLIC_ELEMENTS.has(name)) {
       failContentBuild(
         "CONTENT_ARTIFACT_INTERACTIVE",
@@ -616,6 +714,7 @@ export function activeHtmlMarkup(html: string, sourcePath: string): string {
     sanitized += sanitizeHtmlTag(tag);
     cursor = end + 1;
   }
+  if (inApprovedSearchForm) failUnapprovedSearchSurface(sourcePath);
   const structure = [...sanitized.matchAll(
     /<\/?(?:html|head|body)(?=[\t\n\f\r />])[^>]*>/giu,
   )];
@@ -1852,18 +1951,20 @@ function assertElementId(
 
 function assertHomeProjection(
   main: string,
-  content: LoadedValidatedContent,
-  articles: readonly PublicArticleProjection[],
   sourcePath: string,
 ): void {
   const visibleText = visibleFragmentText(main, sourcePath);
   const fixedCopy = [
-    "围绕个人项目，记录设计、实现、技术取舍与复盘。",
-    "首版先公开可核验的项目资料和工程记录。产品服务会在边界明确并真实可用后再提供入口。",
-    "当前：建立可信主站",
-    "下一步：形成技术分享",
-    "探索：产品服务",
-    "我关注 AI 工程、知识工作流、开发规范和个人产品构建。本站公开项目、技术取舍与复盘，不公开私人联系方式、凭证或私有仓库。",
+    "AXIAL MUSE · PROJECT LINE",
+    "用全栈技术 + AI，让所有人用上好用的工具。",
+    "Axial Muse 的愿景，是把专业能力转化为真正好用的工具，让生产力不再是少数人的特权。",
+    "当前从公开项目与工程复盘开始，持续验证每一个产品方向，在边界明确、能力真实可用后再提供服务入口。",
+    "WHY AXIAL MUSE",
+    "来自轴心时代涌现的大师，代表经得起时间检验的思想与方法。",
+    "让灵感落地，让技术成为改善日常生活的真实力量。",
+    "把专业能力沉淀为人人可用、持续进化的工具与服务。",
+    "我是一个全栈工程师，覆盖人工智能、系统架构、底层驱动、硬件设计、机械工程、制造工艺，曾在达摩院做系统开发。",
+    "关注 AI 工程、前沿科技，正在进行多个个人项目开发。本站分享公开项目、技术取舍与复盘，不公开凭证或私有仓库。",
   ];
   assertVisibleValues(visibleText, fixedCopy, sourcePath);
   const fixedIndexes = fixedCopy.map((value) => visibleText.indexOf(value));
@@ -1874,50 +1975,36 @@ function assertHomeProjection(
       {sourcePath},
     );
   }
-  assertElementId(main, "roadmap", sourcePath);
   assertElementId(main, "about", sourcePath);
-  assertRequiredLink(
-    extractAnchors(main, sourcePath),
-    Object.freeze({href: "/projects/", label: "浏览项目"}),
-    sourcePath,
-  );
-  if (content.projectNavigation.length === 0) {
-    assertVisibleValues(visibleText, [PROJECT_EMPTY_STATE], sourcePath);
-  }
-  if (articles.length === 0) {
-    assertVisibleValues(visibleText, [WRITING_EMPTY_STATE], sourcePath);
-  }
-  assertCardProjectionSet(main, content.projectNavigation, articles, sourcePath);
   assertStaticPageAnchors(
     main,
-    Object.freeze([
-      Object.freeze({href: "/projects/", label: "浏览项目"}),
-      ...content.projectNavigation.flatMap(projectCardAnchors),
-      ...articles.flatMap(articleCardAnchors),
-      Object.freeze({href: "#roadmap", label: ""}),
-      Object.freeze({href: "#about", label: ""}),
-    ]),
+    REQUIRED_HOME_LINKS,
     sourcePath,
   );
   assertExactVisibleProjection(
-    withoutFlatArticleCards(main),
+    main,
     Object.freeze([
-      "Axial Muse",
       fixedCopy[0] ?? "",
       fixedCopy[1] ?? "",
-      "浏览项目",
-      "项目",
-      ...(content.projectNavigation.length === 0 ? [PROJECT_EMPTY_STATE] : []),
-      "技术分享",
-      ...(articles.length === 0
-        ? [WRITING_EMPTY_STATE]
-        : publicWritingLabels(content)),
-      "路线",
       fixedCopy[2] ?? "",
       fixedCopy[3] ?? "",
       fixedCopy[4] ?? "",
-      "关于",
+      "Axial · 轴心",
       fixedCopy[5] ?? "",
+      "Muse · 穆斯",
+      fixedCopy[6] ?? "",
+      "Technology · 工具",
+      fixedCopy[7] ?? "",
+      "ABOUT",
+      "关于我",
+      fixedCopy[8] ?? "",
+      fixedCopy[9] ?? "",
+      "EMAIL",
+      "lyzimin@outlook.com",
+      "↗",
+      "GITHUB",
+      "github.com/lyty1997",
+      "↗",
     ]),
     "CONTENT_ARTIFACT_PUBLIC_COPY",
     sourcePath,
@@ -1943,7 +2030,9 @@ function assertProjectsIndexProjection(
   assertExactVisibleProjection(
     withoutFlatArticleCards(main),
     Object.freeze([
-      "项目",
+      "PROJECTS",
+      "项目介绍",
+      "从真实问题出发，记录每个项目的设计、实现与关键取舍。",
       ...(content.projectNavigation.length === 0 ? [PROJECT_EMPTY_STATE] : []),
     ]),
     "CONTENT_ARTIFACT_PUBLIC_COPY",
@@ -1981,7 +2070,9 @@ function assertWritingIndexProjection(
   assertExactVisibleProjection(
     withoutFlatArticleCards(main),
     Object.freeze([
-      "技术分享",
+      "LESSONS LEARNED",
+      "踩过的坑",
+      "不回避失败与弯路，沉淀来自真实项目的工程判断。",
       ...(articles.length === 0
         ? [WRITING_EMPTY_STATE]
         : publicWritingLabels(content)),
@@ -2141,6 +2232,22 @@ function assertNoUnapprovedPublicActions(
 function assertGlobalChrome(html: string, sourcePath: string): void {
   const body = extractUniqueElementInnerHtml(html, "body", sourcePath);
   const navbar = extractUniqueElementByClass(body, "nav", "navbar", sourcePath);
+  const searchForms = [...navbar.matchAll(
+    /(<form(?=[\t\n\f\r />])[^>]*>)([\s\S]*?)<\/form[\t\n\f\r ]*>/giu,
+  )];
+  if (searchForms.length !== 1) failUnapprovedSearchSurface(sourcePath);
+  assertApprovedSearchFormTag(searchForms[0]?.[1] ?? "", sourcePath);
+  const searchInputTags = [
+    ...(searchForms[0]?.[2] ?? "").matchAll(/<input(?=[\t\n\f\r />])[^>]*>/giu),
+  ];
+  const searchButtonTags = [
+    ...(searchForms[0]?.[2] ?? "").matchAll(/<button(?=[\t\n\f\r />])[^>]*>/giu),
+  ];
+  if (searchInputTags.length !== 1 || searchButtonTags.length !== 1) {
+    failUnapprovedSearchSurface(sourcePath);
+  }
+  assertApprovedSearchInputTag(searchInputTags[0]?.[0] ?? "", sourcePath);
+  assertApprovedSearchButtonTag(searchButtonTags[0]?.[0] ?? "", sourcePath);
   const anchors = extractAnchors(navbar, sourcePath);
   assertExactAnchors(
     anchors,
@@ -2192,7 +2299,7 @@ function assertPageProjection(
     );
   }
   if (route === "/") {
-    assertHomeProjection(main, content, articles, sourcePath);
+    assertHomeProjection(main, sourcePath);
     return;
   }
   if (route === "/projects/") {
@@ -3015,6 +3122,16 @@ function unpublishedTokens(content: LoadedValidatedContent): UnpublishedLeakToke
   const pathValues = new Set<string>();
   const contentValues = new Set<string>();
   const semanticTextValues = new Set<string>();
+  const publicArtifactValues = [
+    ...Object.values(STATIC_PAGE_METADATA).flatMap((metadata) => Object.values(metadata)),
+    PROJECT_EMPTY_STATE,
+    WRITING_EMPTY_STATE,
+    ...Object.values(PROJECT_STATUS_LABELS),
+    ...Object.values(ARTICLE_STATUS_LABELS),
+    ...REQUIRED_GLOBAL_LINKS.flatMap((link) => [link.href, link.label]),
+    ...REQUIRED_HOME_LINKS.flatMap((link) => [link.href, link.label]),
+    ...REQUIRED_FOOTER_LINKS.flatMap((link) => [link.href, link.label]),
+  ];
   const publicSourcePaths = new Set([
     ...content.projectNavigation.map((project) => project.sourcePath),
     ...content.articles
@@ -3029,6 +3146,7 @@ function unpublishedTokens(content: LoadedValidatedContent): UnpublishedLeakToke
       ["published", "archived"].includes(project.publicationStatus)
     ))),
     JSON.stringify(content.articles.filter((article) => article.publicationStatus !== "draft")),
+    ...publicArtifactValues,
   ];
   const publicStructuredValues = [
     ...content.catalog.projects.filter((project) => (
@@ -3044,6 +3162,10 @@ function unpublishedTokens(content: LoadedValidatedContent): UnpublishedLeakToke
         line.trim().replace(/^(?:#{1,6}|[-+*>]|\d+\.)\s+/u, ""),
       )),
     ...publicStructuredValues.flatMap((value) => [
+      decodedSemanticEntities(value),
+      normalizedSemanticText(value),
+    ]),
+    ...publicArtifactValues.flatMap((value) => [
       decodedSemanticEntities(value),
       normalizedSemanticText(value),
     ]),

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {createHash} from "node:crypto";
 import {readFileSync, readdirSync, realpathSync} from "node:fs";
 import {relative, resolve} from "node:path";
 import test from "node:test";
@@ -7,6 +8,23 @@ const ROOT = realpathSync(process.cwd());
 
 function source(path: string): string {
   return readFileSync(resolve(ROOT, path), "utf8");
+}
+
+function relativeLuminance(hex: string): number {
+  assert.match(hex, /^#[0-9a-f]{6}$/u);
+  const channels = [1, 3, 5].map((offset) => {
+    const channel = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return channel <= 0.03928
+      ? channel / 12.92
+      : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
+}
+
+function contrastRatio(first: string, second: string): number {
+  const lighter = Math.max(relativeLuminance(first), relativeLuminance(second));
+  const darker = Math.min(relativeLuminance(first), relativeLuminance(second));
+  return (lighter + 0.05) / (darker + 0.05);
 }
 
 function cssSources(directory = resolve(ROOT, "src")): readonly Readonly<{
@@ -60,16 +78,34 @@ function extractCssBlock(value: string, marker: string): Readonly<{
 test("CODE-008 全局主题只声明已确认令牌、Infima 映射与无动效回退", () => {
   const css = source("src/css/custom.css");
   const expectedTokens = {
-    "--am-canvas": "#f4f6f3",
-    "--am-surface": "#ffffff",
-    "--am-ink": "#171a1c",
-    "--am-muted": "#596168",
-    "--am-line": "#cfd6d1",
-    "--am-accent": "#0b6b5f",
-    "--am-signal": "#b94b35",
+    "--am-canvas": "#f4eddf",
+    "--am-surface": "#fffcf6",
+    "--am-ink": "#16242e",
+    "--am-muted": "#59636b",
+    "--am-line": "#d8ceba",
+    "--am-line-strong": "#938772",
+    "--am-brand": "#153a5b",
+    "--am-accent": "#2b6995",
+    "--am-accent-soft": "#e5edf2",
+    "--am-signal": "#985932",
   };
   for (const [name, value] of Object.entries(expectedTokens)) {
     assert.ok(css.includes(`${name}: ${value};`));
+  }
+  for (const [label, first, second, minimum] of [
+    ["正文/页面", expectedTokens["--am-ink"], expectedTokens["--am-canvas"], 4.5],
+    ["辅助文字/页面", expectedTokens["--am-muted"], expectedTokens["--am-canvas"], 4.5],
+    ["品牌蓝/页面", expectedTokens["--am-brand"], expectedTokens["--am-canvas"], 4.5],
+    ["交互蓝/页面", expectedTokens["--am-accent"], expectedTokens["--am-canvas"], 4.5],
+    ["交互蓝/内容表面", expectedTokens["--am-accent"], expectedTokens["--am-surface"], 4.5],
+    ["交互蓝/浅蓝状态面", expectedTokens["--am-accent"], expectedTokens["--am-accent-soft"], 4.5],
+    ["控件边界/页面", expectedTokens["--am-line-strong"], expectedTokens["--am-canvas"], 3],
+    ["提示色/页面", expectedTokens["--am-signal"], expectedTokens["--am-canvas"], 4.5],
+  ] as const) {
+    assert.ok(
+      contrastRatio(first, second) >= minimum,
+      `${label} 对比度不得低于 ${minimum}:1`,
+    );
   }
   assert.match(css, /--ifm-line-height-base: 1\.65;/u);
   assert.match(
@@ -103,23 +139,100 @@ test("CODE-008 全局主题只声明已确认令牌、Infima 映射与无动效�
     source("docusaurus.config.ts"),
     /customCss: "\.\/src\/css\/custom\.css"/u,
   );
-  assert.match(source("docusaurus.config.ts"), /favicon: "data:,"/u);
+  assert.match(
+    source("docusaurus.config.ts"),
+    /favicon: "assets\/brand\/axial-muse-mark\.png"/u,
+  );
 });
 
-test("CODE-008 首页主操作在已访问状态保持高对比文本", () => {
-  const css = source("src/pages/index.module.css");
-  assert.match(css, /\.primaryLink:visited\s*\{/u);
-  assert.match(css, /--ifm-link-color:\s*var\(--am-surface\)/u);
-  assert.match(css, /--ifm-link-hover-color:\s*var\(--am-surface\)/u);
-  assert.match(css, /color:\s*var\(--am-surface\)/u);
-});
-
-test("CODE-008 全部站点样式保持零 letter-spacing 基线", () => {
-  for (const {path, value} of cssSources()) {
-    for (const match of value.matchAll(/letter-spacing:\s*([^;]+);/gu)) {
-      assert.equal(match[1]?.trim(), "0", `${path} 不得覆盖非零 letter-spacing`);
-    }
+test("D-151 选定的书架之门 A Logo 字节固定且不含 PNG 元数据", () => {
+  const logo = readFileSync(resolve(ROOT, "static-public/assets/brand/axial-muse-mark.png"));
+  const css = source("src/css/custom.css");
+  const headerCss = source("src/components/SiteHeader/SiteHeader.module.css");
+  assert.equal(
+    createHash("sha256").update(logo).digest("hex"),
+    "a5ee5de5e63b2ec3b43ba9d06e980fcc58423aab8e6a8100b2c86cdc221b6a77",
+  );
+  assert.equal(logo.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+  assert.equal(logo.readUInt32BE(16), 1254);
+  assert.equal(logo.readUInt32BE(20), 1254);
+  const chunks: string[] = [];
+  let offset = 8;
+  while (offset < logo.length) {
+    const length = logo.readUInt32BE(offset);
+    chunks.push(logo.subarray(offset + 4, offset + 8).toString("ascii"));
+    offset += length + 12;
   }
+  assert.equal(offset, logo.length);
+  assert.deepEqual([...new Set(chunks)].sort(), ["IDAT", "IEND", "IHDR"]);
+  assert.equal(chunks.filter((chunk) => chunk === "IHDR").length, 1);
+  assert.equal(chunks.filter((chunk) => chunk === "IEND").length, 1);
+  assert.match(
+    headerCss,
+    /:global\(#__docusaurus#__docusaurus\) \.topRow :global\(\.navbar__logo img\)\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*object-fit:\s*contain;/su,
+  );
+  assert.match(
+    css,
+    /--ifm-navbar-background-color:\s*rgb\(255 252 246 \/ 96%\);/u,
+  );
+  assert.match(
+    css,
+    /#__docusaurus#__docusaurus \.navbar\s*\{[^}]*background:\s*rgb\(255 252 246 \/ 96%\);/su,
+  );
+  assert.equal(
+    /#(?:0b756b|e4f3f1|2b887d|10232a|f3f6f8|6673c5)\b/iu
+      .test(css),
+    false,
+  );
+});
+
+test("D-144 首页不重复项目/文章入口且页脚不重复 GitHub", () => {
+  const home = source("src/pages/index.tsx");
+  const config = source("docusaurus.config.ts");
+  assert.equal(/\b(?:ProjectList|WritingList|heroActions)\b/u.test(home), false);
+  assert.equal(/to="\/(?:projects|writing)\/"/u.test(home), false);
+  assert.equal(/label: "GitHub"/u.test(config), false);
+  assert.match(config, /label: "沪ICP备2026029086号"/u);
+});
+
+test("D-141 正文保持自然字距，品牌标签使用局部字距且不引入远程资源", () => {
+  const globalCss = source("src/css/custom.css");
+  const headerCss = source("src/components/SiteHeader/SiteHeader.module.css");
+  const homeCss = source("src/pages/index.module.css");
+  assert.match(globalCss, /body\s*\{[^}]*letter-spacing:\s*0;/su);
+  assert.match(headerCss, /\.resultKind\s*\{[^}]*letter-spacing:\s*0\.08em;/su);
+  assert.match(homeCss, /\.eyebrow,[\s\S]*?letter-spacing:\s*0\.14em;/u);
+  for (const {path, value} of cssSources()) {
+    assert.equal(
+      /@import|url\(\s*["']?https?:/u.test(value),
+      false,
+      `${path} 不得加载远程 CSS 或字体资源`,
+    );
+  }
+});
+
+test("D-141 页头搜索只匹配公开安全投影且不持久化查询", () => {
+  const header = source("src/components/SiteHeader/SiteHeader.tsx");
+  const config = source("docusaurus.config.ts");
+  const registry = source("docs/contracts/static-public-assets.json");
+  assert.match(header, /project\.publicationStatus === "published"/u);
+  assert.match(header, /project\.publicationStatus === "archived"/u);
+  assert.match(header, /article\.publicationStatus !== "draft"/u);
+  assert.match(header, /useState\(""\)/u);
+  assert.match(header, /slice\(0, 6\)/u);
+  assert.equal(
+    /\b(?:fetch|localStorage|sessionStorage)\b|document\.cookie/u.test(header),
+    false,
+  );
+  assert.match(header, /label: "首页"/u);
+  assert.match(header, /label: "项目介绍"/u);
+  assert.match(header, /label: "踩过的坑"/u);
+  assert.match(config, /items: \[\]/u);
+  assert.equal(/登录|注册/u.test(config), false);
+  assert.match(
+    registry,
+    /"sourcePath": "assets\/brand\/axial-muse-mark\.png"[\s\S]*?"role": "brand"/u,
+  );
 });
 
 test("CODE-008 只优先加载项目目录的首张项目预览", () => {
@@ -138,9 +251,9 @@ test("CODE-008 只优先加载项目目录的首张项目预览", () => {
     source("src/pages/projects/index.tsx"),
     /<ProjectList headingLevel="h2" prioritizeFirstPreview \/>/u,
   );
-  assert.match(
-    source("src/pages/index.tsx"),
-    /<ProjectList headingLevel="h3" prioritizeFirstPreview=\{false\} \/>/u,
+  assert.equal(
+    /<ProjectList/u.test(source("src/pages/index.tsx")),
+    false,
   );
 });
 

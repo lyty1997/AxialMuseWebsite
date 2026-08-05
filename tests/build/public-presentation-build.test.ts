@@ -461,22 +461,19 @@ test("I-14/I-15 真实 production build 与 Chromium 回归覆盖公开展示和
     );
     assert.match(
       home,
-      /<link(?=[^>]*\brel=(?:"icon"|icon)(?=[\t\n\f\r >]))(?=[^>]*\bhref=(?:"data:,"|data:,)(?=[\t\n\f\r >]))[^>]*>/u,
+      /<link(?=[^>]*\brel=(?:"icon"|icon)(?=[\t\n\f\r >]))(?=[^>]*\bhref=(?:"\/assets\/brand\/axial-muse-mark\.png"|\/assets\/brand\/axial-muse-mark\.png)(?=[\t\n\f\r >]))[^>]*>/u,
     );
 
-    assert.equal(articleElementCount(home), 3);
+    assert.equal(articleElementCount(home), 0);
     assert.equal(articleElementCount(projects), 1);
     assert.equal(articleElementCount(writing), 2);
     for (const listPage of [home, projects, writing]) {
       assert.equal(listPage.includes(PROJECT_EMPTY_STATE), false);
       assert.equal(listPage.includes(WRITING_EMPTY_STATE), false);
     }
-    assertContainsAll(home, [
-      "Archived Fixture Project",
-      LONG_ARTICLE_TITLE,
-      "Archived Fixture Article",
-      "公开状态：已归档",
-    ]);
+    assert.equal(home.includes("Archived Fixture Project"), false);
+    assert.equal(home.includes(LONG_ARTICLE_TITLE), false);
+    assert.equal(home.includes("Archived Fixture Article"), false);
     assertContainsAll(projects, [
       "Archived Fixture Project",
       "项目状态：",
@@ -558,7 +555,7 @@ test("I-14/I-15 真实 production build 与 Chromium 回归覆盖公开展示和
       projectDetail,
       /aria-current=(?:"page"|page)(?=[\t\n\f\r >])/u,
     );
-    assert.match(
+    assert.doesNotMatch(
       home,
       /<img(?=[^>]*\bloading=(?:"lazy"|lazy)(?=[\t\n\f\r />]))(?=[^>]*\bdecoding=(?:"async"|async)(?=[\t\n\f\r />]))[^>]*>/u,
     );

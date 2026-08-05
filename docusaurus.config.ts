@@ -10,8 +10,8 @@ const isPreview = buildContext.mode === "preview";
 
 const config: Config = {
   title: "Axial Muse",
-  tagline: "个人项目与技术分享",
-  favicon: "data:,",
+  tagline: "用全栈技术与 AI 推动生产力平权",
+  favicon: "assets/brand/axial-muse-mark.png",
   url: "https://www.axialmuse.com",
   baseUrl: "/",
   trailingSlash: true,
@@ -55,17 +55,13 @@ const config: Config = {
     },
     navbar: {
       title: "Axial Muse",
-      items: [
-        {to: "/projects/", label: "项目", position: "left"},
-        {to: "/writing/", label: "技术分享", position: "left"},
-        {to: "/#roadmap", label: "路线", position: "left"},
-        {to: "/#about", label: "关于", position: "left"},
-        {
-          href: "https://github.com/lyty1997",
-          label: "GitHub",
-          position: "right",
-        },
-      ],
+      logo: {
+        alt: "Axial Muse 标志",
+        src: "assets/brand/axial-muse-mark.png",
+        width: 38,
+        height: 38,
+      },
+      items: [],
     },
     footer: {
       style: "light",
@@ -73,10 +69,6 @@ const config: Config = {
         {
           title: "Axial Muse",
           items: [
-            {
-              label: "GitHub",
-              href: "https://github.com/lyty1997",
-            },
             {
               label: "沪ICP备2026029086号",
               href: "https://beian.miit.gov.cn/",

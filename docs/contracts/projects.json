@@ -38,14 +38,18 @@
       "status": "active",
       "publicationStatus": "planned",
       "startedAt": "2026-07",
-      "updatedAt": "2026-07-09",
+      "updatedAt": "2026-07-26",
       "repositoryUrl": "https://github.com/lyty1997/project-scaffold",
       "productionBranch": "main",
       "showcaseMode": "repository",
       "writingModules": [],
+      "relatedWriting": [
+        "019fb119-5f31-7f80-bb8b-79c2b70f1f60"
+      ],
       "source": [
         "docs/projects/vibecoding-project-scaffold.md",
-        "https://github.com/lyty1997/project-scaffold"
+        "https://github.com/lyty1997/project-scaffold",
+        "https://github.com/lyty1997/project-scaffold/tree/a9f6cd51c843f417858ae0417191523d0df11d84"
       ]
     }
   ]

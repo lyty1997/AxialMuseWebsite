@@ -107,6 +107,18 @@
 - **额外管理身份处置**：用户先按 D-118 选择方案 1，随后在确认快照正常后明确授权执行。root-only 事务入口先复核唯一候选、首启来源、无活动会话/进程/定时任务/linger/systemd 引用/业务目录所有权、无特权组和唯一受控直接 sudo 规则，再原子移除该规则、保持密码字段锁定并设置账户过期、把登录 shell 改为系统 `nologin`；账户、home、密钥和其他文件均不删除。事务在 180 秒提交窗口内由第二条 SSH 独立验证当前管理员 `sudo -n`、`sshd -t`、非目标配置、运行时和 sudo 图后才提交；持久化回执确认 `committed` 后清理私有回滚材料。
 - **后验与下一门禁**：最终脱敏后验证明目标身份没有活动引用或业务所有权、无特权组或 sudo 能力、shell/过期终态正确，home 仍存在且事务前后摘要一致，passwd/sudoers/sshd 与运行时基线有效；当前管理 SSH/sudo 未受影响。快照仍未授权恢复或删除，重新启用或删除该账户/文件也未授权；SSH 全局策略随后已按 D-119/D-120 达到 `committed_clean`，OS/腾讯云防火墙、软件、服务、维护重启、verifier/Certbot、#37 和 GitHub/Git 操作仍须分别决定和授权。#36 下一项最小门禁应从防火墙最终闭环、维护重启或 verifier 安装中按依赖顺序另行确认，#37 继续暂停。
 
+## 2026-07-30 — D-144 至 D-146 浏览器批注收口（部分完成）
+
+- **首页与页脚去重**：按浏览器批注明确首页只保留愿景、品牌含义和关于区，删除首屏“浏览项目 / 查看踩过的坑”按钮及首页内重复的“项目介绍 / 踩过的坑”板块；项目和技术分享继续只由页头三项标签导航进入。关于区保留唯一 GitHub 联系卡片，页脚删除重复 GitHub，只保留已核验 ICP 链接、站名与版权。production 制品检查器和正反 fixture 同步收紧为这一精确投影，禁止后续把重复板块、入口或页脚 GitHub 静默加回。
+- **项目内容事实与暂停范围**：`DocRestore` 与 `VibeCoding Project Scaffold` 的注册表、正文和仓库证据仍完整存在，不是页面链接丢失；两者当前均为 `active / planned`，按既有公开契约不会进入 production 路由或项目列表。二者还没有获批准的 1600×1000 WebP 主预览，后者同时关联仍为 draft 的 #30 技术分享。D-146 已记录“保持证据门禁、补图并成批发布”与“修改公开契约、允许仓库型项目无图发布”两种互斥方案；用户确认前不改 publicationStatus、关系、路由、图片契约或公开文案。
+- **Logo 候选与验收**：D-142 当前官方 Logo 再次被用户否决，D-145 将替换操作暂停到候选选择完成；本轮只在仓库外生成 A“轴心之门”、B“Muse 折页”、C“能力棱镜”、D“开放轴印”四版矢量候选，没有把任何候选写入正式品牌素材。持久化 WSL CI 继续复用既有 Node、npm 与冻结 `node_modules`，没有安装、删除或重建环境；production build、严格 TypeScript 和 254/254 个非浏览器测试通过，完整 255 项唯一非零项仍是既知的 WSL `PATH` 无 Linux Chromium。Codex Desktop 内置浏览器另在默认桌面视口和 `360×800` 验证首页、导航、联系方式与页脚，窄屏无横向溢出、全站 GitHub 精确 1 处、控制台日志为空。本轮未提交、推送或运行远端 CI，未引入依赖、第三方服务或新的用户数据处理。
+
+## 2026-07-30 — D-141 至 D-143 Axial Muse 品牌与首页改版（本地实现与验收）
+
+- **确认范围与公开表达**：按用户确认的方案，把 Axial Muse 固定为一条以“轴心时代的大师”和 Muse 为寓意的项目产品线；首页以“用全栈技术 + AI，让所有人用上好用的工具”为主标题，以“让生产力不再是少数人的特权”为愿景表达。页头采用品牌标志、Axial Muse 名称和本地搜索，下层固定“首页 / 项目介绍 / 踩过的坑”三项图标导航；当前不展示登录、注册或尚未实现的账户能力。首页关于区使用用户确认的工程经历、公开范围、邮箱与 GitHub 信息。
+- **实现与数据边界**：首版深色方形/轨道 Logo 经用户视觉验收否决后，D-142 将其重绘为无底框的几何字母 A、贯穿字形的稳定轴心和顶部 Muse 灵感星芒；标志与三个内容标签统一使用石墨色和低饱和青绿色。D-143 又把“品牌含义”“关于我”及联系方式从石墨黑底收口为白色至低饱和青绿色的亮色卡片。另新增双层响应式页头、首页品牌含义/项目/复盘/关于区，以及邮箱和 GitHub 动态图标卡片；动画遵守 `prefers-reduced-motion`。搜索只在浏览器内检索构建时已经投影的公开项目和非 draft 文章标题/摘要，不发送查询、不写 Cookie 或 Web Storage、不引入第三方搜索与运行时资源；production 继续排除 planned、draft 和未完成公开审核的内容。公开制品检查器只允许这一种无 action、method、name 的精确 search form，其余表单、输入与活动界面仍失败关闭。
+- **本地证据与遗留**：持久化 WSL CI 复用 Node `24.18.0`、npm `11.16.0` 与既有冻结 `node_modules`，未删除、重装或下载依赖；完整 `quality`、严格 `typecheck` 和 production build 已通过。Codex Desktop 内置浏览器在 `1440×900`、`1024×768`、`360×800` 验证品牌、双层导航、搜索空结果/Escape、标签切换、关于区与联系方式；三档均无横向溢出，手机端完整显示 Axial Muse 名称，控制台无 error/warn，请求型静态资源全部来自当前站点。完整共享测试仍以 WSL 缺少 Linux Chromium 为唯一预期非零项，真实 UI 证据由 Windows 浏览器单独记录；本轮未提交、推送或运行远端 CI，未引入依赖、第三方服务、查询存储或新的用户数据处理，既有 #30 draft 保持不变。
+
 ## 2026-07-29 — #36 生产服务器第一阶段只读核验与废弃旧站清理（GAP，待控制面和加固授权）
 
 - **授权与范围**：在已核对 SSH host key 的生产 alias 上，按 D-113 只使用非交互登录和 `sudo -n` 完成系统/架构/资源、全部监听与进程、软件/服务、账户与权限、SSH 有效配置、操作系统防火墙、TAT/云代理、生产目录、系统 Python 和 verifier 安装前基线的脱敏只读盘点。公网 IP、主机名、用户名、实例 ID、密钥/指纹、来源地址、进程参数和精确可利用安全姿态只留私密现场记录；未访问腾讯云控制面，未调用 tccli/TAT API，未操作 DNS/TLS/artifact/release，也未写入 GitHub Issue、设置或其他远端状态。
@@ -148,6 +160,14 @@
 - **验收证据**：固定 Node `24.18.0` 下，完整 E-010 `quality`、严格 `typecheck`、16 个 TypeScript 测试源的 253/253 共享测试（含真实 Chrome 回归）、production `build`、JavaScript/模块/Markdown 门禁及 `git diff --check` 全部通过；release 定向 Node 测试为 52/52。另在 `/tmp` 的干净临时 Git 提交和仓库内真实冻结依赖树上实际执行 `production build -> 默认 package:artifact -> 默认 check:artifact`，再通过 E-010 `run-script check:artifact` 精确断言 stdout digest 与 stderr 隔离摘要，完整链路通过；第二份完全不含 `.git`、`node_modules`、`build` 或 `dist` 的临时副本也通过精确 E-010 `run-script quality`，证明既有零依赖 quality/pre-commit 入口未回归。临时提交和摘要只用于本地验收，不是可部署 artifact 身份。
 - **遗留与外部边界**：实现提交 `b38354b` 已普通推送到 `origin/codex/issue-18-production-baseline`；该临时 ref 不在现有 workflow 的 `main`/`dev` push 触发范围，因此没有产生该 SHA 的远端 CI，GitHub Issue #33 验收或关闭证据也尚未形成。#14 producer/upload、#35 verifier 和 #37 deploy/服务器闭环继续独立推进；pure Node 最后一次身份检查到路径式 rename/remove 的极窄同 uid 竞态继续以仓库、`dist/` 和任务临时路径无并发写者为硬前置条件。未新增 npm 依赖、Action、外部服务、浏览器外部请求或用户数据处理；本轮真实验收只复用本机已冻结依赖，没有联网下载或向第三方发送站点内容。
 
+## 2026-07-29 — #30 AI 编码脚手架文章草稿与图表证据（待内容审核）
+
+- **事实边界与文章**：按 [Issue #30](https://github.com/lyty1997/AxialMuseWebsite/issues/30) 推进 Project Scaffold 内容准备，仓库事实固定核对到公开 `main@a9f6cd51c843f417858ae0417191523d0df11d84`。新增《VibeCoding Project Scaffold：从一次对话到可复用的工程闭环》技术文章草稿，明确它就是该项目的主技术分享和设计、实现、复盘记录，并以 classification 与项目注册表 articleId 形成双向关联。正文区分已实现的初始化、Agent 规则、零第三方基础质量、跨机预览和 CI/CD 探测/渲染，与仍为占位的 `npm test`、尚待真实绿地远端验收的 CI/CD 闭环及不存在的在线服务；不把源码复核写成新的项目仓库本地质量或远端 CI 结果。
+- **作者事务与本机边界**：用户确认 Windows 继续作为唯一源码/Git 工作区，正式作者创建事务在持久化 WSL Linux 作者副本执行，只把新文章模板补丁回传 Windows 审查；不进行 WSL Git 或目录反向覆盖。正式入口生成 articleId `019fb119-5f31-7f80-bb8b-79c2b70f1f60`，Windows 工作区继续承载正文、图表、构建验收和 Git。持久化 WSL CI 复用既有 Node `24.18.0`、冻结 `node_modules`、Temurin JRE 与 PlantUML `1.2026.1`，没有删除或重装开发环境。
+- **图表与阅读体验**：重绘四层工程控制面、单次任务闭环、脚手架迁移和模型能力演进 4 张 SVG，文章提供完整替代文本与解释性图注。PlantUML 真相源迁入索引化的 `docs/engineering/ai-coding-scaffold-diagrams.md`，仍由 `check:diagrams` 真实编译并可由 `gen:diagrams` 刷新目标 SVG；文章只展示图，不重复展开源码。Codex Desktop 内置浏览器已在 `1440×900`、`1024×768` 和 `360×800` 验证草稿提示、单一 H1、目录、图表、图注、移动导航和无横向溢出，4 张图均加载，preview 全页保留 `noindex, nofollow`。
+- **构建门禁修复**：首篇真实 draft 暴露 production 未发布内容扫描器会把作者 ID `lyty1997` 与站点已公开 GitHub 链接混淆。修复仅把既有静态页面元数据、空状态、全局导航和页脚链接纳入公开制品语料，并增加“公开链接中的 draft 作者 ID 不误报”回归；原有 draft/planned 身份、路径、摘要、正文、Markdown 渲染和链接目标泄漏反例保持通过。production 最终不包含文章 ID、slug、标题、正文或 4 张图，preview 才包含草稿路由和素材。
+- **本地验证与遗留**：WSL 本地 CI 已通过完整零依赖 `quality`、68 个提交/1 篇文章/4 个注册身份的内容历史、严格 TypeScript、7 个 PlantUML 块编译、production build 和真实 preview build/制品检查。完整共享测试为 255 项、254 项通过；唯一非零项仍是既知的 WSL `PATH` 没有 Linux Chrome/Chromium，真实页面改由 Windows Codex Desktop 内置浏览器完成，不安装 Linux 浏览器，也不把两种证据混记。文章保持 `draft`，尚未提交、推送、发布或取得远端 CI；#30 仍缺用户确认的真实项目工程截图和 1600×1000 主预览 WebP，因此不能关闭。本轮未新增依赖、第三方运行时服务或用户数据处理。
+
 ## 2026-07-28 — #13 production payload 运行时 301 派生与固定 Nginx Docker 验收（本地完成）
 
 - **范围**：在 `main@195656fcbcf05fe440bc2cf9c64e27f68d2be3ab` 建立的 `codex/issue-18-production-baseline` 上推进 #13。本轮只拥有 E-014/CODE-019 的仓库侧注册表读取、公开 HTML 路由提取、规则闭包、确定性运行清单和 Nginx exact-location 配置派生，以及 D-107 授权的本地固定 digest Docker 真实 Nginx 验收；#33 继续拥有 release 封装、摘要和独立复验，#37 继续拥有服务器账本、候选安装、原子激活与回滚兼容，不把这些后续职责或生产现场验收并入 #13。
@@ -156,7 +176,6 @@
 - **真实 Nginx 证据**：D-107 固定 Docker Official Image `nginx:1.28.3-alpine3.23` 的 `linux/amd64` child manifest `sha256:0dcc88822d45581e65ae329f8be769762bf628d3b2bb7d2a077d4aa5c98b30e3`，实际版本探针为 `nginx/1.28.3`。独立入口在空 Docker config、固定本地 socket、`--pull never`、非 root、只读、无 capability、无宿主端口和一次性内部网络下通过真实 `nginx -t`；同一派生 include 与 payload 的 25 项 HTTP/HTTPS 断言覆盖根域/`www` 四个 server、`/old` 与 `/old/`、`/projects`、原始查询串、唯一 `Location`、三个规范 target 200、source HTML 缺失、两个 HTTP ACME 200 和四个未知 Host 404。评审后，Docker/OpenSSL/HTTP/清理命令与 readiness 退避均改为异步可取消编排；SIGINT/SIGTERM 会终止并等待当前操作子进程，随后继续有界清理并以稳定中断错误失败。修复后的真实正常入口再次通过 25 项断言并确认验收容器、网络和临时目录为零残留；真实入口被定向发送 SIGINT 时以稳定中断错误和退出码 1 结束，独立标签复核确认容器与网络为空。中断 fixture 另行覆盖 SIGINT/SIGTERM 与受控资源归零，固定镜像缓存按决定保留。
 - **其余本地证据**：精确 Node `24.18.0` 下，零依赖完整 `quality`、严格 `typecheck`、16 个 TypeScript 测试源的 252/252 共享测试及真实 Chromium 回归、production `build`、JavaScript 明列语法、模块边界与 `git diff --check` 均通过。核心 fixture 覆盖空注册表、golden 字节、排序/reason 不变性、双 alias、查询变量、路径/保留空间、重复/链环、source/target payload 闭包、HTML 布局、链接成员、provenance/accessor、稳定 I/O 双故障及 Docker 入口的固定身份、四 server、硬化、无端口、原始 header、异步 readiness 取消、真实父进程 SIGINT/SIGTERM 与统一自动化隔离。真实当前站点 build 派生出 `/`、`/projects/`、`/writing/` 三条公开路由、0 条 `registered` 与 2 条 `canonical-slash`；D-107 的独立非空 Docker fixture 则刻意派生 2 条 `registered` 与 2 条 `canonical-slash`，用于真实引擎行为验收，二者不混作同一输入事实。
 - **遗留与交付边界**：#13 的仓库实现和本地真实引擎验收已闭环并形成本地实现提交，但尚无精确远端 CI 或 GitHub Issue 关闭证据；#33 的 release 封装/摘要和 #37 的服务器账本、现场 Nginx、激活、reload、回滚兼容与公网冒烟继续独立实施。本轮唯一新增外部访问是经用户授权从 Docker Hub 官方 registry 显式拉取固定 digest 镜像，传输常规 registry/网络元数据，不发送站点内容或用户数据；未新增 npm 依赖、第三方运行时服务、浏览器外部请求或用户数据处理，未安装宿主机 Nginx，未操作服务器、DNS、TLS 或 GitHub Issue/PR。
-
 ## 2026-07-28 — GitHub Actions 额度优化提案（Issue #61，待决策）
 
 - **事实与原因**：当前 private repository 本月已观测到 64 次 workflow run；#8 的三次实际纠错 run 在两个构建 job 尚未完成 production build 时，按逐 job 分钟取整已约消耗 `6 + 8 + 8 = 22` 分钟。现有 workflow 每次启动主/最低 Node 两套完整安装与负载；静态供应链已经属于两次 `quality`，又由独立 job 第三次执行；diagrams 与 supply-chain 的十几秒负载分别占用 runner。当前计费周期额度已经用完，最新 run 未分配 runner。

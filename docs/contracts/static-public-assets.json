@@ -4,5 +4,10 @@
   "status": "active",
   "owner": "AxialMuseWebsite",
   "roleValues": ["brand", "operational"],
-  "assets": []
+  "assets": [
+    {
+      "sourcePath": "assets/brand/axial-muse-mark.png",
+      "role": "brand"
+    }
+  ]
 }

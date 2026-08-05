@@ -1,5 +1,5 @@
 .page {
-  width: min(calc(100% - 2rem), 1120px);
+  width: min(calc(100% - 2rem), 1180px);
   min-height: 52vh;
   margin-inline: auto;
   padding-block: clamp(2.5rem, 7vw, 5rem);
@@ -7,15 +7,29 @@
 
 .header {
   max-width: 720px;
-  margin-bottom: 2rem;
-  padding-bottom: 1.25rem;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.75rem;
   border-bottom: 1px solid var(--am-line);
 }
 
+.header p {
+  margin: 0 0 0.45rem;
+  color: var(--am-accent);
+  font-size: 0.72rem;
+  font-weight: 780;
+  letter-spacing: 0.14em;
+}
+
 .header h1 {
-  margin: 0;
+  margin: 0 0 0.65rem;
   color: var(--am-ink);
-  font-size: 3.25rem;
+  font-size: clamp(2.4rem, 6vw, 4.2rem);
+  letter-spacing: -0.045em;
+}
+
+.header span {
+  color: var(--am-muted);
+  font-size: 1.05rem;
 }
 
 @media (max-width: 767px) {

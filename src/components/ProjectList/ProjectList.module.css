@@ -1,7 +1,7 @@
 .list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
-  gap: 1.25rem;
+  gap: 1.35rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -13,10 +13,19 @@
 
 .card {
   height: 100%;
-  padding: 1rem;
+  overflow: hidden;
+  padding: 1.1rem;
   border: 1px solid var(--am-line);
-  border-radius: 8px;
+  border-radius: 1rem;
   background: var(--am-surface);
+  box-shadow: 0 12px 34px rgb(21 58 91 / 6%);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.card:hover {
+  border-color: var(--am-line-strong);
+  box-shadow: 0 18px 44px rgb(21 58 91 / 10%);
+  transform: translateY(-3px);
 }
 
 .preview {
@@ -26,14 +35,15 @@
   aspect-ratio: 8 / 5;
   margin-bottom: 1rem;
   border: 1px solid var(--am-line);
-  border-radius: 6px;
+  border-radius: 0.7rem;
   background: var(--am-canvas);
   object-fit: cover;
 }
 
 .title {
   margin: 0 0 0.65rem;
-  font-size: 1.25rem;
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
@@ -54,11 +64,16 @@
   font-weight: 650;
 }
 
+.actions a {
+  text-decoration: none;
+}
+
 .emptyState {
   max-width: 66ch;
   margin: 0;
   padding: 1rem;
-  border-left: 3px solid var(--am-line);
+  border-left: 3px solid var(--am-accent);
+  border-radius: 0 0.7rem 0.7rem 0;
   background: var(--am-surface);
   color: var(--am-muted);
 }

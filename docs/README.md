@@ -13,6 +13,7 @@
 - [待决策问题](architecture/open-decisions.md)
 - [跨机协同开发预览工作流](architecture/dev-workflow.md)
 - [主站编码规范 Spec](engineering/main-site-coding-spec.md)
+- [AI 编码脚手架文章图表源](engineering/ai-coding-scaffold-diagrams.md)
 - [主站体验与内容架构](product/site-experience.md)
 - [M0 主站实现 Spec](product/m0-main-site-spec.md)
 - [内容与产品路线](product/content-roadmap.md)
@@ -37,10 +38,10 @@
 
 ## 当前阶段
 
-- 阶段：Docusaurus 静态主站的上层方向和 M0 多页面基线已经固定。#9、#10、#21、#22、#11、#23、#5、#6、#7、#26、#27 与 #28 已完成各自远端闭环；#25 已合入既有主干，#8 的 preview 候选、草稿/noindex/sitemap 制品门禁、冻结依赖证据与原子 current 切换已进入 `origin/dev`，本地 `dev` 又保留了裸端口制品检查、实现 review 阻塞修复与 DocRestore 项目叙事三个未推送提交。当前本地 `dev` 正在汇合 #12/#24/#32 与 #13/#33/#35/#14/#34 的历史、作者、CI、301、release、服务器 verifier、producer/upload 和受限 dispatch 仓库能力；组合树精确远端 CI 与各 Issue 证据尚未取得。#36 已完成服务器盘点、SSH、OS UFW、软件事务、一次维护重启及 D-130 unit-aware v2 正式只读验收；D-135 receipt 为 `accepted-with-residuals` 且全部当前逐组件 gates 为真、`serverMutationPerformed=false`，D-125、D-129 与 D-132 历史不改写。#36 现在只剩 canonical `main` 前置满足后的 verifier 现场安装，#37 继续暂停。当前两个项目仍为 `planned`，技术文章为零，production 只能输出可信空状态。
-- CI 状态：D-097 至 D-102 已形成固定 Action SHA、Node `24.18.0`/`24.16.0` 双端点、完整 checkout、E-010 隔离安装、零依赖 `quality`、安装后 E-013 历史门禁、独立 `typecheck`/`test`/`build` 与静态供应链证据；既有 18 个 high 依赖节点仍按未修复风险跟踪。#14 的 `production-artifact` 只允许 canonical `main` push 并单次上传，#34 仍只是在活动 workflow 外的受限 dispatch 候选，当前没有 `deploy-production`。D-136 第一阶段已获授权；D-137 修正七个未推送提交的邮箱身份后，topic 已以 `e88386b` 普通推送。保留 #8 与 #18 两侧语义的 `dev` 本地合并候选已经通过完整主 Node 门禁；`dev` push CI、`dev -> main` PR checks、合并后的 `main` CI、真实 artifact ID/digest/ZIP 与 `main` required checks 均尚未取得，不得预写成功。
+- 阶段：Docusaurus 静态主站的上层方向和 M0 多页面基线已经固定。#9、#10、#21、#22、#11、#23、#5、#6、#7、#26、#27 与 #28 已完成各自远端闭环；#25 已合入既有主干，#8 的 preview 候选、草稿/noindex/sitemap 制品门禁、冻结依赖证据与原子 current 切换已进入 `origin/dev`，本地 `dev` 又保留了裸端口制品检查、实现 review 阻塞修复与 DocRestore 项目叙事三个未推送提交，并已通过 merge commit `005406f` 汇合 #12/#24/#32 与 #13/#33/#35/#14/#34 的历史、作者、CI、301、release、服务器 verifier、producer/upload 和受限 dispatch 仓库能力。#36 已完成服务器盘点、SSH、OS UFW、软件事务、一次维护重启及 D-130 unit-aware v2 正式只读验收；D-135 receipt 为 `accepted-with-residuals` 且全部当前逐组件 gates 为真、`serverMutationPerformed=false`，D-125、D-129 与 D-132 历史不改写。#36 现在只剩 canonical `main` 前置满足后的 verifier 现场安装，#37 继续暂停。当前两个项目仍为 `planned` 且没有已批准主预览；首篇技术分享已作为 `draft` 进入 preview 准备事实、图表与阅读体验审核，production 仍只输出可信空状态。
+- CI 状态：D-097 至 D-102 已形成固定 Action SHA、Node `24.18.0`/`24.16.0` 双端点、完整 checkout、E-010 隔离安装、零依赖 `quality`、安装后 E-013 历史门禁、独立 `typecheck`/`test`/`build` 与静态供应链证据；既有 18 个 high 依赖节点仍按未修复风险跟踪。#14 的 `production-artifact` 只允许 canonical `main` push 并单次上传，#34 仍只是在活动 workflow 外的受限 dispatch 候选，当前没有 `deploy-production`。D-136 第一阶段已获授权；D-137 修正七个未推送提交的邮箱身份后，topic 已以 `e88386b` 普通推送。保留 #8 与 #18 两侧语义的本地 merge commit `005406f` 已在持久 WSL Node `24.18.0` 环境通过完整零依赖质量门禁与严格类型检查，但尚未 push；该精确 SHA 的远端 CI、后续 `dev -> main` PR checks、`main` CI、真实 artifact ID/digest/ZIP 与 `main` required checks 均未取得，不得预写成功。
 - 范围：静态主站、Git 内容发布、项目展示与入口，以及未来中央账户、评论和独立项目服务的解耦边界。
-- 当前非目标：部署登录、评论、订阅、收费、用户数据采集、CMS、站内搜索、动态后端或项目试用环境。
+- 当前非目标：部署登录、评论、订阅、收费、用户数据采集、CMS、独立/第三方搜索服务、动态后端或项目试用环境。D-141 的页头搜索仅在浏览器内匹配同批公开安全展示投影。
 
 ## 文档维护要求
 

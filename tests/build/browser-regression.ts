@@ -1122,35 +1122,35 @@ async function probeNoHydrationStaticContent(
       false,
     );
     const home = await evaluate<Readonly<{
-      actionHref: string;
-      actionVisible: boolean;
       h1: string;
       h1Visible: boolean;
       hasHydrated: boolean;
       pageOverflows: boolean;
+      projectTabHref: string;
+      projectTabVisible: boolean;
     }>>(connection, `(() => {
       const h1 = document.querySelector("h1");
-      const action = [...document.querySelectorAll("main a")].find(
-        (element) => element.textContent?.trim() === "浏览项目",
+      const projectTab = [...document.querySelectorAll("nav a")].find(
+        (element) => element.textContent?.trim() === "项目介绍",
       );
       return {
-        actionHref: action?.getAttribute("href") ?? "",
-        actionVisible: (action?.getBoundingClientRect().height ?? 0) > 0,
         h1: h1?.textContent?.trim() ?? "",
         h1Visible: (h1?.getBoundingClientRect().height ?? 0) > 0,
         hasHydrated: document.documentElement.dataset.hasHydrated === "true",
         pageOverflows: document.documentElement.scrollWidth
           > document.documentElement.clientWidth + 1
           || document.body.scrollWidth > document.body.clientWidth + 1,
+        projectTabHref: projectTab?.getAttribute("href") ?? "",
+        projectTabVisible: (projectTab?.getBoundingClientRect().height ?? 0) > 0,
       };
     })()`);
     assert.deepEqual(home, {
-      actionHref: "/projects/",
-      actionVisible: true,
       h1: "Axial Muse",
       h1Visible: true,
       hasHydrated: false,
       pageOverflows: false,
+      projectTabHref: "/projects/",
+      projectTabVisible: true,
     });
     assertExpectedLocalFailures(
       observation,

@@ -687,17 +687,19 @@ function artifactArticles(content: LoadedContent): readonly ArtifactArticleProje
 function artifactGlobalChrome(): string {
   return '<header><nav class="navbar navbar--fixed-top">'
     + '<a href="/">Axial Muse</a>'
-    + '<a href="/projects/">项目</a>'
-    + '<a href="/writing/">技术分享</a>'
-    + '<a href="/#roadmap">路线</a>'
-    + '<a href="/#about">关于</a>'
-    + '<a href="https://github.com/lyty1997">GitHub</a>'
+    + '<form class="site-search" role="search"><div>'
+    + '<svg viewBox="0 0 24 24"></svg>'
+    + '<input type="search" aria-label="搜索公开项目和文章" aria-autocomplete="list" aria-controls="site-search-results" aria-expanded="false" autocomplete="off" value="">'
+    + '<button type="submit" aria-label="打开搜索结果" disabled=""><span>↵</span></button>'
+    + "</div></form>"
+    + '<a href="/">首页</a>'
+    + '<a href="/projects/">项目介绍</a>'
+    + '<a href="/writing/">踩过的坑</a>'
     + "</nav></header>";
 }
 
 function artifactFooterHtml(): string {
   return "<footer><p>2026 Axial Muse</p>"
-    + '<a href="https://github.com/lyty1997">GitHub</a>'
     + '<a href="https://beian.miit.gov.cn/">沪ICP备2026029086号</a>'
     + "</footer>";
 }
@@ -807,27 +809,25 @@ function artifactExpectedPageHtml(
 ): string {
   const articles = artifactArticles(content);
   if (route === "/") {
-    const projects = content.projectNavigation.length === 0
-      ? "<p>当前还没有完成公开审核的项目。项目资料通过事实、隐私和视觉证据检查后会在这里出现。</p>"
-      : content.projectNavigation.map(artifactProjectCard).join("");
-    const writing = articles.length === 0
-      ? "<p>技术分享正在从项目记录中整理。首批内容发布后会在这里提供可核验的原始资料与实现细节。</p>"
-      : artifactWritingGroups(content);
     return artifactPageHtml(route, sidebar, {
-      title: "Axial Muse | 个人项目与技术分享",
-      description: "Axial Muse 记录个人项目的设计、实现、技术取舍与复盘，公开可核验的源码与工程资料。",
-      socialDescription: "Axial Muse 记录个人项目的设计、实现、技术取舍与复盘，公开可核验的源码与工程资料。",
+      title: "Axial Muse | 全栈技术 + AI 的生产力工具",
+      description: "Axial Muse 以全栈技术与 AI 构建好用的工具，分享公开项目、技术取舍与工程复盘。",
+      socialDescription: "Axial Muse 以全栈技术与 AI 构建好用的工具，分享公开项目、技术取舍与工程复盘。",
       openGraphType: "website",
-      main: "<h1>Axial Muse</h1>"
-        + "<p>围绕个人项目，记录设计、实现、技术取舍与复盘。</p>"
-        + "<p>首版先公开可核验的项目资料和工程记录。产品服务会在边界明确并真实可用后再提供入口。</p>"
-        + '<a href="/projects/">浏览项目</a>'
-        + `<section><h2>项目</h2>${projects}</section>`
-        + `<section><h2>技术分享</h2>${writing}</section>`
-        + '<section id="roadmap"><h2>路线<a href="#roadmap">\u200b</a></h2>'
-        + "<p>当前：建立可信主站</p><p>下一步：形成技术分享</p><p>探索：产品服务</p></section>"
-        + '<section id="about"><h2>关于<a href="#about">\u200b</a></h2>'
-        + "<p>我关注 AI 工程、知识工作流、开发规范和个人产品构建。本站公开项目、技术取舍与复盘，不公开私人联系方式、凭证或私有仓库。</p>"
+      main: "<p>AXIAL MUSE · PROJECT LINE</p>"
+        + "<h1>用全栈技术 + AI，让所有人用上好用的工具。</h1>"
+        + "<p>Axial Muse 的愿景，是把专业能力转化为真正好用的工具，让生产力不再是少数人的特权。</p>"
+        + "<p>当前从公开项目与工程复盘开始，持续验证每一个产品方向，在边界明确、能力真实可用后再提供服务入口。</p>"
+        + "<aside><p>WHY AXIAL MUSE</p><dl>"
+        + "<dt>Axial · 轴心</dt><dd>来自轴心时代涌现的大师，代表经得起时间检验的思想与方法。</dd>"
+        + "<dt>Muse · 穆斯</dt><dd>让灵感落地，让技术成为改善日常生活的真实力量。</dd>"
+        + "<dt>Technology · 工具</dt><dd>把专业能力沉淀为人人可用、持续进化的工具与服务。</dd>"
+        + "</dl></aside>"
+        + '<section id="about"><p>ABOUT</p><h2>关于我<a href="#about">\u200b</a></h2>'
+        + "<p>我是一个全栈工程师，覆盖人工智能、系统架构、底层驱动、硬件设计、机械工程、制造工艺，曾在达摩院做系统开发。</p>"
+        + "<p>关注 AI 工程、前沿科技，正在进行多个个人项目开发。本站分享公开项目、技术取舍与复盘，不公开凭证或私有仓库。</p>"
+        + '<a href="mailto:lyzimin@outlook.com">EMAIL lyzimin@outlook.com ↗</a>'
+        + '<a href="https://github.com/lyty1997">GITHUB github.com/lyty1997 ↗</a>'
         + "</section>",
     });
   }
@@ -836,11 +836,11 @@ function artifactExpectedPageHtml(
       ? "<p>当前还没有完成公开审核的项目。项目资料通过事实、隐私和视觉证据检查后会在这里出现。</p>"
       : content.projectNavigation.map(artifactProjectCard).join("");
     return artifactPageHtml(route, sidebar, {
-      title: "项目 | Axial Muse",
+      title: "项目介绍 | Axial Muse",
       description: "浏览 Axial Muse 中已完成公开审核的个人项目，查看问题、实现、技术取舍与源码资料。",
       socialDescription: "浏览 Axial Muse 中已完成公开审核的个人项目，查看问题、实现、技术取舍与源码资料。",
       openGraphType: "website",
-      main: `<h1>项目</h1>${projects}`,
+      main: `<p>PROJECTS</p><h1>项目介绍</h1><span>从真实问题出发，记录每个项目的设计、实现与关键取舍。</span>${projects}`,
     });
   }
   if (route === "/writing/") {
@@ -848,11 +848,11 @@ function artifactExpectedPageHtml(
       ? "<p>技术分享正在从项目记录中整理。首批内容发布后会在这里提供可核验的原始资料与实现细节。</p>"
       : artifactWritingGroups(content);
     return artifactPageHtml(route, sidebar, {
-      title: "技术分享 | Axial Muse",
+      title: "踩过的坑 | Axial Muse",
       description: "浏览 Axial Muse 的技术分享，查看来自真实项目的工程问题、实现取舍与复盘记录。",
       socialDescription: "浏览 Axial Muse 的技术分享，查看来自真实项目的工程问题、实现取舍与复盘记录。",
       openGraphType: "website",
-      main: `<h1>技术分享</h1>${writing}`,
+      main: `<p>LESSONS LEARNED</p><h1>踩过的坑</h1><span>不回避失败与弯路，沉淀来自真实项目的工程判断。</span>${writing}`,
     });
   }
   const project = content.projectNavigation.find((item) => item.canonicalPath === route);
@@ -2548,19 +2548,19 @@ test("I-14 production artifact 不把展示模式枚举误判为公开字段名�
 test("I-14 production artifact 拒绝任一页面缺失、重复或伪造统一 SEO metadata", async () => {
   const mutations: readonly ((input: string) => string)[] = [
     (input) => input.replace(
-      "<title>Axial Muse | 个人项目与技术分享</title>",
+      "<title>Axial Muse | 全栈技术 + AI 的生产力工具</title>",
       "",
     ),
     (input) => input.replace(
-      '<meta name="description" content="Axial Muse 记录个人项目的设计、实现、技术取舍与复盘，公开可核验的源码与工程资料。">',
-      '<meta name="description" content="错误"><meta name="description" content="Axial Muse 记录个人项目的设计、实现、技术取舍与复盘，公开可核验的源码与工程资料。">',
+      '<meta name="description" content="Axial Muse 以全栈技术与 AI 构建好用的工具，分享公开项目、技术取舍与工程复盘。">',
+      '<meta name="description" content="错误"><meta name="description" content="Axial Muse 以全栈技术与 AI 构建好用的工具，分享公开项目、技术取舍与工程复盘。">',
     ),
     (input) => input.replace(
-      '<meta property="og:title" content="Axial Muse | 个人项目与技术分享">',
+      '<meta property="og:title" content="Axial Muse | 全栈技术 + AI 的生产力工具">',
       '<meta property="og:title" content="错误">',
     ),
     (input) => input.replace(
-      '<meta property="og:description" content="Axial Muse 记录个人项目的设计、实现、技术取舍与复盘，公开可核验的源码与工程资料。">',
+      '<meta property="og:description" content="Axial Muse 以全栈技术与 AI 构建好用的工具，分享公开项目、技术取舍与工程复盘。">',
       '<meta property="og:description" content="错误">',
     ),
     (input) => input.replace(
@@ -2576,12 +2576,12 @@ test("I-14 production artifact 拒绝任一页面缺失、重复或伪造统一 
       '<meta property="og:image" content="https://placeholder.invalid/og.webp"></head>',
     ),
     (input) => input.replace(
-      "<title>Axial Muse | 个人项目与技术分享</title>",
-      "<!--<title>Axial Muse | 个人项目与技术分享</title>-->",
+      "<title>Axial Muse | 全栈技术 + AI 的生产力工具</title>",
+      "<!--<title>Axial Muse | 全栈技术 + AI 的生产力工具</title>-->",
     ),
     (input) => input.replace(
-      "<title>Axial Muse | 个人项目与技术分享</title>",
-      '<script type="application/json"><title>Axial Muse | 个人项目与技术分享</title></script>',
+      "<title>Axial Muse | 全栈技术 + AI 的生产力工具</title>",
+      '<script type="application/json"><title>Axial Muse | 全栈技术 + AI 的生产力工具</title></script>',
     ),
   ];
   for (const mutate of mutations) {
@@ -2646,12 +2646,19 @@ test("I-14 production artifact 固定 zh-CN、单一 H1、全站导航页脚与�
     },
     {
       code: "CONTENT_ARTIFACT_NAVIGATION",
-      mutate: (input: string) => input.replace('href="/#roadmap">路线', 'href="/roadmap/">路线'),
+      mutate: (input: string) => input.replace('href="/projects/">项目介绍', 'href="/project-list/">项目介绍'),
+    },
+    {
+      code: "CONTENT_ARTIFACT_NAVIGATION",
+      mutate: (input: string) => input.replace(
+        '<a href="https://beian.miit.gov.cn/">沪ICP备2026029086号</a>',
+        '<a href="https://github.com/lyty1997">GitHub</a><a href="https://beian.miit.gov.cn/">沪ICP备2026029086号</a>',
+      ),
     },
     {
       code: "CONTENT_ARTIFACT_DISPLAY_PROJECTION",
       mutate: (input: string) => input.replace(
-        "围绕个人项目，记录设计、实现、技术取舍与复盘。",
+        "Axial Muse 的愿景，是把专业能力转化为真正好用的工具，让生产力不再是少数人的特权。",
         "错误首屏文案",
       ),
     },
@@ -2660,6 +2667,13 @@ test("I-14 production artifact 固定 zh-CN、单一 H1、全站导航页脚与�
       mutate: (input: string) => input.replace(
         "</footer>",
         "<span>公网安备待核验</span></footer>",
+      ),
+    },
+    {
+      code: "CONTENT_ARTIFACT_CARD_SET",
+      mutate: (input: string) => input.replace(
+        '<section id="about">',
+        '<section><h2>项目介绍</h2><a href="/projects/">查看全部项目</a></section><section id="about">',
       ),
     },
   ] as const;
@@ -3958,6 +3972,45 @@ test("E-016 production artifact 不把未发布正文中的框架通用词误判
       "assets/js/framework-vocabulary.txt",
       "Markdown docs\nJavaScript runtime\nWebSocket transport\nDocusaurus framework\n",
     );
+    assert.deepEqual(
+      await invokeArtifactCheck(
+        content,
+        fixture.buildDirectory,
+        fixture.generatedFilesDirectory,
+      ),
+      {sealAssertions: 2, staticAssertions: 2, disposals: 1},
+    );
+  });
+});
+
+test("E-016 production artifact 不把站点公开链接中的 draft 作者 ID 误判为泄漏", async () => {
+  await withFixture(async (repositoryRoot) => {
+    const authorsPath = resolve(repositoryRoot, "docs/contracts/authors.json");
+    const authors = JSON.parse(readFileSync(authorsPath, "utf8")) as {
+      authors: Record<string, unknown>;
+    };
+    authors.authors.lyty1997 = {
+      displayName: "站点作者",
+      links: {github: "https://github.com/lyty1997"},
+    };
+    writeFileSync(authorsPath, `${JSON.stringify(authors, null, 2)}\n`, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    const sourcePath = resolve(
+      repositoryRoot,
+      "site-content/writing/draft-article/index.md",
+    );
+    writeFileSync(
+      sourcePath,
+      readFileSync(sourcePath, "utf8").replace(
+        '"authors":["example-author"]',
+        '"authors":["lyty1997"]',
+      ),
+      {encoding: "utf8", mode: 0o600},
+    );
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
     assert.deepEqual(
       await invokeArtifactCheck(
         content,
