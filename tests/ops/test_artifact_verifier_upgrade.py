@@ -1,3 +1,4 @@
+import contextlib
 import errno
 import fcntl
 import hashlib
@@ -7,6 +8,7 @@ import json
 import os
 import signal
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -430,6 +432,49 @@ class ArtifactVerifierUpgradeTests(unittest.TestCase):
                     "VERIFIER_BOOTSTRAP_STATE",
                 )
                 self.assertFalse(fixture.upgrade_root.exists())
+
+    def test_unexpected_namespace_member_blocks_lifecycle_revalidation(self):
+        for stage in ("initial", "post-commit"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory(
+                prefix="axial-muse-upgrade-test-"
+            ) as temporary_root:
+                fixture = UpgradeFixture(temporary_root)
+                fixture.install()
+                unexpected = fixture.namespace / "unexpected-owner"
+
+                if stage == "initial":
+                    unexpected.write_bytes(b"must not be ignored\n")
+                    self.assert_upgrade_error(
+                        "VERIFIER_UPGRADE_STATE",
+                        fixture.run,
+                    )
+                    self.assertFalse(fixture.upgrade_root.exists())
+                else:
+                    original_mark = UPGRADER._mark_event
+
+                    def mark_then_add_sibling(event, target_marker):
+                        original_mark(event, target_marker)
+                        if target_marker == UPGRADER.COMMITTED_BASENAME:
+                            unexpected.write_bytes(b"must not be ignored\n")
+
+                    with mock.patch.object(
+                        UPGRADER,
+                        "_mark_event",
+                        side_effect=mark_then_add_sibling,
+                    ):
+                        self.assert_upgrade_error(
+                            "VERIFIER_UPGRADE_OUTCOME_UNKNOWN",
+                            fixture.run,
+                        )
+                    event = fixture.event_directories()[0]
+                    self.assertTrue(
+                        (event / UPGRADER.COMMITTED_BASENAME).is_file()
+                    )
+
+                self.assertEqual(
+                    unexpected.read_bytes(),
+                    b"must not be ignored\n",
+                )
 
     def test_detached_upgrade_root_or_event_never_reports_success(self):
         for stage in ("upgrade-root", "event"):
@@ -1004,6 +1049,124 @@ class ArtifactVerifierUpgradeTests(unittest.TestCase):
             )
             self.assertEqual(len(fixture.event_directories()), 1)
 
+    def test_self_test_vector_count_accepts_positive_and_rejects_invalid(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-upgrade-test-"
+        ) as temporary_root:
+            fixture = UpgradeFixture(temporary_root)
+            fixture.install()
+
+            def seven_vectors(system_python, verifier_path):
+                result = fixture.self_test(system_python, verifier_path)
+                result["vectorCount"] = 7
+                return result
+
+            committed = fixture.run(_self_test_runner=seven_vectors)
+            event = fixture.event_directories()[0]
+            receipt_bytes = (
+                event / UPGRADER.RECEIPT_BASENAME
+            ).read_bytes()
+            receipt = UPGRADER._parse_receipt(receipt_bytes)
+            self.assertEqual(receipt["selfTestResult"]["vectorCount"], 7)
+            recovered = fixture.run(
+                expected_current_receipt_sha256=committed[
+                    "componentReceiptSha256"
+                ],
+                _self_test_runner=seven_vectors,
+            )
+            self.assertEqual(recovered["disposition"], "already-current")
+
+            for invalid in (0, -1, True, "7"):
+                with self.subTest(invalid=invalid):
+                    invalid_receipt = json.loads(receipt_bytes)
+                    invalid_receipt["selfTestResult"][
+                        "vectorCount"
+                    ] = invalid
+                    self.assert_upgrade_error(
+                        "VERIFIER_UPGRADE_RECEIPT",
+                        lambda invalid_receipt=invalid_receipt: (
+                            UPGRADER._parse_receipt(
+                                UPGRADER._canonical_json(invalid_receipt)
+                            )
+                        ),
+                    )
+
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-upgrade-test-"
+        ) as temporary_root:
+            fixture = UpgradeFixture(temporary_root)
+            fixture.install()
+
+            def zero_vectors(system_python, verifier_path):
+                result = fixture.self_test(system_python, verifier_path)
+                result["vectorCount"] = 0
+                return result
+
+            self.assert_upgrade_error(
+                "VERIFIER_UPGRADE_SELF_TEST",
+                lambda: fixture.run(_self_test_runner=zero_vectors),
+            )
+
+    def test_self_test_result_is_receipt_bound_during_activation_and_recovery(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-upgrade-test-"
+        ) as temporary_root:
+            fixture = UpgradeFixture(temporary_root)
+            fixture.install()
+            new_component_runs = 0
+
+            def mismatched_activation(system_python, verifier_path):
+                nonlocal new_component_runs
+                result = fixture.self_test(system_python, verifier_path)
+                if Path(verifier_path).read_bytes() == NEW_VERIFIER:
+                    new_component_runs += 1
+                    result["vectorCount"] = 6 + new_component_runs
+                return result
+
+            self.assert_upgrade_error(
+                "VERIFIER_UPGRADE_SELF_TEST",
+                lambda: fixture.run(
+                    _self_test_runner=mismatched_activation
+                ),
+            )
+            self.assertEqual(new_component_runs, 2)
+            event = fixture.event_directories()[0]
+            receipt = json.loads(
+                (event / UPGRADER.RECEIPT_BASENAME).read_bytes()
+            )
+            self.assertEqual(receipt["selfTestResult"]["vectorCount"], 7)
+            self.assertTrue(
+                (event / UPGRADER.ROLLED_BACK_BASENAME).is_file()
+            )
+
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-upgrade-test-"
+        ) as temporary_root:
+            fixture = UpgradeFixture(temporary_root)
+            fixture.install()
+
+            def with_vector_count(vector_count):
+                def runner(system_python, verifier_path):
+                    result = fixture.self_test(system_python, verifier_path)
+                    result["vectorCount"] = vector_count
+                    return result
+
+                return runner
+
+            committed = fixture.run(
+                _self_test_runner=with_vector_count(7)
+            )
+            self.assert_upgrade_error(
+                "VERIFIER_UPGRADE_SELF_TEST",
+                lambda: fixture.run(
+                    expected_current_receipt_sha256=committed[
+                        "componentReceiptSha256"
+                    ],
+                    _self_test_runner=with_vector_count(8),
+                ),
+            )
+            self.assertEqual(len(fixture.event_directories()), 1)
+
     def test_immediate_rollback_requires_canonical_rolled_back_binding(self):
         with tempfile.TemporaryDirectory(
             prefix="axial-muse-upgrade-test-"
@@ -1222,6 +1385,45 @@ class ArtifactVerifierUpgradeTests(unittest.TestCase):
                 self.assertTrue(
                     (detached_event / expected_marker).is_file()
                 )
+
+    def test_upgrade_root_presence_is_bound_before_lineage_load(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-upgrade-test-"
+        ) as temporary_root:
+            fixture = UpgradeFixture(temporary_root)
+            fixture.install()
+            with mock.patch.object(
+                UPGRADER,
+                "_activate_event",
+                side_effect=SimulatedCrash(),
+            ):
+                with self.assertRaises(SimulatedCrash):
+                    fixture.run()
+            detached = Path(temporary_root) / "detached-upgrades"
+            original_reverify = UPGRADER._reverify_lifecycle
+            detached_once = False
+
+            def detach_before_first_reverify(*arguments, **keywords):
+                nonlocal detached_once
+                if not detached_once:
+                    fixture.upgrade_root.rename(detached)
+                    detached_once = True
+                return original_reverify(*arguments, **keywords)
+
+            with mock.patch.object(
+                UPGRADER,
+                "_reverify_lifecycle",
+                side_effect=detach_before_first_reverify,
+            ):
+                self.assert_upgrade_error(
+                    "VERIFIER_UPGRADE_STATE",
+                    fixture.run,
+                )
+
+            self.assertTrue(detached_once)
+            self.assertFalse(fixture.upgrade_root.exists())
+            event = next(detached.iterdir())
+            self.assertTrue((event / UPGRADER.PREPARED_BASENAME).is_file())
 
     def test_long_event_chain_keeps_only_bounded_event_handles(self):
         with tempfile.TemporaryDirectory(
@@ -1584,6 +1786,306 @@ class ArtifactVerifierUpgradeTests(unittest.TestCase):
                     (fixture.formal / UPGRADER.VERIFIER_BASENAME).read_bytes(),
                     NEW_VERIFIER,
                 )
+
+    def test_library_pending_sigint_after_durable_commit_returns_result(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-upgrade-test-"
+        ) as temporary_root:
+            fixture = UpgradeFixture(temporary_root)
+            fixture.install()
+            output = io.StringIO()
+            signal_state = {"commitCompleted": False}
+            original_mark = UPGRADER._mark_event
+            previous_handler = signal.signal(
+                signal.SIGINT,
+                signal.default_int_handler,
+            )
+            previous_mask = signal.pthread_sigmask(
+                signal.SIG_UNBLOCK,
+                (signal.SIGINT,),
+            )
+            sent = False
+
+            def mark_then_signal(event, target_marker):
+                nonlocal sent
+                original_mark(event, target_marker)
+                if target_marker == UPGRADER.COMMITTED_BASENAME:
+                    self.assertIn(
+                        signal.SIGINT,
+                        signal.pthread_sigmask(signal.SIG_BLOCK, ()),
+                    )
+                    os.kill(os.getpid(), signal.SIGINT)
+                    self.assertIn(signal.SIGINT, signal.sigpending())
+                    sent = True
+
+            try:
+                with mock.patch.object(
+                    UPGRADER,
+                    "_mark_event",
+                    side_effect=mark_then_signal,
+                ):
+                    result = fixture.run(
+                        _signal_state=signal_state,
+                        success_stream=output,
+                    )
+            finally:
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+                signal.signal(signal.SIGINT, previous_handler)
+
+            self.assertTrue(sent)
+            self.assertTrue(signal_state["commitCompleted"])
+            self.assertEqual(result["disposition"], "upgraded")
+            self.assertEqual(json.loads(output.getvalue()), result)
+            self.assertEqual(output.getvalue().count("\n"), 1)
+            event = fixture.event_directories()[0]
+            self.assertTrue((event / UPGRADER.COMMITTED_BASENAME).is_file())
+
+    def test_main_restores_both_handlers_under_repeated_pending_signals(self):
+        arguments = [
+            "--source-root",
+            "/private/source",
+            "--expected-current-receipt-sha256",
+            "1" * 64,
+            "--expected-target-commit-sha",
+            NEW_COMMIT,
+            "--expected-target-manifest-sha256",
+            "2" * 64,
+        ]
+        real_signal = signal.signal
+
+        for commit_completed, expected_exit_code in ((False, 1), (True, 0)):
+            with self.subTest(commit_completed=commit_completed):
+                baseline_handlers = {
+                    signal_number: signal.getsignal(signal_number)
+                    for signal_number in UPGRADER.INTERRUPT_SIGNALS
+                }
+                baseline_mask = signal.pthread_sigmask(
+                    signal.SIG_UNBLOCK,
+                    UPGRADER.INTERRUPT_SIGNALS,
+                )
+                delivered = []
+                injected = False
+                mask_during_restore = frozenset()
+                pending_during_restore = frozenset()
+                standard_output = io.StringIO()
+                standard_error = io.StringIO()
+
+                def restored_handler(signal_number, _frame):
+                    delivered.append(signal_number)
+                    raise KeyboardInterrupt()
+
+                for signal_number in UPGRADER.INTERRUPT_SIGNALS:
+                    real_signal(signal_number, restored_handler)
+
+                def fake_upgrade(**keywords):
+                    keywords["_signal_state"]["commitCompleted"] = (
+                        commit_completed
+                    )
+                    if not commit_completed:
+                        raise UPGRADER.VerifierUpgradeError(
+                            "VERIFIER_UPGRADE_INTERRUPTED",
+                            "process/signal",
+                        )
+
+                def inject_during_first_restore(signal_number, handler):
+                    nonlocal injected
+                    nonlocal mask_during_restore
+                    nonlocal pending_during_restore
+                    result = real_signal(signal_number, handler)
+                    if (
+                        not injected
+                        and signal_number == signal.SIGINT
+                        and handler is restored_handler
+                    ):
+                        injected = True
+                        delivery_mask = signal.pthread_sigmask(
+                            signal.SIG_BLOCK,
+                            UPGRADER.INTERRUPT_SIGNALS,
+                        )
+                        try:
+                            for _index in range(3):
+                                os.kill(os.getpid(), signal.SIGINT)
+                                os.kill(os.getpid(), signal.SIGTERM)
+                            mask_during_restore = frozenset(
+                                signal.pthread_sigmask(signal.SIG_BLOCK, ())
+                            )
+                            pending_during_restore = frozenset(
+                                signal.sigpending()
+                            )
+                        finally:
+                            signal.pthread_sigmask(
+                                signal.SIG_SETMASK,
+                                delivery_mask,
+                            )
+                    return result
+
+                try:
+                    with (
+                        mock.patch.object(
+                            UPGRADER,
+                            "upgrade_artifact_verifier",
+                            side_effect=fake_upgrade,
+                        ),
+                        mock.patch.object(
+                            UPGRADER.signal,
+                            "signal",
+                            side_effect=inject_during_first_restore,
+                        ),
+                        contextlib.redirect_stdout(standard_output),
+                        contextlib.redirect_stderr(standard_error),
+                    ):
+                        exit_code = UPGRADER.main(arguments)
+
+                    self.assertEqual(exit_code, expected_exit_code)
+                    self.assertEqual(standard_output.getvalue(), "")
+                    if commit_completed:
+                        self.assertEqual(standard_error.getvalue(), "")
+                    else:
+                        self.assertRegex(
+                            standard_error.getvalue(),
+                            r"^\[VERIFIER_UPGRADE_INTERRUPTED\] "
+                            r"\(process/signal\) .+\n$",
+                        )
+                    self.assertTrue(injected)
+                    self.assertTrue(
+                        UPGRADER.INTERRUPT_SIGNALS.issubset(
+                            mask_during_restore
+                        )
+                    )
+                    self.assertTrue(
+                        UPGRADER.INTERRUPT_SIGNALS.issubset(
+                            pending_during_restore
+                        )
+                    )
+                    self.assertEqual(delivered, [])
+                    self.assertFalse(
+                        UPGRADER.INTERRUPT_SIGNALS.intersection(
+                            signal.sigpending()
+                        )
+                    )
+                    self.assertEqual(
+                        signal.pthread_sigmask(signal.SIG_BLOCK, ()),
+                        baseline_mask.difference(
+                            UPGRADER.INTERRUPT_SIGNALS
+                        ),
+                    )
+                    for signal_number in UPGRADER.INTERRUPT_SIGNALS:
+                        self.assertIs(
+                            signal.getsignal(signal_number),
+                            restored_handler,
+                        )
+                finally:
+                    signal.pthread_sigmask(
+                        signal.SIG_BLOCK,
+                        UPGRADER.INTERRUPT_SIGNALS,
+                    )
+                    for signal_number, handler in baseline_handlers.items():
+                        real_signal(signal_number, handler)
+                    for signal_number in sorted(
+                        UPGRADER.INTERRUPT_SIGNALS.intersection(
+                            signal.sigpending()
+                        )
+                    ):
+                        signal.sigwait((signal_number,))
+                    signal.pthread_sigmask(
+                        signal.SIG_SETMASK,
+                        baseline_mask,
+                    )
+
+    def test_cli_default_handlers_survive_dual_pending_restore_window(self):
+        for commit_completed, expected_exit_code in ((False, 1), (True, 0)):
+            with self.subTest(commit_completed=commit_completed):
+                child_code = f"""
+import importlib.util
+import os
+import signal
+
+spec = importlib.util.spec_from_file_location(
+    "axial_muse_upgrade_signal_child",
+    {str(UPGRADER_PATH)!r},
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+real_signal = signal.signal
+injected = False
+initial_mask = signal.pthread_sigmask(signal.SIG_BLOCK, ())
+if signal.getsignal(signal.SIGINT) is not signal.default_int_handler:
+    raise SystemExit(92)
+if signal.getsignal(signal.SIGTERM) != signal.SIG_DFL:
+    raise SystemExit(92)
+
+def fake_upgrade(**keywords):
+    keywords["_signal_state"]["commitCompleted"] = {commit_completed!r}
+    if not {commit_completed!r}:
+        raise module.VerifierUpgradeError(
+            "VERIFIER_UPGRADE_INTERRUPTED",
+            "process/signal",
+        )
+
+def inject_during_first_restore(signal_number, handler):
+    global injected
+    result = real_signal(signal_number, handler)
+    if (
+        not injected
+        and signal_number == signal.SIGINT
+        and handler is signal.default_int_handler
+    ):
+        injected = True
+        previous_mask = signal.pthread_sigmask(
+            signal.SIG_BLOCK,
+            module.INTERRUPT_SIGNALS,
+        )
+        try:
+            for _index in range(3):
+                os.kill(os.getpid(), signal.SIGINT)
+                os.kill(os.getpid(), signal.SIGTERM)
+            if not module.INTERRUPT_SIGNALS.issubset(signal.sigpending()):
+                raise RuntimeError("controlled signals were not pending")
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+    return result
+
+module.upgrade_artifact_verifier = fake_upgrade
+module.signal.signal = inject_during_first_restore
+exit_code = module.main([
+    "--source-root",
+    "/private/source",
+    "--expected-current-receipt-sha256",
+    {"1" * 64!r},
+    "--expected-target-commit-sha",
+    {NEW_COMMIT!r},
+    "--expected-target-manifest-sha256",
+    {"2" * 64!r},
+])
+if not injected:
+    raise SystemExit(90)
+if module.INTERRUPT_SIGNALS.intersection(signal.sigpending()):
+    raise SystemExit(91)
+if signal.pthread_sigmask(signal.SIG_BLOCK, ()) != initial_mask:
+    raise SystemExit(93)
+if signal.getsignal(signal.SIGINT) is not signal.default_int_handler:
+    raise SystemExit(94)
+if signal.getsignal(signal.SIGTERM) != signal.SIG_DFL:
+    raise SystemExit(94)
+raise SystemExit(exit_code)
+"""
+                completed = subprocess.run(
+                    ["/usr/bin/python3", "-I", "-B", "-c", child_code],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                self.assertEqual(completed.returncode, expected_exit_code)
+                self.assertEqual(completed.stdout, "")
+                if commit_completed:
+                    self.assertEqual(completed.stderr, "")
+                else:
+                    self.assertRegex(
+                        completed.stderr,
+                        r"^\[VERIFIER_UPGRADE_INTERRUPTED\] "
+                        r"\(process/signal\) .+\n$",
+                    )
 
     def test_cli_rejects_force_cleanup_and_reordering(self):
         valid = [

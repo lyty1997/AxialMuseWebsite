@@ -271,6 +271,16 @@ class ArtifactVerifierTests(unittest.TestCase):
             callback()
         self.assertEqual(caught.exception.code, code)
 
+    def assert_single_candidate_residue(self, staging_root):
+        candidates = sorted(
+            path
+            for path in staging_root.iterdir()
+            if path.name.startswith(".verify-candidate-")
+        )
+        self.assertEqual(len(candidates), 1)
+        self.assertTrue(candidates[0].is_dir())
+        return candidates[0]
+
     def test_system_python_self_test_consumes_shared_golden(self):
         result = subprocess.run(
             [
@@ -501,10 +511,7 @@ class ArtifactVerifierTests(unittest.TestCase):
                 ),
             )
             self.assertFalse(second.verified_root.exists())
-            self.assertEqual(
-                sorted(path.name for path in second.root.iterdir()),
-                ["artifact.zip"],
-            )
+            self.assert_single_candidate_residue(second.root)
 
     def test_zip_slip_absolute_backslash_and_empty_directory_are_rejected(self):
         cases = (
@@ -558,7 +565,7 @@ class ArtifactVerifierTests(unittest.TestCase):
                 self.assert_error(expected_code, fixture.verify)
                 self.assertFalse(fixture.verified_root.exists())
 
-    def test_corrupt_crc_fails_during_extraction_and_cleans_candidate(self):
+    def test_corrupt_crc_preserves_private_candidate_and_blocks_retry(self):
         with tempfile.TemporaryDirectory(
             prefix="axial-muse-server-artifact-test-"
         ) as temporary_root:
@@ -573,10 +580,8 @@ class ArtifactVerifierTests(unittest.TestCase):
             fixture.identity["artifactDigest"] = sha256(archive_bytes)
 
             self.assert_error("SERVER_ARTIFACT_EXTRACT", fixture.verify)
-            self.assertEqual(
-                sorted(path.name for path in fixture.root.iterdir()),
-                ["artifact.zip"],
-            )
+            self.assert_single_candidate_residue(fixture.root)
+            self.assert_error("SERVER_ARTIFACT_STAGING", fixture.verify)
 
     def test_central_directory_limit_precedes_zipfile_construction(self):
         with tempfile.TemporaryDirectory(
@@ -721,7 +726,7 @@ class ArtifactVerifierTests(unittest.TestCase):
             self.assert_error("SERVER_ARTIFACT_STAGING", fixture.verify)
             self.assertEqual(marker.read_text(encoding="utf-8"), "external\n")
 
-    def test_signal_and_success_output_failure_remove_transaction_outputs(self):
+    def test_success_output_failure_preserves_private_transaction_residue(self):
         class FailingOutput:
             def write(self, _value):
                 raise OSError("controlled output failure")
@@ -739,8 +744,9 @@ class ArtifactVerifierTests(unittest.TestCase):
             )
             self.assertEqual(
                 sorted(path.name for path in fixture.root.iterdir()),
-                ["artifact.zip"],
+                ["artifact.zip", "verified-release"],
             )
+            self.assert_error("SERVER_ARTIFACT_STAGING", fixture.verify)
 
     def test_activation_is_noreplace_and_rechecks_bytes_after_rename(self):
         with tempfile.TemporaryDirectory(
@@ -775,9 +781,14 @@ class ArtifactVerifierTests(unittest.TestCase):
                 target_identity["before"],
             )
             self.assertEqual(
-                sorted(path.name for path in fixture.root.iterdir()),
+                sorted(
+                    path.name
+                    for path in fixture.root.iterdir()
+                    if not path.name.startswith(".verify-candidate-")
+                ),
                 ["artifact.zip", "verified-release"],
             )
+            self.assert_single_candidate_residue(fixture.root)
 
         with tempfile.TemporaryDirectory(
             prefix="axial-muse-server-artifact-test-"
@@ -807,10 +818,10 @@ class ArtifactVerifierTests(unittest.TestCase):
                 self.assert_error("SERVER_ARTIFACT_CHANGED", fixture.verify)
             self.assertEqual(
                 sorted(path.name for path in fixture.root.iterdir()),
-                ["artifact.zip"],
+                ["artifact.zip", "verified-release"],
             )
 
-    def test_staging_parent_swap_after_sync_fails_and_cleans_held_tree(self):
+    def test_staging_parent_swap_after_sync_preserves_held_residue(self):
         with tempfile.TemporaryDirectory(
             prefix="axial-muse-server-artifact-test-"
         ) as temporary_root:
@@ -855,7 +866,7 @@ class ArtifactVerifierTests(unittest.TestCase):
             self.assertTrue(swapped)
             self.assertEqual(
                 sorted(path.name for path in displaced.iterdir()),
-                ["artifact.zip"],
+                ["artifact.zip", "verified-release"],
             )
             self.assertEqual(
                 (fixture.verified_root / "owner-marker").read_bytes(),
@@ -906,14 +917,14 @@ class ArtifactVerifierTests(unittest.TestCase):
 
             self.assertEqual(
                 sorted(path.name for path in displaced.iterdir()),
-                ["artifact.zip"],
+                ["artifact.zip", "verified-release"],
             )
             self.assertEqual(
                 (fixture.verified_root / "owner-marker").read_bytes(),
                 replacement_marker,
             )
 
-    def test_output_failure_cleanup_stays_anchored_after_parent_swap(self):
+    def test_output_failure_residue_stays_anchored_after_parent_swap(self):
         with tempfile.TemporaryDirectory(
             prefix="axial-muse-server-artifact-test-"
         ) as temporary_root:
@@ -945,12 +956,321 @@ class ArtifactVerifierTests(unittest.TestCase):
             )
             self.assertEqual(
                 sorted(path.name for path in displaced.iterdir()),
-                ["artifact.zip"],
+                ["artifact.zip", "verified-release"],
             )
             self.assertEqual(
                 (fixture.verified_root / "owner-marker").read_bytes(),
                 replacement_marker,
             )
+
+    def test_candidate_creation_failure_preserves_held_transaction_after_swap(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-server-artifact-test-"
+        ) as temporary_root:
+            fixture = StagingFixture(temporary_root)
+            original_list = VERIFIER._list_directory_bytes
+            displaced = Path(temporary_root) / "displaced-candidate"
+            replacement_marker = b"external candidate replacement\n"
+            swapped = False
+
+            def swap_candidate_before_creation_cleanup(descriptor):
+                nonlocal swapped
+                candidates = [
+                    path
+                    for path in fixture.root.iterdir()
+                    if path.name.startswith(".verify-candidate-")
+                ]
+                if (
+                    not swapped
+                    and len(candidates) == 1
+                    and os.fstat(descriptor).st_ino
+                    == candidates[0].stat().st_ino
+                ):
+                    owned = candidates[0] / "owned"
+                    owned.mkdir(mode=0o700)
+                    (owned / "content").write_bytes(b"transaction-owned\n")
+                    candidate_name = candidates[0].name
+                    candidates[0].rename(displaced)
+                    replacement = fixture.root / candidate_name
+                    replacement.mkdir(mode=0o700)
+                    (replacement / "owner-marker").write_bytes(
+                        replacement_marker
+                    )
+                    swapped = True
+                    raise OSError("controlled candidate basename swap")
+                return original_list(descriptor)
+
+            with mock.patch.object(
+                VERIFIER,
+                "_list_directory_bytes",
+                side_effect=swap_candidate_before_creation_cleanup,
+            ):
+                self.assert_error("SERVER_ARTIFACT_CLEANUP", fixture.verify)
+
+            self.assertTrue(swapped)
+            self.assertEqual(
+                (displaced / "owned" / "content").read_bytes(),
+                b"transaction-owned\n",
+            )
+            replacement = next(
+                path
+                for path in fixture.root.iterdir()
+                if path.name.startswith(".verify-candidate-")
+            )
+            self.assertEqual(
+                (replacement / "owner-marker").read_bytes(),
+                replacement_marker,
+            )
+
+    def test_residue_audit_never_adopts_replacement_after_identity_check(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-server-artifact-test-"
+        ) as temporary_root:
+            staging = Path(temporary_root) / "staging"
+            staging.mkdir(mode=0o700)
+            transaction = staging / VERIFIER.VERIFIED_RELEASE_BASENAME
+            transaction.mkdir(mode=0o700)
+            owned = transaction / "owned"
+            owned.mkdir(mode=0o700)
+            (owned / "content").write_bytes(b"transaction-owned\n")
+            displaced = Path(temporary_root) / "displaced-verified-release"
+            replacement_marker = b"external verified replacement\n"
+            parent_descriptor = os.open(
+                staging,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+            )
+            transaction_descriptor = os.open(
+                transaction,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+            )
+            expected_identity = VERIFIER._directory_ownership_identity(
+                os.fstat(transaction_descriptor)
+            )
+            original_fstat = os.fstat
+            swapped = False
+
+            def swap_after_cleanup_identity_check(descriptor):
+                nonlocal swapped
+                metadata = original_fstat(descriptor)
+                if not swapped and descriptor == transaction_descriptor:
+                    transaction.rename(displaced)
+                    transaction.mkdir(mode=0o700)
+                    (transaction / "owner-marker").write_bytes(
+                        replacement_marker
+                    )
+                    swapped = True
+                return metadata
+
+            try:
+                with mock.patch.object(
+                    VERIFIER.os,
+                    "fstat",
+                    side_effect=swap_after_cleanup_identity_check,
+                ):
+                    self.assert_error(
+                        "SERVER_ARTIFACT_CLEANUP",
+                        lambda: VERIFIER._safe_preserve_tree(
+                            parent_descriptor,
+                            VERIFIER.VERIFIED_RELEASE_BASENAME,
+                            transaction_descriptor,
+                            expected_identity,
+                        ),
+                    )
+            finally:
+                os.close(transaction_descriptor)
+                os.close(parent_descriptor)
+
+            self.assertTrue(swapped)
+            self.assertEqual(
+                (displaced / "owned" / "content").read_bytes(),
+                b"transaction-owned\n",
+            )
+            self.assertEqual(
+                (transaction / "owner-marker").read_bytes(),
+                replacement_marker,
+            )
+
+    def test_residue_audit_never_removes_empty_root_replacement_after_check(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-server-artifact-test-"
+        ) as temporary_root:
+            staging = Path(temporary_root) / "staging"
+            staging.mkdir(mode=0o700)
+            transaction = staging / VERIFIER.VERIFIED_RELEASE_BASENAME
+            transaction.mkdir(mode=0o700)
+            displaced = Path(temporary_root) / "displaced-verified-release"
+            parent_descriptor = os.open(
+                staging,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+            )
+            transaction_descriptor = os.open(
+                transaction,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+            )
+            expected_identity = VERIFIER._directory_ownership_identity(
+                os.fstat(transaction_descriptor)
+            )
+            original_stat = os.stat
+            original_rename = os.rename
+            swapped = False
+
+            def swap_after_root_binding_check(path, *arguments, **keywords):
+                nonlocal swapped
+                metadata = original_stat(path, *arguments, **keywords)
+                if (
+                    not swapped
+                    and path == VERIFIER.VERIFIED_RELEASE_BASENAME
+                    and keywords.get("dir_fd") == parent_descriptor
+                ):
+                    original_rename(transaction, displaced)
+                    transaction.mkdir(mode=0o700)
+                    swapped = True
+                return metadata
+
+            try:
+                with (
+                    mock.patch.object(
+                        VERIFIER.os,
+                        "stat",
+                        side_effect=swap_after_root_binding_check,
+                    ),
+                    mock.patch.object(
+                        VERIFIER.os,
+                        "unlink",
+                        side_effect=AssertionError(
+                            "residue audit must not unlink any pathname"
+                        ),
+                    ),
+                    mock.patch.object(
+                        VERIFIER.os,
+                        "rmdir",
+                        side_effect=AssertionError(
+                            "residue audit must not remove any directory"
+                        ),
+                    ),
+                    mock.patch.object(
+                        VERIFIER.os,
+                        "rename",
+                        side_effect=AssertionError(
+                            "residue audit must not rename any pathname"
+                        ),
+                    ),
+                    mock.patch.object(
+                        VERIFIER,
+                        "_rename_noreplace_at",
+                        side_effect=AssertionError(
+                            "residue audit must not invoke renameat2"
+                        ),
+                    ),
+                ):
+                    VERIFIER._safe_preserve_tree(
+                        parent_descriptor,
+                        VERIFIER.VERIFIED_RELEASE_BASENAME,
+                        transaction_descriptor,
+                        expected_identity,
+                    )
+            finally:
+                os.close(transaction_descriptor)
+                os.close(parent_descriptor)
+
+            self.assertTrue(swapped)
+            self.assertTrue(transaction.is_dir())
+            self.assertEqual(list(transaction.iterdir()), [])
+            self.assertTrue(displaced.is_dir())
+            self.assertEqual(list(displaced.iterdir()), [])
+
+    def test_residue_audit_never_unlinks_internal_file_replacement_after_check(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-server-artifact-test-"
+        ) as temporary_root:
+            staging = Path(temporary_root) / "staging"
+            staging.mkdir(mode=0o700)
+            transaction = staging / VERIFIER.VERIFIED_RELEASE_BASENAME
+            transaction.mkdir(mode=0o700)
+            transaction_file = transaction / "payload.txt"
+            transaction_bytes = b"transaction-owned\n"
+            replacement_bytes = b"external replacement\n"
+            transaction_file.write_bytes(transaction_bytes)
+            displaced_file = Path(temporary_root) / "displaced-payload.txt"
+            parent_descriptor = os.open(
+                staging,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+            )
+            transaction_descriptor = os.open(
+                transaction,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+            )
+            expected_identity = VERIFIER._directory_ownership_identity(
+                os.fstat(transaction_descriptor)
+            )
+            original_stat = os.stat
+            original_rename = os.rename
+            file_stat_calls = 0
+            swapped = False
+
+            def swap_after_file_binding_check(path, *arguments, **keywords):
+                nonlocal file_stat_calls, swapped
+                metadata = original_stat(path, *arguments, **keywords)
+                if (
+                    path == b"payload.txt"
+                    and keywords.get("dir_fd") == transaction_descriptor
+                ):
+                    file_stat_calls += 1
+                    if file_stat_calls == 2:
+                        original_rename(transaction_file, displaced_file)
+                        transaction_file.write_bytes(replacement_bytes)
+                        swapped = True
+                return metadata
+
+            try:
+                with (
+                    mock.patch.object(
+                        VERIFIER.os,
+                        "stat",
+                        side_effect=swap_after_file_binding_check,
+                    ),
+                    mock.patch.object(
+                        VERIFIER.os,
+                        "unlink",
+                        side_effect=AssertionError(
+                            "residue audit must not unlink any pathname"
+                        ),
+                    ),
+                    mock.patch.object(
+                        VERIFIER.os,
+                        "rmdir",
+                        side_effect=AssertionError(
+                            "residue audit must not remove any directory"
+                        ),
+                    ),
+                    mock.patch.object(
+                        VERIFIER.os,
+                        "rename",
+                        side_effect=AssertionError(
+                            "residue audit must not rename any pathname"
+                        ),
+                    ),
+                    mock.patch.object(
+                        VERIFIER,
+                        "_rename_noreplace_at",
+                        side_effect=AssertionError(
+                            "residue audit must not invoke renameat2"
+                        ),
+                    ),
+                ):
+                    VERIFIER._safe_preserve_tree(
+                        parent_descriptor,
+                        VERIFIER.VERIFIED_RELEASE_BASENAME,
+                        transaction_descriptor,
+                        expected_identity,
+                    )
+            finally:
+                os.close(transaction_descriptor)
+                os.close(parent_descriptor)
+
+            self.assertTrue(swapped)
+            self.assertEqual(transaction_file.read_bytes(), replacement_bytes)
+            self.assertEqual(displaced_file.read_bytes(), transaction_bytes)
 
     def test_signal_during_hash_is_not_reclassified(self):
         class SignalReadStream:
@@ -1001,7 +1321,7 @@ class ArtifactVerifierTests(unittest.TestCase):
                 ["artifact.zip"],
             )
 
-    def test_signal_during_extraction_cleans_candidate(self):
+    def test_signal_during_extraction_preserves_private_candidate(self):
         with tempfile.TemporaryDirectory(
             prefix="axial-muse-server-artifact-test-"
         ) as temporary_root:
@@ -1043,10 +1363,7 @@ class ArtifactVerifierTests(unittest.TestCase):
                 standard_error.getvalue(),
                 r"^\[SERVER_ARTIFACT_INTERRUPTED\] \(process/signal\) .+\n$",
             )
-            self.assertEqual(
-                sorted(path.name for path in fixture.root.iterdir()),
-                ["artifact.zip"],
-            )
+            self.assert_single_candidate_residue(fixture.root)
 
     def test_signal_after_success_write_observes_committed_result(self):
         class SignalAfterWrite(io.StringIO):

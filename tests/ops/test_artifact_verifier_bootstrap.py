@@ -8,6 +8,7 @@ import json
 import os
 import signal
 import stat
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -1164,6 +1165,115 @@ class ArtifactVerifierBootstrapTests(unittest.TestCase):
                     ).is_file()
                 )
 
+    def test_library_pending_sigint_after_durable_commit_returns_result(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-bootstrap-test-"
+        ) as temporary_root:
+            fixture = BootstrapFixture(temporary_root)
+            output = io.StringIO()
+            signal_state = {"commitCompleted": False}
+            original_commit = BOOTSTRAP._commit_marker
+            previous_handler = signal.signal(
+                signal.SIGINT,
+                signal.default_int_handler,
+            )
+            previous_mask = signal.pthread_sigmask(
+                signal.SIG_UNBLOCK,
+                (signal.SIGINT,),
+            )
+            sent = False
+
+            def commit_then_signal(transaction):
+                nonlocal sent
+                original_commit(transaction)
+                self.assertIn(
+                    signal.SIGINT,
+                    signal.pthread_sigmask(signal.SIG_BLOCK, ()),
+                )
+                os.kill(os.getpid(), signal.SIGINT)
+                self.assertIn(signal.SIGINT, signal.sigpending())
+                sent = True
+
+            try:
+                with mock.patch.object(
+                    BOOTSTRAP,
+                    "_commit_marker",
+                    side_effect=commit_then_signal,
+                ):
+                    result = fixture.run(
+                        _signal_state=signal_state,
+                        success_stream=output,
+                    )
+            finally:
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+                signal.signal(signal.SIGINT, previous_handler)
+
+            self.assertTrue(sent)
+            self.assertTrue(signal_state["commitCompleted"])
+            self.assertEqual(
+                result,
+                {
+                    "schemaVersion": BOOTSTRAP.RECEIPT_SCHEMA_VERSION,
+                    "status": "committed",
+                    "disposition": "installed",
+                    "transactionId": "b" * 32,
+                    "commitSha": COMMIT_SHA,
+                    "verifierSha256": sha256(VERIFIER_BYTES),
+                    "goldenSha256": sha256(GOLDEN_BYTES),
+                },
+            )
+            self.assertEqual(json.loads(output.getvalue()), result)
+            self.assertEqual(output.getvalue().count("\n"), 1)
+            self.assertTrue(
+                (
+                    fixture.formal
+                    / BOOTSTRAP.STATE_DIRECTORY
+                    / BOOTSTRAP.COMMITTED_BASENAME
+                ).is_file()
+            )
+
+    def test_library_real_sigint_before_commit_isolates(self):
+        with tempfile.TemporaryDirectory(
+            prefix="axial-muse-bootstrap-test-"
+        ) as temporary_root:
+            fixture = BootstrapFixture(temporary_root)
+            previous_handler = signal.signal(
+                signal.SIGINT,
+                signal.default_int_handler,
+            )
+            previous_mask = signal.pthread_sigmask(
+                signal.SIG_UNBLOCK,
+                (signal.SIGINT,),
+            )
+
+            def interrupt_self_test(_python, _path):
+                os.kill(os.getpid(), signal.SIGINT)
+                raise AssertionError("default SIGINT handler must interrupt")
+
+            try:
+                error = self.assert_error(
+                    "VERIFIER_BOOTSTRAP_INTERRUPTED",
+                    lambda: fixture.run(
+                        _self_test_runner=interrupt_self_test,
+                    ),
+                )
+            finally:
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+                signal.signal(signal.SIGINT, previous_handler)
+
+            self.assertEqual(error.source_path, "process/keyboard-interrupt")
+            self.assertFalse(fixture.formal.exists())
+            self.assertEqual(
+                len(
+                    [
+                        name
+                        for name in fixture.reserved_names()
+                        if name.startswith(BOOTSTRAP.ISOLATION_PREFIX)
+                    ]
+                ),
+                1,
+            )
+
     def test_post_activation_failure_stays_masked_through_isolation(self):
         with tempfile.TemporaryDirectory(
             prefix="axial-muse-bootstrap-test-"
@@ -1370,6 +1480,253 @@ class ArtifactVerifierBootstrapTests(unittest.TestCase):
                     )
                 finally:
                     signal.signal(signal_number, original_handler)
+
+    def test_main_restores_both_handlers_under_repeated_pending_signals(self):
+        arguments = [
+            "--source-root",
+            "/private/source",
+            "--expected-commit-sha",
+            COMMIT_SHA,
+            "--expected-verifier-sha256",
+            "1" * 64,
+            "--expected-golden-sha256",
+            "2" * 64,
+        ]
+        real_signal = signal.signal
+
+        for commit_completed, expected_exit_code in ((False, 1), (True, 0)):
+            with self.subTest(commit_completed=commit_completed):
+                baseline_handlers = {
+                    signal_number: signal.getsignal(signal_number)
+                    for signal_number in BOOTSTRAP.INTERRUPT_SIGNALS
+                }
+                baseline_mask = signal.pthread_sigmask(
+                    signal.SIG_UNBLOCK,
+                    BOOTSTRAP.INTERRUPT_SIGNALS,
+                )
+                delivered = []
+                injected = False
+                mask_during_restore = frozenset()
+                pending_during_restore = frozenset()
+                standard_output = io.StringIO()
+                standard_error = io.StringIO()
+
+                def restored_handler(signal_number, _frame):
+                    delivered.append(signal_number)
+                    raise KeyboardInterrupt()
+
+                for signal_number in BOOTSTRAP.INTERRUPT_SIGNALS:
+                    real_signal(signal_number, restored_handler)
+
+                def fake_bootstrap(**keywords):
+                    keywords["_signal_state"]["commitCompleted"] = (
+                        commit_completed
+                    )
+                    if not commit_completed:
+                        raise BOOTSTRAP.VerifierBootstrapError(
+                            "VERIFIER_BOOTSTRAP_INTERRUPTED",
+                            "process/signal",
+                        )
+
+                def inject_during_first_restore(signal_number, handler):
+                    nonlocal injected
+                    nonlocal mask_during_restore
+                    nonlocal pending_during_restore
+                    result = real_signal(signal_number, handler)
+                    if (
+                        not injected
+                        and signal_number == signal.SIGINT
+                        and handler is restored_handler
+                    ):
+                        injected = True
+                        delivery_mask = signal.pthread_sigmask(
+                            signal.SIG_BLOCK,
+                            BOOTSTRAP.INTERRUPT_SIGNALS,
+                        )
+                        try:
+                            for _index in range(3):
+                                os.kill(os.getpid(), signal.SIGINT)
+                                os.kill(os.getpid(), signal.SIGTERM)
+                            mask_during_restore = frozenset(
+                                signal.pthread_sigmask(signal.SIG_BLOCK, ())
+                            )
+                            pending_during_restore = frozenset(
+                                signal.sigpending()
+                            )
+                        finally:
+                            signal.pthread_sigmask(
+                                signal.SIG_SETMASK,
+                                delivery_mask,
+                            )
+                    return result
+
+                try:
+                    with (
+                        mock.patch.object(
+                            BOOTSTRAP,
+                            "bootstrap_artifact_verifier",
+                            side_effect=fake_bootstrap,
+                        ),
+                        mock.patch.object(
+                            BOOTSTRAP.signal,
+                            "signal",
+                            side_effect=inject_during_first_restore,
+                        ),
+                        contextlib.redirect_stdout(standard_output),
+                        contextlib.redirect_stderr(standard_error),
+                    ):
+                        exit_code = BOOTSTRAP.main(arguments)
+
+                    self.assertEqual(exit_code, expected_exit_code)
+                    self.assertEqual(standard_output.getvalue(), "")
+                    if commit_completed:
+                        self.assertEqual(standard_error.getvalue(), "")
+                    else:
+                        self.assertRegex(
+                            standard_error.getvalue(),
+                            r"^\[VERIFIER_BOOTSTRAP_INTERRUPTED\] "
+                            r"\(process/signal\) .+\n$",
+                        )
+                    self.assertTrue(injected)
+                    self.assertTrue(
+                        BOOTSTRAP.INTERRUPT_SIGNALS.issubset(
+                            mask_during_restore
+                        )
+                    )
+                    self.assertTrue(
+                        BOOTSTRAP.INTERRUPT_SIGNALS.issubset(
+                            pending_during_restore
+                        )
+                    )
+                    self.assertEqual(delivered, [])
+                    self.assertFalse(
+                        BOOTSTRAP.INTERRUPT_SIGNALS.intersection(
+                            signal.sigpending()
+                        )
+                    )
+                    self.assertEqual(
+                        signal.pthread_sigmask(signal.SIG_BLOCK, ()),
+                        baseline_mask.difference(
+                            BOOTSTRAP.INTERRUPT_SIGNALS
+                        ),
+                    )
+                    for signal_number in BOOTSTRAP.INTERRUPT_SIGNALS:
+                        self.assertIs(
+                            signal.getsignal(signal_number),
+                            restored_handler,
+                        )
+                finally:
+                    signal.pthread_sigmask(
+                        signal.SIG_BLOCK,
+                        BOOTSTRAP.INTERRUPT_SIGNALS,
+                    )
+                    for signal_number, handler in baseline_handlers.items():
+                        real_signal(signal_number, handler)
+                    for signal_number in sorted(
+                        BOOTSTRAP.INTERRUPT_SIGNALS.intersection(
+                            signal.sigpending()
+                        )
+                    ):
+                        signal.sigwait((signal_number,))
+                    signal.pthread_sigmask(
+                        signal.SIG_SETMASK,
+                        baseline_mask,
+                    )
+
+    def test_cli_default_handlers_survive_dual_pending_restore_window(self):
+        for commit_completed, expected_exit_code in ((False, 1), (True, 0)):
+            with self.subTest(commit_completed=commit_completed):
+                child_code = f"""
+import importlib.util
+import os
+import signal
+
+spec = importlib.util.spec_from_file_location(
+    "axial_muse_bootstrap_signal_child",
+    {str(BOOTSTRAP_PATH)!r},
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+real_signal = signal.signal
+injected = False
+initial_mask = signal.pthread_sigmask(signal.SIG_BLOCK, ())
+if signal.getsignal(signal.SIGINT) is not signal.default_int_handler:
+    raise SystemExit(92)
+if signal.getsignal(signal.SIGTERM) != signal.SIG_DFL:
+    raise SystemExit(92)
+
+def fake_bootstrap(**keywords):
+    keywords["_signal_state"]["commitCompleted"] = {commit_completed!r}
+    if not {commit_completed!r}:
+        raise module.VerifierBootstrapError(
+            "VERIFIER_BOOTSTRAP_INTERRUPTED",
+            "process/signal",
+        )
+
+def inject_during_first_restore(signal_number, handler):
+    global injected
+    result = real_signal(signal_number, handler)
+    if (
+        not injected
+        and signal_number == signal.SIGINT
+        and handler is signal.default_int_handler
+    ):
+        injected = True
+        previous_mask = signal.pthread_sigmask(
+            signal.SIG_BLOCK,
+            module.INTERRUPT_SIGNALS,
+        )
+        try:
+            for _index in range(3):
+                os.kill(os.getpid(), signal.SIGINT)
+                os.kill(os.getpid(), signal.SIGTERM)
+            if not module.INTERRUPT_SIGNALS.issubset(signal.sigpending()):
+                raise RuntimeError("controlled signals were not pending")
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+    return result
+
+module.bootstrap_artifact_verifier = fake_bootstrap
+module.signal.signal = inject_during_first_restore
+exit_code = module.main([
+    "--source-root",
+    "/private/source",
+    "--expected-commit-sha",
+    {COMMIT_SHA!r},
+    "--expected-verifier-sha256",
+    {"1" * 64!r},
+    "--expected-golden-sha256",
+    {"2" * 64!r},
+])
+if not injected:
+    raise SystemExit(90)
+if module.INTERRUPT_SIGNALS.intersection(signal.sigpending()):
+    raise SystemExit(91)
+if signal.pthread_sigmask(signal.SIG_BLOCK, ()) != initial_mask:
+    raise SystemExit(93)
+if signal.getsignal(signal.SIGINT) is not signal.default_int_handler:
+    raise SystemExit(94)
+if signal.getsignal(signal.SIGTERM) != signal.SIG_DFL:
+    raise SystemExit(94)
+raise SystemExit(exit_code)
+"""
+                completed = subprocess.run(
+                    ["/usr/bin/python3", "-I", "-B", "-c", child_code],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                self.assertEqual(completed.returncode, expected_exit_code)
+                self.assertEqual(completed.stdout, "")
+                if commit_completed:
+                    self.assertEqual(completed.stderr, "")
+                else:
+                    self.assertRegex(
+                        completed.stderr,
+                        r"^\[VERIFIER_BOOTSTRAP_INTERRUPTED\] "
+                        r"\(process/signal\) .+\n$",
+                    )
 
     def test_default_self_test_runner_classifies_keyboard_interrupt(self):
         with mock.patch.object(

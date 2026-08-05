@@ -2111,6 +2111,11 @@ def _bootstrap_artifact_verifier_impl(
                         disposition=disposition,
                     )
                 except (VerifierBootstrapError, KeyboardInterrupt) as caught:
+                    if signal_state["commitCompleted"]:
+                        return _result_for(
+                            transaction.receipt,
+                            disposition,
+                        )
                     error = (
                         caught
                         if isinstance(caught, VerifierBootstrapError)
@@ -2231,8 +2236,40 @@ def _install_signal_handlers():
 
 
 def _restore_signal_handlers(previous):
-    for signal_number, handler in previous.items():
-        signal.signal(signal_number, handler)
+    previous_mask = signal.pthread_sigmask(
+        signal.SIG_BLOCK,
+        INTERRUPT_SIGNALS,
+    )
+    restoration_error = None
+    try:
+        for signal_number, handler in previous.items():
+            try:
+                signal.signal(signal_number, handler)
+            except BaseException as cause:
+                if restoration_error is None:
+                    restoration_error = cause
+
+        drainable_signals = INTERRUPT_SIGNALS.difference(previous_mask)
+        while True:
+            pending_signals = drainable_signals.intersection(
+                signal.sigpending()
+            )
+            if not pending_signals:
+                break
+            try:
+                signal.sigwait((min(pending_signals),))
+            except BaseException as cause:
+                if restoration_error is None:
+                    restoration_error = cause
+                break
+    finally:
+        try:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        except BaseException as cause:
+            if restoration_error is None:
+                restoration_error = cause
+    if restoration_error is not None:
+        raise restoration_error
 
 
 def main(arguments=None):
@@ -2280,7 +2317,7 @@ def main(arguments=None):
         if previous_handlers:
             try:
                 _restore_signal_handlers(previous_handlers)
-            except Exception:
+            except BaseException:
                 pass
 
 

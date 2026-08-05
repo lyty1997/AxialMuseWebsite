@@ -70,6 +70,12 @@ EXPECTED_COMPONENT_FILES = (
     (GOLDEN_BASENAME, "0644"),
     (VERIFIER_BASENAME, "0755"),
 )
+BASE_NAMESPACE_MEMBERS = tuple(
+    sorted((INSTALL_DIRECTORY, STATE_DIRECTORY))
+)
+UPGRADE_NAMESPACE_MEMBERS = tuple(
+    sorted((*BASE_NAMESPACE_MEMBERS, UPGRADE_ROOT_BASENAME))
+)
 
 ERROR_MESSAGES = {
     "VERIFIER_UPGRADE_RUNTIME": "verifier upgrader 运行时不符合固定 Ubuntu Python 基线。",
@@ -784,6 +790,24 @@ def _event_binding(event):
     )
 
 
+def _assert_namespace_members(
+    namespace_descriptor,
+    *,
+    upgrade_root_present,
+):
+    try:
+        members = tuple(sorted(os.listdir(namespace_descriptor)))
+    except OSError as cause:
+        _fail("VERIFIER_UPGRADE_STATE", "state/namespace", cause)
+    expected_members = (
+        UPGRADE_NAMESPACE_MEMBERS
+        if upgrade_root_present
+        else BASE_NAMESPACE_MEMBERS
+    )
+    if members != expected_members:
+        _fail("VERIFIER_UPGRADE_STATE", "state/namespace")
+
+
 def _assert_live_lifecycle_binding(
     tree,
     namespace_descriptor,
@@ -793,6 +817,7 @@ def _assert_live_lifecycle_binding(
     formal_spec=None,
     formal_identity=None,
     genesis_receipt_bytes=None,
+    event_chain_bound=True,
 ):
     fresh_namespace_descriptor = None
     fresh_upgrade_root_descriptor = None
@@ -853,6 +878,16 @@ def _assert_live_lifecycle_binding(
                 os.fstat(namespace_descriptor)
             ):
                 _fail("VERIFIER_UPGRADE_STATE", "state/namespace")
+            for descriptor in (
+                namespace_descriptor,
+                fresh_namespace_descriptor,
+            ):
+                _assert_namespace_members(
+                    descriptor,
+                    upgrade_root_present=(
+                        upgrade_root_descriptor is not None
+                    ),
+                )
             if genesis_receipt_bytes is not None:
                 fresh_genesis_bytes, _receipt, _spec = _load_genesis(
                     fresh_tree,
@@ -887,38 +922,53 @@ def _assert_live_lifecycle_binding(
                     os.fstat(fresh_upgrade_root_descriptor)
                 ) != _identity(os.fstat(upgrade_root_descriptor)):
                     _fail("VERIFIER_UPGRADE_STATE", "state/upgrades")
-                expected_names = tuple(
-                    binding.name for binding in event_bindings
-                )
-                if (
-                    tuple(sorted(os.listdir(fresh_upgrade_root_descriptor)))
-                    != expected_names
-                ):
-                    _fail("VERIFIER_UPGRADE_STATE", "state/upgrades")
-                for binding in event_bindings:
-                    fresh_event = _open_event(
-                        fresh_upgrade_root_descriptor,
-                        binding.name,
-                        fresh_tree,
+                if event_chain_bound:
+                    expected_names = tuple(
+                        binding.name for binding in event_bindings
                     )
-                    try:
-                        if (
-                            _identity(os.fstat(fresh_event.descriptor))
-                            != binding.directory_identity
-                            or fresh_event.receipt_sha256
-                            != binding.receipt_sha256
-                            or fresh_event.marker != binding.marker
-                            or fresh_event.slot.directory_identity
-                            != binding.slot_directory_identity
-                        ):
-                            _fail(
-                                "VERIFIER_UPGRADE_STATE",
-                                "state/event-binding",
-                            )
-                    finally:
-                        fresh_event.close()
-        BOOTSTRAP._reverify_system_tree(tree)
-        BOOTSTRAP._reverify_lock(tree, lock_descriptor)
+                    if (
+                        tuple(
+                            sorted(os.listdir(fresh_upgrade_root_descriptor))
+                        )
+                        != expected_names
+                    ):
+                        _fail("VERIFIER_UPGRADE_STATE", "state/upgrades")
+                    for binding in event_bindings:
+                        fresh_event = _open_event(
+                            fresh_upgrade_root_descriptor,
+                            binding.name,
+                            fresh_tree,
+                        )
+                        try:
+                            if (
+                                _identity(os.fstat(fresh_event.descriptor))
+                                != binding.directory_identity
+                                or fresh_event.receipt_sha256
+                                != binding.receipt_sha256
+                                or fresh_event.marker != binding.marker
+                                or fresh_event.slot.directory_identity
+                                != binding.slot_directory_identity
+                            ):
+                                _fail(
+                                    "VERIFIER_UPGRADE_STATE",
+                                    "state/event-binding",
+                                )
+                        finally:
+                            fresh_event.close()
+                elif event_bindings:
+                    _fail("VERIFIER_UPGRADE_STATE", "state/upgrades")
+            BOOTSTRAP._reverify_system_tree(tree)
+            BOOTSTRAP._reverify_lock(tree, lock_descriptor)
+            for descriptor in (
+                namespace_descriptor,
+                fresh_namespace_descriptor,
+            ):
+                _assert_namespace_members(
+                    descriptor,
+                    upgrade_root_present=(
+                        upgrade_root_descriptor is not None
+                    ),
+                )
     finally:
         if fresh_lock_descriptor is not None:
             try:
@@ -946,6 +996,7 @@ def _reverify_lifecycle(
     formal_spec=None,
     formal_identity=None,
     genesis_receipt_bytes=None,
+    event_chain_bound=True,
 ):
     for _sample in range(2):
         _assert_live_lifecycle_binding(
@@ -957,7 +1008,27 @@ def _reverify_lifecycle(
             formal_spec,
             formal_identity,
             genesis_receipt_bytes,
+            event_chain_bound,
         )
+
+
+def _validate_self_test_result(value, code, source_path):
+    if (
+        not isinstance(value, dict)
+        or set(value)
+        != {"schemaVersion", "vectorCount", "wireMagic"}
+        or value["schemaVersion"] != SELF_TEST_SCHEMA_VERSION
+        or value["wireMagic"] != FILE_TREE_WIRE_MAGIC
+        or not isinstance(value["vectorCount"], int)
+        or isinstance(value["vectorCount"], bool)
+        or value["vectorCount"] <= 0
+    ):
+        _fail(code, source_path)
+    return {
+        "schemaVersion": SELF_TEST_SCHEMA_VERSION,
+        "wireMagic": FILE_TREE_WIRE_MAGIC,
+        "vectorCount": value["vectorCount"],
+    }
 
 
 def _run_self_test(runner, system_python, component):
@@ -973,13 +1044,21 @@ def _run_self_test(runner, system_python, component):
         _fail("VERIFIER_UPGRADE_INTERRUPTED", "process/keyboard-interrupt", cause)
     except BaseException as cause:
         _fail("VERIFIER_UPGRADE_SELF_TEST", "self-test/process", cause)
-    if value != {
-        "schemaVersion": SELF_TEST_SCHEMA_VERSION,
-        "wireMagic": FILE_TREE_WIRE_MAGIC,
-        "vectorCount": 6,
-    }:
-        _fail("VERIFIER_UPGRADE_SELF_TEST", "self-test/result")
-    return value
+    return _validate_self_test_result(
+        value,
+        "VERIFIER_UPGRADE_SELF_TEST",
+        "self-test/result",
+    )
+
+
+def _assert_self_test_matches_receipt(actual, expected):
+    expected = _validate_self_test_result(
+        expected,
+        "VERIFIER_UPGRADE_RECEIPT",
+        "event/receipt",
+    )
+    if actual != expected:
+        _fail("VERIFIER_UPGRADE_SELF_TEST", "self-test/receipt")
 
 
 def _load_genesis(tree, namespace_descriptor, lock_descriptor):
@@ -1391,14 +1470,13 @@ def _parse_receipt(raw_bytes):
                 "upgraderSha256",
             )
         )
-        or value["selfTestResult"]
-        != {
-            "schemaVersion": SELF_TEST_SCHEMA_VERSION,
-            "vectorCount": 6,
-            "wireMagic": FILE_TREE_WIRE_MAGIC,
-        }
     ):
         _fail("VERIFIER_UPGRADE_RECEIPT", "event/receipt")
+    value["selfTestResult"] = _validate_self_test_result(
+        value["selfTestResult"],
+        "VERIFIER_UPGRADE_RECEIPT",
+        "event/receipt",
+    )
     _validate_component_spec(value["from"], "event/from")
     _validate_component_spec(value["to"], "event/to")
     identities = value["identities"]
@@ -1592,6 +1670,7 @@ def _load_event_chain(
     component_head = genesis_sha256
     active_spec = genesis_spec
     active_identity = genesis_identity
+    active_self_test_result = None
     try:
         for index, name in enumerate(names, start=1):
             event = _open_event(upgrade_root_descriptor, name, tree)
@@ -1621,6 +1700,7 @@ def _load_event_chain(
                 component_head = event.receipt_sha256
                 active_spec = receipt["to"]
                 active_identity = receipt["identities"]["toComponent"]
+                active_self_test_result = receipt["selfTestResult"]
             bindings.append(_event_binding(event))
             if index != len(names):
                 event.close()
@@ -1632,6 +1712,7 @@ def _load_event_chain(
             component_head,
             active_spec,
             active_identity,
+            active_self_test_result,
         )
     except BaseException:
         for event in reversed(events):
@@ -2006,8 +2087,10 @@ def _emit_json_line(stream, value):
 
 
 def _finish_committed(event, signal_state, success_stream, disposition):
-    signal_state["commitCompleted"] = True
     result = _result(event.receipt, event.receipt_sha256, disposition)
+    signal_state.update(
+        {"commitResult": result, "commitCompleted": True}
+    )
     if success_stream is not None:
         try:
             _emit_json_line(success_stream, result)
@@ -2119,10 +2202,14 @@ def _activate_event(
                 "current/component",
                 allow_directory_metadata_change=True,
             )
-            _run_self_test(
+            formal_self_test_result = _run_self_test(
                 self_test_runner,
                 system_python,
                 event.slot,
+            )
+            _assert_self_test_matches_receipt(
+                formal_self_test_result,
+                event.receipt["selfTestResult"],
             )
             _reverify_component_handle(
                 event.slot,
@@ -2225,7 +2312,7 @@ def _activate_event(
             raise caught
 
 
-def upgrade_artifact_verifier(
+def _upgrade_artifact_verifier_impl(
     *,
     source_root,
     expected_current_receipt_sha256,
@@ -2290,10 +2377,17 @@ def upgrade_artifact_verifier(
             event_bindings = ()
             current_component = None
             try:
+                upgrade_root_descriptor = _open_upgrade_root(
+                    tree,
+                    namespace_descriptor,
+                    create=False,
+                )
                 _reverify_lifecycle(
                     tree,
                     namespace_descriptor,
                     lock_descriptor,
+                    upgrade_root_descriptor,
+                    event_chain_bound=False,
                 )
                 (
                     genesis_bytes,
@@ -2305,11 +2399,6 @@ def upgrade_artifact_verifier(
                     lock_descriptor,
                 )
                 genesis_sha256 = hashlib.sha256(genesis_bytes).hexdigest()
-                upgrade_root_descriptor = _open_upgrade_root(
-                    tree,
-                    namespace_descriptor,
-                    create=False,
-                )
                 if upgrade_root_descriptor is None:
                     genesis_spec = _complete_genesis_spec(
                         provisional_genesis_spec,
@@ -2328,6 +2417,7 @@ def upgrade_artifact_verifier(
                     component_head = genesis_sha256
                     active_spec = genesis_spec
                     active_identity = genesis_identity
+                    active_self_test_result = None
                 else:
                     event_names = tuple(
                         sorted(os.listdir(upgrade_root_descriptor))
@@ -2377,6 +2467,7 @@ def upgrade_artifact_verifier(
                         component_head,
                         active_spec,
                         active_identity,
+                        active_self_test_result,
                     ) = _load_event_chain(
                         upgrade_root_descriptor,
                         namespace_descriptor,
@@ -2444,10 +2535,19 @@ def upgrade_artifact_verifier(
                         active_identity,
                         genesis_bytes,
                     )
-                    _run_self_test(
+                    current_self_test_result = _run_self_test(
                         _self_test_runner,
                         _system_python,
                         current_component,
+                    )
+                    if active_self_test_result is None:
+                        _fail(
+                            "VERIFIER_UPGRADE_RECEIPT",
+                            "event/receipt",
+                        )
+                    _assert_self_test_matches_receipt(
+                        current_self_test_result,
+                        active_self_test_result,
                     )
                     _reverify_component_handle(
                         current_component,
@@ -2479,7 +2579,10 @@ def upgrade_artifact_verifier(
                         "commitSha": active_spec["commitSha"],
                         "manifestSha256": active_spec["manifestSha256"],
                     }
-                    signal_state["commitCompleted"] = True
+                    signal_state["commitResult"] = result
+                    signal_state.update(
+                        {"commitResult": result, "commitCompleted": True}
+                    )
                     if success_stream is not None:
                         try:
                             _emit_json_line(success_stream, result)
@@ -2545,6 +2648,64 @@ def upgrade_artifact_verifier(
                     pass
 
 
+def upgrade_artifact_verifier(
+    *,
+    source_root,
+    expected_current_receipt_sha256,
+    expected_target_commit_sha,
+    expected_target_manifest_sha256,
+    success_stream=None,
+    _root_path="/",
+    _expected_uid=0,
+    _expected_gid=0,
+    _system_python="/usr/bin/python3",
+    _self_test_runner=BOOTSTRAP._default_self_test_runner,
+    _transaction_id_factory=lambda: secrets.token_hex(16),
+    _enforce_runtime=True,
+    _signal_state=None,
+):
+    signal_state = (
+        {"commitCompleted": False}
+        if _signal_state is None
+        else _signal_state
+    )
+    try:
+        return _upgrade_artifact_verifier_impl(
+            source_root=source_root,
+            expected_current_receipt_sha256=(
+                expected_current_receipt_sha256
+            ),
+            expected_target_commit_sha=expected_target_commit_sha,
+            expected_target_manifest_sha256=(
+                expected_target_manifest_sha256
+            ),
+            success_stream=success_stream,
+            _root_path=_root_path,
+            _expected_uid=_expected_uid,
+            _expected_gid=_expected_gid,
+            _system_python=_system_python,
+            _self_test_runner=_self_test_runner,
+            _transaction_id_factory=_transaction_id_factory,
+            _enforce_runtime=_enforce_runtime,
+            _signal_state=signal_state,
+        )
+    except KeyboardInterrupt as cause:
+        if signal_state["commitCompleted"]:
+            committed_result = signal_state.get("commitResult")
+            if isinstance(committed_result, dict):
+                return committed_result
+            _fail(
+                "VERIFIER_UPGRADE_OUTCOME_UNKNOWN",
+                "recovery/committed-result",
+                cause,
+            )
+        _fail(
+            "VERIFIER_UPGRADE_INTERRUPTED",
+            "process/keyboard-interrupt",
+            cause,
+        )
+
+
 def _parse_cli_arguments(arguments):
     expected_flags = (
         "--source-root",
@@ -2590,8 +2751,40 @@ def _install_signal_handlers():
 
 
 def _restore_signal_handlers(previous):
-    for signal_number, handler in previous.items():
-        signal.signal(signal_number, handler)
+    previous_mask = signal.pthread_sigmask(
+        signal.SIG_BLOCK,
+        INTERRUPT_SIGNALS,
+    )
+    restoration_error = None
+    try:
+        for signal_number, handler in previous.items():
+            try:
+                signal.signal(signal_number, handler)
+            except BaseException as cause:
+                if restoration_error is None:
+                    restoration_error = cause
+
+        drainable_signals = INTERRUPT_SIGNALS.difference(previous_mask)
+        while True:
+            pending_signals = drainable_signals.intersection(
+                signal.sigpending()
+            )
+            if not pending_signals:
+                break
+            try:
+                signal.sigwait((min(pending_signals),))
+            except BaseException as cause:
+                if restoration_error is None:
+                    restoration_error = cause
+                break
+    finally:
+        try:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        except BaseException as cause:
+            if restoration_error is None:
+                restoration_error = cause
+    if restoration_error is not None:
+        raise restoration_error
 
 
 def main(arguments=None):
@@ -2641,7 +2834,7 @@ def main(arguments=None):
         if previous_handlers:
             try:
                 _restore_signal_handlers(previous_handlers)
-            except Exception:
+            except BaseException:
                 pass
 
 

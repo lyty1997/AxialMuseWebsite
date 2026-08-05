@@ -7,7 +7,6 @@ import json
 import os
 import re
 import secrets
-import shutil
 import signal
 import stat
 import struct
@@ -1811,7 +1810,81 @@ def _candidate_identity(
         _fail("SERVER_ARTIFACT_EXTRACT", "verified-candidate", cause)
 
 
-def _safe_remove_tree(
+def _audit_held_residue_directory(directory_descriptor):
+    directory_metadata = os.fstat(directory_descriptor)
+    if (
+        not stat.S_ISDIR(directory_metadata.st_mode)
+        or directory_metadata.st_uid != os.geteuid()
+    ):
+        raise ValueError("cleanup directory identity is invalid")
+
+    basenames = _list_directory_bytes(directory_descriptor)
+    for basename in basenames:
+        entry_descriptor = None
+        try:
+            path_metadata = os.stat(
+                basename,
+                dir_fd=directory_descriptor,
+                follow_symlinks=False,
+            )
+            if stat.S_ISDIR(path_metadata.st_mode):
+                entry_descriptor = os.open(
+                    basename,
+                    os.O_RDONLY
+                    | os.O_DIRECTORY
+                    | os.O_NOFOLLOW
+                    | os.O_CLOEXEC,
+                    dir_fd=directory_descriptor,
+                )
+                held_metadata = os.fstat(entry_descriptor)
+                if (
+                    held_metadata.st_uid != os.geteuid()
+                    or _directory_ownership_identity(path_metadata)
+                    != _directory_ownership_identity(held_metadata)
+                ):
+                    raise ValueError("cleanup directory changed before open")
+                _audit_held_residue_directory(entry_descriptor)
+                held_after = os.fstat(entry_descriptor)
+                rebound_metadata = os.stat(
+                    basename,
+                    dir_fd=directory_descriptor,
+                    follow_symlinks=False,
+                )
+                if (
+                    _directory_ownership_identity(rebound_metadata)
+                    != _directory_ownership_identity(held_after)
+                ):
+                    raise ValueError("cleanup directory binding changed")
+            elif stat.S_ISREG(path_metadata.st_mode):
+                entry_descriptor = os.open(
+                    basename,
+                    os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC,
+                    dir_fd=directory_descriptor,
+                )
+                held_metadata = os.fstat(entry_descriptor)
+                rebound_metadata = os.stat(
+                    basename,
+                    dir_fd=directory_descriptor,
+                    follow_symlinks=False,
+                )
+                if (
+                    held_metadata.st_uid != os.geteuid()
+                    or held_metadata.st_nlink != 1
+                    or not _same_file_identity(path_metadata, held_metadata)
+                    or not _same_file_identity(held_metadata, rebound_metadata)
+                ):
+                    raise ValueError("cleanup file binding changed")
+            else:
+                raise ValueError("cleanup entry is not an ordinary file or directory")
+        finally:
+            if entry_descriptor is not None:
+                os.close(entry_descriptor)
+
+    if _list_directory_bytes(directory_descriptor) != basenames:
+        raise ValueError("cleanup directory members changed")
+
+
+def _safe_preserve_tree(
     parent_descriptor,
     basename,
     held_descriptor,
@@ -1823,36 +1896,30 @@ def _safe_remove_tree(
             or basename.startswith(".verify-candidate-")
         ):
             raise ValueError("cleanup basename is outside transaction namespace")
-        try:
-            metadata = os.stat(
-                basename,
-                dir_fd=parent_descriptor,
-                follow_symlinks=False,
-            )
-        except FileNotFoundError:
-            return
         held_metadata = os.fstat(held_descriptor)
+        if (
+            not stat.S_ISDIR(held_metadata.st_mode)
+            or _directory_ownership_identity(held_metadata) != expected_identity
+        ):
+            raise ValueError("cleanup root identity is uncertain")
+        _audit_held_residue_directory(held_descriptor)
+
+        metadata = os.stat(
+            basename,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
         if (
             stat.S_ISLNK(metadata.st_mode)
             or not stat.S_ISDIR(metadata.st_mode)
             or _directory_ownership_identity(metadata) != expected_identity
-            or _directory_ownership_identity(held_metadata)
-            != expected_identity
-            or not shutil.rmtree.avoids_symlink_attacks
         ):
-            raise ValueError("cleanup root identity is uncertain")
-        shutil.rmtree(basename, dir_fd=parent_descriptor)
-        try:
-            os.stat(
-                basename,
-                dir_fd=parent_descriptor,
-                follow_symlinks=False,
-            )
-        except FileNotFoundError:
-            pass
-        else:
-            raise ValueError("cleanup target still exists")
-        os.fsync(parent_descriptor)
+            raise ValueError("cleanup basename no longer owns held root")
+        if (
+            _directory_ownership_identity(os.fstat(held_descriptor))
+            != expected_identity
+        ):
+            raise ValueError("cleanup held root changed during audit")
     except ServerArtifactError:
         raise
     except Exception as cause:
@@ -1862,11 +1929,14 @@ def _safe_remove_tree(
 def _create_candidate(staging_descriptor):
     candidate_name = None
     candidate_descriptor = None
+    candidate_identity = None
+    candidate_created = False
     try:
         for _attempt in range(128):
             candidate_name = f".verify-candidate-{secrets.token_hex(16)}"
             try:
                 os.mkdir(candidate_name, 0o700, dir_fd=staging_descriptor)
+                candidate_created = True
                 break
             except FileExistsError:
                 candidate_name = None
@@ -1878,38 +1948,29 @@ def _create_candidate(staging_descriptor):
             dir_fd=staging_descriptor,
         )
         os.fchmod(candidate_descriptor, 0o700)
-        identity = _candidate_identity(
+        candidate_identity = _candidate_identity(
             staging_descriptor,
             candidate_name,
             candidate_descriptor,
         )
         if _list_directory_bytes(candidate_descriptor):
             raise ValueError("new candidate is not empty")
-        result = (candidate_name, candidate_descriptor, identity)
+        result = (candidate_name, candidate_descriptor, candidate_identity)
         candidate_descriptor = None
         return result
     except Exception as cause:
-        if candidate_name is not None:
+        if candidate_created:
             try:
-                if candidate_descriptor is None:
-                    candidate_descriptor = os.open(
-                        candidate_name,
-                        os.O_RDONLY
-                        | os.O_DIRECTORY
-                        | os.O_NOFOLLOW
-                        | os.O_CLOEXEC,
-                        dir_fd=staging_descriptor,
+                if candidate_descriptor is None or candidate_identity is None:
+                    _fail(
+                        "SERVER_ARTIFACT_CLEANUP",
+                        "verified-candidate",
                     )
-                identity = _candidate_identity(
+                _safe_preserve_tree(
                     staging_descriptor,
                     candidate_name,
                     candidate_descriptor,
-                )
-                _safe_remove_tree(
-                    staging_descriptor,
-                    candidate_name,
-                    candidate_descriptor,
-                    identity,
+                    candidate_identity,
                 )
             except ServerArtifactError as cleanup_error:
                 raise cleanup_error from cause
@@ -2226,7 +2287,7 @@ def verify_artifact(
                             "SERVER_ARTIFACT_CLEANUP",
                             "verified-candidate",
                         )
-                    _safe_remove_tree(
+                    _safe_preserve_tree(
                         staging_descriptor,
                         candidate_name,
                         candidate_descriptor,

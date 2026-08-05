@@ -268,13 +268,17 @@
 
 - **D-143 / 2026-08-05**：#36 完整验收复现服务器 verifier 的 staging 父目录替换竞态，并确认 bootstrap 独立测试未覆盖真实 SIGINT/SIGTERM；用户随后授权仓库侧修复与已安装组件的升级设计。授权范围包括设计记录、`ops/deploy/` 实现、独立 Python fixture 和本地质量验证；不包含 commit、push、Issue/PR 写入、GitHub 配置、服务器/TAT、DNS、云资源或其他外部写操作。
 
-  verifier 从入口到成功输出或失败清理必须持续持有首次安全打开的 staging directory fd；`artifact.zip` 的 stat/open、候选创建与提取、整树捕获、metadata 读取、正式激活、父目录同步和身份绑定清理全部从该 fd 或其子 fd 派生，不再以重新解析的 staging 字符串路径决定受控对象。激活继续使用同一父 fd 上的 `renameat2(RENAME_NOREPLACE)`；同步后、成功输出前必须最后证明 live staging 路径仍绑定 held inode。父路径替换、held/live 身份漂移或同步失败都以既有稳定错误失败，清理只能作用于 held 父目录中的本事务 inode，不能触碰替换目录中的同名对象。
+  verifier 从入口到成功输出或失败处置必须持续持有首次安全打开的 staging directory fd；`artifact.zip` 的 stat/open、候选创建与提取、整树捕获、metadata 读取、正式激活、父目录同步和失败 residue 审计全部从该 fd 或其子 fd 派生，不再以重新解析的 staging 字符串路径决定受控对象。激活继续使用同一父 fd 上的 `renameat2(RENAME_NOREPLACE)`；同步后、成功输出前必须最后证明 live staging 路径仍绑定 held inode。父路径替换、held/live 身份漂移或同步失败都以既有稳定错误失败。Linux/POSIX 的 `unlinkat`/`rmdir` 只按父 fd 加 basename 解析对象，不提供把删除原子绑定到已持有 source inode 的条件；`renameat2` 也只能约束目标是否存在，故在不受信任的并发 writer 模型下，任何“最后检查 identity 后删除或改名”仍可误作用于 replacement。失败处置因此只能只读审计 held transaction tree：绑定稳定时保留私有 candidate 或已激活 `verified-release` residue 并继续报告原始业务错误，任何审计漂移报 `SERVER_ARTIFACT_CLEANUP`；不得对事务或 replacement 执行 pathname `unlink`、`rmdir` 或 `rename`。staging 的精确成员闭包会使下一次入口在任何 residue 存在时失败关闭；residue 只能在另行授权、隔离维护且证明没有并发 writer 的人工流程中处置。
 
   bootstrap 的首次安装 CLI、精确两 payload 和不覆盖语义保持不变。SIGINT/SIGTERM 的同一屏蔽区必须从正式 namespace 激活前连续覆盖到 committed marker 持久化或 prepared namespace 完成身份绑定隔离，不能在激活后失败与隔离之间恢复 mask；commit 前中断稳定报 `VERIFIER_BOOTSTRAP_INTERRUPTED`，commit point 后到达或待处理的中断保持成功。独立测试以真实信号覆盖 commit 前隔离、屏蔽区延迟、commit 后成功、handler 恢复和第二信号窗口；直接 `KeyboardInterrupt` 在库入口按同一提交边界分类，但不把不可捕获的进程崩溃伪装为可恢复中断。
 
   已安装 verifier 的字节变化不得复用首次 bootstrap，也不得加入 force/replace。仓库另设显式 component upgrader：调用方同时提供并独立认证当前 committed receipt 所绑定的 commit/verifier/golden 三项身份与下一版本三项身份；runner 复用 held `/usr/local/lib` fd、持久 lock、严格 source 捕获和候选自测，在 receipt 中持久绑定升级来源后才允许原子交换 `artifact-verifier` component directory，包含 `.bootstrap/` 的 `axialmuse` namespace 本身不交换。升级必须保持旧正式版本可恢复，有限的 prepared/exchanged/committed 状态均可由两端 receipt、inode 和 marker 唯一判定；任一 bootstrap candidate、isolation、未知保留名、来源漂移或状态歧义都停止人工处置。升级脚本、其依赖 runner、下一版 verifier/golden 必须来自同一已认证 canonical `main` 提交；本决定只批准仓库实现与本地 fixture，不授权在已安装主机上执行升级或清理旧副本。
 
 - **D-144 / 2026-08-05**：D-143 的仓库修复与本地验收闭合后，用户另行授权把本轮 #36 verifier、bootstrap、component upgrader、对应测试和契约文档形成一个本地提交。提交必须以精确 staged diff 排除工作区此前已有的 D-141/D-142、#37 账本、Git 工作流、预览、架构图和内容发布改动，沿用 D-137 已确认的 canonical GitHub noreply 身份，并由提交钩子复跑质量门禁。本授权不包含 push、PR、Issue、分支切换或合并，也不扩展到服务器/TAT、DNS、云资源、已安装组件升级、residue 清理或其他外部写操作。
+
+- **D-145 / 2026-08-05**：用户明确要求闭环 #36 并直接合并到 `main`。本次授权覆盖：把 D-143 复审修复形成独立提交；以当前稳定 `origin/main` 为精确基点，在隔离 worktree 中将仅含 #36 的专题提交直接 fast-forward 到本地 `main` 并普通推送 `origin/main`；观察该精确 `main` SHA 的远端 CI 至 `completed/success`；从同一 canonical `main` 提交独立认证 upgrader、bootstrap、component manifest、verifier 与 golden 五个 Git blob，在独立维护窗口以当前 committed receipt 摘要作 CAS head，前向升级服务器已安装 verifier，完成自测、owner/mode、lineage/receipt 和 live binding 复核；最后把脱敏闭环事实回填并关闭 Issue #36。该直接 `main` 路径是用户对本次 #36 的窄化紧急例外，不产生 force、rebase、历史改写或绕过失败门禁的权限。
+
+  任一 staged/commit 范围夹带 D-141/D-142、#37 或其他用户改动，远端 `main` 漂移，CI 失败、取消、跳过或未知，canonical blob 认证不一致，SSH/锁/namespace/receipt/CAS/source/自测/持久化或现场终态无法唯一证明时，均在对应写入前或失败关闭点停止，不把 #36 标为完成。现场不清理 bootstrap/upgrade receipt、旧 slot 或失败 residue，不执行 rollback、站点 artifact 发布、Nginx、DNS/TLS、TAT、腾讯云配置、第二次重启、UFW/SSH/软件变更，也不进入 #37；不新增第三方运行时服务或用户数据处理。
 
 ## 依 D-078 形成的 M0 工程决定
 
