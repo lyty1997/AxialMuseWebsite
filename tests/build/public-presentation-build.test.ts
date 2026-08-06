@@ -26,6 +26,7 @@ import test from "node:test";
 import {runThemeBrowserRegression} from "./browser-regression.js";
 
 const REAL_STATIC_VP8L_BASE64 = "UklGRmYAAABXRUJQVlA4TFkAAAAvP8b5AAdQkEIUpv8BAEX6/58i+p/63//+97///e9///vf//73v//973//+9///ve///3vf//73//+97///e9///vf//73v//973//+9///ve///3vf/+7BQA=";
+const REAL_STATIC_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 const PROJECT_EMPTY_STATE = "当前还没有完成公开审核的项目。项目资料通过事实、隐私和视觉证据检查后会在这里出现。";
 const WRITING_EMPTY_STATE = "技术分享正在从项目记录中整理。首批内容发布后会在这里提供可核验的原始资料与实现细节。";
 const ROOT_FILES = Object.freeze([
@@ -189,7 +190,10 @@ function materializePublicContentFixture(root: string): Uint8Array {
     status: "active",
     owner: "AxialMuseWebsite",
     roleValues: ["brand", "operational"],
-    assets: [],
+    assets: [{
+      sourcePath: "assets/brand/axial-muse-mark.png",
+      role: "brand",
+    }],
   });
   writeJson(root, "docs/contracts/redirects.json", {
     version: "0.1.0",
@@ -279,6 +283,14 @@ function materializePublicContentFixture(root: string): Uint8Array {
     root,
     "site-assets/projects/archived-project/overview.webp",
     previewBytes,
+  );
+  const logoBytes = Uint8Array.from(
+    Buffer.from(REAL_STATIC_PNG_BASE64, "base64"),
+  );
+  writeText(
+    root,
+    "static-public/assets/brand/axial-muse-mark.png",
+    logoBytes,
   );
   assert.deepEqual(
     readFileSync(resolve(root, "site-assets/projects/archived-project/overview.webp")),
@@ -598,6 +610,10 @@ test("I-14/I-15 真实 production build 与 Chromium 回归覆盖公开展示和
         resolve(buildRoot, "assets/projects/archived-project/overview.webp"),
       ),
       Buffer.from(previewBytes),
+    );
+    assert.deepEqual(
+      readFileSync(resolve(buildRoot, "assets/brand/axial-muse-mark.png")),
+      Buffer.from(REAL_STATIC_PNG_BASE64, "base64"),
     );
     const css = readCss(resolve(buildRoot, "assets"));
     assertContainsAll(css, [

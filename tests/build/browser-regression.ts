@@ -90,7 +90,7 @@ interface DetailSnapshot {
   readonly mobileTocVisible: boolean;
   readonly pageOverflows: boolean;
   readonly toggleVisible: boolean;
-  readonly visibleNavbarItems: number;
+  readonly visibleSectionTabs: number;
 }
 
 interface FixedViewportReceipt {
@@ -828,7 +828,7 @@ const DETAIL_SNAPSHOT_EXPRESSION = `(() => {
       > document.documentElement.clientWidth + 1
       || document.body.scrollWidth > document.body.clientWidth + 1,
     toggleVisible: isVisible(navbarToggle),
-    visibleNavbarItems: [...document.querySelectorAll(".navbar__item")]
+    visibleSectionTabs: [...document.querySelectorAll('[aria-label="内容导航"] a')]
       .filter(isVisible).length,
   };
 })()`;
@@ -889,6 +889,8 @@ function assertDetailSnapshot(snapshot: DetailSnapshot, width: number): void {
   );
   assert.equal(snapshot.leftDetailsClosed, true, "浏览本栏目必须默认收起");
   assert.equal(snapshot.leftDetailsAboveArticle, true, "浏览本栏目必须位于正文上方");
+  assert.equal(snapshot.toggleVisible, false, `${width}px 不应出现旧版汉堡导航`);
+  assert.equal(snapshot.visibleSectionTabs, 3, `${width}px 三个内容标签必须保持可见`);
   if (width >= 1280) {
     assert.equal(snapshot.desktopDirectoryVisible, true);
     assert.equal(snapshot.leftDetailsVisible, false);
@@ -899,15 +901,11 @@ function assertDetailSnapshot(snapshot: DetailSnapshot, width: number): void {
   if (width >= 996) {
     assert.equal(snapshot.desktopTocVisible, true);
     assert.equal(snapshot.mobileTocVisible, false);
-    assert.equal(snapshot.toggleVisible, false);
-    assert.ok(snapshot.visibleNavbarItems >= 5, `${width}px 桌面导航项缺失`);
   } else {
     assert.equal(snapshot.desktopTocVisible, false);
     assert.equal(snapshot.mobileTocVisible, true);
     assert.equal(snapshot.mobileTocClosed, true);
     assert.equal(snapshot.mobileTocAboveMarkdown, true);
-    assert.equal(snapshot.toggleVisible, true);
-    assert.equal(snapshot.visibleNavbarItems, 0);
   }
   if (snapshot.desktopTocVisible) {
     assert.ok(snapshot.desktopTocRect !== undefined);
@@ -1410,8 +1408,8 @@ export async function runThemeBrowserRegression({
       900,
     );
     assert.equal(
-      await evaluate(connection, "document.querySelector('main img')?.loading"),
-      "lazy",
+      await evaluate(connection, "document.querySelector('main img') === null"),
+      true,
     );
     assertObservationClean(observation);
 
@@ -1448,9 +1446,9 @@ export async function runThemeBrowserRegression({
         (entry) => Number.parseFloat(entry) === 0,
       );
       const elements = [
-        document.querySelector(".navbar-sidebar"),
-        document.querySelector(".navbar-sidebar__backdrop"),
-        document.querySelector(".navbar-sidebar__items"),
+        document.querySelector(".navbar"),
+        document.querySelector('[aria-label="内容导航"]'),
+        document.querySelector('[role="search"]'),
       ].filter(Boolean);
       const root = getComputedStyle(document.documentElement);
       return {
@@ -1477,28 +1475,6 @@ export async function runThemeBrowserRegression({
     assert.equal(reducedMotion.matches, true);
     assert.equal(reducedMotion.scrollBehavior, "auto");
     assert.match(reducedMotion.slow, /^0(?:\.0+)?(?:ms|s)$/u);
-    assert.equal(
-      await evaluate(connection, `new Promise((resolve) => {
-        document.querySelector(".navbar__toggle")?.click();
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          resolve(document.querySelector(".navbar-sidebar--show") !== null);
-        }));
-      })`),
-      true,
-    );
-    assert.equal(
-      await evaluate(connection, `(() => {
-        const elements = [
-          document.querySelector(".navbar-sidebar"),
-          document.querySelector(".navbar-sidebar__backdrop"),
-          document.querySelector(".navbar-sidebar__items"),
-        ].filter(Boolean);
-        return elements.every((element) => getComputedStyle(element)
-          .transitionDuration.split(",")
-          .every((entry) => Number.parseFloat(entry) === 0));
-      })()`),
-      true,
-    );
     assertObservationClean(observation);
 
     await navigate(
@@ -1508,51 +1484,81 @@ export async function runThemeBrowserRegression({
       360,
       800,
     );
-    const navbarToggleFocused = await evaluate<boolean>(connection, `(() => {
-      const toggle = document.querySelector(".navbar__toggle");
-      toggle?.focus();
-      return document.activeElement === toggle;
-    })()`);
-    assert.equal(navbarToggleFocused, true, "小屏导航按钮无法获得键盘焦点");
-    await dispatchEnter(connection);
-    const openedNavbar = await evaluate<Readonly<{
-      closeButtonVisible: boolean;
-      drawerOpen: boolean;
-      expanded: string;
+    const headerKeyboard = await evaluate<Readonly<{
+      searchFocused: boolean;
+      tabHrefs: readonly string[];
+      tabsFocusable: boolean;
+      tabsVisible: boolean;
     }>>(connection, `(() => {
-      const closeButton = document.querySelector(".navbar-sidebar__close");
-      const closeRect = closeButton?.getBoundingClientRect();
+      const tabs = [...document.querySelectorAll('[aria-label="内容导航"] a')];
+      const tabsFocusable = tabs.every((tab) => {
+        tab.focus();
+        return document.activeElement === tab;
+      });
+      const search = document.querySelector('input[aria-label="搜索公开项目和文章"]');
+      search?.focus();
       return {
-        closeButtonVisible: closeRect !== undefined
-          && closeRect.width > 0
-          && closeRect.height > 0,
-        drawerOpen: document.querySelector(".navbar-sidebar--show") !== null,
-        expanded: document.querySelector(".navbar__toggle")
-          ?.getAttribute("aria-expanded") ?? "",
+        searchFocused: document.activeElement === search,
+        tabHrefs: tabs.map((tab) => tab.getAttribute("href") ?? ""),
+        tabsFocusable,
+        tabsVisible: tabs.length === 3 && tabs.every((tab) => {
+          const rect = tab.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        }),
       };
     })()`);
-    assert.deepEqual(openedNavbar, {
-      closeButtonVisible: true,
-      drawerOpen: true,
-      expanded: "true",
+    assert.deepEqual(headerKeyboard, {
+      searchFocused: true,
+      tabHrefs: ["/", "/projects/", "/writing/"],
+      tabsFocusable: true,
+      tabsVisible: true,
     });
-    await dispatchEscape(connection);
-    const closedNavbar = await evaluate<Readonly<{
-      drawerOpen: boolean;
+    await evaluate(connection, `new Promise((resolve) => {
+      const input = document.querySelector('input[aria-label="搜索公开项目和文章"]');
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      setter?.call(input, "Fixture");
+      input?.dispatchEvent(new Event("input", {bubbles: true}));
+      input?.focus();
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    })`);
+    const openSearch = await evaluate<Readonly<{
       expanded: string;
-      focusReturned: boolean;
+      resultCount: number;
+      value: string;
     }>>(connection, `(() => {
-      const toggle = document.querySelector(".navbar__toggle");
+      const input = document.querySelector('input[aria-label="搜索公开项目和文章"]');
       return {
-        drawerOpen: document.querySelector(".navbar-sidebar--show") !== null,
-        expanded: toggle?.getAttribute("aria-expanded") ?? "",
-        focusReturned: document.activeElement === toggle,
+        expanded: input?.getAttribute("aria-expanded") ?? "",
+        resultCount: document.querySelectorAll('#site-search-results [role="option"]').length,
+        value: input?.value ?? "",
       };
     })()`);
-    assert.deepEqual(closedNavbar, {
-      drawerOpen: false,
+    assert.equal(openSearch.expanded, "true");
+    assert.ok(openSearch.resultCount > 0, "搜索输入未展示公开内容结果");
+    assert.equal(openSearch.value, "Fixture");
+    await dispatchEscape(connection);
+    const closedSearch = await evaluate<Readonly<{
+      expanded: string;
+      focusRetained: boolean;
+      resultsPresent: boolean;
+      value: string;
+    }>>(connection, `(() => {
+      const input = document.querySelector('input[aria-label="搜索公开项目和文章"]');
+      return {
+        expanded: input?.getAttribute("aria-expanded") ?? "",
+        focusRetained: document.activeElement === input,
+        resultsPresent: document.querySelector("#site-search-results") !== null,
+        value: input?.value ?? "",
+      };
+    })()`);
+    assert.deepEqual(closedSearch, {
       expanded: "false",
-      focusReturned: true,
+      focusRetained: true,
+      resultsPresent: false,
+      value: "",
     });
     for (const label of ["浏览本栏目", "本页目录"]) {
       const focused: boolean = await evaluate<boolean>(connection, `(() => {
@@ -1657,7 +1663,7 @@ export async function runThemeBrowserRegression({
         "h4-only-empty-toc",
         "hydration-ready",
         "keyboard-details",
-        "keyboard-navbar-escape",
+        "keyboard-header-search",
         "no-hydration-static-content",
         "priority-project-image",
         "prose-link-decoration",

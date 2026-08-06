@@ -181,7 +181,7 @@ a {
 
 @media (max-width: 620px) {
   #__docusaurus#__docusaurus {
-    --ifm-navbar-height: 7.5rem;
+    --ifm-navbar-height: 120px;
   }
 }
 
