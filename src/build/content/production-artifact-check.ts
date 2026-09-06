@@ -490,8 +490,15 @@ function assertApprovedSearchFormTag(tag: string, sourcePath: string): void {
 
 function assertApprovedSearchInputTag(tag: string, sourcePath: string): void {
   const attributes = htmlAttributes(tag, sourcePath);
+  const allowed = new Set([
+    "type", "value", "placeholder", "aria-label", "aria-autocomplete",
+    "aria-controls", "aria-expanded", "autocomplete", "spellcheck",
+  ]);
   if (
-    decodePageHtmlText(attributes.get("type") ?? "", sourcePath) !== "search"
+    [...attributes.keys()].some((name) => !allowed.has(name))
+    || !attributes.has("value")
+    || decodePageHtmlText(attributes.get("value") ?? "", sourcePath) !== ""
+    || decodePageHtmlText(attributes.get("type") ?? "", sourcePath) !== "search"
     || decodePageHtmlText(attributes.get("aria-label") ?? "", sourcePath)
       !== "搜索公开项目和文章"
     || decodePageHtmlText(attributes.get("autocomplete") ?? "", sourcePath) !== "off"
@@ -501,9 +508,8 @@ function assertApprovedSearchInputTag(tag: string, sourcePath: string): void {
       !== "site-search-results"
     || decodePageHtmlText(attributes.get("aria-expanded") ?? "", sourcePath)
       !== "false"
-    || attributes.has("name")
-    || attributes.has("form")
-    || attributes.has("formaction")
+    || (attributes.has("spellcheck")
+      && decodePageHtmlText(attributes.get("spellcheck") ?? "", sourcePath) !== "false")
   ) {
     failUnapprovedSearchSurface(sourcePath);
   }
@@ -511,14 +517,13 @@ function assertApprovedSearchInputTag(tag: string, sourcePath: string): void {
 
 function assertApprovedSearchButtonTag(tag: string, sourcePath: string): void {
   const attributes = htmlAttributes(tag, sourcePath);
+  const allowed = new Set(["type", "aria-label", "disabled"]);
   if (
-    decodePageHtmlText(attributes.get("type") ?? "", sourcePath) !== "submit"
+    [...attributes.keys()].some((name) => !allowed.has(name))
+    || decodePageHtmlText(attributes.get("type") ?? "", sourcePath) !== "submit"
     || decodePageHtmlText(attributes.get("aria-label") ?? "", sourcePath)
       !== "打开搜索结果"
     || !attributes.has("disabled")
-    || attributes.has("name")
-    || attributes.has("form")
-    || attributes.has("formaction")
   ) {
     failUnapprovedSearchSurface(sourcePath);
   }

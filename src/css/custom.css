@@ -80,7 +80,8 @@ a {
 }
 
 #__docusaurus#__docusaurus .navbar {
-  height: var(--ifm-navbar-height);
+  height: auto;
+  min-height: var(--ifm-navbar-height);
   padding: 0;
   border-bottom: 1px solid var(--am-line);
   backdrop-filter: blur(16px);
@@ -180,8 +181,9 @@ a {
 }
 
 @media (max-width: 620px) {
+  :root,
   #__docusaurus#__docusaurus {
-    --ifm-navbar-height: 120px;
+    --ifm-navbar-height: 7.5rem;
   }
 }
 

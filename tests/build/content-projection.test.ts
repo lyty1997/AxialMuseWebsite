@@ -426,6 +426,10 @@ test("E-009 preview 访问泄漏检查不把正文中的裸端口误判为配置
     "192.168.0.162:8088",
     "http://localhost:8088",
     "http://127.0.0.1:8088",
+    "https://localhost:8088",
+    "https://127.0.0.1:8088",
+    "//localhost:8088",
+    "//127.0.0.1:8088",
   ]) {
     assert.throws(
       () => assertPreviewAccessNotLeaked(
@@ -2869,6 +2873,45 @@ test("I-14 production artifact 精确闭合详情关联列表并省略空关系�
       ),
       {sealAssertions: 2, staticAssertions: 2, disposals: 1},
     );
+  });
+});
+
+test("D-152 production 搜索控件仅接受固定属性与空初始查询", async () => {
+  const mutations = [
+    (html: string) => html.replace("<input ", '<input oninput="window.__query=this.value" '),
+    (html: string) => html.replace("<input ", '<input onfocus="window.__focused=true" '),
+    (html: string) => html.replace("<input ", '<input name="query" '),
+    (html: string) => html.replace("<input ", '<input form="external-form" '),
+    (html: string) => html.replace("<input ", '<input data-query="persisted-query" '),
+    (html: string) => html.replace('value=""', 'value="persisted-query"'),
+    (html: string) => html.replace('value=""', 'value="&#32;"'),
+    (html: string) => html.replace(' value=""', ""),
+    (html: string) => html.replace('autocomplete="off"', 'autocomplete="on"'),
+    (html: string) => html.replace("<input ", '<input spellcheck="true" '),
+    (html: string) => html.replace("<button ", '<button onclick="window.__clicked=true" '),
+    (html: string) => html.replace("<button ", '<button formaction="/unexpected/" '),
+    (html: string) => html.replace("<button ", '<button formtarget="_blank" '),
+    (html: string) => html.replace("<form ", '<form onsubmit="window.__submitted=true" '),
+  ];
+  await withFixture(async (repositoryRoot) => {
+    const content = await loadFixtureContent({repositoryRoot, mode: "production"});
+    const fixture = createArtifactFixture(repositoryRoot, content);
+    const rootPath = resolve(fixture.buildDirectory, "index.html");
+    const input = readFileSync(rootPath, "utf8");
+    await assert.doesNotReject(() => invokeArtifactCheck(
+      content, fixture.buildDirectory, fixture.generatedFilesDirectory,
+    ));
+    for (const mutate of mutations) {
+      const output = mutate(input);
+      assert.notEqual(output, input);
+      writeFileSync(rootPath, output, {encoding: "utf8", mode: 0o600});
+      await assert.rejects(
+        () => invokeArtifactCheck(
+          content, fixture.buildDirectory, fixture.generatedFilesDirectory,
+        ),
+        assertBuildError("CONTENT_ARTIFACT_INTERACTIVE"),
+      );
+    }
   });
 });
 

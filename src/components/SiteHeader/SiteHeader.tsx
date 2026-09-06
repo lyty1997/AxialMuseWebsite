@@ -4,6 +4,7 @@ import NavbarLogo from "@theme/Navbar/Logo";
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type KeyboardEvent,
@@ -102,6 +103,7 @@ function SiteSearch() {
   const location = useLocation();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const searchEntries = useMemo<readonly SearchEntry[]>(() => {
     const projects = data.projectNavigation
       .filter((project) => (
@@ -143,6 +145,22 @@ function SiteSearch() {
     setQuery("");
     setActiveIndex(0);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const list = resultsRef.current;
+    const selected = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (list === null || selected === undefined || selected === null) return;
+    const viewport = list.getBoundingClientRect();
+    const item = selected.getBoundingClientRect();
+    const top = viewport.top + list.clientTop;
+    const bottom = top + list.clientHeight;
+    // 只滚动结果列表，避免 scrollIntoView 连带移动页面或页头。
+    if (item.top < top || item.height > list.clientHeight) {
+      list.scrollTop += item.top - top;
+    } else if (item.bottom > bottom) {
+      list.scrollTop += item.bottom - bottom;
+    }
+  }, [selectedIndex, normalizedQuery, results.length]);
 
   const openResult = (entry: SearchEntry | undefined): void => {
     if (entry === undefined) return;
@@ -211,6 +229,7 @@ function SiteSearch() {
         ? (
           <div
             id="site-search-results"
+            ref={resultsRef}
             className={styles.searchResults}
             role="listbox"
             aria-label="搜索结果"

@@ -225,12 +225,15 @@
   }
 
   .topRow {
-    height: 72px;
-    gap: 11px;
+    height: auto;
+    min-height: 4.5rem;
+    flex-wrap: wrap;
+    gap: 0.6875rem;
+    padding-block: 0.625rem;
   }
 
-  .topRow :global(.navbar__brand) {
-    gap: 7px;
+  :global(#__docusaurus#__docusaurus) .topRow :global(.navbar__brand) {
+    gap: 0.4375rem;
   }
 
   :global(#__docusaurus#__docusaurus) .topRow :global(.navbar__logo) {
@@ -239,15 +242,17 @@
   }
 
   .topRow :global(.navbar__title) {
-    font-size: 15px;
+    font-size: 0.9375rem;
   }
 
   .search {
-    width: min(100%, 240px);
+    width: auto;
+    min-width: 0;
+    flex: 1 1 8rem;
   }
 
   .searchField {
-    min-height: 39px;
+    min-height: 2.4375rem;
     grid-template-columns: 16px minmax(0, 1fr);
     gap: 7px;
     padding: 2px 11px;
@@ -264,7 +269,7 @@
   }
 
   .searchField input {
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 
   .searchField input::placeholder {
@@ -272,18 +277,23 @@
   }
 
   .tabs {
-    height: 48px;
+    height: auto;
+    min-height: 3rem;
     justify-content: space-between;
   }
 
   :global(#__docusaurus#__docusaurus) .tab,
   :global(#__docusaurus#__docusaurus) .tab:visited {
     flex: 1 1 0;
+    flex-wrap: wrap;
     justify-content: center;
     gap: 6px;
     padding-inline: 6px;
-    font-size: 13px;
-    white-space: nowrap;
+    padding-block: 0.4rem;
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .tab::after {

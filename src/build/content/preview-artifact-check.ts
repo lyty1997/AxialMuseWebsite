@@ -180,8 +180,8 @@ function forbiddenAccessValues(environment: NodeJS.ProcessEnv): readonly string[
     `${host}:${port}`,
     `http://${host}`,
     `https://${host}`,
-    `http://127.0.0.1:${port}`,
-    `http://localhost:${port}`,
+    `127.0.0.1:${port}`,
+    `localhost:${port}`,
   ]);
   return Object.freeze([...values]);
 }

@@ -1539,6 +1539,61 @@ export async function runThemeBrowserRegression({
     assert.equal(openSearch.expanded, "true");
     assert.ok(openSearch.resultCount > 0, "搜索输入未展示公开内容结果");
     assert.equal(openSearch.value, "Fixture");
+    // 强制产生结果列表溢出，验证键盘选择、环绕和正文滚动彼此独立。
+    const searchOverflow = await evaluate<Readonly<{
+      overflowing: boolean;
+      pageScroll: number;
+    }>>(connection, `(() => {
+      const list = document.querySelector("#site-search-results");
+      const options = [...list.querySelectorAll('[role="option"]')];
+      for (const option of options) option.style.minHeight = "120px";
+      const tallest = Math.max(...options.map((option) => option.getBoundingClientRect().height));
+      list.style.maxHeight = (tallest + 4) + "px";
+      return {overflowing: list.scrollHeight > list.clientHeight, pageScroll: window.scrollY};
+    })()`);
+    assert.ok(openSearch.resultCount >= 2, "键盘溢出 fixture 至少需要两个结果");
+    assert.equal(searchOverflow.overflowing, true, "搜索列表未实际产生溢出");
+    let expectedSearchIndex = 0;
+    for (const key of [
+      ...Array.from({length: openSearch.resultCount}, () => "ArrowDown"),
+      "ArrowUp",
+    ]) {
+      expectedSearchIndex = (expectedSearchIndex + (key === "ArrowDown" ? 1 : -1)
+        + openSearch.resultCount) % openSearch.resultCount;
+      await connection.send("Input.dispatchKeyEvent", {
+        code: key,
+        key,
+        type: "keyDown",
+        windowsVirtualKeyCode: key === "ArrowDown" ? 40 : 38,
+      });
+      await connection.send("Input.dispatchKeyEvent", {code: key, key, type: "keyUp"});
+      await evaluate(connection, `new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      })`);
+      const selection: Readonly<{
+        focusRetained: boolean;
+        pageScroll: number;
+        selectedVisible: boolean;
+        selectedId: string;
+      }> = await evaluate(connection, `(() => {
+        const input = document.querySelector('input[type="search"]');
+        const list = document.querySelector("#site-search-results");
+        const selected = document.getElementById(input.getAttribute("aria-activedescendant"));
+        const viewport = list.getBoundingClientRect();
+        const item = selected.getBoundingClientRect();
+        const top = viewport.top + list.clientTop;
+        return {
+          focusRetained: document.activeElement === input,
+          pageScroll: window.scrollY,
+          selectedId: selected.id,
+          selectedVisible: item.top >= top - 1 && item.bottom <= top + list.clientHeight + 1,
+        };
+      })()`);
+      assert.equal(selection.selectedVisible, true, `${key} 选中了不可见的搜索结果`);
+      assert.equal(selection.selectedId, `site-search-result-${expectedSearchIndex}`);
+      assert.equal(selection.focusRetained, true);
+      assert.equal(selection.pageScroll, searchOverflow.pageScroll, "搜索选择带动了正文滚动");
+    }
     await dispatchEscape(connection);
     const closedSearch = await evaluate<Readonly<{
       expanded: string;
@@ -1599,9 +1654,19 @@ export async function runThemeBrowserRegression({
       afterFontSize: number;
       baselineFontSize: number;
       criticalElementsFit: boolean;
+      headerFontsScale: boolean;
+      headerContentsFit: boolean;
       pageOverflows: boolean;
     }>>(connection, `new Promise((resolve) => {
       const baselineFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const headerText = [
+        document.querySelector(".navbar__title"),
+        document.querySelector('input[type="search"]'),
+        ...document.querySelectorAll('[aria-label="内容导航"] a'),
+      ];
+      const baselineHeaderFonts = headerText.map(
+        (element) => Number.parseFloat(getComputedStyle(element).fontSize),
+      );
       const style = document.createElement("style");
       style.textContent = "html { font-size: 200% !important; }";
       document.head.append(style);
@@ -1610,6 +1675,7 @@ export async function runThemeBrowserRegression({
           getComputedStyle(document.documentElement).fontSize,
         );
         const critical = [
+          ...headerText,
           document.querySelector("h1"),
           document.querySelector(".theme-doc-markdown"),
           ...document.querySelectorAll("summary"),
@@ -1618,6 +1684,15 @@ export async function runThemeBrowserRegression({
         resolve({
           afterFontSize,
           baselineFontSize,
+          headerFontsScale: headerText.every((element, index) => (
+            Number.parseFloat(getComputedStyle(element).fontSize) >= baselineHeaderFonts[index] * 1.9
+          )),
+          headerContentsFit: headerText.every((element) => {
+            const rect = element.getBoundingClientRect();
+            const navbar = document.querySelector(".navbar").getBoundingClientRect();
+            return rect.top >= navbar.top && rect.bottom <= navbar.bottom
+              && element.scrollWidth <= element.clientWidth + 1;
+          }),
           criticalElementsFit: critical.every((element) => {
             const rect = element.getBoundingClientRect();
             return rect.left >= -1 && rect.right <= document.documentElement.clientWidth + 1;
@@ -1633,6 +1708,8 @@ export async function runThemeBrowserRegression({
       "200% 根文本探针未实际放大字号",
     );
     assert.equal(textResize.criticalElementsFit, true, "200% 文本裁切关键内容");
+    assert.equal(textResize.headerFontsScale, true, "200% 文本未实际放大页头品牌、搜索与导航文字");
+    assert.equal(textResize.headerContentsFit, true, "200% 页头文字裁切或超出导航容器");
     assert.equal(textResize.pageOverflows, false, "200% 文本产生页面级横向溢出");
     assertObservationClean(observation);
 

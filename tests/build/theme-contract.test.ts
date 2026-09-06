@@ -235,6 +235,17 @@ test("D-141 页头搜索只匹配公开安全投影且不持久化查询", () =>
   );
 });
 
+test("D-152 手机页头保留相对字号和内容驱动的换行高度", () => {
+  const css = source("src/components/SiteHeader/SiteHeader.module.css");
+  const mobile = extractCssBlock(css, "@media (max-width: 620px)").block;
+  const fontSizes = [...mobile.matchAll(/font-size:\s*([^;]+);/gu)];
+  assert.equal(fontSizes.length, 3);
+  for (const match of fontSizes) assert.match(match[1] ?? "", /^[\d.]+rem$/u);
+  assert.match(extractCssBlock(mobile, ".topRow {").block, /height:\s*auto;/u);
+  assert.match(extractCssBlock(mobile, ".topRow {").block, /flex-wrap:\s*wrap;/u);
+  assert.match(extractCssBlock(mobile, ".tabs {").block, /height:\s*auto;/u);
+});
+
 test("CODE-008 只优先加载项目目录的首张项目预览", () => {
   const projectList = source("src/components/ProjectList/ProjectList.tsx");
   assert.match(projectList, /readonly prioritizeFirstPreview: boolean;/u);
