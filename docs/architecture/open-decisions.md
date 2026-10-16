@@ -280,6 +280,14 @@
 
   任一 staged/commit 范围夹带 D-141/D-142、#37 或其他用户改动，远端 `main` 漂移，CI 失败、取消、跳过或未知，canonical blob 认证不一致，SSH/锁/namespace/receipt/CAS/source/自测/持久化或现场终态无法唯一证明时，均在对应写入前或失败关闭点停止，不把 #36 标为完成。现场不清理 bootstrap/upgrade receipt、旧 slot 或失败 residue，不执行 rollback、站点 artifact 发布、Nginx、DNS/TLS、TAT、腾讯云配置、第二次重启、UFW/SSH/软件变更，也不进入 #37；不新增第三方运行时服务或用户数据处理。
 
+- **D-159 / 2026-10-16**：WireGuard 管理隧道恢复后，用户明确要求继续完成 #36。延续 D-145 已授权的 verifier 升级、现场验收、证据晋级和 Issue 关闭范围；源码目标固定为已进入 canonical `main` 且精确 CI 成功的 `a5ad326d64cf3055c3fa312ee9df3b5bf2f143e2`。执行前分别认证同提交的 upgrader、bootstrap、component manifest、verifier 与 golden，核对当前 committed receipt、前向提交关系和维护窗口内无在途旧 verifier；以 receipt 摘要作 CAS head 执行一次原子升级，独立核对新组件、自测、owner/mode、lineage、旧 slot 保留与 live binding。
+
+  日常管理沿用已经恢复并通过严格主机密钥校验的 `axialmuse-prod` 隧道入口：公网 TCP 22 关闭，WireGuard 只承担单客户端管理。当前服务器网络和服务状态先只读核验，升级不改动 WireGuard、SSH、UFW、TAT、Nginx、软件包、DNS/TLS 或云配置，不重启实例，不清理历史 receipt、旧 slot 或失败 residue，不进入 #37。既有 D-125/D-129/D-132 历史结果保持原样；控制面快照、到期与恢复入口继续明确区分所有者既有确认和本轮主机观测。
+
+  证据在独立 worktree 从精确 `main` 基点形成，只包含 #36 本次状态和交接文档，沿用 D-145 的普通 fast-forward 直推例外；确认提交范围、质量门禁及精确 `main` CI 成功后再关闭 Issue。主工作区已有 WireGuard、#37、预览、Git 规则和其他未提交改动不夹带晋级。任一来源、CAS、现场状态或 CI 不能唯一证明时停止并保留证据；不新增第三方运行时服务或用户数据处理。
+
+  D-159 现场结果：五个 canonical blob 和前向祖先关系认证通过；101 项系统 Python 回归及 6 个 golden 自测通过。唯一升级返回 `status=committed`、`disposition=upgraded`，正式组件绑定 `a5ad326d64cf3055c3fa312ee9df3b5bf2f143e2`。全新严格 SSH 会话独立复核新组件字节、root owner/mode、genesis → 首个 committed event → 当前组件关系、旧 slot 和自测结果一致；升级前后 boot、包清单、有效 SSH、UFW 规则、监听及 Nginx 配置摘要相同，相关服务 active/enabled 且零 failed unit。认证传输的五个临时文件已定向清理，历史 receipt 和旧 slot 保留。证据晋级的精确 CI 与 Issue 关闭另以远端结果为准。
+
 ## 依 D-078 形成的 M0 工程决定
 
 - **E-001 / 2026-07-18 — 项目内容职责拆分**：`docs/contracts/projects.json` 继续拥有项目 ID、短 slug、标题、摘要、状态、日期、仓库、展示开关、导航顺序和写作模块等结构化事实；项目长文位于 `site-content/projects/<project-id>/index.md` 或 `index.mdx`，只拥有背景、能力、取舍、限制、证据说明和复盘正文，不重复 H1、摘要、状态、日期、仓库或路由字段。构建期根据稳定 project ID 关联两者，并从注册表只读派生 Docusaurus 的 `title`、`description`、完整 `/projects/<project-slug>` 路径和草稿行为，不回写源文件。`published` 或 `archived` 项目必须恰有一个正文入口；`draft` 或 `planned` 可以暂缺正文但不能产生生产路由；孤儿正文、双入口和结构化字段双写均使构建失败。项目列表、项目侧栏和详情元数据读取同一注册表，正文文件路径不生成公开 URL。

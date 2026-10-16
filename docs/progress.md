@@ -4,6 +4,13 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-10-16 — D-159 #36 verifier 升级与现场验收完成
+
+- **来源与范围**：用户要求恢复 #36 闭环，延续 D-145。修复提交 `a5ad326d64cf3055c3fa312ee9df3b5bf2f143e2` 已进入 canonical `main`，[对应 CI](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/30986857755) 的五个 job 全部成功。五个升级文件分别经 GitHub 精确提交内容、Git blob identity、本地对象和 SHA-256 交叉认证；已安装 `7c0865f` 是目标的严格祖先且旧组件字节匹配。
+- **现场结果**：严格 WireGuard SSH、`sudo -n`、无在途 verifier 和既有 receipt/权限预检通过后，以 genesis receipt 摘要为 CAS head 完成唯一原子升级，返回 `status=committed`、`disposition=upgraded`。独立新会话确认正式 verifier/golden 与目标字节一致、owner/mode 和 live inode 绑定正确、追加 receipt 链闭合、旧 slot 完整保留；临时传输文件已经定向清理。
+- **独立验证**：`/usr/bin/python3 -I -B ops/deploy/verify_artifact.py --self-test` 通过 6 个 golden 向量；`/usr/bin/python3 -B -m unittest discover -s tests/ops -p 'test_artifact_verifier*.py'` 通过 101 项。服务器正式路径自测同样通过 6 向量，且与 event receipt 一致。现场 SSH/WireGuard/UFW/转发/监听/Nginx/TAT/Certbot、零 failed unit、无活动站点/ACME、无 Node/npm/源码树和生产目录缺席门禁全部通过；升级前后 boot、包、SSH、UFW、监听与 Nginx 配置摘要相同。固定 Node `24.18.0` 完整 `quality` 已通过；文档提交由 hook 复验，精确远端 CI 结果在 Issue #36 关闭证据中记录。
+- **交接与边界**：#36 服务器基线和 verifier 升级验收已闭合；`/srv/axialmuse`、`/var/lib/axialmuse` 的缺席是本项成功前态，其创建及 owner/mode 验收归 #37。调用方共享锁、部署/回滚、TAT 活动接线、Nginx 站点和 DNS/TLS 仍待后续任务。本轮未执行生产发布或重启，未改网络、服务或云配置，未清理历史 receipt/旧 slot；控制面快照、续费和恢复能力沿用所有者既有确认，不声称本轮重新验证。D-125/D-129/D-132 历史结论不变。未新增第三方运行时服务或用户数据处理。
+
 ## 2026-08-05 — D-143 #36 完整验收复核与仓库侧修复候选
 
 - **验收发现与授权**：#36 完整验收复现了 `verify_artifact.py` 在 staging 字符串父路径被替换后仍可能对 displaced tree 完成激活的竞态，并确认 bootstrap 独立 fixture 未以真实 SIGINT/SIGTERM 覆盖提交边界；尝试刷新服务器只读事实时 SSH transport 返回 255，未取得新的 live 证据。用户先授权仓库侧修复、已安装 verifier 的升级设计和本地验证，随后以 D-144 另行授权把首轮 #36 修复、测试和契约文档形成一个本地提交；该提交后复审又发现四个实现缺口，最终复核再发现 upgrader 直接库入口的同源提交后信号缺口。用户现以 D-145 明确授权形成独立 follow-up 提交、仅 fast-forward 直推 `main`、等待精确 SHA CI、认证 canonical 五个 blob、以前向 CAS 升级并复核服务器组件、回填脱敏证据及关闭 Issue #36；任一范围、远端、CI 或现场门禁不唯一即停止。

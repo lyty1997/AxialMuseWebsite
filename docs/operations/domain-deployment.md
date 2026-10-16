@@ -1,12 +1,12 @@
 # 域名与生产发布设计
 
 状态：draft
-最近更新：2026-08-04
+最近更新：2026-10-16
 适用范围：M0 腾讯云域名、DNS、轻量应用服务器、HTTPS、自动发布与回滚
 
 ## 目的
 
-本文把 `axialmuse.com` 从已注册、已备案状态发布到腾讯云上海轻量应用服务器的过程拆成可验证步骤。服务器盘点、旧站清理、控制面基础核验、恢复点、额外身份处置、D-119/D-120 SSH、D-122 OS UFW 重启前稳态、云 Web 入站和 D-124 软件事务已经完成。D-125 历史正式回执仍为 `environmental_inconclusive`；D-126 以 `status=complete oracleMatch=true` 关闭当前内容关系缺口后，用户在 D-128 接受剩余历史不确定性并确认云层当时已为单一 SSH 来源，唯一正式 component-aware transition 返回 `status=complete outcome=committed`，授权已消费且清理完成。D-129 的唯一维护重启已经执行并确认新 boot，但完整 post-reboot 因冻结 vendor declaration predicate 不满足而保持 `post-reboot-pending`。D-130 已记录所有者对当前主机侧无已知问题和腾讯云控制面正常的人工确认，并完成新只读逐组件源码/契约的本地审计；D-132 首轮 formal 以 `remote-posture-exec-start-shape` 失败关闭，没有生成 receipt、自动重试或远端/云写操作。D-133 的单次同 boot 只读分类确认当前 TAT 为 `single-zero` 且 unit/fragment/process 门禁均为真，unattended-upgrades 为 `numeric-pair` 且 unit/fragment 门禁均为真；它不构成 formal receipt。D-134 已本地完成 unit-aware v2 候选并保持 Nginx 与其他 unit 的既有边界。后续获准的一轮 v2 formal 已生成并独立校验私有 receipt，结果为 `status=accepted-with-residuals`、`vendorState=fully_absent`、`aggregateDisposition=accepted_residual_unattributed`，且所有 gates 均为真、`serverMutationPerformed=false`；D-129/D-132 历史不变。#36 只剩 canonical `main` 后的 verifier 现场安装，#37 继续暂停。
+本文把 `axialmuse.com` 从已注册、已备案状态发布到腾讯云上海轻量应用服务器的过程拆成可验证步骤。#36 已完成服务器盘点、旧站清理、账户/SSH/UFW 加固、软件与 Certbot 基线，以及 verifier 安装和 D-159 原子升级验收。当前管理使用 WireGuard 严格 SSH；正式 verifier/golden 对应 CI 成功的 canonical `main@a5ad326`，旧 slot 与 receipt 链完整保留。D-125 的 `environmental_inconclusive`、D-129 的 `post-reboot-pending` 和 D-132 的失败仍为历史事实；D-135 的 `accepted-with-residuals` 与 D-159 的独立当前态证据不改写历史。#37 的生产目录、发布/恢复和 TAT/Nginx/DNS/TLS 上线尚未实施。
 
 ## 已知事实
 
@@ -15,7 +15,7 @@
 - ICP 备案号：`沪ICP备2026029086号`。
 - 腾讯云接入备案：用户于 2026-07-13 确认接入成功。
 - 生产服务器：腾讯云轻量应用服务器，中国上海地域，Ubuntu Server 24.04 LTS 64bit。
-- 服务器用途：用户确认为本网站生产服务器；盘点发现并经确认废弃的旧静态网页已清理。额外管理身份按 D-118 可逆禁用，云代理保留，D-119/D-120 SSH、D-122 OS UFW 重启前稳态和 D-124 软件事务已完成；云 Web 入站和单一 SSH 来源是 D-129 前最后由用户确认的精确规则事实，用户又在 D-130 人工确认当前主机侧无已知问题且腾讯云控制面正常。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成。D-129 唯一重启已发生而完整后验 pending；D-132 首轮 formal 失败后，D-133 已把当前形态收窄到 TAT `single-zero` outer normalizer，D-134 已完成对应 unit-aware v2 本地契约。后续 v2 formal 的有效私有 receipt 已生成并独立校验，#36 只剩 canonical `main` 后的 verifier 现场安装；#37 仍须另行决定与授权。
+- 服务器用途：专用于本网站。D-159 已通过新严格 SSH 会话复核：WireGuard、SSH、TAT、Nginx 和 Certbot timer active/enabled，零 failed unit；无活动 Nginx 站点、ACME 账户或证书、Node/npm、源码 clone、依赖树及生产 release/账本目录。verifier/golden 已升级到 `a5ad326` 并通过独立字节、receipt/旧 slot、权限、live binding 与 6 向量自测验收。云快照、续费与恢复能力仍引用所有者此前人工确认，不作为本轮云 API 观测。
 
 以上事实来自用户确认，实施时仍需通过腾讯云控制台和服务器只读命令交叉核验。文档不记录腾讯云账号、实例 ID、公网 IP、密码或密钥；生产事实统一维护在 [生产环境清单](production-inventory.md)。
 
@@ -82,7 +82,7 @@ M0 不额外建设公网 staging 子域名，避免增加服务器配置、证�
 - CPU、内存、系统盘与剩余空间、全部监听及其本机进程、已安装的 Web/运行时/下载归档工具、系统服务、账户/权限、SSH 有效配置、操作系统防火墙、本机 TAT、系统 Python 和预期生产目录缺席均已通过严格 host key SSH 与 `sudo -n` 只读命令盘点。用户后续人工控制面核验确认实例规格与生命周期未发现阻断偏差；精确规格和容量只保留在私密现场记录，当前设计不为个人静态站点虚构尚未批准的资源阈值。
 - 用户此前确认为空机并专用于本网站；盘点发现的旧静态网页已由用户确认并清理，未发现主站源码、Node/npm、数据库、容器或其他应用内容。额外管理身份与腾讯云代理的首启来源已经归因；用户选择本轮保留 TAT 与腾讯云代理，额外管理身份已经按 D-118 可逆禁用并完成独立后验。
 
-截至 D-134 后续获准的 unit-aware v2 formal 已形成有效私有 receipt、#36 仅待 verifier 现场安装的控制面与加固状态：
+以下保留 D-134/D-135 时点的控制面与加固历史；后续 verifier 安装及 D-159 升级、当前 WireGuard 管理边界以本节开头和生产清单为准：
 
 - 用户已于 2026-07-30 提供人工控制面核验的脱敏逐项结论：目标实例与生命周期、快照能力/配额、控制台恢复、TAT/任务、代理保留及 MFA/操作保护未发现阻断偏差。2026-08-02 确认腾讯云轻量防火墙已允许任意 IPv4 来源访问 TCP 80/443；SSH 当时有三个分别受限的 IPv4 来源，用户选择方案 A，不增加 IPv6 或其他入站。额外两条删除后曾出现三次 TCP 22 建连超时；用户随后恢复此前三条受限规则集合，严格 SSH 已成功，服务器连接元数据确认实际来源仍对应槽位 2，并匹配 OS UFW 唯一 SSH 来源规则。用户之后在 D-129 前确认两个额外来源已经再次删除、云层只保留该同源单一 SSH 入口；维护重启没有改写云规则。用户又在 D-130 确认按当前主机侧证据未发现问题，并在腾讯云控制面确认当前状态正常。这是所有者人工确认，不是 Agent 从本地进程状态独立推导的云控制面证明。
 - 控制面另有一条无法逐进程确定归因的历史出带宽告警；只读时间线已排除有意包升级和后续废弃旧站清理，补充内网监控只显示短时入向峰值后恢复，且当前没有持续异常、未知公网/Web 监听或 failed unit。用户按 D-116 明确接受仅限该单次历史告警的残余不确定性，因此它不再阻断 #36；未来复发、持续异常或新未知监听/进程仍须重新失败关闭。
@@ -222,9 +222,10 @@ CLI 只按固定顺序接受 `--source-root`、`--expected-current-receipt-sha25
 |---|---|---|
 | TCP 80 | `0.0.0.0/0` | ACME HTTP-01 与 HTTP 到 HTTPS 跳转 |
 | TCP 443 | `0.0.0.0/0` | 正式 HTTPS 访问 |
-| TCP 22 | 站点所有者当前公网 IP | 紧急管理；不供自动部署使用 |
+| WireGuard 高位 UDP | 任意 IPv4 来源；单 peer 公钥认证 | 单客户端管理隧道，精确端口仅保留于私密配置 |
+| 隧道内 TCP 22 | `wg0` 上精确客户端 `/32`，目标限定服务器隧道地址 | 严格主机密钥、公钥专用的非 root SSH；公网 TCP 22 关闭 |
 
-未使用端口全部关闭；不公开数据库、服务器面板、开发服务器或预览端口。D-122 已完成 OS UFW 提交和重启前稳态；云层 TCP 80/443 与单一 SSH 来源是 D-129 前最后由用户确认的精确规则事实，D-130 又记录所有者对当前主机侧和腾讯云控制面正常的人工确认。D-125 历史回执仍为 `environmental_inconclusive`，D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成。D-129 的唯一维护重启已经执行而完整 post-reboot pending；D-132 首轮 D-130 formal 已失败关闭且未生成 receipt，D-133 当前分类与 D-134 本地契约本身不替代 formal。后续获准的 unit-aware v2 formal 已形成并独立校验 `accepted-with-residuals` 私有 receipt，所有 gates 均为真且 `serverMutationPerformed=false`；D-129/D-132 保持历史原状。第二次重启及恢复动作仍须新授权。不得向所有来源开放 SSH，也不得开放 IPv6 或其他端口。参考：[管理实例防火墙](https://cloud.tencent.com/document/product/1207/44577)。两层必须同时闭合。
+未使用端口全部关闭。D-159 主机只读验收证明 UFW 恰有 Web 两条、WireGuard UDP 一条及精确隧道 SSH 一条允许语义，服务器 IPv4/IPv6 forwarding 均关闭；无公网 SSH 放行、IPv6 用户放行、额外 peer 或未知监听。云侧 Web/WireGuard 入站和公网 TCP 22 关闭沿用隧道完成时的所有者确认，本轮不声称重新读取云防火墙。SSH 不供自动部署使用，TAT 发布路径不变。D-122/D-128 的公网来源规则只保留为历史记录；D-125/D-129/D-132 历史结果及 D-135 接受残余的边界不变。实例重启、恢复及规则更改须各自授权。参考：[管理实例防火墙](https://cloud.tencent.com/document/product/1207/44577)。
 
 ### 登录与权限
 
@@ -372,9 +373,9 @@ Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩
 1. 完成服务器地域、系统、镜像、现有服务和续费盘点；服务器侧与腾讯云控制面基础字段已完成脱敏核验。
 2. 核验 ICP 备案号、备案内容与腾讯云接入状态。
 3. 创建系统盘快照；实例支持、配额、恢复入口和当前 D-122 加固态软件事务前快照正常状态已经确认，恢复或删除仍须另行授权。
-4. 复核已提交的 D-119/D-120 SSH、D-122 OS 防火墙和 D-124 软件状态。D-125 历史正式回执仍为 `environmental_inconclusive`；D-126 已证明 transition 前的当前内容关系，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成。D-129 的唯一维护重启已执行并确认新 boot，但完整 post-reboot 因 vendor declaration predicate 不满足而 pending。D-130 人工控制面确认与新只读源码/契约本地审计已完成；D-132 首轮 formal 以 `remote-posture-exec-start-shape` 失败且未生成 receipt，D-133 又以单次当前分类把候选修正收窄到 TAT `single-zero` outer normalizer。D-134 已完成验收源码、policy/schema、receipt 路径和反例的 unit-aware v2 本地审计；后续获准的 v2 formal 已形成并独立校验有效私有 receipt，结果为 `accepted-with-residuals`，且不改写 D-129/D-132。#36 只剩 verifier/golden/bootstrap 同一提交进入 canonical `main` 后再取得授权完成现场安装；#37 继续暂停。任何第二次重启或恢复仍须各自门禁。
-5. 保留并验证现有 Nginx、TAT agent 与系统下载/归档/哈希/Python 工具；verifier/golden 还必须等待同一提交进入 canonical `main` 后再取得现场安装授权。生产不安装 Node/npm，也不为主站准备源码 clone。
-6. 由 #37 创建并验收生产 release/current/账本目录、root-owned 发布/回滚脚本、只追加 URL 暴露账本和固定 TAT command；#36 已记录这些目录当前不存在，远端 #36 关闭文字须先与该职责边界同步，不能以缺席冒充 owner/mode 通过。部署脚本必须整版安装 payload/config、生成精确 SHA 包装，并拒绝历史 source/target 不再收敛到同一 200 的回滚。canonical 仓库已核验为 public，服务器不配置 artifact 凭证。
+4. #36 的 SSH/UFW/软件基线已验收；D-159 又复核当前 WireGuard、服务、监听、零 failed unit 与无站点/源码边界。D-125/D-129/D-132 历史结果不改写，D-135 的接受残余结论继续有效；第二次重启或恢复仍须独立授权。
+5. verifier/golden 已在 D-159 从同一已认证 canonical `main@a5ad326` 原子升级，独立自测和 receipt/权限验收通过。保留 Nginx、TAT、Certbot 和系统下载/归档/哈希/Python 工具；生产不安装 Node/npm，不克隆主站源码。
+6. 由 #37 创建并验收生产 release/current/账本目录、root-owned 发布/回滚脚本、只追加 URL 暴露账本和固定 TAT command；#36 已记录这些目录当前不存在，该目录缺席是 #36 的成功前态，创建后的 owner/mode 验收由 #37 提供。部署脚本必须整版安装 payload/config、生成精确 SHA 包装，并拒绝历史 source/target 不再收敛到同一 200 的回滚。canonical 仓库已核验为 public，服务器不配置 artifact 凭证。
 7. 配置通过准入并固定 commit SHA 的 GitHub Actions、四个 prerequisite、E-015 `production-artifact`、`production` environment、最小 CAM 凭证与 deployment workflow；最终 job 不使用 environment/Secret，只有 deploy job 可以读取 CAM 凭证。
 8. 先通过服务器公网 IP 的受控测试或临时 hosts 验证 Nginx；使用最小 release 覆盖 exact 301、查询保留、目标 200、ACME 和未知 Host，不提前公开未完成页面。
 9. 保存 DNS 旧值，添加或修改 `@` 与 `www` A 记录。

@@ -1,7 +1,7 @@
 # 生产环境清单
 
 状态：inactive
-最近更新：2026-08-04
+最近更新：2026-10-16
 适用范围：M0 生产环境非敏感事实与验证记录
 
 ## 使用规则
@@ -9,6 +9,8 @@
 本文只记录恢复站点所需的非敏感事实。密码、恢复代码、API token、支付资料、注册人身份信息和个人联系方式不得写入本文或仓库；它们由站点所有者在密码管理器和供应商后台维护。
 
 生产服务器已购买但生产站点尚未启用，未核验字段保持“未设置”或“未核验”。每次域名、DNS、托管或发布分支变化后同步更新，并在变更记录中留下日期与原因。
+
+截至 2026-10-16，#36 的服务器基线与 verifier 原子升级已完成现场验收；站点仍未启用。下表中旧日期表示当时观测，不能当作本轮重新验证的云控制面、DNS 或 TLS 事实。
 
 ## 所有权
 
@@ -58,27 +60,27 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 | 实例到期与自动续费 | 用户于 2026-07-30 人工核验未发现阻断偏差；精确值不写入仓库 |
 | 快照能力与当前恢复点 | 用户于 2026-07-30 人工核验快照支持、配额与控制台恢复入口未发现阻断偏差，D-117 加固前快照保留为历史恢复点；2026-08-02 又为 D-122 已提交的当前加固态创建软件事务前系统盘快照，确认控制台终态正常且恢复通道可用。均未执行恢复演练，精确快照标识不写入仓库，恢复或删除未授权 |
 | TAT agent | 目标机本地 agent 已核验为腾讯云组件且 active/enabled，无新增公网监听；用户于 2026-07-30 人工核验控制面 online 且无未知任务，并选择本轮保留 TAT 与腾讯云代理。D-129 新 boot 的脱敏诊断再次确认本地 `tat_agent.service` active/running/enabled；用户又在 D-130 人工确认当前腾讯云控制面正常。该人工确认与本机服务证据分开记录；精确版本、任务和服务姿态保留在私密现场记录 |
-| Web 与 TLS 组件 | 既有旧静态站点经用户确认后已删除；D-124 当时的软件后验确认 Nginx 配置测试成功、active 且没有活动 server block 或 TCP 80/443 监听。Ubuntu 官方 Certbot CLI 与 timer 已安装并通过当时的独立后验，timer enabled/active/waiting；没有 ACME 账户、证书或 lineage，本轮未签发或读取证书。D-129 新 boot 的 diagnostic-only remainder 再次证明 Nginx/Certbot/监听当前语义门禁通过，但正式完整后验仍因 vendor/cross-reboot posture 契约 pending；精确版本与其他服务姿态不写入公开仓库 |
-| SSH、账户与系统防火墙 | 额外交互账户已归因为首启用户数据创建，并于 2026-07-30 按 D-118 移除唯一受控直接 sudo 规则、设置账户过期和不可交互 shell，同时保留账户/home/密钥及其他文件。D-119/D-120 随后以可回退事务完成 root-owned SSH 全局策略，独立严格公钥会话与最终后验达到 `committed_clean`；既有管理身份、端口、主机密钥、主密钥文件和 sudo 路径未变。D-122 又在目标服务器提交并启用 UFW 最小 IPv4 入站边界，第二条严格 SSH、精确临时状态清理和重启前稳态均通过；D-128 随后把 normalized non-vendor 提交到 frozen oracle 并通过当时的 vendor 安全语义。D-129 唯一重启后，SSH unavailable→available、boot 改变、system running、non-vendor oracle、IPv6 vendor 缺席及防火墙双读稳定已经确认，但 IPv4 `YJ-FIREWALL-INPUT` 声明、引用和规则持续缺席，完整 post-reboot 保持 pending。详细身份、来源和规则正文不写入公开仓库 |
-| 腾讯云入站边界 | 用户已手工允许任意 IPv4 来源访问 TCP 80/443；SSH 方案 A 删除额外来源后曾连续三次 TCP 22 建连超时，随后用户恢复此前三条受限云 SSH 规则集合。严格 SSH 恢复后，服务器连接元数据确认实际来源仍对应槽位 2，并与 OS UFW 唯一 SSH 来源规则匹配；用户之后在 D-129 前确认两个额外来源已经再次删除、云层只保留该同源单一 SSH 入口且不增加 IPv6 或其他入站。D-129 没有改写云规则；用户又在 D-130 人工确认当前腾讯云控制面正常，但本记录不自行展开为未逐项复述的精确规则值 |
+| Web 与 TLS 组件 | D-159 当前复核 Nginx 配置测试成功且 active/enabled，无活动 server block 或 Web 监听；Certbot CLI 与 timer 正常，timer active/enabled，没有 ACME 账户、证书或 lineage。未签发证书、创建 webroot 或 reload Nginx |
+| SSH、账户与系统防火墙 | D-159 当前复核严格 WireGuard SSH 和非交互 sudo；公钥专用、禁止 root/密码/键盘交互/空密码认证和唯一 authorized_keys 策略通过。UFW 仅允许 Web、WireGuard UDP 和目标/来源均限定隧道地址的 wg0 TCP 22，服务器双栈转发关闭。详细身份、地址、规则与密钥不入库；D-118 至 D-135 历史保留于下方验证记录 |
+| 腾讯云入站边界 | WireGuard 完成时所有者已确认 Web TCP 80/443、单一 WireGuard UDP 入站和公网 TCP 22 关闭。D-159 只复核主机 UFW 与严格隧道 SSH，未重新读取或修改云规则；不把主机观测当作云控制面独立证明 |
 | 软件与源码边界 | `/root`、`/home`、`/srv`、`/opt`、`/var/www` 与 `/usr/local` 未发现 Node/npm、容器运行时、主站源码 clone、`node_modules` 或 Node manifest；Git 及系统下载、归档、哈希工具已存在 |
 | 系统更新 | 只读核验窗口内观察到当前管理身份另行发起并完成系统包升级，用户于 2026-07-30 确认是本人有意执行；关键服务与配置终态复核通过。Ubuntu 官方自动安全更新服务及两个 apt timer 已启用，未配置自动重启。D-124 于 2026-08-02 以单一事务精确升级 `distro-info-data`、`libssl-dev`、`libssl3t64`、`openssl`、`tzdata`、`tzdata-legacy` 六包，并新增七个 Certbot 最小包，零额外、零移除且未执行 `autoremove`；当时的独立软件后验通过。D-129 后来执行唯一维护重启并确认 boot 改变；diagnostic-only remainder 在同一新 boot 证明精确包、自动更新和 `reboot-required` 缺席等当前语义门禁通过，但 vendor/cross-reboot posture 正式契约仍 pending，也没有重新建立基线 |
-| 生产目录 | 预期 `/srv/axialmuse` 与 `/var/lib/axialmuse` 现场不存在，该缺席是 #36 的只读基线证据；release/current/账本目录的创建与 owner/mode 验收仍归 #37，远端 #36 关闭文字须先与此边界同步 |
+| 生产目录 | D-159 再次确认 `/srv/axialmuse` 与 `/var/lib/axialmuse` 不存在，是 #36 的成功前态；release/current/账本目录的创建和 owner/mode 验收归 #37 |
 | Web Root | 目标：活动 `site-release.conf` 中 `/srv/axialmuse/releases/<sha>/payload` 的精确绝对路径；`current` 只在配置解析时选代 |
 | 生产分支 | `main` |
 | 发布方式 | 目标：GitHub Actions 构建不可变 artifact -> 腾讯云 TAT 受限交付 -> 校验后原子 release；尚未实施 |
 | 构建位置 | 目标：仅 GitHub Actions 构建；PR/`main` 的 `website-quality` 与 release-eligible `production-artifact` 各自在独立 runner 构建，只有后者对 `main` 精确 SHA fresh rebuild + full quality 的 build 可部署；生产服务器不构建 |
-| Build command | 仓库已实现 `build`、`package:artifact` 与 `check:artifact`；后两者复用冻结依赖中的 production checker，并完成确定性封装及外部 `releaseContentSha256` 复验。#14 已由本地提交 `7b5cc47` 把完整顺序接入四个 prerequisite 之后的 `production-artifact` job，但尚无 canonical `main` 真实运行 |
+| Build command | `build`、`package:artifact` 与 `check:artifact` 已进入 canonical main；`a5ad326` 的 CI run `30986857755` 中 production-artifact job 成功。本轮以该 CI 认证 #36 源码前置，真实 ZIP/下载/部署仍归后续独立验收 |
 | Output directory | Docusaurus production 输出为默认 `build/`，#33 的临时交付根为 `dist/release/`；`dist/` 不提交。仓库仍保留迁移前 `public/`，目标机旧静态 Web Root 已删除，尚未部署 Docusaurus release |
-| Artifact 身份 | 仓库侧已实现 40 位提交 SHA、source build tree、内部清单与 artifact 外 `releaseContentSha256`；#14 本地提交在 upload 前形成 build/release 操作 seal，upload 后复核同一 seal、HEAD blob 与默认 index 状态后，才映射 canonical repository、workflow run ID/attempt、artifact ID 和 GitHub 外层 `artifactDigest` 七项 outputs，展示名不用于选择。由于尚未发生真实 upload，这些 GitHub 服务端身份没有实际值 |
-| Artifact 内容 | #33 已实现 `payload/`（已重验 `build/` 的逐文件复制）与 `metadata/`（source build tree、提交标识、release manifest、逐文件 SHA-256、运行重定向清单和 Nginx exact-location 配置）的本地确定性生成与复验；尚无已上传 production artifact |
-| 服务器 artifact 校验器 | #35 已由本地提交 `f7fdc43` 实现只使用 Python 3.12 标准库的 `ops/deploy/verify_artifact.py` 与 Node/Python 共享 golden；#36 工作区另有一次性 root bootstrap 候选，但两者都尚未进入 canonical `main`，本地负向验收不等于服务器安装。2026-07-29 已现场确认 `/usr/bin/python3` 为 root-owned 链接并精确解析到兼容的 root-owned Python 3.12；安装目标固定为 `/usr/local/lib/axialmuse/artifact-verifier/` 的 root-owned verifier/golden，bootstrap 只作经摘要认证的瞬时执行器，不安装自身。须待 bootstrap、verifier 与 golden 同一源提交进入 canonical `main`，再以精确提交和三项摘要完成独立认证并取得现场安装授权；#14 真实 ZIP shape 复验仍待 |
+| Artifact 身份 | 已实现提交 SHA、source build tree、releaseContentSha256、七项 producer outputs 与跨 Action seal。a5ad326 已有成功 producer run；本轮未提取或重新验收实际 artifact ID/digest/ZIP，不据此声称服务器发布成功 |
+| Artifact 内容 | 已实现 payload/metadata 的确定性封装并进入成功的 canonical main producer；生产 ZIP 的独立取回复验、消费和真实发布仍待后续任务 |
+| 服务器 artifact 校验器 | 已从首次安装的 `7c0865f` 前向升级到 canonical `main@a5ad326`。D-159 分别认证五个 blob，以 bootstrap receipt 摘要作 CAS head，唯一升级返回 committed/upgraded。新会话独立证明 verifier/golden 字节、root:root、目录 0755、verifier 0755、golden 0644、单链接/live inode、6 向量自测和 receipt 链一致；旧 slot/genesis/event receipt 保留，仅清理本次五文件传输目录 |
 | 跨 job build 边界 | E-015 固定不上传或下载中间 build artifact；`production-artifact` 在 fresh runner 自包含重建、重验和封装，避免消费其他 job 文件系统 |
 | 发布新鲜度 | #34 已由本地提交 `2c40e87` 在活动 workflow 外实现七项 producer outputs、当前 GitHub context、canonical main/run/artifact/head/digest 的两次 main 交叉核验，以及 main 不取消/生产串行的静态 concurrency 候选；尚未接入真实 workflow/API，concurrency 仍不替代新鲜度 |
 | Workflow token | prerequisite 与 #14 producer 的 `contents: read` 已由本地提交 `7b5cc47` 配置，其他 producer scope 为 `none`；#34 本地提交 `2c40e87` 的静态 deploy fixture 只允许 `contents: read`、`actions: read`，但尚未写入活动 workflow 或真实 environment |
 | TAT 调度 | #34 已实现固定 `ap-shanghai`、单 command/instance、五参数 `InvokeCommand` 的 TC3 签名与 dry-run；成功 `status: dispatched` 只记录 invocation ID，不表示 task/部署成功。实际 command/instance、CAM、environment 与 #37 终态查询均未接线 |
 | Artifact 读取 | 2026-07-29 已只读确认 canonical 仓库为 public、未归档且默认分支为 `main`，当前路径无需服务器 artifact 凭证；GitHub environment protection 的方案能力仍待活动接线前核验 |
-| 服务器发布职责 | #35 只负责从私有 staging 校验外层 `artifactDigest`、安全解包、从 exact release 独立重算 `releaseContentSha256`，并交叉校验元数据、清单、运行规则与提交身份，成功形成 `verified-release`。#37 才在部署锁内复核后安装同 SHA payload/运行清单/Nginx 配置至不可变 release，用 URL 暴露账本验证历史闭包，生成精确 SHA root/include，执行隔离候选测试、`nginx -t`、reload、逐规则冒烟和受控恢复；两者均尚未部署 |
+| 服务器发布职责 | #35 verifier 已安装且经 D-159 升级验收，负责从私有 staging 校验外层 digest、安全解包和 release 元数据/规则，成功形成 verified-release。#37 负责持锁安装不可变 release、URL 账本、精确 SHA Nginx 配置、激活、冒烟和兼容恢复，当前尚未安装或执行；其调用方须在打开组件前接入固定共享锁 |
 | 活动重定向身份 | #33 的 release metadata 已实现源注册表摘要、公开路由摘要、运行清单摘要、Nginx 配置摘要和规则数；当前尚无已部署活动 release |
 | URL 暴露账本 | 目标：`/var/lib/axialmuse/url-exposure-ledger.json`；每次 reload 前只追加候选的全部规范 200 路径和新增或改指的 registered 301 边，`canonical-slash` 不入边账本但 target 由路由预写保护；记录每次 deployment 前后摘要并由 root-owned 备份保护，当前未创建 |
 | 回滚兼容谓词 | 目标：每个历史 published route 仍可解析，每条历史 301 边的 source/target 收敛到同一当前 200；只有目标文件但缺少 source 规则不算兼容 |
@@ -168,6 +170,7 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 | D-128 component-aware transition | `status=complete outcome=committed`；一次受 watchdog 保护的 runtime transition 已提交，normalized non-vendor、vendor 安全语义、UFW、严格 SSH/sudo、服务、监听、配置、包、boot 与零 failed unit 后验通过 | 2026-08-03 | 授权已消费且 cleanup complete；D-125 历史结论不变。未重启、再基线、修改云规则、安装 verifier 或进入 #37 |
 | D-129 唯一维护重启与 post-reboot | 唯一重启已执行；SSH unavailable→available、boot 改变和 system running 已确认。正式 post 与一次同 boot resume 均失败于 `remote-vendor-declaration`；多次诊断证明 non-vendor oracle、IPv6 vendor 缺席和双读稳定，但 IPv4 YJ 声明、引用及规则持续缺席。diagnostic-only remainder 以两条间隔 10 秒的新会话通过其余当前语义门禁，重启前后聚合 posture 摘要不等 | 2026-08-03 | 一次性授权已消费，结果保持 `post-reboot-pending` 且 `formalAccepted=false`；未第二次重启、reload/再基线、手工补链、重启腾讯服务或修改云控制面 |
 | D-130 只读逐组件 semantic acceptance | 用户确认当前主机侧无已知问题且腾讯云控制面正常；新契约只接受 vendor `fully_absent` 或原严格 `rejecting` 完整态，保留其余逐组件门禁，并把旧 pre/post 聚合不等显式记为 `accepted_residual_unattributed` | 2026-08-04 | D-132 首轮 formal 以 `remote-posture-exec-start-shape` 失败且未生成 receipt；D-133 当前分类收窄到 TAT `single-zero` outer normalizer。D-134 随后把本地候选升级为 unit-aware v2：TAT 仅单值零、unattended-upgrades 仅数字对、Nginx 既有内层规则不扩大，并以整串 grammar、policy/schema、v1/v2 receipt 隔离、live binding 与 mutation 反例完成本地审计。后续获准的一轮 v2 formal 在同一 boot 的两条 fresh SSH 会话中间隔至少 10 秒通过全部 gates，生成并独立校验 mode `0600`、被 Git 忽略的私有 receipt；结果为 `status=accepted-with-residuals`、`vendorState=fully_absent`、`aggregateDisposition=accepted_residual_unattributed`、`serverMutationPerformed=false`，且不改写 D-129/D-132 |
+| D-159 verifier 升级 | 五个 canonical blob/前向关系通过；CAS 升级 committed/upgraded；新会话独立核验字节、权限、live binding、receipt 链、保留旧 slot 和 6 个自测向量；主机状态未漂移 | 2026-10-16 | `a5ad326`；101 项 Python 回归通过；生产发布未执行 |
 | 生产冒烟 | 未执行 | - | - |
 | 桌面端渲染 | 未执行 | - | - |
 | 移动端渲染 | 未执行 | - | - |
@@ -177,6 +180,7 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 
 | 日期 | 变更 | 原因 | 验证 |
 |---|---|---|---|
+| 2026-10-16 | D-159 完成 verifier 原子升级与 #36 当前基线复验 | WireGuard 管理通道恢复后完成既定 #36 范围 | committed/upgraded；新会话独立验收通过；保留旧组件/receipt；未发布站点、重启或修改网络/服务/云配置 |
 | 2026-08-04 | 执行 D-130 unit-aware v2 formal 只读验收 | 以 D-134 已审计的严格逐 unit 契约取得 D-129 之后的独立当前态证据，同时保留 D-129/D-132 历史结论 | 两条 fresh SSH 会话位于同一 boot、间隔至少 10 秒且所有 gates 均为真；本地私有、被 Git 忽略且 mode `0600` 的 v2 receipt 已生成并独立校验，结果为 `status=accepted-with-residuals`、`vendorState=fully_absent`、`aggregateDisposition=accepted_residual_unattributed`、`serverMutationPerformed=false`。除正常 SSH/sudo 审计副作用外，没有服务器或云资源写操作；#36 只剩 canonical `main` 后的 verifier 现场安装，#37 继续暂停 |
 | 2026-08-04 | 按 D-133 执行一次隐私安全只读 ExecStart 分类 | 在不输出原始现场字段或修改验收契约的边界内，把 D-132 的两个 outer-normalizer 候选收窄到可审计的当前形态 | 远端连接前修复首轮复审发现的尾部误分类；最终候选通过固定依赖、同 boot、challenge、干净环境、命令白名单和正反例审计。一次新 SSH 会话确认 TAT 为 `single-zero` 且 unit/fragment/process 门禁均为真，unattended-upgrades 为 `numeric-pair` 且 unit/fragment 门禁均为真。没有 receipt、重试或服务器/云写入；契约修正与 formal 重跑仍待分别授权 |
 | 2026-08-04 | 按 D-134 本地升级 D-130 unit-aware v2 契约 | 只把 D-133 已分类的 TAT 单值零作为该 unit 的严格展示等价值；其他 unit 不全局放宽 | v2 候选显式传入 unit，整串匹配固定字段顺序并拒绝未知 unit、交叉 status、缺失/重复/乱序/额外字段、第二记录和尾随内容；policy、remote/local schema、receipt 路径及 mutation 证据同步升级。仅执行本地审计，没有服务器连接、formal、receipt 或 Git 发布 |
