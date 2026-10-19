@@ -19,6 +19,7 @@
 - [DocRestore 项目展示与未来体验设计](projects/docrestore-experience.md)
 - [VibeCoding Project Scaffold 项目展示设计](projects/vibecoding-project-scaffold.md)
 - [域名与生产发布设计](operations/domain-deployment.md)
+- [生产调度接线清单](operations/production-deploy-setup.md)
 - [内容发布流程](operations/content-publishing.md)
 - [自动化维护与运行手册](operations/maintenance.md)
 - [生产环境清单](operations/production-inventory.md)
