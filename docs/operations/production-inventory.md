@@ -79,7 +79,7 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 | 发布新鲜度 | #34 已由本地提交 `2c40e87` 在活动 workflow 外实现七项 producer outputs、当前 GitHub context、canonical main/run/artifact/head/digest 的两次 main 交叉核验，以及 main 不取消/生产串行的静态 concurrency 候选；尚未接入真实 workflow/API，concurrency 仍不替代新鲜度 |
 | Workflow token | prerequisite 与 #14 producer 的 `contents: read` 已由本地提交 `7b5cc47` 配置，其他 producer scope 为 `none`；#34 本地提交 `2c40e87` 的静态 deploy fixture 只允许 `contents: read`、`actions: read`，但尚未写入活动 workflow 或真实 environment |
 | TAT 调度 | #34 已实现固定 `ap-shanghai`、单 command/instance、五参数 `InvokeCommand` 的 TC3 签名与 dry-run；成功 `status: dispatched` 只记录 invocation ID，不表示 task/部署成功。实际 command/instance、CAM、environment 与 #37 终态查询均未接线 |
-| Artifact 读取 | 2026-07-29 已只读确认 canonical 仓库为 public、未归档且默认分支为 `main`，当前路径无需服务器 artifact 凭证；GitHub environment protection 的方案能力仍待活动接线前核验 |
+| Artifact 读取 | canonical 仓库为 public，但 2026-10-19 实测 ZIP 下载匿名 HTTP 401；服务器须按 D-161 使用仅本仓库 `Actions:read` 的专用 GitHub App，凭证与真实下载验收尚待。GitHub environment protection 的实际配置仍待接线验收 |
 | 服务器发布职责 | #35 verifier 已安装且经 D-159 升级验收，负责从私有 staging 校验外层 digest、安全解包和 release 元数据/规则，成功形成 verified-release。#37 负责持锁安装不可变 release、URL 账本、精确 SHA Nginx 配置、激活、冒烟和兼容恢复，当前尚未安装或执行；其调用方须在打开组件前接入固定共享锁 |
 | 活动重定向身份 | #33 的 release metadata 已实现源注册表摘要、公开路由摘要、运行清单摘要、Nginx 配置摘要和规则数；当前尚无已部署活动 release |
 | URL 暴露账本 | 目标：`/var/lib/axialmuse/url-exposure-ledger.json`；每次 reload 前只追加候选的全部规范 200 路径和新增或改指的 registered 301 边，`canonical-slash` 不入边账本但 target 由路由预写保护；记录每次 deployment 前后摘要并由 root-owned 备份保护，当前未创建 |

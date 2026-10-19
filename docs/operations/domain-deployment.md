@@ -234,7 +234,7 @@ CLI 只按固定顺序接受 `--source-root`、`--expected-current-receipt-sha25
 - 管理员、Nginx 与发布脚本使用不同系统身份和文件权限。
 - GitHub 只保存专用 CAM 子账号的 SecretId/SecretKey，不保存腾讯云主账号凭证。
 - CAM 策略只允许对指定 TAT command 和指定轻量实例执行、查询；不授予任意命令、实例重装、删除或财务权限。
-- canonical 仓库已于 2026-07-29 只读核验为 public，artifact 使用无需凭证的读取路径，服务器不配置私有仓库读取凭证。若未来仓库可见性发生经批准的变化，必须重新设计并授权读取身份，不沿用当前路径隐式降级。
+- canonical 仓库已核验为 public，但 2026-10-19 对同一未过期 artifact 的匿名实测表明元数据可读而 ZIP 下载返回 HTTP 401。服务器按 D-161 使用只安装到本仓库且仅授予 `Actions:read` 的专用 GitHub App；root-only 私钥按需签发短时 installation token 访问固定下载端点，不把凭证或短时重定向 URL 写入 TAT 参数、命令行、日志或仓库。App 尚待创建和安装，不能把当前公开仓库状态等同于可部署的无凭证下载链路。
 
 ## 自动发布契约
 
@@ -375,7 +375,7 @@ Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩
 3. 创建系统盘快照；实例支持、配额、恢复入口和当前 D-122 加固态软件事务前快照正常状态已经确认，恢复或删除仍须另行授权。
 4. #36 的 SSH/UFW/软件基线已验收；D-159 又复核当前 WireGuard、服务、监听、零 failed unit 与无站点/源码边界。D-125/D-129/D-132 历史结果不改写，D-135 的接受残余结论继续有效；第二次重启或恢复仍须独立授权。
 5. verifier/golden 已在 D-159 从同一已认证 canonical `main@a5ad326` 原子升级，独立自测和 receipt/权限验收通过。保留 Nginx、TAT、Certbot 和系统下载/归档/哈希/Python 工具；生产不安装 Node/npm，不克隆主站源码。
-6. 由 #37 创建并验收生产 release/current/账本目录、root-owned 发布/回滚脚本、只追加 URL 暴露账本和固定 TAT command；#36 已记录这些目录当前不存在，该目录缺席是 #36 的成功前态，创建后的 owner/mode 验收由 #37 提供。部署脚本必须整版安装 payload/config、生成精确 SHA 包装，并拒绝历史 source/target 不再收敛到同一 200 的回滚。canonical 仓库已核验为 public，服务器不配置 artifact 凭证。
+6. 由 #37 创建并验收生产 release/current/账本目录、root-owned 发布/回滚脚本、只追加 URL 暴露账本和固定 TAT command；#36 已记录这些目录当前不存在，该目录缺席是 #36 的成功前态，创建后的 owner/mode 验收由 #37 提供。部署脚本必须整版安装 payload/config、生成精确 SHA 包装，并拒绝历史 source/target 不再收敛到同一 200 的回滚。ZIP 下载按 D-161 使用服务器专用 GitHub App，只授予本仓库 `Actions:read`；首次账本和公开激活继续独立授权。
 7. 配置通过准入并固定 commit SHA 的 GitHub Actions、四个 prerequisite、E-015 `production-artifact`、`production` environment、最小 CAM 凭证与 deployment workflow；最终 job 不使用 environment/Secret，只有 deploy job 可以读取 CAM 凭证。
 8. 先通过服务器公网 IP 的受控测试或临时 hosts 验证 Nginx；使用最小 release 覆盖 exact 301、查询保留、目标 200、ACME 和未知 Host，不提前公开未完成页面。
 9. 保存 DNS 旧值，添加或修改 `@` 与 `www` A 记录。
