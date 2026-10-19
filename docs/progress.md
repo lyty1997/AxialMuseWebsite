@@ -4,6 +4,15 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-10-19 — 六项制品链验收与真实 artifact 复核
+
+- **范围与当前事实**：按用户要求验收 #12、#13、#32、#33、#35、#14。新鲜 GitHub 查询确认 canonical `main@2ed430aa45b673d9cddad5d607ea837d4cc212c3`；该 SHA 的 [CI run 38908312695](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/38908312695) 是 `push`、`completed/success`，五个 job 均成功。它只证明制品生产链，不代表 #34 活动 TAT 调度或 #37 生产部署已接线。
+- **真实 artifact**：同一 run 的唯一、未过期 artifact ID 为 `12049645678`，外层 REST digest 为 `sha256:7c9b6a13a9e888b65ac09a915caff906cc62b62253bb96e9e6d3cece52ecd668`；原始 ZIP 下载后独立 SHA-256 精确相同。精确 `main` 的隔离 worktree 用 Node `24.18.0` 经 E-010 冻结安装 1298 个包、production build、封装和独立 checker 得到 `sourceBuildTreeSha256=cf9417abfc9341eb675495757597c593edb4f382f528eb807fb5953848309f6a` 与 `releaseContentSha256=506c12575736d5a21a60d3e4355130668627249e95403b05022483ed46f77b0f`；下载 ZIP 与本地重建 release 的 18 个普通文件集合和字节全部相同。这是本次额外的独立重建观察；设计不要求每次 build 都可复现。
+- **独立验证与反例**：Python verifier 用 GitHub 外层摘要、独立重建 release 摘要与精确 commit 成功解包真实 ZIP，回报 18 个 release 文件、14 个 payload 文件、3 个公开路由、0 条 registered 与 2 条 canonical-slash 规则。把同一真实 ZIP 的外层或 release 期望摘要分别改错，两次均以稳定错误非零退出、stdout 为空且未激活。verifier 生命周期 fixture 101/101、自测 6/6；历史入口核对 111 个可达提交并通过 48+2 fixture；workflow 23/23、301 逻辑 32/32、历史/封装/fresh workspace/输出四组 124/124。固定本地 Nginx 镜像实际 `nginx -t` 和 25 项 HTTP 断言通过，含 2 条故意构造的 registered 与 2 条 slash 规则；真实 M0 artifact 的注册规则仍为零。固定 Node 的完整零依赖 `quality`、`typecheck`、Markdown/契约/Secret 与差异检查通过。
+- **Issue 收尾**：按依赖顺序向 [#12](https://github.com/lyty1997/AxialMuseWebsite/issues/12)、[#13](https://github.com/lyty1997/AxialMuseWebsite/issues/13)、[#32](https://github.com/lyty1997/AxialMuseWebsite/issues/32)、[#33](https://github.com/lyty1997/AxialMuseWebsite/issues/33)、[#35](https://github.com/lyty1997/AxialMuseWebsite/issues/35)、[#14](https://github.com/lyty1997/AxialMuseWebsite/issues/14) 分别回填正常与反例、精确 SHA、实际命令和下游交接后关闭；GitHub 独立读回六项均为 `closed/completed`。#12/#13/#14 原正文的待实现提示已改为已验收，保留原始契约追溯。
+- **Git 晋级决定与授权**：用户确认本轮只把 `docs/README.md` 和 `docs/progress.md` 的收尾补丁放在以当前稳定 `main@2ed430a` 为基点的独立专题分支，普通推送后直接向 `main` 提 PR；PR 只含这两份文档，检查全部成功且 head/base 未漂移后普通合并，随后核对精确合并 SHA 的 `main` CI 为 `completed/success`。远端 `dev` 比 `main` 多 9 个并行提交，故本轮不借道或改动 `dev`；不 force、不 rebase、不直推 `main`，不操作 #34/#37、服务器、TAT、DNS 或云资源。主工作区原有改动保留，Git 晋级在隔离 worktree 执行。
+- **证据边界和交接**：GitHub REST 不提供已完成 job 的 `release-content-sha256` 输出供事后单独读取；本轮以该 job 成功状态、固定 workflow 的前后 seal/输出门禁、独立从精确 SHA 重建得到的相同摘要和逐文件字节比对共同验收 #14，不声称直接取得该历史 job output。#34 仍须从同一次活动 run 的 job output 传递摘要并做新鲜度/CAM/TAT 验证；#37 仍负责锁、账本、不可变安装、Nginx/current、恢复和现场发布。#32 的 workflow 验收不代表 GitHub 分支保护已配置；#61 CI 成本决策仍独立开放。没有服务器、TAT、DNS 或云资源写入；未新增第三方服务或用户数据处理。仓库文档的 Git 晋级另按现有规则办理，不能复用 #36 直推例外。
+
 ## 2026-10-16 — D-159 #36 verifier 升级与现场验收完成
 
 - **来源与范围**：用户要求恢复 #36 闭环，延续 D-145。修复提交 `a5ad326d64cf3055c3fa312ee9df3b5bf2f143e2` 已进入 canonical `main`，[对应 CI](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/30986857755) 的五个 job 全部成功。五个升级文件分别经 GitHub 精确提交内容、Git blob identity、本地对象和 SHA-256 交叉认证；已安装 `7c0865f` 是目标的严格祖先且旧组件字节匹配。
