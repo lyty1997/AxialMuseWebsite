@@ -2,6 +2,8 @@
 
 本清单落实 D-160/D-161。只有固定服务器入口完成安装、GitHub 凭证与腾讯云最小权限配置读回、活动 workflow 进入 canonical `main` 后，才可执行一次受控 TAT 调度。调用返回的 `invocation ID` 不代表任务成功或站点已上线。当前固定入口只允许下载并独立验证到私有 staging，随后以 `DEPLOY_ACTIVATION_PENDING` 和非零状态明确停止；这是 #34 调度验收的安全边界，不是 #37 生产激活完成。首次账本、forward-only、Nginx 站点/reload、DNS/TLS 和公开激活仍须分别确认。
 
+活动 `deploy-production` job 随 `main` push 自动触发；合并接线 PR 的那次 `main` push 也会生成新的 artifact 并尝试调用 TAT。必须在合并前完成下方的腾讯云 command/CAM/实例读回及 GitHub environment 核查；PR 检查中的跳过状态不构成生产调度验收。合并后以精确 `main` SHA 的 run、TAT invocation ID 和独立 task 终态分别收据化；首次任务仍按 `DEPLOY_ACTIVATION_PENDING` 预期解释，不将其非零结束写成网站上线成功。
+
 ## GitHub App：服务器只读制品
 
 1. 在 GitHub 账号 `lyty1997` 下注册专用 **private GitHub App**，关闭 webhook；Repository permissions 只将 **Actions** 设为 **Read-only**（Metadata read 为 GitHub 基础权限），其余保持 No access。不授予组织权限或订阅事件。

@@ -11,6 +11,7 @@ export const JAVASCRIPT_SOURCE_FILES = Object.freeze([
   "scripts/quality/lib/plantuml.mjs",
   "scripts/quality/lib/process-environment.mjs",
   "scripts/quality/lib/ci-workflow.mjs",
+  "scripts/quality/lib/ci-actions.mjs",
   "scripts/quality/lib/deploy-workflow.mjs",
   "scripts/quality/lib/content-history.mjs",
   "scripts/quality/lib/production-artifact-outputs.mjs",
