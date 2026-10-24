@@ -238,6 +238,18 @@ CLI 只按固定顺序接受 `--source-root`、`--expected-current-receipt-sha25
 
 ## 自动发布契约
 
+### #37 本机激活实现边界（D-163）
+
+新站账本不追溯已删除旧站；初始化必须显式执行且不可覆盖。部署状态在私有目录保存规范账本的连续摘要链、不可变 release 收据与事务结果；持锁读取时逐代验证只追加关系和当前账本字节。任何未完成事务、缺代、损坏、账本与备份不一致均停止，禁止自动修复或静默初始化。
+
+固定部署命令与 SSH 回滚命令共用排他锁，并与 verifier 升级锁互斥。部署顺序为：认证 staging → 复算整树与元数据 → 不可变安装 payload/config → 隔离 Nginx 配置/HTTP 检查 → 验证账本及预选兼容 fallback → 必要时消费一次性批准 → 原子预写并同步账本 → 原子切换 current → 配置检查/reload/本机 HTTP 冒烟 → 记录结果。失败只允许恢复预选兼容代；无兼容代时保留候选、账本与诊断，报告 forward-only 失败，不伪称发布成功。
+
+一次性批准文件位于 root-only 状态目录，绑定完整五参数、账本前后摘要、到期 UTC 秒与唯一 ID；最长有效期一小时，消费发生在账本预写之前并保留消费证据。重复请求、过期、旧账本或错误制品不得复用批准。回滚只接受精确 40 位 SHA，目标必须来自成功安装收据，并通过整树复核、完整当前账本兼容和隔离 HTTP 检查。
+
+#37 的活动与候选 Nginx 仅监听 `127.0.0.1`，本机探针固定 Host，逐条检验实际 200 字节、301 单个 Location 与查询保留；301 目标再次请求本机，不跟随到公网。基础配置只经 current 选择精确 SHA 的 root/include，metadata 不进入 Web Root。该成功结果为本机验收，#38 才负责公网监听、DNS、正式 TLS 和公网 deployment 结论。现场安装与具体监听端口须先形成可审查清单并核对无占用。
+
+graceful reload 只证明信号已发送，不能用一次成功 HTTP 请求宣称旧代已经退出。入口在 reload 前捕获 master 与其所有 worker 的 PID/starttime，reload 后有界等待旧 worker 全部退出，且 master 身份不变、新 worker 存在，再跑全量本机 HTTP 冒烟；超时或 master 漂移进入失败恢复。这样避免新旧 worker 并存时，偶然命中新 worker 的探针提前报告成功。
+
 ### GitHub 侧
 
 M0 生产 workflow 仅由 canonical repository 的 `main` push 触发，不提供普通 `workflow_dispatch` 发布入口；历史 SHA 恢复必须走另行授权的恢复流程。发布链满足：

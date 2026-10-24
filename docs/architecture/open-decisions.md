@@ -265,6 +265,10 @@
 - **D-140 / 2026-08-04**：用户在 PR #62 已由 PR #63 完整回退后，确认只把 `codex/issue-18-production-baseline` 的 #18 支线直接晋级到 canonical `main`，不经过尚未完成的 `dev`。只读拓扑审计确认远端 `main@3acc6f2` 已包含旧 topic `e88386b` 的历史祖先关系，但当前树不含其被回退内容；因此普通 merge 只会得到 no-op，而反向回退 PR #63 会重新带入 PR #62 的完整 `dev`、超出本次授权。实施允许在隔离 worktree 中把原 topic 从 `e88386b` 普通快进到锁定的 `main@3acc6f2`，再按原始 `195656f..e88386b` 的 11 个线性提交顺序形成新的可审计重应用提交；不得使用 revert-of-revert、force、rebase、reset、直接推送 `main` 或夹带 topic 之外的 `dev` 内容。
 
   重应用必须保留 D-139 与本决定，并证明除 `docs/architecture/open-decisions.md` 新增的 D-139/D-140 外，tracked 路径、文件 mode 和内容精确等于旧 topic `e88386b`；原 #18 范围固定为 76 个文件，不包含 #8 preview 或当前主工作区的 13 份未提交 #36 evidence。完成差异复核和固定 Node `24.18.0` 的完整本地质量门禁后，可普通非强制 push 同名 topic，创建 `codex/issue-18-production-baseline -> main` 的窄化例外 PR；required checks 全部成功、head/base 未漂移且 GitHub 仍报告可合并后使用普通 merge，不删除分支，并观察精确 `main` push CI 至 `completed/success`。任何内容范围漂移、冲突无法按旧 topic 与 D-139/D-140 同时保持、门禁失败或远端漂移都必须停止。本授权不包含 Issue 写操作、服务器或云资源写入、production 部署、DNS/TLS、TAT 调度、依赖变化、用户数据处理或第三方运行时服务。
+- **D-142 / 2026-08-04**：用户要求 #37 继续在 `codex/issue-18-production-baseline` 开发；当前授权只覆盖仓库与本地 fixture，不包含服务器、TAT、Nginx、GitHub/腾讯云配置或其他外部写入。首个实现子任务固定为 CODE-019 暴露账本纯逻辑：严格解析并稳定序列化 `1.0.0` 账本，保持 published route 与 registered edge 只追加及首次 release 身份，验证候选 release 对全部历史路径和边的一步收敛，并在候选激活前计算绑定前后规范字节的 SHA-256。累计历史边必须作为完整有向图拒绝环；公开路由、历史边和 runtime manifest 同时拒绝 CODE-019 的保留命名空间。为保持已安装 #36 verifier 的精确两文件 bootstrap 契约，本轮不让账本模块导入或改装 verifier，而用同语义谓词与跨模块固定向量测试证明两者保留路由行为一致；未来若改为单一运行时模块，须另行设计 verifier 组件升级。
+
+  本决定不预先授权首次空账本初始化、root-owned 脚本或目录安装、Nginx 配置/reload、TAT command/environment/CAM 接线、生产 artifact 下载、实际发布或回滚。普通发布默认仍要求兼容 fallback；forward-only 授权的精确承载方式、rollback 触发通道和首次生产账本来源会改变外部操作边界，必须在依赖它们的实现或现场动作前另行确认。
+
 
 - **D-143 / 2026-08-05**：#36 完整验收复现服务器 verifier 的 staging 父目录替换竞态，并确认 bootstrap 独立测试未覆盖真实 SIGINT/SIGTERM；用户随后授权仓库侧修复与已安装组件的升级设计。授权范围包括设计记录、`ops/deploy/` 实现、独立 Python fixture 和本地质量验证；不包含 commit、push、Issue/PR 写入、GitHub 配置、服务器/TAT、DNS、云资源或其他外部写操作。
 
@@ -294,6 +298,14 @@
 - **D-161 / 2026-10-19**：#34/#37 接线预检发现，canonical 公开仓库的同一 Actions artifact 元数据匿名 GET 返回 HTTP 200，而 ZIP 下载匿名 GET 返回 HTTP 401；E-005 和部署文档中“公开仓库即可无凭证下载 ZIP”的实施假设不成立。用户选择在服务器使用仅安装到 canonical 单仓库、只授予 `Actions:read` 的专用 GitHub App；其私钥由 root-only 文件保管，服务器按需签发短时 installation token，只向固定 GitHub API 下载端点使用，任何私钥、JWT、token 或下载重定向 URL 均不进入命令输出、TAT 参数、仓库或日志。App 注册、安装、私钥交付和轮换属于外部准备，完成前不执行真实 artifact 下载或 TAT 调度。用户同时选择由 Agent 给出精确腾讯云控制台配置清单，用户自行创建限定 command/instance 的 CAM 身份与 TAT 固定 command，并将 CAM SecretId/SecretKey 直接写入 GitHub `production` environment；本会话不接收或打印密钥。固定入口、凭证边界、仓库接线与受控调度仍按 D-160 的逐项后验实施，首次公开激活、forward-only、DNS/TLS、Nginx reload 与 Git 晋级路径不因本决定扩大授权。
 
 - **D-162 / 2026-10-19**：用户授权把本次 #37 固定 TAT/服务器入口、D-160/D-161 决策与接线文档及相应测试，从刷新后的 canonical `main` 单独形成 `codex/*` 分支，直接向 `main` 提 PR；核对提交与三点文件差异仅含本次范围、required checks 全部成功且 head/base 未漂移后普通合并，再核对精确 `main` push CI 达到 `completed/success`。主工作区已有的 #37 账本草稿、其他用户未提交改动、远端 `dev` 并行提交和 #34 活动 workflow 均不随此次 PR 晋级。此次 Git 授权不替代 D-160/D-161 对服务器固定入口安装前态、App/CAM/TAT 外部凭证与命令、受控调度和生产激活的独立验收；缺少外部配置时保留待办，不宣称 #34/#37 已完成。验证采用隔离工作树差异审查、Python/仓库质量门禁、PR 检查和精确 `main` CI；不新增浏览器第三方请求或用户数据处理。
+
+- **D-163 / 2026-10-24**：用户确认继续 #37，正式 URL 暴露账本以新 Docusaurus 站点首次发布为起点，接受不追溯已经删除的旧静态站点；初始化仍是显式、一次性操作，账本缺失或损坏不触发自动重建。TAT 保持既有五参数。没有兼容 fallback 时，固定服务器入口读取 root-only 的一次性 forward-only 批准文件，严格绑定完整制品身份、当前账本摘要与有效期；在账本预写前持久消费，过期、身份漂移、重放或缺席均拒绝。兼容回滚由 WireGuard SSH 调用固定 rollback 命令，仍验证目标不可变 release 与完整账本，不新增云端命令或扩大 CAM 权限。
+
+  #37 本轮以仅监听本机的 Nginx 验收真实 release/current/账本及恢复，公网监听、DNS 与正式 TLS 留给 #38。本机成功仅报告本机激活验收，不标记公网 deployment 成功。首次 forward-only 失败时保留账本闭包、release 与失败证据，不回退到无兼容性的空站或旧代。具体 root-owned 安装、初始化、Nginx 配置/reload 和验收次数在完整候选与测试形成后，按可审查的现场写入方案执行独立审查；本决定先授权相应仓库实现与本地隔离验收，不沿用 #34 已用完的 TAT 调度或 Git 晋级授权。原工作区及 `dev` 并行工作保持原样。
+
+- **D-164 / 2026-10-24**：用户在审查 D-163 的 17 文件候选和完整本地验收后，授权从精确 canonical `main@441b2140ff0bd2e8191c107ce9ebe6f8a92eadee` 建独立 `codex/*` 分支，直接向 main 提 PR；required checks 全绿且 head/base 稳定后普通合并，排除 dev 的九个并行提交和主工作区其他改动。精确 main CI 成功后认证安装六模块和四命令，保留旧固定入口备份，显式初始化新站空账本；对已独立验收的旧 main 精确制品与账本前后摘要生成一次性 forward-only 批准。现场最多新增两次 TAT 调度（合并时旧入口准备一次、安装后完整重跑该 main CI 一次），四次仅本机激活/兼容切换，最终 current 停在新 main。验证全部通过后回填并关闭 #37；公网监听、DNS、正式 TLS、CAM 权限变化、额外 main push、重跑或调度不在本轮范围。
+
+  实施严格按[接线清单](../operations/production-deploy-setup.md)执行：每次写入前核对来源、唯一目标、owner/mode、锁、前态和剩余次数；结果不明、身份漂移或门禁失败即停止，不以自动重试消费下一次动作。安装与激活均须独立新 SSH 后验；GitHub CI、TAT 接受、task 终态、实际 current/HTTP/账本分别记录，不互相替代。未新增第三方服务或用户数据处理。
 
 ## 依 D-078 形成的 M0 工程决定
 
