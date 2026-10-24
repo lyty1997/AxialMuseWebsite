@@ -4,6 +4,13 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-10-23 — #34 活动 dispatch workflow 隔离候选
+
+- **范围与来源**：用户要求继续 #34。canonical `main@911848236b1552d3787f3cf0aeb94731f6d12a16` 保持稳定，远端 `dev` 多 9 个独立提交，主工作区含其他未提交改动；本轮仅在基于该 `main` 的隔离工作树准备活动 workflow。GitHub `production` environment 只允许 `main`，两个 Secret 名称和地域、command、实例三个变量已读回，但 Secret 值不可由 GitHub API 读取。
+- **本地候选**：把已审查的 `deploy-production` fixture 原样接入唯一 CI workflow，保留 producer 四项前置与上传后身份输出；job 仅在 canonical `main` push 且 artifact 成功时进入 `production` environment，先不接触 CAM Secret 独立复核 GitHub 身份，随后再次复核并只调用固定 `InvokeCommand`。顶层并发保留 `main` run，job 自身串行。质量门禁分别锁定原五个 producer job 和新的 deploy job；权限扩大、替换目标或跳过身份门禁均失败关闭。固定 Node `24.18.0` 的完整 `quality`、29 项 CI/部署 workflow 定向测试、Markdown/契约/Secret、YAML 解析及差异检查通过；严格 SSH 再次确认服务器五个固定入口与 canonical 字节一致、TAT agent active，站点仍未激活。
+- **所有者核对与 Git 晋级决定**：用户逐项确认腾讯云保存的固定命令 SHA-256 为 `bdce0154468ee49942a7792dfdf1d99901cf3f82b42afe8319c7031250e8be92`，采用 SHELL/root、启用五参数且没有默认值、定时器或 COS；专用 CAM 子用户含用户组继承仅有指定命令与实例的 `tat:InvokeCommand`。这是所有者控制台核对，非 Agent 独立云 API 读回。用户授权将本次九文件候选放入独立 `codex/*` 分支，直接向 `main` 提 PR；仅在 PR 检查全绿、精确 head/base 未漂移且上述核对通过后普通合并，并验收合并 `main` push 自动发起的一次 TAT 调度。不改动 `dev` 或主工作区既有改动，不 force、不 rebase、不直推 `main`。
+- **待验收**：记录授权时本地代码尚未提交或进入 PR，活动 workflow 尚未进入 `main`，没有触发 TAT。Secret 值的有效性仅能在受保护 runner 内以签名调用或首次受控调度证明；调度受理、任务终态与服务器私有 staging 必须分别取证，含糊失败不自动重调。#34 不等于 #37 发布或网站上线，首次账本、Nginx 和 DNS/TLS 继续独立待办。未新增浏览器第三方请求或用户数据处理。
+
 ## 2026-10-19 — 六项制品链验收与真实 artifact 复核
 
 - **范围与当前事实**：按用户要求验收 #12、#13、#32、#33、#35、#14。新鲜 GitHub 查询确认 canonical `main@2ed430aa45b673d9cddad5d607ea837d4cc212c3`；该 SHA 的 [CI run 38908312695](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/38908312695) 是 `push`、`completed/success`，五个 job 均成功。它只证明制品生产链，不代表 #34 活动 TAT 调度或 #37 生产部署已接线。
