@@ -4,6 +4,8 @@
 
 活动 `deploy-production` job 随 `main` push 自动触发；合并接线 PR 的那次 `main` push 也会生成新的 artifact 并尝试调用 TAT。必须在合并前完成下方的腾讯云 command/CAM/实例读回及 GitHub environment 核查；PR 检查中的跳过状态不构成生产调度验收。合并后以精确 `main` SHA 的 run、TAT invocation ID 和独立 task 终态分别收据化；首次任务仍按 `DEPLOY_ACTIVATION_PENDING` 预期解释，不将其非零结束写成网站上线成功。
 
+服务器可能在 `deploy-production` job 收尾前开始读取制品。下载器的本地修复候选保留整个精确 run 必须 `completed/success` 的要求：仅在相同 run/artifact/attempt/commit/repository 身份全部匹配且 run 为 `in_progress`、conclusion 为 null 时，在 30 秒内、最多 15 次间隔两秒重新读取元数据；每次重新校验完整身份与过期状态，成功前不请求 ZIP。超时以 `ARTIFACT_WORKFLOW_PENDING` 停止，失败、取消、身份漂移或 HTTP 错误立即停止。该只读等待不重发 TAT、不重试下载、不删除失败 staging，也不放宽生产激活边界。此候选仍须完成 Git 晋级、服务器来源认证与安装及新的独立受控验收，尚未部署。
+
 ## GitHub App：服务器只读制品
 
 1. 在 GitHub 账号 `lyty1997` 下注册专用 **private GitHub App**，关闭 webhook；Repository permissions 只将 **Actions** 设为 **Read-only**（Metadata read 为 GitHub 基础权限），其余保持 No access。不授予组织权限或订阅事件。

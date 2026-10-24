@@ -4,6 +4,19 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-10-24 — #34 下载时序修复晋级与受控再验收授权
+
+- **用户决定**：用户授权现有四文件修复从基于 `main@a430009497feb80cdcda41fb27e6c1e9c6ccf52a` 的独立 `codex/*` 分支直接向 `main` 提 PR，检查全绿且 head/base 稳定后普通合并。等待精确合并 SHA 的 main CI 成功，再从同一 canonical SHA 认证并更新服务器下载器，最后完整重跑该 main CI 一次验收。最多新增两次 TAT 调度：修复合并自动触发的一次仍使用旧入口，安装后再验收一次；任一结果不明不自动追加调用。
+- **执行与验证边界**：只晋级 `ops/deploy/fetch_artifact.py`、其测试、接线清单和本进度文档，不夹带主工作区或 `dev` 改动。服务器仅替换已核验来源的下载器，保留旧字节和失败 staging；通过严格 SSH 前态、精确字节/权限后验、run/artifact/双摘要绑定、独立 task 终态与 staging 文件树复验收尾。不激活站点，不初始化账本，不修改 Nginx、DNS/TLS、网络或服务。记录时尚未执行本轮提交、安装或额外调用。
+
+## 2026-10-23 — #34 活动接线合并与首次真实调度
+
+- **已完成 Git 晋级**：[PR #67](https://github.com/lyty1997/AxialMuseWebsite/pull/67) 的九文件候选通过完整本地 quality 与提交 hook；[PR CI](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40050924472) 完成且四个前置 job 成功，producer/deploy 按 PR 规则跳过。head/base 和范围复核一致后普通合并为 `main@a430009497feb80cdcda41fb27e6c1e9c6ccf52a`；[精确 main CI](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40051122594) 的六个 job 全部成功。未改动 `dev` 或主工作区既有内容。
+- **真实调度**：首次受控 `InvokeCommand` 返回 `inv-waa1ps06ji`，run 为 `40051122594`、artifact 为 `12542499771`，ZIP digest 为 `bce05aac3d3529fd78f01531989109c4d687ce35295abdaed9a3b6fc69353d0c`、release digest 为 `7014629a3dd0539d85d041cdc26f4781a3572d285750bae1431a2a604f1d3cc7`。这证明受保护 runner 的 CAM 凭证可签名调用指定目标；最小权限仍由所有者控制台核对支持，不声称 Agent 独立读回了完整 CAM 策略。
+- **服务器独立终态**：TAT agent 收到的完整脚本与上述五参数逐字节匹配，任务 `invt-waa1ps06jj` 为 root/SHELL、无 COS；终态为 `FAILED`、exit 1、固定码 `ARTIFACT_IDENTITY`。精确 staging 中仅有零字节 ZIP，没有 `verified-release`；`current`、`releases` 仍缺席，Nginx 配置摘要与预检一致。未重调、重跑 CI、删除失败 staging 或激活站点。
+- **缺口与本地修复**：固定下载器要求整个 run 已 `completed/success`，与同一 run 内最后一个 job 发起 TAT 存在时序竞争；任务结束时间与 deploy job 完成时间均为 `2026-10-24T01:48:39Z`，未取得当时 GitHub metadata 快照，因此该竞争是源码与现场一致的原因解释，非对所有身份字段历史值的独立还原。准备仅对相同身份的 `in_progress` run 做有界只读等待，保留完成且成功后才能下载的严格门禁。#34 保持开放，等待修复晋级、服务器安装和新的受控调用达到 `DEPLOY_ACTIVATION_PENDING` 验收边界；#37 的账本、生产安装、Nginx 与 DNS/TLS 继续待办。本条证据与修复尚在隔离工作树，未追加 main push；未引入新第三方服务或用户数据处理。
+- **修复候选验证**：四文件补丁位于基于 `main@a430009` 的独立工作树。121 项 Python 服务器测试、Ruff、固定 Node `24.18.0` 完整 `quality` 和差异检查通过；其中下载器九项测试覆盖正常完成、有界等待、失败/取消/未知状态、跨轮 attempt/SHA/repository/artifact/digest/过期变化、HTTP 不重试、签名下载无 Authorization 和短写失败。相同 pending→success fixture 独立加载 canonical 旧代码可复现 `ARTIFACT_IDENTITY`，候选通过。尚未 commit/push/PR、安装服务器或重跑 CI；首次九文件 PR 和一次受控调用授权已经执行，后续 Git 晋级及额外调度须另行确认。
+
 ## 2026-10-23 — #34 活动 dispatch workflow 隔离候选
 
 - **范围与来源**：用户要求继续 #34。canonical `main@911848236b1552d3787f3cf0aeb94731f6d12a16` 保持稳定，远端 `dev` 多 9 个独立提交，主工作区含其他未提交改动；本轮仅在基于该 `main` 的隔离工作树准备活动 workflow。GitHub `production` environment 只允许 `main`，两个 Secret 名称和地域、command、实例三个变量已读回，但 Secret 值不可由 GitHub API 读取。

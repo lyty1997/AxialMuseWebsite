@@ -3,6 +3,7 @@
 import hashlib
 import json
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -15,6 +16,9 @@ API_ROOT = "https://api.github.com/repos/lyty1997/AxialMuseWebsite"
 MAX_METADATA_BYTES = 64 * 1024
 MAX_ZIP_BYTES = 2 * 1024 * 1024 * 1024
 READ_SIZE = 64 * 1024
+WORKFLOW_WAIT_SECONDS = 30
+WORKFLOW_POLL_SECONDS = 2
+WORKFLOW_MAX_POLLS = 15
 DECIMAL = re.compile(r"[1-9][0-9]{0,15}\Z", re.ASCII)
 SHA = re.compile(r"[0-9a-f]{40}\Z", re.ASCII)
 DIGEST = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
@@ -43,9 +47,9 @@ def _request(url, token=None):
     return urllib.request.Request(url, headers=headers)
 
 
-def _read_metadata(url, token, *, opener=_OPENER):
+def _read_metadata(url, token, *, opener=_OPENER, timeout=20):
     try:
-        with opener.open(_request(url, token), timeout=20) as response:
+        with opener.open(_request(url, token), timeout=timeout) as response:
             if response.status != 200:
                 raise ArtifactFetchError("ARTIFACT_METADATA_HTTP")
             raw = response.read(MAX_METADATA_BYTES + 1)
@@ -90,28 +94,8 @@ def _signed_download_url(url, token, *, opener=_OPENER):
     return location
 
 
-def fetch_exact_artifact(*, workflow_run_id, artifact_id, commit_sha,
-                         artifact_digest, destination, token,
-                         opener=_OPENER):
-    if (
-        not isinstance(workflow_run_id, str)
-        or DECIMAL.fullmatch(workflow_run_id) is None
-        or not isinstance(artifact_id, str)
-        or DECIMAL.fullmatch(artifact_id) is None
-        or not isinstance(commit_sha, str)
-        or SHA.fullmatch(commit_sha) is None
-        or not isinstance(artifact_digest, str)
-        or DIGEST.fullmatch(artifact_digest) is None
-        or not isinstance(token, str)
-        or len(token) < 16
-        or not hasattr(destination, "write")
-    ):
-        raise ArtifactFetchError("ARTIFACT_INPUT")
-    artifact_url = f"{API_ROOT}/actions/artifacts/{artifact_id}"
-    metadata = _read_metadata(artifact_url, token, opener=opener)
-    workflow = _read_metadata(
-        f"{API_ROOT}/actions/runs/{workflow_run_id}", token, opener=opener
-    )
+def _validate_identity(metadata, workflow, *, workflow_run_id, artifact_id,
+                       commit_sha, artifact_digest):
     relationship = metadata.get("workflow_run")
     size = metadata.get("size_in_bytes")
     repository = workflow.get("repository")
@@ -139,8 +123,6 @@ def fetch_exact_artifact(*, workflow_run_id, artifact_id, commit_sha,
         or workflow.get("head_sha") != commit_sha
         or workflow.get("head_branch") != "main"
         or workflow.get("event") != "push"
-        or workflow.get("status") != "completed"
-        or workflow.get("conclusion") != "success"
         or not isinstance(repository, dict)
         or repository.get("full_name") != "lyty1997/AxialMuseWebsite"
         or not isinstance(repository_id, int)
@@ -148,6 +130,66 @@ def fetch_exact_artifact(*, workflow_run_id, artifact_id, commit_sha,
         or relationship.get("head_repository_id") != repository_id
     ):
         raise ArtifactFetchError("ARTIFACT_IDENTITY")
+    return size
+
+
+def _metadata_timeout(deadline, clock):
+    remaining = deadline - clock()
+    if remaining <= 0:
+        raise ArtifactFetchError("ARTIFACT_WORKFLOW_PENDING")
+    return min(20, remaining)
+
+
+def fetch_exact_artifact(*, workflow_run_id, artifact_id, commit_sha,
+                         artifact_digest, destination, token,
+                         opener=_OPENER, sleeper=time.sleep,
+                         clock=time.monotonic):
+    if (
+        not isinstance(workflow_run_id, str)
+        or DECIMAL.fullmatch(workflow_run_id) is None
+        or not isinstance(artifact_id, str)
+        or DECIMAL.fullmatch(artifact_id) is None
+        or not isinstance(commit_sha, str)
+        or SHA.fullmatch(commit_sha) is None
+        or not isinstance(artifact_digest, str)
+        or DIGEST.fullmatch(artifact_digest) is None
+        or not isinstance(token, str)
+        or len(token) < 16
+        or not hasattr(destination, "write")
+    ):
+        raise ArtifactFetchError("ARTIFACT_INPUT")
+    artifact_url = f"{API_ROOT}/actions/artifacts/{artifact_id}"
+    workflow_url = f"{API_ROOT}/actions/runs/{workflow_run_id}"
+    deadline = clock() + WORKFLOW_WAIT_SECONDS
+    for poll in range(WORKFLOW_MAX_POLLS + 1):
+        metadata = _read_metadata(
+            artifact_url, token, opener=opener,
+            timeout=_metadata_timeout(deadline, clock),
+        )
+        workflow = _read_metadata(
+            workflow_url, token, opener=opener,
+            timeout=_metadata_timeout(deadline, clock),
+        )
+        size = _validate_identity(
+            metadata, workflow, workflow_run_id=workflow_run_id,
+            artifact_id=artifact_id, commit_sha=commit_sha,
+            artifact_digest=artifact_digest,
+        )
+        _metadata_timeout(deadline, clock)
+        if (
+            workflow.get("status") == "completed"
+            and workflow.get("conclusion") == "success"
+        ):
+            break
+        if (
+            workflow.get("status") != "in_progress"
+            or "conclusion" not in workflow
+            or workflow["conclusion"] is not None
+        ):
+            raise ArtifactFetchError("ARTIFACT_IDENTITY")
+        if poll == WORKFLOW_MAX_POLLS:
+            raise ArtifactFetchError("ARTIFACT_WORKFLOW_PENDING")
+        sleeper(min(WORKFLOW_POLL_SECONDS, _metadata_timeout(deadline, clock)))
     location = _signed_download_url(
         f"{artifact_url}/zip", token, opener=opener
     )

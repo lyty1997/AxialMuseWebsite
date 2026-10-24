@@ -31,10 +31,15 @@ class Response:
 
 
 class FakeOpener:
-    def __init__(self, *, digest=DIGEST, signed=SIGNED):
+    def __init__(self, *, digest=DIGEST, signed=SIGNED,
+                 workflows=None, artifacts=None):
         self.digest = digest
         self.signed = signed
         self.requests = []
+        self.workflows = list(workflows or [{}])
+        self.artifacts = list(artifacts or [{}])
+        self.workflow_reads = 0
+        self.artifact_reads = 0
 
     def open(self, request, timeout):
         self.requests.append(request)
@@ -57,6 +62,8 @@ class FakeOpener:
                     "repository_id": 123, "head_repository_id": 123,
                 },
             }
+            content.update(self.artifacts[min(self.artifact_reads, len(self.artifacts) - 1)])
+            self.artifact_reads += 1
         else:
             content = {
                 "id": int(RUN_ID),
@@ -68,10 +75,111 @@ class FakeOpener:
                 "conclusion": "success",
                 "repository": {"full_name": "lyty1997/AxialMuseWebsite", "id": 123},
             }
+            content.update(self.workflows[min(self.workflow_reads, len(self.workflows) - 1)])
+            self.workflow_reads += 1
         return Response(json.dumps(content).encode("ascii"))
 
 
 class FetchArtifactTests(unittest.TestCase):
+    def fetch(self, opener, output, **options):
+        return fetch_artifact.fetch_exact_artifact(
+            workflow_run_id=RUN_ID, artifact_id=ARTIFACT_ID, commit_sha=SHA,
+            artifact_digest=DIGEST, destination=output,
+            token="ghs_" + "x" * 32, opener=opener, **options,
+        )
+
+    def assert_no_zip_request(self, opener, output):
+        self.assertFalse(any(r.full_url.endswith('/zip') or r.full_url == SIGNED
+                             for r in opener.requests))
+        self.assertEqual(output.getvalue(), b'')
+
+    def test_waits_for_same_run_success_before_requesting_zip(self):
+        opener = FakeOpener(workflows=[
+            {"status": "in_progress", "conclusion": None}, {},
+        ])
+        output, sleeps = io.BytesIO(), []
+
+        def wait(seconds):
+            self.assert_no_zip_request(opener, output)
+            sleeps.append(seconds)
+
+        self.assertEqual(self.fetch(opener, output, sleeper=wait), len(ZIP))
+        self.assertEqual(sleeps, [2])
+        self.assertEqual(opener.artifact_reads, 2)
+        self.assertEqual(opener.workflow_reads, 2)
+        self.assertEqual(output.getvalue(), ZIP)
+        self.assertNotIn('Authorization', opener.requests[-1].headers)
+
+    def test_pending_run_has_hard_poll_limit_and_no_download(self):
+        opener = FakeOpener(workflows=[{"status": "in_progress", "conclusion": None}])
+        output, sleeps = io.BytesIO(), []
+        with self.assertRaisesRegex(fetch_artifact.ArtifactFetchError,
+                                    '^ARTIFACT_WORKFLOW_PENDING$'):
+            self.fetch(opener, output, sleeper=sleeps.append, clock=lambda: 0)
+        self.assertEqual(len(sleeps), 15)
+        self.assertEqual(opener.workflow_reads, 16)
+        self.assert_no_zip_request(opener, output)
+
+    def test_pending_run_has_elapsed_time_limit(self):
+        opener = FakeOpener(workflows=[{"status": "in_progress", "conclusion": None}])
+        output, now = io.BytesIO(), [0]
+
+        def wait(seconds):
+            now[0] += seconds + 31
+
+        with self.assertRaisesRegex(fetch_artifact.ArtifactFetchError,
+                                    '^ARTIFACT_WORKFLOW_PENDING$'):
+            self.fetch(opener, output, sleeper=wait, clock=lambda: now[0])
+        self.assertEqual(opener.workflow_reads, 1)
+        self.assert_no_zip_request(opener, output)
+
+    def test_failed_cancelled_or_unknown_run_never_waits_or_downloads(self):
+        for changes in [
+            {"conclusion": "failure"}, {"conclusion": "cancelled"},
+            {"conclusion": "timed_out"}, {"status": "queued", "conclusion": None},
+            {"status": "in_progress", "conclusion": "success"},
+        ]:
+            with self.subTest(changes=changes):
+                opener, output, sleeps = FakeOpener(workflows=[changes]), io.BytesIO(), []
+                with self.assertRaisesRegex(fetch_artifact.ArtifactFetchError,
+                                            '^ARTIFACT_IDENTITY$'):
+                    self.fetch(opener, output, sleeper=sleeps.append)
+                self.assertEqual(sleeps, [])
+                self.assert_no_zip_request(opener, output)
+
+    def test_every_poll_revalidates_identity_and_expiry(self):
+        for workflow, artifact in [
+            ({"run_attempt": 2}, {}), ({"head_sha": "b" * 40}, {}),
+            ({"id": 1}, {}), ({"event": "pull_request"}, {}),
+            ({"repository": {"id": 123, "full_name": "other/repo"}}, {}),
+            ({}, {"expired": True}), ({}, {"digest": "sha256:" + "0" * 64}),
+            ({}, {"id": 1}), ({}, {"name": "different"}),
+        ]:
+            with self.subTest(workflow=workflow, artifact=artifact):
+                opener = FakeOpener(workflows=[
+                    {"status": "in_progress", "conclusion": None}, workflow,
+                ], artifacts=[{}, artifact])
+                output, sleeps = io.BytesIO(), []
+                with self.assertRaisesRegex(fetch_artifact.ArtifactFetchError,
+                                            '^ARTIFACT_IDENTITY$'):
+                    self.fetch(opener, output, sleeper=sleeps.append)
+                self.assertEqual(sleeps, [2])
+                self.assert_no_zip_request(opener, output)
+
+    def test_metadata_http_failure_is_not_retried(self):
+        class FailingOpener(FakeOpener):
+            def open(self, request, timeout):
+                self.requests.append(request)
+                raise urllib.error.URLError('private-transport-error')
+
+        opener, output, sleeps = FailingOpener(), io.BytesIO(), []
+        with self.assertRaisesRegex(fetch_artifact.ArtifactFetchError,
+                                    '^ARTIFACT_METADATA_HTTP$'):
+            self.fetch(opener, output, sleeper=sleeps.append)
+        self.assertEqual(len(opener.requests), 1)
+        self.assertEqual(sleeps, [])
+        self.assert_no_zip_request(opener, output)
+
     def test_exact_archive_is_streamed_without_auth_on_signed_url(self):
         opener = FakeOpener()
         output = io.BytesIO()
