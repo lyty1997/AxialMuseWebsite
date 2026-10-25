@@ -4,6 +4,21 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-10-25 — #38 DNS 现状核对及 #39 HTTPS 候选
+
+- **决定与事实**：按 D-165，所有者确认 DNSPod 后台只有符合预期的默认线路 A（根域/www、TTL 600），无其他线路或 MX/TXT/CAA，免费套餐没有 DNSSEC。权威 NS、多公共解析器和实例 metadata 比较一致；完整 zone 旧值导出尚无证据，不能以公共枚举替代。顺序为已核验 DNS → #39 HTTPS → #38 DNSSEC，两个 Issue 保持开放。
+- **候选实现**：独立 main 归档中的公网配置、同代 CSP、固定命令模式接线及证书 hook；沿用既有不可变 release/current/账本与兼容恢复。未知 Host/SNI、外部主动资源、内联事件/未知样式、失配或过期证书、缺模式/配置漂移均失败关闭。详情与操作边界见[公网 HTTPS 候选与验收清单](operations/public-https-setup.md)。
+- **本地验收**：fixture、固定既有镜像的真实 Nginx/TLS、完整 Node quality 与 Ruff 通过；真实当前 artifact 独立校验并经 Chrome 三页 hydration/客户端跳转验证，未见 CSP 违规、浏览器错误或外部请求尝试。首次导航超时摘录保留，30 秒等待的独立重跑通过，不声称还原首次原因。Python/本机 Nginx 门禁不冒充远端候选 CI、正式证书或公网成功。
+- **保留边界**：未创建提交/分支/PR、未触发 TAT、未改服务器配置/DNS/TLS/云规则、未申请 ACME 或购买套餐。原主工作区和 #37 收尾工作树保持原样；候选继承三份 #37 文档，仍待后续 Git 路径审查。服务器最后只读检查仍只有本机 18080。无新增第三方服务或用户数据处理；正式部署、续期演练、DNSSEC 与公网观察继续待授权和实际验收。
+
+## 2026-10-25 — #37 本机发布、账本与兼容恢复现场验收完成
+
+- **晋级与认证安装**：按 D-164，[PR #69](https://github.com/lyty1997/AxialMuseWebsite/pull/69) 的 17 文件候选进入 canonical `main@27d461b9d7d0745343f01b3c491ee68d267b4700`，没有带入 dev 的九个并行提交。精确 main 的 GitHub 内容、Git blob 和 SHA-256 交叉认证六模块；安装六个 root:root/0644 模块及四个 root:root/0755 固定命令，保留 root-only 旧入口备份，随后由新 SSH 逐项核验摘要/权限和非法参数拒绝。原 verifier、下载器、TAT command、App 凭证与 CAM 权限未改写。
+- **两次 TAT**：[run 40146353211 attempt 1](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40146353211/attempts/1) 六个 job 成功，artifact `12581107123` 在旧入口按计划以 `DEPLOY_ACTIVATION_PENDING`、exit 2 停止，18 文件与双摘要一致。安装并完成首次激活后，仅完整重跑同一 run 一次；[attempt 2](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40146353211/attempts/2) 六个 job 成功，artifact `12580683476` 对应独立 task `invt-0ab9kvg3m6` 为 `SUCCESS`、exit 0，完整五参数与实际制品一致。最终 ZIP digest 为 `c302e47f25318610f65a57788482a28220724cd2e783db60ad11c6793dc27f2a`，release tree digest 为 `dd3c2ff3284f5ca30c823e17f58e692806023752577e1bfcea8898a12a31e49d`。
+- **四次真实切换**：显式初始化新站账本，为旧 main `441b214` / run `40069951954` / artifact `12550609976` 创建并消费精确一次性批准；固定 prepared 首次激活旧代，第二笔 TAT 激活新代，再用固定 rollback 回到旧代、回到新代。四个事务均为 `local-accepted`、命令 exit 0，最终 current 为 `27d461b`。每次独立 HTTP 验收均通过 14 个 payload 字节摘要、两条 301/查询串、目标 200 和 metadata/config/未知路径 404；唯一 Web 监听是 `127.0.0.1:18080`，临时候选端口已退出。
+- **账本与现场保全**：账本 SHA-256 为 `2bd67fdfc737ea75047eb235cb64495865f5c91ac5d58bf1b2eaf42a2573d4de`，genesis 与首次发布两份连续历史保留，后续切换未删改承诺；批准消费证据保留。四个历史 staging 按身份/字节/权限指纹全部保留，包括失败零字节 ZIP，总计六个 staging。原 Nginx 配置文件摘要未变，仅新增获准的本机 server block。既有 fwupd 失败项已消失，当前失败集合是冻结身份集合的子集；未 reset-failed、修复无关服务、重启或修改管理网络。
+- **验证与收尾**：Python ops 170 项通过、1 项 opt-in 默认跳过并单独通过真实 Nginx 集成；完整 quality、Ruff、失败注入与回归通过。PR 首次最低 Node 测试仅留下 `NPM_WORKLOAD_FAILED`，内部断言被既有日志入口抑制；同版 24.16.0 本地 253 项通过，PR 重跑及两次 main CI 通过，不声称还原首次失败根因。[完整命令与现场关闭证据](https://github.com/lyty1997/AxialMuseWebsite/issues/37#issuecomment-6391457633)已回填，#38 接收固定接口；公网监听、DNS/DNSSEC、正式 TLS 未实施。未新增第三方服务、浏览器请求或用户数据处理。本条与相关收尾文档仅留在独立工作树，未追加 main push 或第三笔 TAT，后续文档晋级继续遵守发布授权。
+
 ## 2026-10-24 — #37 本机原子发布候选与恢复验收
 
 - **用户选择**：D-163 确认新站首次发布为空账本起点、不追溯已删除旧站；无兼容 fallback 使用精确身份/账本摘要/有效期绑定的一次性 root-only 批准，回滚由固定 SSH 命令执行。#37 只完成本机监听验收，公网监听、DNS 与正式 TLS 留给 #38；具体生产写入方案另行审查。

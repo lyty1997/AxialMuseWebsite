@@ -307,6 +307,14 @@
 
   实施严格按[接线清单](../operations/production-deploy-setup.md)执行：每次写入前核对来源、唯一目标、owner/mode、锁、前态和剩余次数；结果不明、身份漂移或门禁失败即停止，不以自动重试消费下一次动作。安装与激活均须独立新 SSH 后验；GitHub CI、TAT 接受、task 终态、实际 current/HTTP/账本分别记录，不互相替代。未新增第三方服务或用户数据处理。
 
+- **D-165 / 2026-10-25**：用户确认 DNSPod 后台 `@`/`www` A、默认线路、TTL 600 与目标服务器符合预期，后台仅有 A，无其他线路及 MX/TXT/CAA；当前免费套餐没有 DNSSEC。公共只读复核与严格 SSH 实例元数据比较相符。该确认不包含完整旧值导出已完成的证据，不推导出购买付费套餐、修改 NS/DS 或启用 DNSSEC 的授权。#38 保持开放，不将 DNSSEC 缺席当作验收成功。
+
+  用户同意按“现有 DNS 核验 → #39 公网 Nginx/HTTPS 候选与本地验收 → HTTPS 稳定后回到 #38 DNSSEC”的顺序推进，并授权准备 #39 候选。#39 可使用 #38 已核验 A/NS 作为前置，不等待尚需 HTTPS 稳定的 DNSSEC 收尾；#38 完整关闭仍须满足原 DNSSEC 验收或经用户另行改变范围。候选沿用 #37 的不可变 release/current、锁、账本和恢复语义，准备双域名 TLS、精确 Host、同代 CSP、安全头、缓存、ACME webroot 与续期 hook；以本机隔离 Nginx、测试证书和真实静态制品验证正反例。公网安装、80/443、Nginx reload、ACME 注册/协议接受/正式签证、DNS/DNSSEC、费用、Git commit/push/PR/merge、TAT 调度均在具体方案可审查后另行确认；保留原工作区与 #37 收尾文档。
+
+- **D-166 / 2026-10-25**：用户在审查 #39 的 13 文件候选及正式执行清单后，授权独立 `codex/*` 分支从精确 canonical `main@27d461b` 直接向 main 提 PR，required checks 全绿且 head/base 稳定后普通合并，排除 dev 九个并行提交与原工作区改动。授权认证安装、保留旧入口/配置备份、HTTP-01 bootstrap、Let’s Encrypt 双域名正式证书、HTTPS 启用、固定 prepared 发布及续期验收，全部通过后回填并关闭 #39。用户选择自己在服务器 root-only 文件配置 ACME 联系邮箱，接受官方 Subscriber Agreement v1.8 及两个域名进入公开 CT 日志；执行前若协议链接变化则停止。用户逐项确认现有 ICP/腾讯云接入有效、云端 IPv4 80/443 已放行且公网 22 关闭、控制台恢复入口可用；这些是所有者确认，不是本会话云 API 或备案后台证明。
+
+  本轮上限为一次新增 TAT、一次正式签发、一次带 hook 的 staging 续期 dry-run、一次固定 prepared 发布、六次生产 Nginx reload（包含清单内恢复）；结果不明不自动重试，不超额。按[正式执行清单](../operations/public-https-setup.md)逐阶段复核唯一来源、当前 boot/服务/制品/账本、锁、owner/mode、配置前态和剩余次数，执行后用新 SSH、独立 TAT task、实际 HTTP/TLS/证书和成功 hook 回执分别验收。公网 vhost 请求日志按候选关闭；HSTS 保持 false。不改 DNS/DNSSEC、NS、AAAA、项目域名、云/SSH/UFW 规则、App/CAM 或 verifier，不购买套餐；#38 保持开放。收尾文档先留本地，避免未经授权的额外 main push/TAT。
+
 ## 依 D-078 形成的 M0 工程决定
 
 - **E-001 / 2026-07-18 — 项目内容职责拆分**：`docs/contracts/projects.json` 继续拥有项目 ID、短 slug、标题、摘要、状态、日期、仓库、展示开关、导航顺序和写作模块等结构化事实；项目长文位于 `site-content/projects/<project-id>/index.md` 或 `index.mdx`，只拥有背景、能力、取舍、限制、证据说明和复盘正文，不重复 H1、摘要、状态、日期、仓库或路由字段。构建期根据稳定 project ID 关联两者，并从注册表只读派生 Docusaurus 的 `title`、`description`、完整 `/projects/<project-slug>` 路径和草稿行为，不回写源文件。`published` 或 `archived` 项目必须恰有一个正文入口；`draft` 或 `planned` 可以暂缺正文但不能产生生产路由；孤儿正文、双入口和结构化字段双写均使构建失败。项目列表、项目侧栏和详情元数据读取同一注册表，正文文件路径不生成公开 URL。

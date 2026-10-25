@@ -30,8 +30,8 @@
 |---|---|---|
 | 注册域名 | `axialmuse.com` | 用户于 2026-07-12 确认 |
 | canonical URL | `https://www.axialmuse.com/` | 设计值，尚未上线验证 |
-| nameserver | `broderick.dnspod.net`、`sandpaper.dnspod.net` | 2026-07-12 公共 DNS 查询 |
-| DNSSEC | 未启用，父区无 DS | 2026-07-12 公共 DNS 查询 |
+| nameserver | `broderick.dnspod.net`、`sandpaper.dnspod.net` | 2026-10-25 两权威 NS/公共 DNS 核对 |
+| DNSSEC | 未发现父区 DS/域名 DNSKEY；免费套餐无此能力，尚待决定 | 2026-10-25 公共 DNS 与所有者后台确认 |
 | 根域重定向 | 未配置 | - |
 | 域名到期日 | 未设置 | - |
 | 自动续费 | 未设置 | - |
@@ -40,10 +40,12 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 
 | 类型 | 名称 | 目标或用途 | 代理状态 | TTL |
 |---|---|---|---|---|
-| A | `@` | 当前无记录；上线时指向轻量服务器公网 IPv4 | DNSPod | 计划 600 秒 |
-| A | `www` | 当前无记录；上线时指向轻量服务器公网 IPv4 | DNSPod | 计划 600 秒 |
+| A | `@` | 已存在，默认线路，目标匹配实例 metadata 的公网 IPv4 | DNSPod | 600 秒 |
+| A | `www` | 已存在，默认线路，同根域目标 | DNSPod | 600 秒 |
 | A | `<project-slug>` | 仅为已批准项目显式创建；当前无记录 | DNSPod | 计划 600 秒 |
 | AAAA | `@` / `www` | 当前无记录；M0 不计划启用 | DNSPod | - |
+
+2026-10-25 所有者确认后台只有上述符合预期的 A，没有其他线路或 MX/TXT/CAA。此为所有者脱敏确认，不是本会话经 DNSPod API 全量导出的证据；公共查询也不构成完整 zone 枚举。任何 DNS/DNSSEC 写入前仍须私密保存全量旧值并另获授权。当前先准备 #39 HTTPS 候选，HTTPS 稳定后再回到 #38；免费套餐限制不构成购买或迁移授权。
 
 ## 腾讯云轻量应用服务器
 

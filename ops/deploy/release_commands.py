@@ -104,7 +104,10 @@ def main(arguments=None, executable=None):
                 return 0
             store = ReleaseStore(SITE, state, load_verifier())
             from ops.deploy.prepare_artifact import prepare_artifact
-            nginx = LocalNginx(store, site_configuration=Path("/etc/nginx/conf.d/axialmuse-local.conf"))
+            from ops.deploy.public_activation import PublicNginx, load_public_mode
+            mode = load_public_mode(state)
+            options = {"site_configuration": Path("/etc/nginx/conf.d/axialmuse-local.conf")}
+            nginx = LocalNginx(store, **options) if mode is None else PublicNginx(store, mode=mode, **options)
             engine = ReleaseTransaction(store, nginx, prepare=prepare_artifact)
             if identity is not None:
                 stage = None
