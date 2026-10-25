@@ -1,5 +1,13 @@
 # 生产调度接线清单
 
+## 当前验收状态（2026-10-25）
+
+#37 已按 D-163/D-164 完成本机发布与兼容恢复。[PR #69](https://github.com/lyty1997/AxialMuseWebsite/pull/69) 合并为 `main@27d461b9d7d0745343f01b3c491ee68d267b4700`；六模块和四命令已认证安装，旧入口备份保留。run `40146353211` 两个 attempt 均为六 job 成功；第二次实际 TAT task `invt-0ab9kvg3m6` 独立确认 `SUCCESS` / exit 0。四次激活/兼容切换结束后 current 停在该 main，HTTP、账本链、批准消费和历史 staging 保全均已现场验收。
+
+账本摘要为 `2bd67fdfc737ea75047eb235cb64495865f5c91ac5d58bf1b2eaf42a2573d4de`；唯一 Web 监听为 `127.0.0.1:18080`。后续 main push 会由已安装入口尝试完整本机激活，不能继续把 `DEPLOY_ACTIVATION_PENDING` 当作当前成功边界。公网监听、DNS/DNSSEC 与正式 TLS 仍交给 #38；当前只允许报告 `local-accepted`。完整命令、制品身份和验证结果见 [#37 关闭证据](https://github.com/lyty1997/AxialMuseWebsite/issues/37#issuecomment-6391457633)。收尾文档暂未再次晋级，以遵守本轮两次 TAT 上限。
+
+## #34 接线阶段的历史边界
+
 本清单落实 D-160/D-161。只有固定服务器入口完成安装、GitHub 凭证与腾讯云最小权限配置读回、活动 workflow 进入 canonical `main` 后，才可执行一次受控 TAT 调度。调用返回的 `invocation ID` 不代表任务成功或站点已上线。当前固定入口只允许下载并独立验证到私有 staging，随后以 `DEPLOY_ACTIVATION_PENDING` 和非零状态明确停止；这是 #34 调度验收的安全边界，不是 #37 生产激活完成。首次账本、forward-only、Nginx 站点/reload、DNS/TLS 和公开激活仍须分别确认。
 
 活动 `deploy-production` job 随 `main` push 自动触发；合并接线 PR 的那次 `main` push 也会生成新的 artifact 并尝试调用 TAT。必须在合并前完成下方的腾讯云 command/CAM/实例读回及 GitHub environment 核查；PR 检查中的跳过状态不构成生产调度验收。合并后以精确 `main` SHA 的 run、TAT invocation ID 和独立 task 终态分别收据化；首次任务仍按 `DEPLOY_ACTIVATION_PENDING` 预期解释，不将其非零结束写成网站上线成功。

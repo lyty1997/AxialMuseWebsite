@@ -1,12 +1,12 @@
 # 域名与生产发布设计
 
 状态：draft
-最近更新：2026-10-16
+最近更新：2026-10-25
 适用范围：M0 腾讯云域名、DNS、轻量应用服务器、HTTPS、自动发布与回滚
 
 ## 目的
 
-本文把 `axialmuse.com` 从已注册、已备案状态发布到腾讯云上海轻量应用服务器的过程拆成可验证步骤。#36 已完成服务器盘点、旧站清理、账户/SSH/UFW 加固、软件与 Certbot 基线，以及 verifier 安装和 D-159 原子升级验收。当前管理使用 WireGuard 严格 SSH；正式 verifier/golden 对应 CI 成功的 canonical `main@a5ad326`，旧 slot 与 receipt 链完整保留。D-125 的 `environmental_inconclusive`、D-129 的 `post-reboot-pending` 和 D-132 的失败仍为历史事实；D-135 的 `accepted-with-residuals` 与 D-159 的独立当前态证据不改写历史。#37 的生产目录、发布/恢复和 TAT/Nginx/DNS/TLS 上线尚未实施。
+本文把 `axialmuse.com` 发布到腾讯云上海轻量服务器的过程拆成可验证步骤。#36 的服务器/verifier 基线、#34 活动 TAT 与 #37 的真实 release/current/账本及仅本机发布恢复已验收；#37 最终 current 为 `main@27d461b9d7d0745343f01b3c491ee68d267b4700`，只监听 `127.0.0.1:18080`。D-125/D-129/D-132 历史结果及 D-135 的接受残余结论保持原样。2026-10-25 已核对根域和 www A/NS，#38 的 DNSSEC 与 #39 正式 HTTPS 尚待；本次仅准备 D-165 授权的候选，详见[公网 HTTPS 候选与验收清单](public-https-setup.md)。
 
 ## 已知事实
 
@@ -290,7 +290,13 @@ TAT `InvokeCommand` 支持对已启用参数的固定 command 传入 JSON 编码
 
 ## DNS 设计
 
-保持域名在腾讯云注册，不迁移 nameserver。2026-07-12 公共查询已确认权威 nameserver 为 `broderick.dnspod.net` 与 `sandpaper.dnspod.net`，根域和 `www` 均无 A/AAAA，父区无 DS；上线前仍需在控制台核对 zone 所属账号与记录清单。
+### #38/#39 分阶段前置（D-165）
+
+2026-10-25 公共只读核查显示：两个既定权威 NS、Google/Cloudflare HTTPS DNS 与三个公共递归 DNS 的根域和 `www` A 均为同一 IPv4、TTL 600；严格 SSH 会话内与实例 metadata 公网 IPv4 比较相符。未查询到相应 AAAA/CNAME、域名 DNSKEY 或父区 DS。用户确认后台只有符合预期的默认线路 A，没有其他线路或 MX/TXT/CAA；免费套餐不具备 DNSSEC。该确认不是完整 zone 导出或 DNSSEC 验收，实际写入前仍须保存后台全量旧值。
+
+顺序固定为：现有 A/NS 核验 → #39 候选及经单独授权的公网 HTTPS → HTTPS 稳定后的 #38 DNSSEC。#38 保持开放；DNSSEC 付费能力与购买决定仍待用户确认，不自动升级套餐或迁移 NS。#39 的直接前置取已核验 A/NS，而不是尚需 HTTPS 稳定的 DNSSEC 全项关闭。此前 D-163 把公网工作统称 #38，此处按实际 Issue 拆分：#38 管 DNS/DNSSEC，#39 管 Nginx/HTTPS。
+
+保持域名在腾讯云注册，不迁移 nameserver。2026-07-12 的历史公共查询确认两个既定 NS、当时根域和 `www` 无 A/AAAA、父区无 DS；2026-10-25 当前 A/NS 与免费套餐状态已按上节更新，不沿用旧记录缺席结论。写入前仍须在控制台核对 zone 所属账号并保存完整记录清单。
 
 | 主机记录 | 类型 | 线路 | 值 | 初始 TTL |
 |---|---|---|---|---|
