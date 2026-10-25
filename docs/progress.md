@@ -4,6 +4,26 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-10-24 — #37 本机原子发布候选与恢复验收
+
+- **用户选择**：D-163 确认新站首次发布为空账本起点、不追溯已删除旧站；无兼容 fallback 使用精确身份/账本摘要/有效期绑定的一次性 root-only 批准，回滚由固定 SSH 命令执行。#37 只完成本机监听验收，公网监听、DNS 与正式 TLS 留给 #38；具体生产写入方案另行审查。
+- **仓库候选**：实现规范账本摘要链与备份、事务阻断、批准消费防重放、verifier 共用锁、安装前 staging 全树复验、同 SHA 不可变 payload/config、固定 deploy/prepared/rollback/init 命令及本机 Nginx 激活。只有历史验收成功且兼容更新后完整账本的 release 可作 fallback；恢复失败或崩溃留下 pending 状态会阻断后续操作。正常 forward-only 失败保留闭包，并可使用新身份和新批准向前修复。
+- **验收发现与修正**：真实固定镜像 Nginx 证明，一次 HTTP 冒烟成功后旧 worker 仍可能接受下一连接并返回旧代。候选现按 master 与 worker 的 PID/starttime 等待旧代退出，再执行全量 HTTP 验证。真实 Nginx 已通过两代字节切换、兼容回滚、reload 故障恢复、真实无效配置拒绝、301/query 与 metadata 404；真实 SIGKILL fixture 证明未完成事务阻断下一次发布。批准过期/漂移/重放、账本断链/缺失/写入中断、摘要不符、staging 变化、不可变安装重入和不兼容回滚均有独立反例。
+- **本地与现场边界**：系统 Python 3.12 的 ops 回归、相关 Ruff、固定 Node 24.18.0 完整 `quality` 已通过；Docker 集成入口需显式启用并已单独执行，具体最后结果以本轮交付回执为准。只读 SSH 核对生产目录权限、共享 verifier 锁、Nginx 原配置摘要和两个候选端口空闲；没有服务器写入、TAT 调用或 Git 发布。可审查的窄化 Git 晋级、六模块/四命令安装、显式初始化和四次本机切换方案见[接线清单](operations/production-deploy-setup.md)。#37 继续开放，未将本地候选记为生产验收。未新增第三方服务或用户数据处理。
+
+## 2026-10-24 — #37 恢复推进：账本历史比较与现场前态复核
+
+- **上游与现场**：刷新远端确认 `main@441b2140ff0bd2e8191c107ce9ebe6f8a92eadee`，#34 已完成的调度/制品准备证据见 [交接记录](https://github.com/lyty1997/AxialMuseWebsite/issues/37#issuecomment-6380988655)。本轮严格 SSH 只读复核确认 `current`、`releases` 与生产 URL 账本均缺席；固定入口为 root:root/0755，Nginx 配置测试成功、配置摘要与 #34 收尾一致。没有新增 TAT 调用或服务器写入。
+- **独立实现与证据**：在已有 D-142 账本纯逻辑基础上增加 `assert_ledger_append_only(before, after)`，比较全部路由、边及其首次 release 身份，拒绝规范 JSON 仍合法但删除历史事实、替换目标或重写首次身份的账本；merge 返回前执行此检查。`python3 -m unittest discover -s tests/ops -p '*ledger*.py' -v` 共 21 项通过，相关 Ruff 通过。内存 mutation 将该谓词替换为恒真后，六项新增测试产生十个失败断言、零运行错误，证明反例能检测历史检查被绕过；未改写磁盘源码。
+- **决策门禁与暂停范围**：D-142 明确保留的首次账本来源、forward-only 批准承载方式与回滚通道尚待用户选择；#37 本机验收与 #38 公网接入的边界也已提交确认。仓库仅保留旧单页源码和空重定向注册表，不能据此证明历史服务器从未返回过其他 URL/301。依赖这些选择的生产持久化、激活和恢复实现及外部写入保持暂停。远端 `dev` 仍有九个并行提交，本轮未提交、推送或创建 PR，原有用户改动完整保留；本条与账本增量仅为本地候选，#37 保持开放。未新增第三方服务、浏览器请求或用户数据处理。
+
+## 2026-10-24 — #34 时序修复安装与受控验收完成
+
+- **Git 与第一次新增调用**：[PR #68](https://github.com/lyty1997/AxialMuseWebsite/pull/68) 四文件修复通过 [PR CI](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40061134461)，核对 head/base 后合并为 `main@441b2140ff0bd2e8191c107ce9ebe6f8a92eadee`。[main run 40069951954 attempt 1](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40069951954/attempts/1) 的六个 job 全部成功，返回 `inv-2aa9uagj3n`。旧入口本次未碰到时序窗口：任务 `invt-2aa9uagj3p` 以 `DEPLOY_ACTIVATION_PENDING`、exit 2 停止，artifact `12551260833` 的外层 ZIP digest 为 `bf010e31067458242e290d72cf4c9ed6580ff74c36c018a24320f9ddab05a6da`，release digest 为 `a4cc5eae66894794a163ec6a6bf72b01419faca9371fff767b19fdbf18350cad`；完整五参数命令及 18 个 verified-release 文件与 ZIP 字节一致，未激活站点。
+- **安装来源与后验**：GitHub 精确 main 内容、Git blob 和本地源码交叉认证下载器 blob `1949ffc17c3966f14bb10c2ebbfe828b0229062a`，新 SHA-256 为 `8ecf0c434c0baeaa133b020c0d303ee46736bc563602fe8d5c5da491ee013cee`。main CI 成功且无在途部署后，仅原子替换 `/usr/local/lib/axialmuse/ops/deploy/fetch_artifact.py`，保留 root-only 旧字节备份。新 SSH 会话确认 root:root/0644、其余四个固定组件未变，并以同一 main 的测试在已安装模块上通过九项测试；三个既有 staging 的字节与权限快照完全一致，Nginx 未变，current/releases 仍缺席。
+- **最后一次受控重跑**：按本轮授权，在 main 仍精确匹配且 attempt 1 成功、安装后验通过后，仅请求一次完整 rerun。[attempt 2](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40069951954/attempts/2) 六个 job 全部成功，返回 `inv-waaa2j0bwp`、artifact `12550609976`。安装后任务 `invt-waaa2j0bwq` 的完整脚本与五参数匹配，按约定以 `DEPLOY_ACTIVATION_PENDING`、exit 2 停止；TAT 的 `FAILED` 只表示该非零退出，不表示站点已激活。ZIP digest 为 `e987884970a39eb2e40f516d9561c9ff7ae8e44ada222dcfe49c4ac49a4ff22c`，release digest 为 `a4cc5eae66894794a163ec6a6bf72b01419faca9371fff767b19fdbf18350cad`；远端独立重算两个摘要并逐文件比对 18 个文件一致。
+- **收尾与下游边界**：最终新 SSH 会话确认安装源码仍匹配 canonical、新旧下载器字节保留、三个历史 staging 的内容与权限快照未变，且只新增本次验证成功的 staging；main 仍为 `441b214`，Nginx 未变，current/releases 缺席。#34 的身份/新鲜度/Secret 前门禁/受限调度与独立 task 验收闭合，关闭证据回填到 Issue；#37 的账本、不可变生产安装、原子激活、Nginx 与 DNS/TLS 仍未完成。共使用本轮授权的两次调度，没有追加 main push、本轮第三次调用、失败 staging 清理、站点激活或新第三方服务/用户数据处理。现场证据在本地进度与 GitHub Issue 保存；本条及接线清单的收尾更新尚未再次晋级 main，避免超出本轮调度次数，后续文档晋级须沿用明确的发布授权。
+
 ## 2026-10-24 — #34 下载时序修复晋级与受控再验收授权
 
 - **用户决定**：用户授权现有四文件修复从基于 `main@a430009497feb80cdcda41fb27e6c1e9c6ccf52a` 的独立 `codex/*` 分支直接向 `main` 提 PR，检查全绿且 head/base 稳定后普通合并。等待精确合并 SHA 的 main CI 成功，再从同一 canonical SHA 认证并更新服务器下载器，最后完整重跑该 main CI 一次验收。最多新增两次 TAT 调度：修复合并自动触发的一次仍使用旧入口，安装后再验收一次；任一结果不明不自动追加调用。
