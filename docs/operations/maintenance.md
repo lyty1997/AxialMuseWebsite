@@ -107,6 +107,8 @@ D-097 至 D-099 已实现固定 Action SHA、Node 24 双端点、完整 checkout
 
 ### 定时检查
 
+2026-10-26 D-168 确认 DNSSEC 延期，免费加固与运行监测先推进。DNSSEC 检查当前验证未启用状态及父区无陈旧 DS，不能要求未部署的签名链或将缺席误报为成功。先建立本机只读采样和反例，24 小时观察及活动 schedule/通知分别验收；本机后台采样不等于 GitHub 定时通知已上线。HSTS/CAA 的精确配置和生产写入继续按[免费加固与运行观察](production-health.md)审查。
+
 以下计划任务仍未创建；D-097 的四个 CI job 不代表定时维护 workflow 已经存在。
 
 M0 在 GitHub Actions 增加以下计划任务：

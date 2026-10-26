@@ -290,6 +290,12 @@ TAT `InvokeCommand` 支持对已启用参数的固定 command 传入 JSON 编码
 
 ## DNS 设计
 
+### 零新增开支边界（D-168）
+
+用户于 2026-10-26 确认 DNSSEC 暂缓，继续免费加固与运行监测。#38 的本次完成范围为既有 A/NS/TTL 的公共只读验收，DNSSEC 不再是本次关闭的强制条件；其未启用风险明确保留，不把缺席记为链验证通过。继续 DNSPod 免费版及现有两个默认线路 A，不迁移 NS、不购买套餐、不新增 HTTPS 类型记录。完整 zone 尚无导出证据，公共查询不能枚举全部记录；未来任何 DNS 写入前仍须私密导出全量旧值并取得具体授权。
+
+网站 HTTPS 与 HTTPS 类型 DNS 记录分别验收：前者已由 #39 真实证书和续期验收建立，后者不是当前 A 记录直连 Nginx 的必要条件。HSTS、CAA 和活动监测接线的具体方案见[免费加固与运行观察](production-health.md)，尚未因此获得生产写入或额外 Git/TAT 授权。下文 D-165 的“HTTPS 稳定后启用 DNSSEC”顺序及原上线步骤中的 DNSSEC 必验项，以本节延期决定为准。
+
 ### #38/#39 分阶段前置（D-165）
 
 2026-10-25 公共只读核查显示：两个既定权威 NS、Google/Cloudflare HTTPS DNS 与三个公共递归 DNS 的根域和 `www` A 均为同一 IPv4、TTL 600；严格 SSH 会话内与实例 metadata 公网 IPv4 比较相符。未查询到相应 AAAA/CNAME、域名 DNSKEY 或父区 DS。用户确认后台只有符合预期的默认线路 A，没有其他线路或 MX/TXT/CAA；免费套餐不具备 DNSSEC。该确认不是完整 zone 导出或 DNSSEC 验收，实际写入前仍须保存后台全量旧值。
@@ -311,7 +317,7 @@ TAT `InvokeCommand` 支持对已启用参数的固定 command 传入 JSON 编码
 - 未配置服务器 IPv6、系统防火墙、Nginx 和证书前不添加 AAAA。
 - 不覆盖未知 MX、TXT、CAA 或验证记录；修改前导出当前 DNS 清单。
 - 稳定观察后可把 TTL 调整到 3600 秒；迁移或故障演练前再提前降低。
-- HTTPS 和 DNS 稳定后启用 DNSSEC，并验证 DS、DNSKEY、RRSIG 与公共解析结果。DNSPod 支持 DNSSEC，具体套餐可用性在控制台现场核验。
+- D-168 暂缓 DNSSEC。未来单独获准启用时，再核验套餐能力、DS/DNSKEY/RRSIG 和公共验证链；本次只核对未启用状态与父区无陈旧 DS，不购买套餐。
 
 ## Nginx 与 HTTPS
 
@@ -400,7 +406,7 @@ Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩
 10. 签发证书，验证四种 HTTP/HTTPS 主机名行为、同版本旧路径/尾斜杠 301 和未知 Host 拒绝策略。
 11. 从 `main` 走两轮自动发布；先演练无新增永久边的兼容回滚，再证明“有历史 target 但缺 source 规则”的旧 release 会被拒绝，并分别验证有兼容 fallback 和经授权 forward-only 的恢复语义。
 12. 发布 canonical、`robots.txt`、`sitemap.xml`、ICP 页脚和安全响应头。
-13. 启用 DNSSEC，完成桌面端、移动端、公共解析、TLS 和生产冒烟验证。
+13. 按 D-168 记录 DNSSEC 延期状态，完成桌面端、移动端、公共解析、TLS 和生产冒烟验证；未来启用 DNSSEC 单独审查。
 14. 连续观察至少 24 小时，更新生产清单；开站后按时完成公安联网备案。
 
 项目体验在主站完成基础上线后按 [项目体验子域名架构](../architecture/project-experience-hosting.md) 逐个接入，不与主站首次 DNS 切换打包执行。
@@ -411,7 +417,7 @@ Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩
 
 - `@` 与 `www` A 记录均指向预期轻量服务器公网 IPv4。
 - 注册表中状态为 `live` 的项目都有且只有预期的显式 A 记录；不存在泛解析。
-- nameserver、DNSSEC 验证链和公共解析结果正确。
+- nameserver 和公共解析结果正确；当前 DNSSEC 按 D-168 延期，父区无残留 DS。只有未来明确启用后才要求 DNSSEC 验证链通过。
 - ICP 备案状态、腾讯云接入状态和页脚备案号一致。
 - 没有未知泛解析、失效验证记录或被覆盖的邮件记录。
 

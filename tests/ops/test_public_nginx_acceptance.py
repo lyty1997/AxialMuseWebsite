@@ -11,9 +11,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ops.deploy.deployment_state import DeploymentError, write_new
+from ops.deploy.deployment_state import DeploymentError, canonical, write_new
 from ops.deploy.nginx_activation import local_site_config
-from ops.deploy.public_activation import PublicNginx
+from ops.deploy.public_activation import PublicNginx, load_public_mode
 from ops.deploy.public_site import bootstrap_config, content_hash
 from ops.deploy.release_transaction import ReleaseTransaction
 from ops.deploy.renew_public_certificate import renew
@@ -122,6 +122,68 @@ class PublicFixture:
 
 @unittest.skipUnless(os.environ.get("AXIALMUSE_NGINX_ACCEPTANCE") == "1", "需显式启用本机 Docker 验收")
 class PublicRealNginxTests(unittest.TestCase):
+    def test_trial_hsts_survives_deploy_rollback_and_renew_then_disables(self):
+        with tempfile.TemporaryDirectory(prefix="axial-hsts-nginx-") as directory:
+            fixture = PublicFixture(directory)
+            try:
+                fixture.start()
+                adapter, store = fixture.adapter, fixture.fixture.store
+                mode_path = fixture.fixture.state.root / "public-site.json"
+                write_new(mode_path, canonical({"schema": 1, "hsts": False}))
+                before = fixture.fixture.state.read_ledger()[0]
+                adapter.public_smoke(fixture.sha)
+                old_config = adapter.public_configuration.read_bytes()
+                adapter.mode = {"schema": 2, "hstsMaxAge": 300}
+                # 隔离候选可先验证；活动 mode/config 不一致时续期必须拒绝。
+                with adapter.public_candidate(fixture.sha):
+                    pass
+                self.assertEqual(adapter.public_configuration.read_bytes(), old_config)
+                with self.assertRaisesRegex(DeploymentError, "PUBLIC_CONFIG_DRIFT"):
+                    renew(store, adapter)
+                mode_path.write_bytes(canonical(adapter.mode))
+                self.assertEqual(load_public_mode(fixture.fixture.state), adapter.mode)
+                adapter.activate(fixture.sha)
+                def request(host, path, tls=True):
+                    port = adapter.https_port if tls else adapter.http_port
+                    return adapter.public_request(port, host, path, tls=tls)
+                for host in ("axialmuse.com", "www.axialmuse.com"):
+                    for path in ("/", "/does-not-exist/"):
+                        for tls in (False, True):
+                            hsts = [v for k, v in request(host, path, tls)[1]
+                                    if k.lower() == "strict-transport-security"]
+                            self.assertEqual(hsts, ["max-age=300"] if tls else [])
+                engine = ReleaseTransaction(store, adapter)
+                stage, identity = fixture.fixture.stage("d" * 40, payload_index=b"TRIAL RELEASE")
+                engine.execute(identity=identity, stage=stage)
+                self.assertIn(("Strict-Transport-Security", "max-age=300"), request("www.axialmuse.com", "/")[1])
+                engine.execute(rollback_sha=fixture.sha)
+                renew(store, adapter)
+                self.assertEqual(mode_path.read_bytes(), canonical({"schema": 2, "hstsMaxAge": 300}))
+                adapter.public_smoke(fixture.sha)
+                self.assertEqual(fixture.fixture.state.read_ledger()[0], before)
+                # 错误地恢复旧半年头必须被真正 TLS 响应探针识别。
+                clean = adapter.public_configuration.read_bytes()
+                adapter.public_configuration.write_bytes(clean.replace(b"max-age=300", b"max-age=15552000"))
+                adapter.run(fixture.nginx_command + ["-s", "reload"])
+                deadline = time.monotonic() + 10
+                while ("Strict-Transport-Security", "max-age=15552000") not in request("www.axialmuse.com", "/")[1]:
+                    self.assertLess(time.monotonic(), deadline)
+                    time.sleep(0.02)
+                with self.assertRaisesRegex(DeploymentError, "PUBLIC_HSTS"):
+                    adapter.public_smoke(fixture.sha)
+                adapter.public_configuration.write_bytes(clean)
+                adapter.activate(fixture.sha)
+                adapter.mode = {"schema": 2, "hstsMaxAge": 0}
+                mode_path.write_bytes(canonical(adapter.mode))
+                adapter.activate(fixture.sha)
+                renew(store, adapter)
+                self.assertFalse(any(k.lower() == "strict-transport-security"
+                                     for k, _ in request("www.axialmuse.com", "/")[1]))
+                self.assertEqual(store.current(), fixture.sha)
+                self.assertEqual(fixture.fixture.state.read_ledger()[0], before)
+            finally:
+                fixture.stop()
+
     def test_tls_hosts_csp_cache_bootstrap_and_compatible_recovery(self):
         with tempfile.TemporaryDirectory(prefix="axial-public-nginx-") as directory:
             fixture = PublicFixture(directory)

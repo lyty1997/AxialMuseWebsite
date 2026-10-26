@@ -4,5 +4,7 @@
   "status": "active",
   "owner": "AxialMuseWebsite",
   "roleValues": ["brand", "operational"],
-  "assets": []
+  "assets": [
+    {"sourcePath": "robots.txt", "role": "operational"}
+  ]
 }
