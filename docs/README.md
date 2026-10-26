@@ -21,6 +21,7 @@
 - [域名与生产发布设计](operations/domain-deployment.md)
 - [生产调度接线清单](operations/production-deploy-setup.md)
 - [公网 HTTPS 候选与验收清单](operations/public-https-setup.md)
+- [免费加固与运行观察](operations/production-health.md)
 - [内容发布流程](operations/content-publishing.md)
 - [自动化维护与运行手册](operations/maintenance.md)
 - [生产环境清单](operations/production-inventory.md)
@@ -39,7 +40,11 @@
 
 ## 当前阶段
 
-- 最新上线核查（D-165 / 2026-10-25）：#37 仅本机发布已完成；根域和 `www` 的现有 A/NS 已复核并匹配服务器。#38 的 DNSSEC 尚待，所有者确认免费套餐无此能力；已授权准备 #39 公网 HTTPS 候选及本地验收，正式上线、DNSSEC 与 Git 发布继续按独立清单审查。以下历史条目的“DNS 未实施”不代表当前 A 记录缺席。
+- D-169 / 2026-10-26：300 秒 HSTS 候选已实现；兼容原关闭/半年模式，严格拒绝未批准期限。默认 Python ops 212 项（209 通过、三个 opt-in 跳过），其中两个真实 Nginx/TLS 场景另行启用通过，完整 quality、Ruff 与原配置逐字节兼容证明通过。生产仍关闭 HSTS；[16 文件候选的晋级/安装清单](operations/production-health.md)单独等待授权，不自动消耗 Git/TAT/reload 额度。
+
+- D-168 / 2026-10-26：用户确认 DNSSEC 暂缓，保留免费 DNS/HTTPS，#38 改按现有 DNS 只读验收收尾；完整 zone 导出保留为未来写入前要求。免费加固与运行监测先推进，具体生产配置、DNS 和 Git/schedule 写入仍待候选审查，见[免费加固与运行观察](operations/production-health.md)。#40 的真实 24 小时观察和 #41/#42 的定时接线不因一次公网成功而完成。以下旧条目的 DNSSEC 强制前置以 D-168 为准。
+
+- 最新上线核查（D-166/D-167 / 2026-10-25）：[PR #70](https://github.com/lyty1997/AxialMuseWebsite/pull/70) 已合并为 `main@2cf04ee`，六项 CI 和唯一新增 TAT 独立成功。`https://www.axialmuse.com/` 的真实证书、14 个文件公网哈希、四主机路由、浏览器及一次正式续期 dry-run 均验收通过；current/账本、六个事务与七次 reload 独立复核一致。已按授权上线可信空状态，无浏览器第三方请求或用户数据采集。详细回执见[公网 HTTPS 验收清单](operations/public-https-setup.md)。#38 的 DNSSEC、HSTS 和 #40 持续健康核查留待独立推进；本次收尾文档只留本地，避免追加 main push/TAT。以下历史条目的“DNS/TLS 未实施”以本条当前证据为准。
 
 2026-10-25：#34 与 #37 已完成独立现场验收；#37 的实现经 PR #69 进入 `main@27d461b`，六模块与四命令已认证安装，两次 TAT、四次本机激活/兼容切换全部按授权完成，最终 current 停在同一 main。账本、真实 HTTP 与仅本机监听已复核，[关闭证据](https://github.com/lyty1997/AxialMuseWebsite/issues/37#issuecomment-6391457633)已回填。公网监听、DNS/DNSSEC 与正式 TLS 留给 #38；不能据此宣称网站已经公网可用。详见[生产调度接线清单](operations/production-deploy-setup.md)。本轮收尾文档尚在独立工作树，未追加会触发第三笔 TAT 的 main push。
 

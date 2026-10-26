@@ -16,6 +16,8 @@ HOSTS = ("axialmuse.com", "www.axialmuse.com")
 WEBROOT = Path("/srv/axialmuse-acme")
 LINEAGE = Path("/etc/letsencrypt/live/axialmuse.com")
 PUBLIC_CONFIG = Path("/etc/nginx/conf.d/axialmuse-public.conf")
+LEGACY_HSTS_SECONDS = 15552000
+TRIAL_HSTS_SECONDS = 300
 SECURITY = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -123,13 +125,30 @@ def csp_for_store(store, sha):
     return "; ".join(directives)
 
 
-def security_headers(csp, hsts=False):
+def public_hsts_max_age(mode):
+    require(isinstance(mode, dict) and type(mode.get("schema")) is int, "PUBLIC_MODE")
+    if mode["schema"] == 1:
+        require(set(mode) == {"schema", "hsts"} and type(mode["hsts"]) is bool, "PUBLIC_MODE")
+        return LEGACY_HSTS_SECONDS if mode["hsts"] else 0
+    require(mode["schema"] == 2 and set(mode) == {"schema", "hstsMaxAge"}
+            and type(mode["hstsMaxAge"]) is int
+            and mode["hstsMaxAge"] in (0, TRIAL_HSTS_SECONDS), "PUBLIC_MODE")
+    return mode["hstsMaxAge"]
+
+
+def security_headers(csp, hsts=False, *, hsts_max_age=None):
     require(isinstance(csp, str) and not any(char in csp for char in ('"', "\n", "\r", "$", "\\")),
             "PUBLIC_CSP")
     require(type(hsts) is bool, "PUBLIC_MODE")
+    if hsts_max_age is None:
+        age = LEGACY_HSTS_SECONDS if hsts else 0
+    else:
+        require(not hsts and type(hsts_max_age) is int
+                and hsts_max_age in (0, TRIAL_HSTS_SECONDS, LEGACY_HSTS_SECONDS), "PUBLIC_MODE")
+        age = hsts_max_age
     headers = dict(SECURITY, **{"Content-Security-Policy": csp})
-    if hsts:
-        headers["Strict-Transport-Security"] = "max-age=15552000"
+    if age:
+        headers["Strict-Transport-Security"] = f"max-age={age}"
     return "".join(f'    add_header {key} "{value}" always;\n' for key, value in headers.items())
 
 
@@ -159,7 +178,7 @@ def bootstrap_config(webroot=WEBROOT, listen="0.0.0.0:80"):
     return text.encode()
 
 
-def public_config(store, sha, *, hsts=False, webroot=WEBROOT, lineage=LINEAGE,
+def public_config(store, sha, *, hsts=False, hsts_max_age=None, webroot=WEBROOT, lineage=LINEAGE,
                   http="0.0.0.0:80", https="0.0.0.0:443"):
     sha_valid(sha)
     for listen in (http, https):
@@ -168,7 +187,7 @@ def public_config(store, sha, *, hsts=False, webroot=WEBROOT, lineage=LINEAGE,
     include = safe_path(store.releases / sha / "config/site-release.conf")
     csp = csp_for_store(store, sha)
     headers = security_headers(csp)
-    secure_headers = security_headers(csp, hsts)
+    secure_headers = security_headers(csp, hsts, hsts_max_age=hsts_max_age)
     cert = safe_path(Path(lineage) / "fullchain.pem")
     key = safe_path(Path(lineage) / "privkey.pem")
     # 用 map 处理缓存，避免 location 中 add_header 覆盖整套安全头继承。

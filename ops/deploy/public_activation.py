@@ -16,6 +16,7 @@ from ops.deploy.deployment_state import (
 from ops.deploy.nginx_activation import LocalNginx
 from ops.deploy.public_site import (
     CANONICAL, HOSTS, LINEAGE, PUBLIC_CONFIG, SECURITY, WEBROOT, csp_for_store, public_config,
+    public_hsts_max_age,
 )
 
 
@@ -25,8 +26,7 @@ def load_public_mode(state, configuration=PUBLIC_CONFIG):
         require(not os.path.lexists(configuration), "PUBLIC_MODE_MISSING")
         return None
     mode = decode(read_file(path, state.uid, mode=0o600))
-    require(set(mode) == {"schema", "hsts"} and type(mode["schema"]) is int
-            and mode["schema"] == 1 and type(mode["hsts"]) is bool, "PUBLIC_MODE")
+    public_hsts_max_age(mode)
     return mode
 
 
@@ -35,7 +35,8 @@ class PublicNginx(LocalNginx):
                  lineage=LINEAGE, http_port=80, https_port=443, candidate_http=18082,
                  candidate_https=18443, public_address="0.0.0.0", tls_context=None, ca_file=None, **kwargs):
         super().__init__(store, **kwargs)
-        self.mode = mode
+        public_hsts_max_age(mode)
+        self.mode = dict(mode)
         self.public_configuration = Path(public_configuration)
         self.webroot = Path(webroot)
         self.lineage = Path(lineage)
@@ -50,7 +51,7 @@ class PublicNginx(LocalNginx):
 
     def render(self, sha, *, candidate=False):
         return public_config(
-            self.store, sha, hsts=self.mode["hsts"], webroot=self.webroot, lineage=self.lineage,
+            self.store, sha, hsts_max_age=public_hsts_max_age(self.mode), webroot=self.webroot, lineage=self.lineage,
             http=f"127.0.0.1:{self.candidate_http}" if candidate else f"{self.public_address}:{self.http_port}",
             https=f"127.0.0.1:{self.candidate_https}" if candidate else f"{self.public_address}:{self.https_port}",
         )
@@ -111,7 +112,8 @@ class PublicNginx(LocalNginx):
             for name, value in {**SECURITY, "Content-Security-Policy": expected_csp}.items():
                 require([v for k, v in headers if k.lower() == name.lower()] == [value], "PUBLIC_SECURITY_HEADERS")
             hsts = [v for k, v in headers if k.lower() == "strict-transport-security"]
-            require(hsts == (["max-age=15552000"] if tls and self.mode["hsts"] else []), "PUBLIC_HSTS")
+            age = public_hsts_max_age(self.mode)
+            require(hsts == ([f"max-age={age}"] if tls and age else []), "PUBLIC_HSTS")
             return code, headers, body
 
         rules = {rule.source: rule.target for rule in view.rules}

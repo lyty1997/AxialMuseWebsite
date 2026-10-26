@@ -4,6 +4,31 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-10-26 — D-169 的 300 秒 HSTS 候选完成本地验证
+
+- **用户选择与实现**：用户确认仅根域/www HTTPS 下发 300 秒 HSTS，不含子域继承或 preload。两个既有公网模块新增严格 schema 2 的整数 0/300，旧 schema 1 布尔语义保留。固定 deploy/rollback 和证书 hook 通过共同模式解析使用新策略，五个 TAT 参数及 hook 文件不变；配置/模式失配在续期 reload 前拒绝，未创建生产安装或迁移。
+- **独立证据**：与已认证安装源同摘要的旧 renderer 在实际当前路径/CSP 上，对原关闭和半年两种模式均逐字节一致；新头只出现于两个已知 HTTPS server。默认 Python ops 212 项（209 通过、三个既有/新增 opt-in 跳过），其中两项真实固定镜像 Nginx/TLS 独立启用通过，覆盖发布、回滚、续期、关闭和半年头定向 mutation；新增公网监测精确头反例通过，Ruff、完整 quality 和 diff 检查通过。首轮 quality 被文档中的受限状态词拦截，已定位文档门禁并修正文案；原非零日志保留，未把泛化错误解释为代码测试成功。
+- **收尾与操作门禁**：16 文件候选及[具体执行清单](operations/production-health.md)已形成，包括 robots 修复、只读监测与此前 #39 的本地文档收尾。远端 main 仍为 `2cf04ee`，dev 有九个独有提交；新的 Git 路径、一次新增 TAT、最多四次 reload（含 hook 与恢复）、两模块认证安装和新阶段观察均尚未获准。旧本机采样仍运行，已有采样均诚实保留 robots 缺失失败，不报告 24 小时成功。未新增第三方服务、访问者数据处理、费用或生产写入；CAA/DNSSEC、活动 schedule 与依赖升级保持各自边界。
+
+## 2026-10-26 — #38 零新增开支收尾与运行观察启动
+
+- **用户决定与关闭**：D-168 确认 DNSSEC 暂缓，保留免费 DNS/HTTPS，先推进免费加固和运行监测。#38 已改按现有 A/NS/TTL 的只读验收范围关闭，[证据与边界](https://github.com/lyty1997/AxialMuseWebsite/issues/38#issuecomment-6409820383)已独立逐字核验；新 113 项 DNS 组合在四个初始 UDP 失败保留、逐项 TCP 补查后全部符合预期。未声称 DNSSEC 链通过或全量 zone 已导出；导出仍是未来 DNS 写入前要求。
+- **实际监测与缺口**：新零依赖 Python 检查绑定完整复验的当前 artifact，真实公网 42 项中 41 通过，14 个 payload 哈希一致，唯一失败为 `/robots.txt` 404，命令正确 exit 1。注册 robots 的修复候选已实际 production build 验证，尚未部署；#40/#41 不因此关闭。本机每 15 分钟采样、计划至少 24 小时的进程已经启动，首份回执为 UTC `06:31:43`；本机采样没有自动通知，不等同服务器常驻/GitHub schedule。已知失败、采样空档和未到 24 小时不能算成功，修复上线后重新绑定基线并重开观察。
+- **验证**：新增 20 项正常/反例及采样循环检查通过，完整 Python ops 为 206 项（204 通过、两个既有 opt-in 跳过）；完整 Node quality、Ruff、253 项 TypeScript 和 production build 通过。真实移动视口 Chrome 三页 hydration/导航、29 个请求无第三方请求、CSP 违规或浏览器错误，截图已查看。严格 SSH 只读复核 current/账本/事务/安装/备份/证书/服务/管理边界通过，本轮零新增 reload、TAT 或部署。
+- **后续与风险**：GitHub 实时未关闭依赖告警为 critical 4、high 26、medium 15、low 5；已核对三个包的锁定路径和官方公告，生产 Nginx 不执行 Node 不代表 CI 风险消失，正式升级/可达性仍待。HSTS 短有效期、CAA 精确值和继承影响、活动 schedule/通知及 Git 晋级需具体方案审查。详见[免费加固与运行观察](operations/production-health.md)。原主工作区、dev 并行提交和 #39 本地收尾保持；本轮未提交或推送，未新增服务商、费用或访问者采集。
+
+## 2026-10-25 — #39 公网 HTTPS 与续期验收完成
+
+- **最终行为**：`https://www.axialmuse.com/` 已提供 `main@2cf04ee`；四主机单跳/查询保留、未知 Host/SNI 拒绝、14 个 payload 哈希、安全头/CSP、缓存/MIME/gzip/Range、Chrome 三页 hydration 与客户端跳转全部通过。无证书/hosts 例外，无外部浏览器请求、CSP 违规或浏览器错误。
+- **发布与续期**：一次正式签发、一次精确同制品 prepared 发布、一次真实续期 dry-run 均 exit 0，唯一新增 hook 成功回执绑定当前 SHA、账本、时间和实际加载证书。公开证书到期 `2027-01-23 13:33:10 UTC`，SHA-256 `215ddd80bfef1ebf99fd5f823716a2d0d578690621a92cac07726bf898f423d0`；Nginx/Certbot timer active/enabled，六个发布事务全部成功。
+- **额度与收尾**：含失败恢复累计七次 reload，由 systemd journal 独立计数，低于 D-167 的八次上限；仅一次新增 TAT，无 CI 重跑、DNS 写入或额外 Git 发布。八目标、十一个未变组件、五份备份、当前配置/账本/boot/管理边界最终复核通过，失败证据保留。[#39 关闭证据](https://github.com/lyty1997/AxialMuseWebsite/issues/39#issuecomment-6399028942)已回填并独立逐字核验，Issue 按 completed 关闭；#38 DNSSEC 与 #40 保持各自待办。已启用获准 ACME 服务，仅向 CA 提交所有者私密联系邮箱，无浏览器第三方请求或用户数据采集。本条及详细收尾文档只留本地。
+
+### 本轮失败、恢复与新增授权记录
+
+- **晋级与安装**：[PR #70](https://github.com/lyty1997/AxialMuseWebsite/pull/70) 合并为 `main@2cf04ee`，[main CI](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40201521669) 六项成功；唯一新增 TAT 独立 SUCCESS/exit 0，14 个 payload HTTP 哈希通过。四模块认证、八目标安装及五份旧入口备份独立复核通过，十一个既有组件未变，邮箱文件仅格式/权限核验通过。
+- **失败与恢复**：现场辅助脚本缺少导入在写入前停止；修正后，HTTP 函数名遮蔽标准库导致 bootstrap 探针失败，已完成精确配置恢复和独立复核。仅本机 18080，current 为上述新 main，账本未变，五个事务；正式签发、prepared、续期均未开始。两个辅助脚本错误与已完成恢复均留证，不把 main CI 成功写成公网验收。
+- **后续授权**：含 merge TAT 累计三次 reload。剩余流程预计四次，另保留一次兼容恢复；用户在 D-167 明确确认总上限调整为八次，剩余最多五次，其他边界不变。#39/#38 继续开放，等待真实公网/续期结果，失败目录与历史 staging 保留。本条及[详细回执](operations/public-https-setup.md)只留本地，未追加 push/TAT、DNS 或用户数据处理。
+
 ## 2026-10-25 — #38 DNS 现状核对及 #39 HTTPS 候选
 
 - **决定与事实**：按 D-165，所有者确认 DNSPod 后台只有符合预期的默认线路 A（根域/www、TTL 600），无其他线路或 MX/TXT/CAA，免费套餐没有 DNSSEC。权威 NS、多公共解析器和实例 metadata 比较一致；完整 zone 旧值导出尚无证据，不能以公共枚举替代。顺序为已核验 DNS → #39 HTTPS → #38 DNSSEC，两个 Issue 保持开放。

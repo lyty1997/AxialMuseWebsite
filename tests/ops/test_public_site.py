@@ -11,7 +11,10 @@ from unittest.mock import Mock, patch
 from ops.deploy.deployment_state import DeploymentError, canonical, write_new
 from ops.deploy import release_commands
 from ops.deploy.public_activation import PublicNginx, load_public_mode
-from ops.deploy.public_site import InlinePolicy, bootstrap_config, content_hash, csp_for_store, public_config
+from ops.deploy.public_site import (
+    InlinePolicy, bootstrap_config, content_hash, csp_for_store, public_config,
+    public_hsts_max_age, security_headers,
+)
 from ops.deploy.renew_public_certificate import record_success, renew, renewal_context
 from test_release_transaction import ReleaseFixture
 
@@ -86,6 +89,71 @@ class PublicSiteTests(unittest.TestCase):
         self.assertNotIn("return 301", bootstrap_config().decode())
         self.assertIn("return 503", bootstrap_config().decode())
 
+    def test_public_mode_preserves_legacy_and_accepts_only_approved_trial(self):
+        modes = (({"schema": 1, "hsts": False}, 0), ({"schema": 1, "hsts": True}, 15552000),
+                 ({"schema": 2, "hstsMaxAge": 0}, 0), ({"schema": 2, "hstsMaxAge": 300}, 300))
+        path = self.fixture.state.root / "public-site.json"
+        for mode, expected in modes:
+            with self.subTest(mode=mode):
+                path.write_bytes(canonical(mode))
+                path.chmod(0o600)
+                self.assertEqual(load_public_mode(self.fixture.state), mode)
+                self.assertEqual(public_hsts_max_age(mode), expected)
+                self.assertEqual(PublicNginx(self.fixture.store, mode=mode).render(self.sha),
+                                 public_config(self.fixture.store, self.sha, hsts_max_age=expected))
+        self.assertEqual(public_config(self.fixture.store, self.sha),
+                         public_config(self.fixture.store, self.sha, hsts_max_age=0))
+        self.assertEqual(public_config(self.fixture.store, self.sha, hsts=True),
+                         public_config(self.fixture.store, self.sha, hsts_max_age=15552000))
+
+    def test_unknown_or_ambiguous_modes_never_render_or_invoke_commands(self):
+        invalid = (None, [], {}, {"schema": True, "hsts": False}, {"schema": 1, "hsts": 0},
+                   {"schema": 1, "hsts": False, "hstsMaxAge": 300},
+                   {"schema": 2, "hsts": True}, {"schema": 3, "hstsMaxAge": 300})
+        invalid += tuple({"schema": 2, "hstsMaxAge": age} for age in
+                         (False, True, 300.0, "300", None, -1, 301, 3600, 15552000))
+        invalid += ({"schema": 2, "hstsMaxAge": 300, "preload": True},)
+        path = self.fixture.state.root / "public-site.json"
+        for mode in invalid:
+            with self.subTest(mode=mode):
+                path.write_bytes(canonical(mode))
+                path.chmod(0o600)
+                with self.assertRaisesRegex(DeploymentError, "PUBLIC_MODE"):
+                    load_public_mode(self.fixture.state)
+                command = Mock()
+                with self.assertRaisesRegex(DeploymentError, "PUBLIC_MODE"):
+                    PublicNginx(self.fixture.store, mode=mode, run=command)
+                command.assert_not_called()
+
+    def test_trial_headers_are_only_on_two_known_https_servers(self):
+        config = public_config(self.fixture.store, self.sha, hsts_max_age=300).decode()
+        exact = 'add_header Strict-Transport-Security "max-age=300" always;'
+        self.assertEqual(config.count(exact), 2)
+        self.assertNotIn("15552000", config)
+        self.assertNotIn("includeSubDomains", config)
+        self.assertNotIn("preload", config)
+        for block in config.split("server {")[1:]:
+            self.assertEqual(exact in block, "ssl_certificate " in block)
+        for age in (False, True, 300.0, "300", -1, 301):
+            with self.assertRaisesRegex(DeploymentError, "PUBLIC_MODE"):
+                security_headers("default-src 'none'", hsts_max_age=age)
+        with self.assertRaisesRegex(DeploymentError, "PUBLIC_MODE"):
+            security_headers("default-src 'none'", True, hsts_max_age=300)
+
+    def test_mode_config_mismatch_blocks_renewal_without_reload(self):
+        configuration = self.root / "public.conf"
+        write_new(configuration, public_config(self.fixture.store, self.sha), 0o644)
+        command = Mock()
+        target = PublicNginx(self.fixture.store, mode={"schema": 2, "hstsMaxAge": 300},
+                             public_configuration=configuration, run=command)
+        before = self.fixture.state.read_ledger()[0]
+        with self.assertRaisesRegex(DeploymentError, "PUBLIC_CONFIG_DRIFT"):
+            renew(self.fixture.store, target)
+        command.assert_not_called()
+        self.assertEqual(self.fixture.store.current(), self.sha)
+        self.assertEqual(self.fixture.state.read_ledger()[0], before)
+        self.assertEqual(configuration.read_bytes(), public_config(self.fixture.store, self.sha))
+
     def test_tls_verification_cannot_be_disabled(self):
         insecure = ssl._create_unverified_context()
         with self.assertRaisesRegex(DeploymentError, "PUBLIC_TLS_CONTEXT"):
@@ -113,7 +181,8 @@ class PublicSiteTests(unittest.TestCase):
     def test_fixed_command_selects_public_adapter_only_with_explicit_mode(self):
         values = ["1", "2", "a" * 40, "b" * 64, "c" * 64]
         arguments = [v for pair in zip(release_commands.FLAGS, values) for v in pair]
-        for mode in (None, {"schema": 1, "hsts": False}):
+        for mode in (None, {"schema": 1, "hsts": False},
+                     {"schema": 2, "hstsMaxAge": 0}, {"schema": 2, "hstsMaxAge": 300}):
             with self.subTest(mode=mode), \
                     patch.object(release_commands.os, "geteuid", return_value=0), \
                     patch.object(release_commands, "verifier_lock", return_value=contextlib.nullcontext()), \

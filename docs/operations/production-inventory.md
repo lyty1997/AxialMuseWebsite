@@ -1,16 +1,16 @@
 # 生产环境清单
 
-状态：inactive
-最近更新：2026-10-16
+状态：active（#39 公网 HTTPS 验收通过；DNSSEC 按 D-168 延期）
+最近更新：2026-10-26
 适用范围：M0 生产环境非敏感事实与验证记录
 
 ## 使用规则
 
 本文只记录恢复站点所需的非敏感事实。密码、恢复代码、API token、支付资料、注册人身份信息和个人联系方式不得写入本文或仓库；它们由站点所有者在密码管理器和供应商后台维护。
 
-生产服务器已购买但生产站点尚未启用，未核验字段保持“未设置”或“未核验”。每次域名、DNS、托管或发布分支变化后同步更新，并在变更记录中留下日期与原因。
+生产站点已按 D-166/D-167 启用，未核验字段保持“未设置”或“未核验”。每次域名、DNS、托管或发布分支变化后同步更新，并在变更记录中留下日期与原因。
 
-截至 2026-10-16，#36 的服务器基线与 verifier 原子升级已完成现场验收；站点仍未启用。下表中旧日期表示当时观测，不能当作本轮重新验证的云控制面、DNS 或 TLS 事实。
+2026-10-25 的最新事实：`main@2cf04ee` 六项 CI 和唯一新增 TAT 成功；公开 HTTPS、一次 prepared 发布及真实续期 dry-run 已独立验收。八目标/十一个未变组件/五份备份、六个发布事务、未变账本、七次 reload 通过；详见[执行回执](public-https-setup.md)。下表中旧日期仍表示当时观测，不改写历史云控制面或系统维护回执；本次收尾只留本地，未追加 Git 发布。
 
 ## 所有权
 
@@ -29,10 +29,10 @@
 | 项目 | 当前值 | 最近验证 |
 |---|---|---|
 | 注册域名 | `axialmuse.com` | 用户于 2026-07-12 确认 |
-| canonical URL | `https://www.axialmuse.com/` | 设计值，尚未上线验证 |
+| canonical URL | `https://www.axialmuse.com/` | 2026-10-25 公网严格 TLS、真实字节与 Chrome 验收 |
 | nameserver | `broderick.dnspod.net`、`sandpaper.dnspod.net` | 2026-10-25 两权威 NS/公共 DNS 核对 |
-| DNSSEC | 未发现父区 DS/域名 DNSKEY；免费套餐无此能力，尚待决定 | 2026-10-25 公共 DNS 与所有者后台确认 |
-| 根域重定向 | 未配置 | - |
+| DNSSEC | 未发现父区 DS/域名 DNSKEY；D-168 确认暂缓，保留免费套餐 | 2026-10-25 公共 DNS；2026-10-26 用户决定 |
+| 根域重定向 | HTTP/HTTPS 根域均按同代 exact 规则单跳至 canonical，路径/查询保留 | 2026-10-25 四主机公网验收 |
 | 域名到期日 | 未设置 | - |
 | 自动续费 | 未设置 | - |
 
@@ -45,7 +45,7 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 | A | `<project-slug>` | 仅为已批准项目显式创建；当前无记录 | DNSPod | 计划 600 秒 |
 | AAAA | `@` / `www` | 当前无记录；M0 不计划启用 | DNSPod | - |
 
-2026-10-25 所有者确认后台只有上述符合预期的 A，没有其他线路或 MX/TXT/CAA。此为所有者脱敏确认，不是本会话经 DNSPod API 全量导出的证据；公共查询也不构成完整 zone 枚举。任何 DNS/DNSSEC 写入前仍须私密保存全量旧值并另获授权。当前先准备 #39 HTTPS 候选，HTTPS 稳定后再回到 #38；免费套餐限制不构成购买或迁移授权。
+2026-10-25 所有者确认后台只有上述符合预期的 A，没有其他线路或 MX/TXT/CAA。此为所有者脱敏确认，不是本会话经 DNSPod API 全量导出的证据；公共查询也不构成完整 zone 枚举。任何 DNS/DNSSEC 写入前仍须私密保存全量旧值并另获授权。#39 HTTPS 已验收；2026-10-26 D-168 确认 DNSSEC 延期，#38 按现有 DNS 收尾。未购买、迁移或新增 HTTPS 类型记录，HSTS/CAA 和活动监测见[具体边界](production-health.md)。
 
 ## 腾讯云轻量应用服务器
 
@@ -62,18 +62,18 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 | 实例到期与自动续费 | 用户于 2026-07-30 人工核验未发现阻断偏差；精确值不写入仓库 |
 | 快照能力与当前恢复点 | 用户于 2026-07-30 人工核验快照支持、配额与控制台恢复入口未发现阻断偏差，D-117 加固前快照保留为历史恢复点；2026-08-02 又为 D-122 已提交的当前加固态创建软件事务前系统盘快照，确认控制台终态正常且恢复通道可用。均未执行恢复演练，精确快照标识不写入仓库，恢复或删除未授权 |
 | TAT agent | 目标机本地 agent 已核验为腾讯云组件且 active/enabled，无新增公网监听；用户于 2026-07-30 人工核验控制面 online 且无未知任务，并选择本轮保留 TAT 与腾讯云代理。D-129 新 boot 的脱敏诊断再次确认本地 `tat_agent.service` active/running/enabled；用户又在 D-130 人工确认当前腾讯云控制面正常。该人工确认与本机服务证据分开记录；精确版本、任务和服务姿态保留在私密现场记录 |
-| Web 与 TLS 组件 | D-159 当前复核 Nginx 配置测试成功且 active/enabled，无活动 server block 或 Web 监听；Certbot CLI 与 timer 正常，timer active/enabled，没有 ACME 账户、证书或 lineage。未签发证书、创建 webroot 或 reload Nginx |
+| Web 与 TLS 组件 | 2026-10-25 Nginx 配置测试、严格 TLS 与真实续期 hook 通过；Nginx/Certbot timer active/enabled。双域名 lineage 为 `/etc/letsencrypt/live/axialmuse.com`，到期 `2027-01-23 13:33:10 UTC`；叶证书 SHA-256 `215ddd80bfef1ebf99fd5f823716a2d0d578690621a92cac07726bf898f423d0`。仅 IPv4 80/443 和本机 18080；HSTS 关闭 |
 | SSH、账户与系统防火墙 | D-159 当前复核严格 WireGuard SSH 和非交互 sudo；公钥专用、禁止 root/密码/键盘交互/空密码认证和唯一 authorized_keys 策略通过。UFW 仅允许 Web、WireGuard UDP 和目标/来源均限定隧道地址的 wg0 TCP 22，服务器双栈转发关闭。详细身份、地址、规则与密钥不入库；D-118 至 D-135 历史保留于下方验证记录 |
 | 腾讯云入站边界 | WireGuard 完成时所有者已确认 Web TCP 80/443、单一 WireGuard UDP 入站和公网 TCP 22 关闭。D-159 只复核主机 UFW 与严格隧道 SSH，未重新读取或修改云规则；不把主机观测当作云控制面独立证明 |
 | 软件与源码边界 | `/root`、`/home`、`/srv`、`/opt`、`/var/www` 与 `/usr/local` 未发现 Node/npm、容器运行时、主站源码 clone、`node_modules` 或 Node manifest；Git 及系统下载、归档、哈希工具已存在 |
 | 系统更新 | 只读核验窗口内观察到当前管理身份另行发起并完成系统包升级，用户于 2026-07-30 确认是本人有意执行；关键服务与配置终态复核通过。Ubuntu 官方自动安全更新服务及两个 apt timer 已启用，未配置自动重启。D-124 于 2026-08-02 以单一事务精确升级 `distro-info-data`、`libssl-dev`、`libssl3t64`、`openssl`、`tzdata`、`tzdata-legacy` 六包，并新增七个 Certbot 最小包，零额外、零移除且未执行 `autoremove`；当时的独立软件后验通过。D-129 后来执行唯一维护重启并确认 boot 改变；diagnostic-only remainder 在同一新 boot 证明精确包、自动更新和 `reboot-required` 缺席等当前语义门禁通过，但 vendor/cross-reboot posture 正式契约仍 pending，也没有重新建立基线 |
-| 生产目录 | D-159 再次确认 `/srv/axialmuse` 与 `/var/lib/axialmuse` 不存在，是 #36 的成功前态；release/current/账本目录的创建和 owner/mode 验收归 #37 |
+| 生产目录 | #37 已创建并验收 `/srv/axialmuse` 与 `/var/lib/axialmuse`；#39 最终 current 为 `2cf04ee8a781af1181b8e377a395d0a211c27e3e`，六个事务全部成功，URL 账本摘要保持 `2bd67fdfc737ea75047eb235cb64495865f5c91ac5d58bf1b2eaf42a2573d4de`；精确升级备份保留 |
 | Web Root | 目标：活动 `site-release.conf` 中 `/srv/axialmuse/releases/<sha>/payload` 的精确绝对路径；`current` 只在配置解析时选代 |
 | 生产分支 | `main` |
-| 发布方式 | 目标：GitHub Actions 构建不可变 artifact -> 腾讯云 TAT 受限交付 -> 校验后原子 release；尚未实施 |
+| 发布方式 | GitHub Actions 从精确 main 构建不可变 artifact，经受限 TAT 校验/原子安装、同代 Nginx 和账本兼容检查；#34/#37 与 #39 的公网模式均已独立验收 |
 | 构建位置 | 目标：仅 GitHub Actions 构建；PR/`main` 的 `website-quality` 与 release-eligible `production-artifact` 各自在独立 runner 构建，只有后者对 `main` 精确 SHA fresh rebuild + full quality 的 build 可部署；生产服务器不构建 |
 | Build command | `build`、`package:artifact` 与 `check:artifact` 已进入 canonical main；`a5ad326` 的 CI run `30986857755` 中 production-artifact job 成功。本轮以该 CI 认证 #36 源码前置，真实 ZIP/下载/部署仍归后续独立验收 |
-| Output directory | Docusaurus production 输出为默认 `build/`，#33 的临时交付根为 `dist/release/`；`dist/` 不提交。仓库仍保留迁移前 `public/`，目标机旧静态 Web Root 已删除，尚未部署 Docusaurus release |
+| Output directory | Docusaurus production 输出为默认 `build/`，临时交付根为 `dist/release/`，均不提交；服务器精确 release 的 `payload/` 已部署，14 个文件公网字节与 CI artifact 一致 |
 | Artifact 身份 | 已实现提交 SHA、source build tree、releaseContentSha256、七项 producer outputs 与跨 Action seal。a5ad326 已有成功 producer run；本轮未提取或重新验收实际 artifact ID/digest/ZIP，不据此声称服务器发布成功 |
 | Artifact 内容 | 已实现 payload/metadata 的确定性封装并进入成功的 canonical main producer；生产 ZIP 的独立取回复验、消费和真实发布仍待后续任务 |
 | 服务器 artifact 校验器 | 已从首次安装的 `7c0865f` 前向升级到 canonical `main@a5ad326`。D-159 分别认证五个 blob，以 bootstrap receipt 摘要作 CAS head，唯一升级返回 committed/upgraded。新会话独立证明 verifier/golden 字节、root:root、目录 0755、verifier 0755、golden 0644、单链接/live inode、6 向量自测和 receipt 链一致；旧 slot/genesis/event receipt 保留，仅清理本次五文件传输目录 |
@@ -82,8 +82,8 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 | Workflow token | prerequisite 与 #14 producer 的 `contents: read` 已由本地提交 `7b5cc47` 配置，其他 producer scope 为 `none`；#34 本地提交 `2c40e87` 的静态 deploy fixture 只允许 `contents: read`、`actions: read`，但尚未写入活动 workflow 或真实 environment |
 | TAT 调度 | #34 已实现固定 `ap-shanghai`、单 command/instance、五参数 `InvokeCommand` 的 TC3 签名与 dry-run；成功 `status: dispatched` 只记录 invocation ID，不表示 task/部署成功。实际 command/instance、CAM、environment 与 #37 终态查询均未接线 |
 | Artifact 读取 | canonical 仓库为 public，但 2026-10-19 实测 ZIP 下载匿名 HTTP 401；服务器须按 D-161 使用仅本仓库 `Actions:read` 的专用 GitHub App，凭证与真实下载验收尚待。GitHub environment protection 的实际配置仍待接线验收 |
-| 服务器发布职责 | #35 verifier 已安装且经 D-159 升级验收，负责从私有 staging 校验外层 digest、安全解包和 release 元数据/规则，成功形成 verified-release。#37 负责持锁安装不可变 release、URL 账本、精确 SHA Nginx 配置、激活、冒烟和兼容恢复，当前尚未安装或执行；其调用方须在打开组件前接入固定共享锁 |
-| 活动重定向身份 | #33 的 release metadata 已实现源注册表摘要、公开路由摘要、运行清单摘要、Nginx 配置摘要和规则数；当前尚无已部署活动 release |
+| 服务器发布职责 | #35 verifier 和 #37 持锁不可变安装/URL 账本/精确 SHA 激活已安装并验收；#39 以显式 root-only 模式接入同代公网配置、严格 TLS 和固定续期 hook，继续复用 verifier 与部署锁及完整账本兼容恢复 |
+| 活动重定向身份 | 当前 main 的真实 artifact `12602585347` 通过 verifier 和独立公网验收；两条运行规则、公开路由和 Nginx include 均与同代 release 绑定 |
 | URL 暴露账本 | 目标：`/var/lib/axialmuse/url-exposure-ledger.json`；每次 reload 前只追加候选的全部规范 200 路径和新增或改指的 registered 301 边，`canonical-slash` 不入边账本但 target 由路由预写保护；记录每次 deployment 前后摘要并由 root-owned 备份保护，当前未创建 |
 | 回滚兼容谓词 | 目标：每个历史 published route 仍可解析，每条历史 301 边的 source/target 收敛到同一当前 200；只有目标文件但缺少 source 规则不算兼容 |
 | 服务器主站工具边界 | 不安装 Node/npm，不拉取主站源码，不从源码 checkout 执行脚本或构建；2026-07-29 对登录 home、`/srv`、`/opt`、`/var/www` 与 `/usr/local` 的只读扫描未发现 Node/npm、源码 clone、`node_modules` 或 Node manifest |
@@ -150,8 +150,8 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 
 | 项目 | 当前值 |
 |---|---|
-| Nginx access log | 计划关闭 |
-| Nginx error log | 计划本地保留 7 天 |
+| Nginx access log | 公网与 bootstrap vhost 已关闭；精确活动配置独立匹配 |
+| Nginx error log | 公网请求 error log 为 `/dev/null crit`，避免 URL/query 留存；配置测试、操作和失败诊断保留在 root-only 升级目录 |
 | SSH/system auth log | 计划按系统轮转，目标 30 天 |
 | 外部日志服务 | 不引入 |
 
@@ -159,9 +159,9 @@ DNS 记录上线后按以下格式记录用途，不记录仅存在于供应商�
 
 | 检查 | 结果 | 时间 | 对应提交/部署 |
 |---|---|---|---|
-| DNS | DNSPod NS 有效；`@`/`www` 无 A/AAAA，符合切换前状态 | 2026-07-12 | 公共 DNS 查询 |
-| DNSSEC | 父区无 DS，尚未启用 | 2026-07-12 | 公共 DNS 查询 |
-| TLS/HTTPS | 无 A/AAAA，暂不具备验证条件 | 2026-07-12 | - |
+| DNS | `@`/`www` A 匹配预期服务器，无 AAAA/CNAME；本轮未修改 | 2026-10-25 | 现有 DNS 身份和实际公网连接复核 |
+| DNSSEC | D-168 确认暂缓；#38 依调整后的现有 DNS 范围验收关闭，不购买或修改 NS/DS | 2026-10-26 | [关闭证据](https://github.com/lyty1997/AxialMuseWebsite/issues/38#issuecomment-6409820383)与用户决定 |
+| TLS/HTTPS | 双 SAN/系统信任/14 个 payload 哈希/四主机/CSP/浏览器通过，真实续期 dry-run 与新增成功 hook 回执匹配；实际七次 reload | 2026-10-25 | `main@2cf04ee` / CI `40201521669` / artifact `12602585347`，详细回执见上方链接 |
 | SSH 全局策略 | D-119/D-120 已由两条全新的严格公钥专用会话复核管理身份、`sudo -n`、服务、配置树与全部有效值，事务终态为 `committed_clean` | 2026-07-30 | 脱敏现场验收；不记录主机、账号、IP、指纹或密钥摘要 |
 | OS 防火墙 | D-122 已提交 UFW 最小 IPv4 入站边界，完成第二条严格 SSH、事务临时状态精确清理及重启前稳态验收；D-122 验收时，既有腾讯 YJ 链相较该事务写入前保持不变 | 2026-08-01 | 脱敏现场验收；开发机本地 UFW 与腾讯云控制面均未操作 |
 | 软件与 Certbot 基线 | D-124 精确完成六包升级与七包新增，零额外、零移除；独立软件后验确认全部十三包、APT 标记、Certbot CLI/官方 timer、无 ACME 状态及既有 SSH/UFW/YJ/Nginx/TAT/监听边界 | 2026-08-02 | 该回执形成时尚未重启、签发证书或安装 verifier；D-129 diagnostic remainder 已通过当前软件语义门禁，D-129 原 formal 保持 pending；D-132 首轮 D-130 formal 失败且没有 receipt。D-133 分类与 D-134 本地契约本身不替代 formal，但后续获准的 unit-aware v2 formal 已形成并独立校验 `accepted-with-residuals` 私有 receipt；verifier 仍未现场安装 |

@@ -1,8 +1,26 @@
 # 公网 HTTPS 候选与验收清单
 
-状态：D-166 已授权执行，尚未安装或公开激活。
+状态：D-166/D-167 的公网 HTTPS、固定发布入口和真实续期演练已验收；以下历史候选、失败与授权清单保留，实际状态以本节执行回执为准。本地收尾尚未追加 Git 发布。
 最近更新：2026-10-25
 适用范围：#39 双域名 Nginx、ACME、CSP 与本地验收；#38 DNSSEC 后续独立收尾。
+
+## 2026-10-25 执行回执（仅本地收尾，未追加发布）
+
+最终公网入口为 `https://www.axialmuse.com/`。唯一一次正式签发 exit 0，公开叶证书 SHA-256 为 `215ddd80bfef1ebf99fd5f823716a2d0d578690621a92cac07726bf898f423d0`，到期为 `2027-01-23 13:33:10 UTC`。HTTPS 启用、一次精确身份 prepared 发布和一次 `certbot renew --cert-name axialmuse.com --dry-run --run-deploy-hooks --no-eff-email --config /etc/axialmuse/certbot-contact.ini` 全部成功。续期含 Certbot 自带约 196 秒随机等待，没有第二次调用；本轮新增唯一 root-only hook 成功回执的时间、current、账本和实际加载证书均独立匹配。
+
+续期后最终公网复核：系统信任链与双 SAN 验证通过，14 个 payload 哈希匹配独立下载且由 verifier 完整校验的真实 ZIP；37 个 HTTP 请求覆盖四主机、14 个单跳 301、查询保留、200/404、未知 Host 421 和未知 SNI 拒绝。CSP/安全头、九个指纹资源缓存、MIME、gzip/Vary 与 Range 206 通过，HSTS 关闭，无 Set-Cookie。Chrome 三页 hydration 与客户端跳转通过，29 个请求无外部来源尝试、CSP 违规或浏览器错误；使用系统信任，无 hosts 或证书例外。
+
+最终新 SSH 独立验收：八个组件、十一个未变组件与五份旧入口备份摘要通过；活动 Nginx 七个 include 均来自已知基础配置和精确当前 release。current 仍为 `2cf04ee`，六个事务全部 local-accepted，账本摘要、chain 和两项历史未变。Nginx 与 Certbot timer active/enabled，仅 IPv4 80/443 与本机 18080，没有候选监听残留；四条 UFW 规则完整解析，公网 SSH 未开放，boot 未变，failed unit 为冻结集合的稳定子集。systemd journal 独立计数七次 reload，保守预算预留八次，未使用 prepared 的可选兼容恢复。bootstrap 原件和全部失败记录保留，合成探针已精确移除。
+
+本轮实际为一次新增 TAT、一次正式签发、一次 prepared 发布、一次续期 dry-run、七次 reload，均在 D-166/D-167 范围内。[完整关闭证据](https://github.com/lyty1997/AxialMuseWebsite/issues/39#issuecomment-6399028942)已回填并独立逐字核验，#39 已按 completed 关闭；#38 DNSSEC、HSTS 和 #40 持续健康核查留待各自范围。新启用已授权的 Let’s Encrypt ACME 服务并仅提交所有者私密联系邮箱；未新增浏览器第三方请求、用户数据采集、DNS 写入或付费服务。
+
+[PR #70](https://github.com/lyty1997/AxialMuseWebsite/pull/70) 已在检查通过且 head/base 稳定后合并为 `main@2cf04ee8a781af1181b8e377a395d0a211c27e3e`；[main CI 40201521669](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40201521669) 六项 job 全部成功。唯一新增 TAT task `invt-0ac1xu07b2` 的完整五参数命令独立匹配，终态 SUCCESS/exit 0。artifact `12602585347` 的 ZIP SHA-256 为 `97ade501105db29f9be1b35c40f6aa6f1d7f9094e1acc658dfe2d113ae0c6273`，release tree 为 `7920f2c59fdd92bc92d09c63f2b6b9ae6bc32acd2f06210552de4604e2f85168`。新 current 的 14 个 payload HTTP 字节匹配，账本 SHA-256 保持 `2bd67fdfc737ea75047eb235cb64495865f5c91ac5d58bf1b2eaf42a2573d4de`，事务数为 5。
+
+四个模块从上述精确 main 经 GitHub 内容、Git blob 与 SHA-256 认证，八个目标已安装；新 SSH 独立检查八个目标、十一个未变组件、五份旧入口备份及四个非法参数拒绝均通过。所有者的联系邮箱文件格式、root:root/0600 独立检查通过，邮箱值没有输出。备份位于 `/var/lib/axialmuse/public-upgrade-2cf04ee8a781af1181b8e377a395d0a211c27e3e/`，权限 0700。
+
+未提交的现场辅助脚本首先因遗漏 `DeploymentState` 导入在任何 bootstrap 写入前停止；独立确认请求回执、配置和 reload 预算均未创建后修正。随后 bootstrap 已安装并 reload，但辅助函数 `http` 遮蔽 `http.client`，探针失败触发已授权恢复；配置移除与本机恢复 reload 均完成。原始错误和恢复结果保留，函数已改名并通过七个针对性边界断言。上述错误属于现场辅助脚本，不是已合并仓库模块的测试结果。
+
+恢复后的历史复核曾确认只有 `127.0.0.1:18080`，公网配置和模式缺席，未申请证书、未执行 prepared 或续期；current、账本和五个事务未变，Nginx 基础文件摘要未变，failed unit 仍为原冻结集合的子集。当时已消耗三次生产 reload（merge TAT、bootstrap、bootstrap 恢复），原上限六次不足以完成剩余步骤并保留兼容恢复额度，因此暂停并请求调整。用户随后在 D-167 明确授权总上限八次，才从独立验证的恢复状态继续，结果见本节上方。没有额外 TAT 或 CI 重跑。
 
 ## 不变量与前置
 
@@ -21,7 +39,7 @@ D-165 已授权候选和本机隔离验收。DNSPod 后台 A 已由所有者核�
 
 | 路径 | 用途与权限 |
 |---|---|
-| `/var/lib/axialmuse/deployment/public-site.json` | mode `0600`、root:root；严格 schema 为 `{"schema":1,"hsts":false}`；创建即显式启用模式 |
+| `/var/lib/axialmuse/deployment/public-site.json` | mode `0600`、root:root；当前为 `{"schema":1,"hsts":false}`；D-169 候选兼容原 schema，并新增严格 schema 2 的整数 `hstsMaxAge`（仅 0/300），迁移尚未实施 |
 | `/etc/nginx/conf.d/axialmuse-public.conf` | root:root `0644`；整代 root/include/CSP；只在持有发布锁时原子更新 |
 | `/etc/nginx/conf.d/axialmuse-acme.conf` | 仅首次 HTTP-01 bootstrap；正式 HTTPS 激活前移出活动配置，保留备份 |
 | `/srv/axialmuse-acme` | root:root `0755`，全部祖先可遍历；只服务 `/.well-known/acme-challenge/` 的单个 token，不进入 release 或私有状态目录 |
@@ -31,7 +49,7 @@ D-165 已授权候选和本机隔离验收。DNSPod 后台 A 已由所有者核�
 
 HTTP bootstrap 对两个精确 Host 只提供 ACME token，其他路径返回 503，未知 Host 返回 421。正式模式只监听 IPv4 80/443；本机 18080 保留，隔离候选使用 18082/18443，全部候选端口只绑定 `127.0.0.1`。无 AAAA、项目域名、通配证书或第三方浏览器来源。
 
-CSP 使用 `default-src 'none'`、本站脚本及实际内联 SHA-256、本站样式及实际内联样式 SHA-256，图片仅本站及 data，连接仅本站；禁用 object、base、form、frame 和事件属性。真实 Docusaurus 制品的隐藏 SVG sprite 使用唯一静态样式属性 `display: none;`，仅此值通过 CSP3 `style-src-attr 'unsafe-hashes'` 与精确 SHA-256 授权；其余样式属性失败关闭，不使用 `unsafe-inline` 或 `unsafe-eval`。CSP 每次从验证后的完整 payload 派生，不修改不可变 release。HSTS 默认关闭；HTTPS 稳定并获准后才设 `max-age=15552000`，不使用 preload 或 includeSubDomains。
+CSP 使用 `default-src 'none'`、本站脚本及实际内联 SHA-256、本站样式及实际内联样式 SHA-256，图片仅本站及 data，连接仅本站；禁用 object、base、form、frame 和事件属性。真实 Docusaurus 制品的隐藏 SVG sprite 使用唯一静态样式属性 `display: none;`，仅此值通过 CSP3 `style-src-attr 'unsafe-hashes'` 与精确 SHA-256 授权；其余样式属性失败关闭，不使用 `unsafe-inline` 或 `unsafe-eval`。CSP 每次从验证后的完整 payload 派生，不修改不可变 release。HSTS 生产仍关闭；D-169 已确认新增 300 秒候选，不使用 preload 或 includeSubDomains，具体安装/reload 待授权。旧 schema 1 的 true 保持历史半年语义，新的 schema 2 不允许任意延长期限，详见[模式兼容与迁移边界](production-health.md)。
 
 所有响应（含重定向/错误）继承安全头。缓存按设计区分 HTML、短期索引、普通资源、指纹资源、媒体；错误为 no-store。gzip 按 MIME 启用且保留 Vary。请求 access log 关闭；候选公开 vhost 将请求 error log 丢弃，避免 URL/query 写入错误日志，配置测试和 reload 的受控诊断继续保留在 root 运维记录。该候选日志取舍须包含在正式安装审查中。
 
@@ -80,7 +98,7 @@ fixture 测试覆盖 CSP 内容变化、外部脚本/内联属性拒绝、Host/A
 
 正式公网内容启用前，需所有者核对现有 ICP/接入备案仍有效、云端 IPv4 80/443 放行且公网 22 关闭，确认恢复入口可用。当前会话没有对应云控制面或备案连接，不把 OS 防火墙或公共 DNS 查询充当后台证明。请求日志按本候选关闭，保留 root-only 操作/失败记录；不增加服务、分析、Cookie 或其他用户数据处理。
 
-## 本轮实际结果与剩余范围
+## 正式执行前的历史候选证据
 
 候选基于精确 `main@27d461b` 的独立归档目录，不创建提交、分支或 PR；同时继承 #37 已验证但未发布的三份收尾文档，原工作树不变。新模块、固定命令的模式接线、fixture 与真实 Nginx 验收位于上述接口及 `tests/ops/test_public_site.py`、`tests/ops/test_public_nginx_acceptance.py`。
 
