@@ -213,6 +213,7 @@ class DeploymentState:
             require(re.fullmatch(r"[0-9a-f]{32}", name), "DEPLOY_TRANSACTION")
             directory = self.transactions / name
             check_directory(directory, self.uid, 0o700)
+            require(not os.path.lexists(directory / "pending"), "DEPLOY_RECOVERY_REQUIRED")
             require((directory / "result.json").exists(), "DEPLOY_RECOVERY_REQUIRED")
             result = decode(read_file(directory / "result.json", self.uid, mode=0o600))
             require(result.get("status") in ("local-accepted", "recovered", "rejected", "forward-only-failed"),
@@ -234,8 +235,20 @@ class DeploymentState:
         directory = self.transactions / secrets.token_hex(16)
         directory.mkdir(mode=0o700)
         sync_directory(self.transactions)
+        write_new(directory / "pending", b"")
         write_new(directory / "request.json", canonical(request))
         return directory
+
+    def complete(self, transaction):
+        """结果落盘后解除阻断；解除后的异常不得触发恢复。"""
+        result = decode(read_file(transaction / "result.json", self.uid, mode=0o600))
+        require(result.get("status") in (
+            "local-accepted", "recovered", "rejected", "forward-only-failed",
+        ), "DEPLOY_RECOVERY_REQUIRED")
+        require(read_file(transaction / "pending", self.uid, mode=0o600) == b"",
+                "DEPLOY_TRANSACTION")
+        (transaction / "pending").unlink()
+        sync_directory(transaction)
 
     def consume_approval(self, transaction, identity, before, after, now=None):
         identity_valid(identity)

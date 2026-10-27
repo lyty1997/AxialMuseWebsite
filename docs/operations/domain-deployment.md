@@ -270,6 +270,10 @@ GitHub environment 可以限制部署分支、保护 secrets 并控制并发。�
 
 ### TAT 与服务器侧
 
+下载器只接受身份匹配的 `in_progress/null` 或 `completed/success` run；按其精确 attempt 查询完整 job 列表，要求四项 prerequisite 和 `Production artifact` 各唯一且已成功，并重新读取 run 验证 attempt 与身份没有漂移。不得等待包含 TAT 调度的整个 workflow 完成，避免调度等待服务器时形成循环依赖。
+
+发布事务开始即持久写入 `pending`。读取历史时，只要该标记仍存在，即使 `result.json` 写有成功也必须阻断。正常结果或已完成恢复的结果完全写入并 fsync 后，才解除 pending；恢复结果原子替换可能已经存在的成功记录。恢复失败或结果写入中断保留 pending 供人工核查。解除标记是运行时提交点，其后的目录同步异常只上报，不再进入恢复分支，避免撤销已经提交的成功结果。
+
 1. GitHub Actions 使用 `InvokeCommand` 请求执行已开启自定义参数的 `axialmuse-deploy` TAT command，并传入且只传入 `workflowRunId`、`artifactId`、40 位 `commitSha`、GitHub 上传输出的 `artifactDigest` 与上传前 job output `releaseContentSha256`；两个摘要均为不带算法前缀的 64 位小写十六进制且职责不同，不能共用字段。
 2. root 持有的发布入口严格校验参数形态，并只访问脚本内固定的 GitHub owner/repository；不接受任意 URL、shell 片段、分支名或文件路径。
 3. 服务器从已核验为 public 的 canonical 仓库读取 artifact 元数据且不携带仓库凭证，核对 workflow run、artifact ID、`head_sha` 和未过期状态；REST `digest` 必须精确等于 ASCII `sha256:` 拼接 TAT 的裸 `artifactDigest`，缺失、其他算法、重复前缀、大小写或长度异常均失败，不做宽松归一化。仓库可见性若发生变化必须重新授权，不自动切换到个人或私有仓库凭证。

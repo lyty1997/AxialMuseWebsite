@@ -12,7 +12,9 @@
 
 活动 `deploy-production` job 随 `main` push 自动触发；合并接线 PR 的那次 `main` push 也会生成新的 artifact 并尝试调用 TAT。必须在合并前完成下方的腾讯云 command/CAM/实例读回及 GitHub environment 核查；PR 检查中的跳过状态不构成生产调度验收。合并后以精确 `main` SHA 的 run、TAT invocation ID 和独立 task 终态分别收据化；首次任务仍按 `DEPLOY_ACTIVATION_PENDING` 预期解释，不将其非零结束写成网站上线成功。
 
-服务器可能在 `deploy-production` job 收尾前开始读取制品。下载器保留整个精确 run 必须 `completed/success` 的要求：仅在相同 run/artifact/attempt/commit/repository 身份全部匹配且 run 为 `in_progress`、conclusion 为 null 时，在 30 秒内、最多 15 次间隔两秒重新读取元数据；每次重新校验完整身份与过期状态，成功前不请求 ZIP。超时以 `ARTIFACT_WORKFLOW_PENDING` 停止，失败、取消、身份漂移或 HTTP 错误立即停止。该只读等待不重发 TAT、不重试下载、不删除失败 staging，也不放宽生产激活边界。修复已随 [PR #68](https://github.com/lyty1997/AxialMuseWebsite/pull/68) 进入 canonical `main@441b214`，在精确 CI 成功后认证安装；[run 40069951954 attempt 2](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40069951954/attempts/2) 六个 job 成功，独立服务器任务按约定停于 `DEPLOY_ACTIVATION_PENDING`、exit 2，18 个文件与双摘要均验收一致。它完成 #34 接线验收，仍不表示 #37 站点激活。
+历史下载器曾要求整个 run 达到 `completed/success`，只允许在精确身份不变时等待最多 30 秒。[PR #68](https://github.com/lyty1997/AxialMuseWebsite/pull/68) 将该版本合入 `main@441b214` 并认证安装；[run 40069951954 attempt 2](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40069951954/attempts/2) 当时六个 job 成功，服务器任务停于 `DEPLOY_ACTIVATION_PENDING`、exit 2，18 个文件与双摘要一致。该历史证据保留。
+
+2026-10-26 复审确认：等待整个 run 会与同 job 等待 TAT 终态形成循环依赖。本地修复候选改为验证精确 run attempt 的 `Website quality gates`、`Minimum Node compatibility`、`Diagram compile check`、`Supply chain evidence` 与 `Production artifact` 各唯一且全部成功，允许整体仍为 `in_progress/null`，也接受 `completed/success`；下载前再次验证 artifact、run 和 attempt。不完整 job 列表、未成功 prerequisite/producer、身份或过期漂移均立即拒绝，不请求 ZIP。接口使用 [GitHub 按 attempt 列出 jobs](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt)。该候选尚未晋级或安装，现有生产入口仍是此前认证版本。
 
 ## #37 本机激活候选与现场执行清单
 
