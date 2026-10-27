@@ -50,6 +50,10 @@ class TatEntryTests(unittest.TestCase):
                 with self.assertRaises(tat_entry.TatEntryError):
                     tat_entry.parse_command_data(candidate)
         for candidate in (
+            substitute(VALUES).replace(
+                b"/usr/local/lib/axialmuse-release/tat-entry.py",
+                b"/usr/local/lib/axialmuse/tat-entry.py",
+            ),
             substitute(VALUES).replace(b"exit 127\n", b""),
             substitute(VALUES).replace(b"# AXIALMUSE-TAT-END\n", b""),
             substitute(VALUES) + b"extra\n",
@@ -73,7 +77,7 @@ class TatEntryTests(unittest.TestCase):
                 ),
             })
             candidate = candidate.replace(
-                b"/usr/local/lib/axialmuse/tat-entry.py",
+                b"/usr/local/lib/axialmuse-release/tat-entry.py",
                 str(stub).encode("ascii"),
                 1,
             )

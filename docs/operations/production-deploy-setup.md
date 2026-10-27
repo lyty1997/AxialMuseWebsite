@@ -1,5 +1,15 @@
 # 生产调度接线清单
 
+## 2026-10-27 命名空间修复候选（尚未安装）
+
+复审发现，下方历史布局把发布模块和 TAT 解析器放入 verifier 的闭合命名空间，阻断后续升级。修复候选将所有发布运行模块安装在 `/usr/local/lib/axialmuse-release/ops/deploy/`，解析器安装在 `/usr/local/lib/axialmuse-release/tat-entry.py`；旧准备入口、四个固定命令和证书续期 hook 均从新的固定根导入。目录保持 root:root/0755，模块和解析器为 root:root/0644；命令与 hook 为 root:root/0755。verifier 的 `/usr/local/lib/axialmuse/artifact-verifier/`、闭合成员列表、receipt 和既有双锁不变，不允许链接或未知成员。
+
+这是本地修复，不表示现有服务器已经迁移。生产迁移前必须认证精确成功 main 的全部运行模块、命令、hook、解析器和新 TAT 模板；固定五参数及 CAM 权限不变，但模板字节和 SHA-256 已改变，旧控制台脚本不能直接使用。执行方案须在生命周期/部署双锁内备份旧成员，准备并复核完整新根，切换命令/hook 和保存的 TAT command，然后将旧 `ops/`、`tat-entry.py` 及其历史备份移出 verifier 命名空间，保留到 root-only 恢复目录；不得删除证据或把符号链接留在旧位置。切换期间禁止并发 TAT、verifier 升级及续期 hook。具体现场写入清单、失败恢复和动作额度另行审查；本轮不执行迁移。
+
+当前候选 TAT 模板 SHA-256 为 `f3a5ed02428266a16790f686b8a612e93b61fef3c96bcbe6da5943eb68e72f3e`；这是候选源码摘要，不是控制台已配置证明。历史模板摘要与现场回执保持原样。
+
+本地组合验收必须先 bootstrap，再按候选路径安装真实发布模块及解析器，运行 verifier 升级、真实系统 Python 自测和 already-current 复验，核对发布文件字节/inode/mode 不变；旧混装布局仍以 `VERIFIER_UPGRADE_STATE` 在创建升级事务之前拒绝。
+
 ## 当前验收状态（2026-10-25）
 
 #37 已按 D-163/D-164 完成本机发布与兼容恢复。[PR #69](https://github.com/lyty1997/AxialMuseWebsite/pull/69) 合并为 `main@27d461b9d7d0745343f01b3c491ee68d267b4700`；六模块和四命令已认证安装，旧入口备份保留。run `40146353211` 两个 attempt 均为六 job 成功；第二次实际 TAT task `invt-0ab9kvg3m6` 独立确认 `SUCCESS` / exit 0。四次激活/兼容切换结束后 current 停在该 main，HTTP、账本链、批准消费和历史 staging 保全均已现场验收。

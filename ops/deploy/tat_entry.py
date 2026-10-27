@@ -10,7 +10,7 @@ MAX_COMMAND_BYTES = 2048
 DEPLOY_ENTRY = "/usr/local/sbin/axialmuse-deploy"
 PREFIX = (
     b"#!/bin/sh\n"
-    b'exec /usr/bin/python3 -I -B /usr/local/lib/axialmuse/tat-entry.py 3<"$0"\n'
+    b'exec /usr/bin/python3 -I -B /usr/local/lib/axialmuse-release/tat-entry.py 3<"$0"\n'
     b"exit 127\n"
     b"# AXIALMUSE-TAT-PARAMETERS-V1\n"
 )

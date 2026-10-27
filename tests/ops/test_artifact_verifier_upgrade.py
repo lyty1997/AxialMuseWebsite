@@ -1,3 +1,4 @@
+import ast
 import contextlib
 import errno
 import fcntl
@@ -7,6 +8,7 @@ import io
 import json
 import os
 import signal
+import shlex
 import stat
 import subprocess
 import sys
@@ -1258,6 +1260,94 @@ class ArtifactVerifierUpgradeTests(unittest.TestCase):
                 receipt["to"]["manifestSha256"],
                 sha256(fixture.manifest),
             )
+
+    def test_release_installation_allows_real_upgrade_and_idempotent_recheck(self):
+        # 从真实入口解析安装根，防止 fixture 使用与运行代码无关的手写路径。
+        roots = []
+        for name in ("deploy.py", "release_commands.py", "renew_public_certificate.py"):
+            tree = ast.parse(UPGRADER_PATH.with_name(name).read_bytes())
+            roots.append(next(
+                Path(ast.literal_eval(node.args[1]))
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and ast.unparse(node.func) == "sys.path.insert"
+            ))
+        self.assertEqual(roots, [roots[0]] * 3)
+        self.assertEqual(roots[0].parent, Path("/usr/local/lib"))
+        template = UPGRADER_PATH.with_name("tat-command.sh").read_bytes()
+        parser_path = Path(shlex.split(template.splitlines()[1].decode())[4])
+        self.assertEqual(parser_path, roots[0] / "tat-entry.py")
+
+        with tempfile.TemporaryDirectory(prefix="axial-muse-combined-upgrade-") as temporary:
+            fixture = UpgradeFixture(temporary)
+            fixture.install()
+            runtime = fixture.root / roots[0].relative_to("/")
+            modules = runtime / "ops/deploy"
+            modules.mkdir(parents=True, mode=0o755)
+            for directory in (runtime, runtime / "ops", modules):
+                directory.chmod(0o755)
+            # 安装真实发布源码，不混入 verifier、bootstrap 或 upgrader。
+            excluded = {"verify_artifact.py", "bootstrap_artifact_verifier.py",
+                        "upgrade_artifact_verifier.py"}
+            for source in UPGRADER_PATH.parent.glob("*.py"):
+                if source.name not in excluded:
+                    target = modules / source.name
+                    target.write_bytes(source.read_bytes())
+                    target.chmod(0o644)
+            parser = fixture.root / parser_path.relative_to("/")
+            parser.write_bytes(UPGRADER_PATH.with_name("tat_entry.py").read_bytes())
+            parser.chmod(0o644)
+
+            def snapshot():
+                return {
+                    str(path.relative_to(runtime)): (
+                        path.stat().st_ino, stat.S_IMODE(path.stat().st_mode),
+                        sha256(path.read_bytes()) if path.is_file() else None,
+                    )
+                    for path in (runtime, *sorted(runtime.rglob("*")))
+                }
+
+            before = snapshot()
+            fixture.manifest = UPGRADER_PATH.with_name(UPGRADER.MANIFEST_BASENAME).read_bytes()
+            for name in (UPGRADER.MANIFEST_BASENAME, UPGRADER.VERIFIER_BASENAME,
+                         UPGRADER.GOLDEN_BASENAME):
+                fixture._write_private_source(
+                    fixture.upgrade_source / name, UPGRADER_PATH.with_name(name).read_bytes(),
+                )
+            options = {"_system_python": "/usr/bin/python3",
+                       "_self_test_runner": BOOTSTRAP._default_self_test_runner}
+            result = fixture.run(**options)
+            self.assertEqual(result["disposition"], "upgraded")
+            second = fixture.run(
+                **options, expected_current_receipt_sha256=result["componentReceiptSha256"],
+            )
+            self.assertEqual(second["disposition"], "already-current")
+            self.assertEqual(len(fixture.event_directories()), 1)
+            self.assertEqual(snapshot(), before)
+            self.assertEqual(tuple(sorted(path.name for path in fixture.namespace.iterdir())),
+                             UPGRADER.UPGRADE_NAMESPACE_MEMBERS)
+
+    def test_legacy_release_members_still_block_before_upgrade_state(self):
+        for members in (("ops",), ("tat-entry.py",), ("ops", "tat-entry.py")):
+            with self.subTest(members=members), tempfile.TemporaryDirectory(
+                prefix="axial-muse-mixed-namespace-"
+            ) as temporary:
+                fixture = UpgradeFixture(temporary)
+                fixture.install()
+                for name in members:
+                    path = fixture.namespace / name
+                    if name == "ops":
+                        (path / "deploy").mkdir(parents=True, mode=0o755)
+                        (path / "deploy/release_commands.py").write_bytes(
+                            UPGRADER_PATH.with_name("release_commands.py").read_bytes(),
+                        )
+                    else:
+                        path.write_bytes(UPGRADER_PATH.with_name("tat_entry.py").read_bytes())
+                        path.chmod(0o644)
+                self.assert_upgrade_error("VERIFIER_UPGRADE_STATE", fixture.run)
+                self.assertFalse(fixture.upgrade_root.exists())
+                self.assertTrue(all((fixture.namespace / name).exists() for name in members))
 
     def test_stale_cas_and_invalid_source_do_not_create_upgrade_state(self):
         with tempfile.TemporaryDirectory(
