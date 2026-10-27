@@ -4,6 +4,8 @@
 最近更新：2026-10-25
 适用范围：#39 双域名 Nginx、ACME、CSP 与本地验收；#38 DNSSEC 后续独立收尾。
 
+2026-10-27 本地兼容修复同步将续期 hook 的 Python 导入根改为 `/usr/local/lib/axialmuse-release`，与发布组件保持一致；现有 hook 尚未迁移。安装目录、TAT 模板变化及受控迁移前置见[命名空间修复候选](production-deploy-setup.md#2026-10-27-命名空间修复候选尚未安装)。历史公网/续期回执不构成本次候选的生产安装证据。
+
 ## 2026-10-25 执行回执（仅本地收尾，未追加发布）
 
 最终公网入口为 `https://www.axialmuse.com/`。唯一一次正式签发 exit 0，公开叶证书 SHA-256 为 `215ddd80bfef1ebf99fd5f823716a2d0d578690621a92cac07726bf898f423d0`，到期为 `2027-01-23 13:33:10 UTC`。HTTPS 启用、一次精确身份 prepared 发布和一次 `certbot renew --cert-name axialmuse.com --dry-run --run-deploy-hooks --no-eff-email --config /etc/axialmuse/certbot-contact.ini` 全部成功。续期含 Certbot 自带约 196 秒随机等待，没有第二次调用；本轮新增唯一 root-only hook 成功回执的时间、current、账本和实际加载证书均独立匹配。

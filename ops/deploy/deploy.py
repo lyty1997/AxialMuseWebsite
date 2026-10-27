@@ -5,7 +5,7 @@ import sys
 
 
 # -I 不读取 PYTHONPATH；生产组件只从 root-owned 固定路径导入。
-sys.path.insert(0, "/usr/local/lib/axialmuse")
+sys.path.insert(0, "/usr/local/lib/axialmuse-release")
 
 from ops.deploy.fetch_artifact import ArtifactFetchError  # noqa: E402
 from ops.deploy.github_app_auth import GitHubAppAuthError  # noqa: E402

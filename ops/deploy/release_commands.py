@@ -10,7 +10,8 @@ import sys
 from pathlib import Path
 
 sys.dont_write_bytecode = True
-sys.path.insert(0, "/usr/local/lib/axialmuse")
+# verifier 保持独占闭合命名空间；发布组件使用同级独立根。
+sys.path.insert(0, "/usr/local/lib/axialmuse-release")
 
 from ops.deploy.deployment_state import (  # noqa: E402
     DeploymentError, DeploymentState, canonical, check_directory, identity_valid,

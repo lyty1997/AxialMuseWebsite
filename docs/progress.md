@@ -4,6 +4,13 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-10-27 — 发布命名空间兼容修复获准提交与 PR
+
+- **授权与范围**：用户在本地修复验收后要求先提交并创建 review bugfix PR。以 canonical `main@81d1ebf` 的独立工作树形成 `codex/deploy-namespace-fix` 分支，普通提交、推送并直接向 main 提 PR，跟踪精确 head 的 CI；不经有九个并行提交的 dev。保留原主工作区及其他候选。本次不授权合并、生产迁移、保存的 TAT command 更新或新增调度。
+- **修复**：发布模块导入根、TAT 解析器和模板、续期 hook 同步改到 `/usr/local/lib/axialmuse-release`；verifier 正式路径、receipt、闭合成员表及生命周期双锁不变。具体安装和旧布局迁移要求见[接线清单](operations/production-deploy-setup.md)。代码和文档进入 PR 不代表已安装，不宣称线上升级阻塞已解除。
+- **验收**：系统 Python 3.12 的 221 项 ops 测试全部通过、零跳过，显式启用全部三项真实 Nginx/TLS 集成。升级器 40 项通过，其中新组合 fixture 先 bootstrap、按真实入口解析的固定路径安装真实发布源码，再以真实 verifier/golden、系统 Python 自测完成升级和 already-current 复验，发布文件字节、inode 和 mode 不变。旧 `ops/`、旧 `tat-entry.py` 各自及共同混装均在升级状态创建前拒绝。内存 mutation 把所有入口恢复到旧根后，新组合测试以预期 `VERIFIER_UPGRADE_STATE` 变红。完整 Node 24.18.0 `quality`、Ruff 和 diff 检查通过。
+- **发布边界**：本轮只提交、推送专题分支并创建/验收 PR，无生产 SSH、main 合并、TAT、Nginx reload、DNS 或证书写入；不改既有观察结果，不新增依赖、第三方服务、费用或用户数据处理。dev 内容、预览和项目公开状态另行推进，不带入本 PR。后续合并与服务器/TAT 迁移仍须具体清单及新的明确授权。
+
 ## 2026-10-27 — 两项部署复审修复获准提交与 PR
 
 - **授权与路径**：用户允许将下述已验收的十文件修复提交并创建 PR；采用基于 `main@9e106d5` 的独立 `codex/deploy-review-fixes` 分支，普通推送后直接面向 `main`，保留 `dev` 九个并行提交。六个实现/测试文件与已验收指纹一致，提交由正常 hook 再执行完整 quality；精确 PR head 的检查结果另行验收。

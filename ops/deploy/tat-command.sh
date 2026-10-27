@@ -1,5 +1,5 @@
 #!/bin/sh
-exec /usr/bin/python3 -I -B /usr/local/lib/axialmuse/tat-entry.py 3<"$0"
+exec /usr/bin/python3 -I -B /usr/local/lib/axialmuse-release/tat-entry.py 3<"$0"
 exit 127
 # AXIALMUSE-TAT-PARAMETERS-V1
 workflowRunId={{workflowRunId}}

@@ -7,7 +7,7 @@ import sys
 import time
 
 sys.dont_write_bytecode = True
-sys.path.insert(0, "/usr/local/lib/axialmuse")
+sys.path.insert(0, "/usr/local/lib/axialmuse-release")
 
 from ops.deploy.deployment_state import (  # noqa: E402
     DeploymentError, DeploymentState, canonical, check_directory, digest, read_file,
