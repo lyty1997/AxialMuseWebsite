@@ -14,6 +14,7 @@ from ops.deploy.deployment_state import DeploymentError, DeploymentState, canoni
 from ops.deploy.release_install import ReleaseStore
 from ops.deploy.release_transaction import ReleaseTransaction
 from ops.deploy import url_exposure_ledger as ledger
+from ops.deploy import deployment_state as state_module
 from test_artifact_verifier import VERIFIER, build_release, write_archive
 
 
@@ -147,6 +148,99 @@ class ReleaseTransactionTests(unittest.TestCase):
         self.assertEqual(self.fixture.store.current(), self.first)
         self.assertEqual(self.fixture.nginx.events[-1], ("activate", self.first))
 
+    def test_success_result_sync_failure_cannot_mask_recovery_outcome(self):
+        for recovery_fails in (False, True):
+            with self.subTest(recovery_fails=recovery_fails), tempfile.TemporaryDirectory() as root:
+                fixture = ReleaseFixture(root)
+                stage, identity = fixture.stage(self.first)
+                fixture.approve(identity)
+                fixture.engine.execute(identity=identity, stage=stage)
+                stage, identity = fixture.stage(self.second)
+                if recovery_fails:
+                    fixture.nginx.fail = ("activate", self.first)
+                original = state_module.sync_directory
+                injected = False
+                def fail_after_success(path):
+                    nonlocal injected
+                    path = Path(path)
+                    result = path / "result.json"
+                    if result.exists() and not injected:
+                        value = state_module.decode(result.read_bytes())
+                        if value.get("sha") == self.second and value.get("status") == "local-accepted":
+                            injected = True
+                            raise OSError("result directory fsync failed")
+                    return original(path)
+                expected = "DEPLOY_RECOVERY_REQUIRED" if recovery_fails else "DEPLOY_RECOVERED"
+                with patch.object(state_module, "sync_directory", side_effect=fail_after_success):
+                    with self.assertRaisesRegex(DeploymentError, expected):
+                        fixture.engine.execute(identity=identity, stage=stage)
+                self.assertTrue(injected)
+                self.assertEqual(fixture.store.current(), self.first)
+                transaction = next(path for path in fixture.state.transactions.iterdir()
+                                   if state_module.decode((path / "request.json").read_bytes())["identity"]["commit_sha"] == self.second)
+                self.assertEqual(state_module.decode((transaction / "result.json").read_bytes())["status"],
+                                 "recovery-required" if recovery_fails else "recovered")
+                if recovery_fails:
+                    with self.assertRaisesRegex(DeploymentError, "DEPLOY_RECOVERY_REQUIRED"):
+                        fixture.state.assert_idle()
+                else:
+                    fixture.state.assert_idle()
+                    self.assertNotIn(self.second, fixture.state.successful_releases())
+
+    def test_interrupt_after_success_write_leaves_pending_and_blocks_restart(self):
+        self.deploy_first()
+        stage, identity = self.fixture.stage(self.second)
+        original = state_module.sync_directory
+        def interrupt(path):
+            result = Path(path) / "result.json"
+            if result.exists() and (Path(path) / "pending").exists():
+                value = state_module.decode(result.read_bytes())
+                if value.get("sha") == self.second:
+                    raise KeyboardInterrupt()
+            return original(path)
+        with patch.object(state_module, "sync_directory", side_effect=interrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                self.fixture.engine.execute(identity=identity, stage=stage)
+        reopened = DeploymentState(self.fixture.home, os.getuid())
+        with self.assertRaisesRegex(DeploymentError, "DEPLOY_RECOVERY_REQUIRED"):
+            reopened.assert_idle()
+        self.assertEqual(self.fixture.store.current(), self.second)
+
+    def test_recovery_result_write_failure_keeps_pending_even_with_success_record(self):
+        self.deploy_first()
+        stage, identity = self.fixture.stage(self.second)
+        original = state_module.sync_directory
+        def fail_result_sync(path):
+            result = Path(path) / "result.json"
+            if result.exists() and state_module.decode(result.read_bytes()).get("sha") == self.second:
+                raise OSError("sync failed")
+            return original(path)
+        with patch.object(state_module, "sync_directory", side_effect=fail_result_sync), patch(
+            "ops.deploy.release_transaction.replace_file", side_effect=OSError("recovery write failed"),
+        ):
+            with self.assertRaises(OSError):
+                self.fixture.engine.execute(identity=identity, stage=stage)
+        with self.assertRaisesRegex(DeploymentError, "DEPLOY_RECOVERY_REQUIRED"):
+            self.fixture.state.assert_idle()
+
+    def test_post_commit_sync_failure_never_recovers_a_committed_success(self):
+        self.deploy_first()
+        stage, identity = self.fixture.stage(self.second)
+        original = state_module.sync_directory
+        def fail_after_commit(path):
+            path = Path(path)
+            result = path / "result.json"
+            if result.exists() and not (path / "pending").exists():
+                if state_module.decode(result.read_bytes()).get("sha") == self.second:
+                    raise OSError("commit directory sync failed")
+            return original(path)
+        with patch.object(state_module, "sync_directory", side_effect=fail_after_commit):
+            with self.assertRaises(OSError):
+                self.fixture.engine.execute(identity=identity, stage=stage)
+        self.fixture.state.assert_idle()
+        self.assertEqual(self.fixture.store.current(), self.second)
+        self.assertEqual(self.fixture.nginx.events[-1], ("activate", self.second))
+
     def test_first_forward_only_failure_preserves_commitment_and_current(self):
         stage, identity = self.fixture.stage(self.first)
         self.fixture.approve(identity)
@@ -241,6 +335,43 @@ ReleaseTransaction(store, nginx).execute(identity=json.loads(sys.argv[3]), stage
         self.assertEqual(self.fixture.store.current(), self.second)
         with self.assertRaisesRegex(DeploymentError, "DEPLOY_RECOVERY_REQUIRED"):
             self.fixture.state.assert_idle()
+
+    def test_real_sigkill_after_success_record_still_blocks_next_deploy(self):
+        self.deploy_first()
+        stage, identity = self.fixture.stage(self.second)
+        code = r'''
+import json, os, signal, sys
+from pathlib import Path
+sys.path.insert(0, 'tests/ops')
+from test_artifact_verifier import VERIFIER
+from test_release_transaction import NginxDouble
+from ops.deploy.deployment_state import DeploymentState
+from ops.deploy.release_install import ReleaseStore
+from ops.deploy import release_transaction
+root = Path(sys.argv[1])
+state = DeploymentState(root/'state', os.getuid())
+store = ReleaseStore(root/'site', state, VERIFIER)
+original = release_transaction.write_new
+def kill_after_result(path, content):
+    original(path, content)
+    if path.name == 'result.json':
+        os.kill(os.getpid(), signal.SIGKILL)
+release_transaction.write_new = kill_after_result
+release_transaction.ReleaseTransaction(store, NginxDouble()).execute(
+    identity=json.loads(sys.argv[3]), stage=Path(sys.argv[2]))
+'''
+        import json
+        result = subprocess.run([sys.executable, "-c", code, self.temporary.name, str(stage), json.dumps(identity)],
+                                capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, -signal.SIGKILL)
+        self.assertEqual(self.fixture.store.current(), self.second)
+        results = [state_module.decode((path / "result.json").read_bytes())
+                   for path in self.fixture.state.transactions.iterdir()]
+        self.assertTrue(any(value.get("status") == "local-accepted" and value.get("sha") == self.second
+                            for value in results))
+        reopened = DeploymentState(self.fixture.home, os.getuid())
+        with self.assertRaisesRegex(DeploymentError, "DEPLOY_RECOVERY_REQUIRED"):
+            reopened.assert_idle()
 
 
 if __name__ == "__main__":

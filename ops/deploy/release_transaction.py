@@ -4,7 +4,7 @@ import signal
 
 from ops.deploy import url_exposure_ledger as ledger
 from ops.deploy.deployment_state import (
-    DeploymentError, canonical, digest, identity_valid, require, write_new,
+    DeploymentError, canonical, digest, identity_valid, replace_file, require, write_new,
 )
 
 
@@ -81,7 +81,6 @@ class ReleaseTransaction:
                 result = {"status": "local-accepted", "sha": candidate_sha,
                           "fallback": fallback, "ledgerBefore": digest(before), "ledgerAfter": digest(after)}
                 write_new(transaction / "result.json", canonical(result))
-                return result
             except Exception as error:
                 status = "rejected"
                 # 若 switch 的 fsync/后验失败，不能仅凭 Python 布尔值假设未切换。
@@ -110,9 +109,15 @@ class ReleaseTransaction:
                     code = str(error)
                 if code == "DEPLOY_NGINX_UNCERTAIN":
                     status = "recovery-required"
-                write_new(transaction / "result.json", canonical({
+                # pending 仍在：写入中途留下的成功记录不能遮盖恢复结果。
+                replace_file(transaction / "result.json", canonical({
                     "status": status, "code": code or "DEPLOY_INTERNAL",
                     "sha": candidate_sha,
                     "ledgerBefore": digest(before), "ledgerAfter": digest(after),
                 }))
+                if status != "recovery-required":
+                    self.state.complete(transaction)
                 raise DeploymentError("DEPLOY_" + status.upper().replace("-", "_")) from error
+            # 成功记录已持久化；提交点之后的中断/同步错误不能再回滚。
+            self.state.complete(transaction)
+            return result

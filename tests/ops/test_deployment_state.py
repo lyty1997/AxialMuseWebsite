@@ -87,6 +87,33 @@ class DeploymentStateTests(unittest.TestCase):
         result.update(changes)
         state.write_new(self.store.root / "forward-only.json", state.canonical(result))
 
+    def test_pending_overrides_success_until_complete(self):
+        transaction = self.store.begin({"test": True})
+        state.write_new(transaction / "result.json", state.canonical({
+            "status": "local-accepted", "sha": "a" * 40,
+        }))
+        with self.assertRaisesRegex(state.DeploymentError, "DEPLOY_RECOVERY_REQUIRED"):
+            self.store.assert_idle()
+        self.store.complete(transaction)
+        self.store.assert_idle()
+        self.assertEqual(self.store.successful_releases(), {"a" * 40})
+
+    def test_legacy_completed_transaction_remains_readable(self):
+        transaction = self.store.transactions / ("a" * 32)
+        transaction.mkdir(mode=0o700)
+        state.write_new(transaction / "result.json", state.canonical({
+            "status": "local-accepted", "sha": "b" * 40,
+        }))
+        self.store.assert_idle()
+        self.assertEqual(self.store.successful_releases(), {"b" * 40})
+
+    def test_recovery_required_result_cannot_complete(self):
+        transaction = self.store.begin({"test": True})
+        state.write_new(transaction / "result.json", state.canonical({"status": "recovery-required"}))
+        with self.assertRaisesRegex(state.DeploymentError, "DEPLOY_RECOVERY_REQUIRED"):
+            self.store.complete(transaction)
+        self.assertTrue((transaction / "pending").exists())
+
     def test_approval_is_consumed_and_id_cannot_be_replayed(self):
         transaction = self.store.begin({"test": True})
         self.approval()
