@@ -1,7 +1,7 @@
 # 跨机协同开发预览工作流
 
 状态：active
-最近更新：2026-07-18
+最近更新：2026-10-28
 适用范围：Windows 机器与 Linux 托管机之间的本地开发预览闭环（编码会话可以在任意一端发起，托管固定在 Linux 一端）。本工作流只覆盖“改代码 → 本地渲染验证 → 再改”的迭代环节；生产目标已于 2026-07-12 确认为腾讯云轻量应用服务器，见 [域名与生产发布设计](../operations/domain-deployment.md)，两条链路独立运行。
 
 ## 背景与目标
@@ -64,7 +64,7 @@ AxialMuseWebsite.preview/          # 专门用于 checkout 待验收分支并构
 
 **创建方式的一处约束**：git 不允许同一个分支在两个 worktree 里同时被检出（比如主目录已经在 `dev`，预览 worktree 就不能再 `git checkout dev`，会报 `already used by worktree`）。所以预览 worktree 用 `git worktree add --detach ../AxialMuseWebsite.preview dev` 建成**分离头指针（detached HEAD）**模式，之后每次要看哪个分支的效果，都是 `git checkout --detach <分支或 origin/分支的最新提交>`，而不是切到分支本身。这样无论主目录当前停在哪个分支，预览 worktree 都不会和它冲突，包括预览 `dev` 或 `main` 自己的场景。
 
-**Windows 端的 worktree 是另外一回事，工具链自带，不用手动管理**：如果 Windows 端用 Claude Code / Claude Desktop 的编码会话来改代码，工具链本身会给每个会话自动建一个独立 worktree + 分支（例如 `.claude/worktrees/<会话名>`，分支名形如 `claude/<会话名>`），和主目录（跟随 `main`）互不干扰。这天然满足"发生改动时用 worktree 隔离"的诉求，不需要在这份设计里再手动搭一套 Windows 侧 worktree 管理机制；该会话分支后续必须先 push 并合入 `dev`，完成集成验证后再通过唯一的 `dev -> main` PR 晋级。
+**Windows 端的 worktree 是另外一回事，工具链自带，不用手动管理**：如果 Windows 端用 Claude Code / Claude Desktop 的编码会话来改代码，工具链本身会给每个会话自动建一个独立 worktree + 分支（例如 `.claude/worktrees/<会话名>`，分支名形如 `claude/<会话名>`），和主目录（跟随 `main`）互不干扰。这天然满足"发生改动时用 worktree 隔离"的诉求，不需要在这份设计里再手动搭一套 Windows 侧 worktree 管理机制。该会话分支后续必须先普通 push；只有远端 `dev` 没有相对 `main` 的独有提交并已 fast-forward 对齐到精确 `main` 时，才可先合入 `dev` 再走 `dev -> main` PR。`dev` 有并行工作时保持会话分支独立，经确认后直接向 `main` 提 PR，避免夹带未完成开发。
 
 ## 源码同步脚本（双向、一键）
 
@@ -140,9 +140,14 @@ Win --> User : 确认是否符合预期
 
 == 反复迭代直至满意 ==
 
-User -> Linux : 确认合并
+User -> Linux : 请求晋级并确认目标范围
 activate Linux
-Linux -> Hub : 合并 feature 分支到 dev
+Linux -> Hub : fetch 并核对 main、dev、feature
+alt dev 与 main 精确对齐
+  Linux -> Hub : feature 合入 dev，CI 后 dev 到 main PR
+else dev 有并行提交或树差异
+  Linux -> Hub : 保持 feature 独立，直接发起 main PR
+end
 deactivate Linux
 deactivate Preview
 @enduml
@@ -165,14 +170,15 @@ deactivate Preview
 
 ## 从开发预览晋级到生产
 
-本地预览闭环结束不代表可以直接更新 `main`。主站统一使用以下晋级路径：
+本地预览闭环结束不代表可以直接更新 `main`。主站按 D-141 先判断并行状态，再选择晋级路径：
 
-1. 所有准备发布的改动在 `dev` 形成完整提交并推送到 `origin/dev`。
-2. 观察 `dev` CI；失败时在 `dev` 修复并重新推送，不能把修复直接提交到 `main`。
-3. 确认局域网预览、桌面/平板/移动截图、内容审核和质量门禁均完成。
-4. 创建唯一方向的生产 PR：`dev -> main`，核对 head/base，禁止反向或跨过 `dev`。
-5. required checks 通过后合并 PR，再观察 `main` CI 和生产 deployment。
-6. 本地 `main` fast-forward 同步 `origin/main` 后切回 `dev`；不得在 `main` 继续开发。
+1. 准备发布的改动在其来源 topic 或 `dev` 形成完整提交并普通推送；刷新远端 `main`、`dev` 和 topic。
+2. 核对 merge-base、`origin/main..origin/dev` 提交集合和两个远端 tip 的 tracked tree。只有 `dev` 没有独有提交并已 fast-forward 到精确 `main` 时，topic 才可先合入 `dev`；否则保持 topic 独立，不改动并行中的 `dev`。
+3. 来源为 `dev` 时，等待其精确 push SHA 的 CI 成功。当前 workflow 的 push 仅监听 `main` 和 `dev`，topic 普通推送不会触发 CI；topic 直接晋级时先完成本地门禁，再按第 5 步创建 PR，等待该 PR 的检查，不把不存在的 topic push CI 作为创建 PR 的前置。不修改 workflow 或跳过 PR 门禁；失败时只在来源分支范围内修复并重新推送，不能把修复直接提交到 `main`。
+4. 确认局域网预览、桌面/平板/移动截图、内容审核和质量门禁均完成。
+5. 创建已确认方向的生产 PR：空闲 `dev` 路径为 `dev -> main`，并行路径为 topic -> `main`；核对提交集合、三点文件差异、head/base 和可合并状态只含本任务。
+6. 等待当前 PR 的 required checks 全部成功，并核对检查绑定当前 head 及预期 merge ref；head/base 未漂移后才普通合并，再观察精确 `main` CI 和 production deployment 至终态成功。创建 PR 和合并仍各自需要用户授权，topic push 不触发 CI 不构成跳过检查的理由。
+7. 本地 `main` 只 fast-forward 同步 `origin/main`；是否切回或同步 `dev` 取决于其并行工作和祖先/树状态，不得无条件改动活动开发分支，也不得在 `main` 继续开发。
 
 ## 与生产发布的边界
 
