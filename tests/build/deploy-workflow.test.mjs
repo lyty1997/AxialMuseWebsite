@@ -37,7 +37,7 @@ function expectConcurrencyCode(source, code) {
   );
 }
 
-test("#34 static deploy job fixture is exact but remains outside active workflows", () => {
+test("#34 active deploy job is identical to its reviewed fixture", () => {
   assert.deepEqual(checkDeployProductionFixture({root: ROOT}), {ok: true});
   assert.equal(
     readFileSync(resolve(ROOT, DEPLOY_CONCURRENCY_FIXTURE_PATH), "utf8"),
@@ -49,11 +49,9 @@ test("#34 static deploy job fixture is exact but remains outside active workflow
   );
   assert.equal(DEPLOY_CONCURRENCY_FIXTURE_PATH.startsWith(".github/workflows/"), false);
   assert.equal(DEPLOY_WORKFLOW_FIXTURE_PATH.startsWith(".github/workflows/"), false);
-  assert.equal(
-    readFileSync(resolve(ROOT, ".github/workflows/ci.yml"), "utf8")
-      .includes("\n  deploy-production:\n"),
-    false,
-  );
+  const workflow = readFileSync(resolve(ROOT, ".github/workflows/ci.yml"), "utf8");
+  assert.equal(workflow.endsWith(`\n${DEPLOY_PRODUCTION_JOB}`), true);
+  assert.equal(workflow.includes(`\n${DEPLOY_SAFE_CI_CONCURRENCY}\n`), true);
   const preSecretStep = DEPLOY_PRODUCTION_JOB.split(
     "      - name: Reverify identity and invoke fixed TAT command\n",
   )[0];

@@ -16,11 +16,14 @@ GitHub：https://github.com/lyty1997
 
 ## 分支与晋级
 
-- 固定晋级路径：在 `dev` 提交 → push `origin/dev` → 观察 `dev` CI → 创建 `dev -> main` PR → required checks 通过 → 合并 → 观察 `main` CI。
-- 用户授权提交、当前位于 `dev` 且未要求独立分支时，提交落在 `dev`；不得为了套用晋级路径擅自切换当前分支。Agent 获准新建的 `codex/*` 分支先合入 `dev` 并完成集成验证，生产 PR 仍只能从 `dev` 指向 `main`。
-- 禁止直接 commit 或 push `main`，也不得本地 merge 后 push 绕过 PR。紧急例外须先获用户批准，事后回合并到 `dev`。
-- 创建 PR 前确认 `dev` 已推送、工作区干净且 head/base 为 `dev`/`main`；合并后本地 `main` 只 fast-forward 到 `origin/main`，随后切回 `dev`。
-- `main` 是稳定分支，`dev` 是开发主干；上述命名与晋级路径的任何变更都须由用户确认。
+- `main` 是稳定分支，`dev` 是开发主干；专题分支是否可以借道 `dev` 晋级，取决于 `dev` 相对 `main` 是否存在尚未晋级的提交或树差异，不得把 `codex/* -> dev -> main` 当作无条件固定路径。
+- 合并专题分支前先刷新远端引用，并同时核对 merge-base、`origin/main..origin/dev` 提交集合和两个远端 tip 的 tracked tree（含 mode）差异。只有 `origin/main` 与 `origin/dev` 已指向同一提交，或 `origin/dev` 没有独有提交且先普通 fast-forward 到精确 `origin/main` 后二者相等，才允许专题分支先合入 `dev`；随后依次执行普通 push `origin/dev`、观察精确 `dev` CI、创建 `dev -> main` PR、核对提交集合与文件差异、等待 required checks 全部成功且 head/base 未漂移、普通合并，并观察精确 `main` push CI 至 `completed/success`。
+- 只要 `dev` 存在未晋级的并行开发提交或树差异，专题分支就不得先合入 `dev`，以免把无关、未完成或未经授权的 dev 工作带入生产晋级。此时保持专题分支独立，并在用户确认后选择专题分支直接向 `main` 提 PR，或等待明确的 dev 集成窗口。直接晋级同样必须普通 push topic，核对 `origin/main..topic` 提交集合和 PR 三点文件差异只含本任务，等待 required checks 全部成功、head/base 未漂移且 PR 可合并，再普通合并并观察精确 `main` push CI 至 `completed/success`。
+- 不得为了伪造空闲 dev 条件、隐藏任务范围或绕过审计而临时 merge、rebase、cherry-pick、回退或移动 ref；已单独授权且基于当前稳定 `main` 形成新可审计提交的窄化重应用不在此限。若 topic 已是 `main` 祖先但其树效果后来被回退，普通 merge/PR 是 no-op，必须在取得新授权后基于当前 `main` 重形成提交，不能反向回退整批无关改动。
+- 用户授权提交、当前位于 `dev` 且未要求独立分支时，提交落在 `dev`；不得为了套用晋级路径擅自切换当前分支。获准新建的 `codex/*` 分支必须保持任务边界，只有满足上述空闲 dev 条件时才可先合入 `dev`。
+- 禁止直接 commit 或 push `main`，也不得本地 merge 后 push 绕过 PR；专题分支经 PR 直接晋级不属于直接 push。紧急直写例外须先获用户批准，后续是否把 canonical `main` 同步到 `dev` 仍须重新检查并行工作、祖先和树状态，不得无条件回合并。
+- 创建 PR 前确认 head/base 与已确认的晋级路径一致、来源分支已推送、工作区干净，并再次检查 PR 的提交集合和文件差异只含本任务。合并后本地 `main` 只 fast-forward 到 `origin/main`；是否切回或同步 `dev` 取决于其并行工作状态，不得无条件改动活动开发分支。
+- 上述命名、晋级条件与分支边界的任何变更都须由用户确认。
 
 ## 提交
 

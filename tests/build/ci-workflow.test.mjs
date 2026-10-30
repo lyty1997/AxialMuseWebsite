@@ -118,10 +118,10 @@ function withTemporaryRoot(callback) {
   }
 }
 
-test("CODE-020 canonical CI topology passes with five jobs and pinned Actions", () => {
+test("CODE-020 canonical CI topology passes with deploy job and pinned Actions", () => {
   assert.deepEqual(checkCiWorkflowSource(CANONICAL), {
-    actionCount: 12,
-    jobCount: 5,
+    actionCount: 14,
+    jobCount: 6,
   });
 });
 
@@ -131,8 +131,8 @@ test("CODE-020 repository workflow file set contains only regular ci.yml", () =>
     mkdirSync(directory, {recursive: true});
     writeFileSync(join(directory, "ci.yml"), CANONICAL, "utf8");
     assert.deepEqual(checkCiWorkflow(root), {
-      actionCount: 12,
-      jobCount: 5,
+      actionCount: 14,
+      jobCount: 6,
     });
     writeFileSync(
       join(directory, "release.yml"),
@@ -163,14 +163,35 @@ test("CODE-020 repository workflow file set contains only regular ci.yml", () =>
   });
 });
 
-test("D-097 concurrency cancellation is mandatory", () => {
+test("#34 main runs remain live while other CI runs can cancel", () => {
   expectCode(
     replaceOnce(
       CANONICAL,
+      "  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}",
       "  cancel-in-progress: true",
-      "  cancel-in-progress: false",
     ),
     "CI_WORKFLOW_HEADER",
+  );
+});
+
+test("#34 active deploy job cannot gain wider scope or skip Secret gate", () => {
+  expectCode(
+    replaceInJob(
+      CANONICAL,
+      "deploy-production",
+      "      actions: read\n",
+      "      actions: write\n",
+    ),
+    "CI_WORKFLOW_DEPLOY",
+  );
+  expectCode(
+    replaceInJob(
+      CANONICAL,
+      "deploy-production",
+      "        run: node scripts/deploy/check-production-deploy-identity.mjs\n",
+      "        run: true\n",
+    ),
+    "CI_WORKFLOW_DEPLOY",
   );
 });
 

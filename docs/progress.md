@@ -4,20 +4,154 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-10-31 — main 更新合入本地 dev
+
+- **授权与前态**：用户要求先将 main 更新拉入 dev；远端核对为 `main@489562e` 与 `dev@e9c06da`，两侧各有 40/9 个独有提交。七个未提交 review 修复文件已逐字节备份并保存于独立 stash，既有 stash 和其他工作树保留。
+- **整合边界**：普通合并保留两侧历史，处理 14 个冲突文件及自动合并中的历史 preview 回退；保留 main 生产部署、verifier、独立运行命名空间与活动 CI，保留 dev 的 preview/原子 current、品牌、搜索、草稿文章、项目叙事与回归。静态素材同时登记品牌 PNG 和 robots；dev 品牌决策按既有映射消歧为 D-173 至 D-184，main 运维编号不变。
+- **验收与遗留**：合并结果连同恢复后的七文件修复通过完整隔离 quality、独立 typecheck、262 项 TypeScript 测试（零跳过）、production/preview 真实 Chromium 回归及 production 构建；系统 Python 3.12 的 221 项运维测试通过，三个既有可选 Nginx 集成场景未启用。初次质量/测试在根配置的历史 preview 开关回退处失败关闭，修正后完整重跑成功，原日志保留。merge 提交只记录 main 整合及冲突消歧，原七文件 review 修复继续为未提交状态；上述工作区验收不冒充不含这七文件修复的独立提交验收。没有 push、PR、远端 CI、服务器/真实预览配置操作或部署，没有新增依赖、第三方服务、费用或用户数据处理。
+
+## 2026-10-28 — 三项复审文档修正独立晋级
+
+- **范围**：用户授权提交、推送并经 PR 合并到 main。基于 `main@cdcccc7` 的独立 `codex/review-docs-closeout` 只整理文档/规则及配套图，不经含九个并行提交的 dev，不修改运行代码或 workflow。编号协调登记 D-173 至 D-184，并固定精确 dev 快照和旧新映射；原 main 运维记录不变。dev 的九文件引用替换保留隔离候选，随其内容另行晋级，不能以本次映射登记宣称那些文件已经进入 main。
+- **修正**：晋级说明与规则明确 dev 等精确 push CI，topic 本地验证并经授权创建 PR 后等绑定当前 head/merge ref 的检查；原有条件式晋级同步到文字及图，不能为了等待不存在的 topic push CI 而阻塞创建 PR。运行观察改为历史已结束：98 个样本、86402.902 秒、原始回执通过，但窗口跨越发布，不等于当前版本的独立 24 小时验收。
+- **验证边界**：本轮本地复核的 12 个新编号无既有占用，九文件按映射反向比对证明决策正文、日期、授权边界和测试逻辑未改；用现有观察函数重新计算全部样本，与原始完成回执及 baseline 摘要相符。原始证据不修改。Git hooks、PR 检查、main CI 与其自动部署分别按精确 SHA 验收，不把本地通过写成远端成功。
+- **遗留**：dev 编号引用、#8、监测器运行修复、24 小时新观察、活动定时/通知及此前服务器安装文档收尾仍按各自候选处理；本次不携带其整份旧文档或运行文件。除合并自动触发的一次现有 CI/TAT 外，不手工重跑 CI/TAT、不安装组件、不改 Nginx/DNS/证书或启停观察，不新增服务、费用或用户数据处理。
+
+## 2026-10-27 — 发布命名空间兼容修复获准提交与 PR
+
+- **授权与范围**：用户在本地修复验收后要求先提交并创建 review bugfix PR。以 canonical `main@81d1ebf` 的独立工作树形成 `codex/deploy-namespace-fix` 分支，普通提交、推送并直接向 main 提 PR，跟踪精确 head 的 CI；不经有九个并行提交的 dev。保留原主工作区及其他候选。本次不授权合并、生产迁移、保存的 TAT command 更新或新增调度。
+- **修复**：发布模块导入根、TAT 解析器和模板、续期 hook 同步改到 `/usr/local/lib/axialmuse-release`；verifier 正式路径、receipt、闭合成员表及生命周期双锁不变。具体安装和旧布局迁移要求见[接线清单](operations/production-deploy-setup.md)。代码和文档进入 PR 不代表已安装，不宣称线上升级阻塞已解除。
+- **验收**：系统 Python 3.12 的 221 项 ops 测试全部通过、零跳过，显式启用全部三项真实 Nginx/TLS 集成。升级器 40 项通过，其中新组合 fixture 先 bootstrap、按真实入口解析的固定路径安装真实发布源码，再以真实 verifier/golden、系统 Python 自测完成升级和 already-current 复验，发布文件字节、inode 和 mode 不变。旧 `ops/`、旧 `tat-entry.py` 各自及共同混装均在升级状态创建前拒绝。内存 mutation 把所有入口恢复到旧根后，新组合测试以预期 `VERIFIER_UPGRADE_STATE` 变红。完整 Node 24.18.0 `quality`、Ruff 和 diff 检查通过。
+- **发布边界**：本轮只提交、推送专题分支并创建/验收 PR，无生产 SSH、main 合并、TAT、Nginx reload、DNS 或证书写入；不改既有观察结果，不新增依赖、第三方服务、费用或用户数据处理。dev 内容、预览和项目公开状态另行推进，不带入本 PR。后续合并与服务器/TAT 迁移仍须具体清单及新的明确授权。
+
+## 2026-10-27 — 两项部署复审修复获准提交与 PR
+
+- **授权与路径**：用户允许将下述已验收的十文件修复提交并创建 PR；采用基于 `main@9e106d5` 的独立 `codex/deploy-review-fixes` 分支，普通推送后直接面向 `main`，保留 `dev` 九个并行提交。六个实现/测试文件与已验收指纹一致，提交由正常 hook 再执行完整 quality；精确 PR head 的检查结果另行验收。
+- **边界**：本次只完成提交、推送与 PR 检查，不合并、不安装到服务器，也不启动 TAT、reload 或 DNS 写入。主工作区、#8 候选及生产采样保留；2026-10-26 的“尚未提交”是此前阶段的历史状态，以本条后续 Git 证据为准。未增加依赖、第三方服务、费用或用户数据处理。
+
+## 2026-10-26 — 部署复审两项修复与已合并分支清理
+
+- **修复行为**：下载器验证精确 run attempt 的四个 prerequisite 与 producer 均唯一且成功，不等待包含调度 job 的整个 workflow；下载前重新核对制品、run 身份及 attempt。事务增加持久 pending 阻断，成功写入后的 fsync 异常进入恢复时可原子替换结果，恢复失败或中断不能被旧成功记录掩盖；提交点之后的目录同步异常不会触发回滚。旧无 pending 的完整历史记录仍可读取。
+- **验证**：基于 `origin/main@9e106d5` 的独立候选在系统 Python 3.12 下完整 ops 219 项通过（含三个既有 opt-in 跳过），另行启用固定本机 Docker 镜像的真实 Nginx 发布/回滚验收通过；完整 Node quality、修改文件 Ruff 和 diff 检查通过。新增反例覆盖 job 缺失/重复/失败/错误身份、attempt 与制品过期漂移、成功记录目录 fsync 失败、fallback 失败、恢复记录写入失败、提交后同步失败，以及成功 JSON 已存在时真实 SIGKILL。将旧实现仅加载到独立测试进程后，两项定向回归均失败，证明新增断言能检出原缺陷。首次默认 Conda Python 3.13 被固定运行时门禁拒绝，失败日志保留，未放宽门禁。GitHub 已有 run 的只读 jobs/制品元数据也通过新验证器；未下载 ZIP。
+- **分支清理**：删除九个远端已合并 `codex/*` 分支、相应九个本地分支及已合并的本地 `remote` 分支，保留 `main`、`dev`。八个关联工作树脱离旧分支并保持原 SHA，逐文件内容/权限摘要前后相同，工作树与未提交文件均保留。主工作区当前是 detached HEAD；#8 候选和生产采样工作树保留。删除前核对精确祖先、开放 PR 与远端 tip，远端原子删除附带精确旧 tip 保护；清理回执在 `/tmp/axialmuse-branch-cleanup-20261026.json`。
+- **交付边界**：修复同时保存在用户原工作区和 `/tmp/axialmuse-deploy-review-20261026` 的窄化 main 候选；尚未提交、推送、创建 PR、合并或安装到生产。没有新增 CI/TAT/reload、DNS 写入、依赖、服务费用或用户数据处理。现有生产入口未改变，生产观察不因本轮修复而重开或宣称完成。
+
+
+## 2026-10-26 — D-169 的 300 秒 HSTS 候选完成本地验证
+
+- **用户选择与实现**：用户确认仅根域/www HTTPS 下发 300 秒 HSTS，不含子域继承或 preload。两个既有公网模块新增严格 schema 2 的整数 0/300，旧 schema 1 布尔语义保留。固定 deploy/rollback 和证书 hook 通过共同模式解析使用新策略，五个 TAT 参数及 hook 文件不变；配置/模式失配在续期 reload 前拒绝，未创建生产安装或迁移。
+- **独立证据**：与已认证安装源同摘要的旧 renderer 在实际当前路径/CSP 上，对原关闭和半年两种模式均逐字节一致；新头只出现于两个已知 HTTPS server。默认 Python ops 212 项（209 通过、三个既有/新增 opt-in 跳过），其中两项真实固定镜像 Nginx/TLS 独立启用通过，覆盖发布、回滚、续期、关闭和半年头定向 mutation；新增公网监测精确头反例通过，Ruff、完整 quality 和 diff 检查通过。首轮 quality 被文档中的受限状态词拦截，已定位文档门禁并修正文案；原非零日志保留，未把泛化错误解释为代码测试成功。
+- **收尾与操作门禁**：16 文件候选及[具体执行清单](operations/production-health.md)已形成，包括 robots 修复、只读监测与此前 #39 的本地文档收尾。远端 main 仍为 `2cf04ee`，dev 有九个独有提交；新的 Git 路径、一次新增 TAT、最多四次 reload（含 hook 与恢复）、两模块认证安装和新阶段观察均尚未获准。旧本机采样仍运行，已有采样均诚实保留 robots 缺失失败，不报告 24 小时成功。未新增第三方服务、访问者数据处理、费用或生产写入；CAA/DNSSEC、活动 schedule 与依赖升级保持各自边界。
+
+## 2026-10-26 — #38 零新增开支收尾与运行观察启动
+
+- **用户决定与关闭**：D-168 确认 DNSSEC 暂缓，保留免费 DNS/HTTPS，先推进免费加固和运行监测。#38 已改按现有 A/NS/TTL 的只读验收范围关闭，[证据与边界](https://github.com/lyty1997/AxialMuseWebsite/issues/38#issuecomment-6409820383)已独立逐字核验；新 113 项 DNS 组合在四个初始 UDP 失败保留、逐项 TCP 补查后全部符合预期。未声称 DNSSEC 链通过或全量 zone 已导出；导出仍是未来 DNS 写入前要求。
+- **实际监测与缺口**：新零依赖 Python 检查绑定完整复验的当前 artifact，真实公网 42 项中 41 通过，14 个 payload 哈希一致，唯一失败为 `/robots.txt` 404，命令正确 exit 1。注册 robots 的修复候选已实际 production build 验证，尚未部署；#40/#41 不因此关闭。本机每 15 分钟采样、计划至少 24 小时的进程已经启动，首份回执为 UTC `06:31:43`；本机采样没有自动通知，不等同服务器常驻/GitHub schedule。已知失败、采样空档和未到 24 小时不能算成功，修复上线后重新绑定基线并重开观察。
+- **验证**：新增 20 项正常/反例及采样循环检查通过，完整 Python ops 为 206 项（204 通过、两个既有 opt-in 跳过）；完整 Node quality、Ruff、253 项 TypeScript 和 production build 通过。真实移动视口 Chrome 三页 hydration/导航、29 个请求无第三方请求、CSP 违规或浏览器错误，截图已查看。严格 SSH 只读复核 current/账本/事务/安装/备份/证书/服务/管理边界通过，本轮零新增 reload、TAT 或部署。
+- **后续与风险**：GitHub 实时未关闭依赖告警为 critical 4、high 26、medium 15、low 5；已核对三个包的锁定路径和官方公告，生产 Nginx 不执行 Node 不代表 CI 风险消失，正式升级/可达性仍待。HSTS 短有效期、CAA 精确值和继承影响、活动 schedule/通知及 Git 晋级需具体方案审查。详见[免费加固与运行观察](operations/production-health.md)。原主工作区、dev 并行提交和 #39 本地收尾保持；本轮未提交或推送，未新增服务商、费用或访问者采集。
+
+## 2026-10-25 — #39 公网 HTTPS 与续期验收完成
+
+- **最终行为**：`https://www.axialmuse.com/` 已提供 `main@2cf04ee`；四主机单跳/查询保留、未知 Host/SNI 拒绝、14 个 payload 哈希、安全头/CSP、缓存/MIME/gzip/Range、Chrome 三页 hydration 与客户端跳转全部通过。无证书/hosts 例外，无外部浏览器请求、CSP 违规或浏览器错误。
+- **发布与续期**：一次正式签发、一次精确同制品 prepared 发布、一次真实续期 dry-run 均 exit 0，唯一新增 hook 成功回执绑定当前 SHA、账本、时间和实际加载证书。公开证书到期 `2027-01-23 13:33:10 UTC`，SHA-256 `215ddd80bfef1ebf99fd5f823716a2d0d578690621a92cac07726bf898f423d0`；Nginx/Certbot timer active/enabled，六个发布事务全部成功。
+- **额度与收尾**：含失败恢复累计七次 reload，由 systemd journal 独立计数，低于 D-167 的八次上限；仅一次新增 TAT，无 CI 重跑、DNS 写入或额外 Git 发布。八目标、十一个未变组件、五份备份、当前配置/账本/boot/管理边界最终复核通过，失败证据保留。[#39 关闭证据](https://github.com/lyty1997/AxialMuseWebsite/issues/39#issuecomment-6399028942)已回填并独立逐字核验，Issue 按 completed 关闭；#38 DNSSEC 与 #40 保持各自待办。已启用获准 ACME 服务，仅向 CA 提交所有者私密联系邮箱，无浏览器第三方请求或用户数据采集。本条及详细收尾文档只留本地。
+
+### 本轮失败、恢复与新增授权记录
+
+- **晋级与安装**：[PR #70](https://github.com/lyty1997/AxialMuseWebsite/pull/70) 合并为 `main@2cf04ee`，[main CI](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40201521669) 六项成功；唯一新增 TAT 独立 SUCCESS/exit 0，14 个 payload HTTP 哈希通过。四模块认证、八目标安装及五份旧入口备份独立复核通过，十一个既有组件未变，邮箱文件仅格式/权限核验通过。
+- **失败与恢复**：现场辅助脚本缺少导入在写入前停止；修正后，HTTP 函数名遮蔽标准库导致 bootstrap 探针失败，已完成精确配置恢复和独立复核。仅本机 18080，current 为上述新 main，账本未变，五个事务；正式签发、prepared、续期均未开始。两个辅助脚本错误与已完成恢复均留证，不把 main CI 成功写成公网验收。
+- **后续授权**：含 merge TAT 累计三次 reload。剩余流程预计四次，另保留一次兼容恢复；用户在 D-167 明确确认总上限调整为八次，剩余最多五次，其他边界不变。#39/#38 继续开放，等待真实公网/续期结果，失败目录与历史 staging 保留。本条及[详细回执](operations/public-https-setup.md)只留本地，未追加 push/TAT、DNS 或用户数据处理。
+
+## 2026-10-25 — #38 DNS 现状核对及 #39 HTTPS 候选
+
+- **决定与事实**：按 D-165，所有者确认 DNSPod 后台只有符合预期的默认线路 A（根域/www、TTL 600），无其他线路或 MX/TXT/CAA，免费套餐没有 DNSSEC。权威 NS、多公共解析器和实例 metadata 比较一致；完整 zone 旧值导出尚无证据，不能以公共枚举替代。顺序为已核验 DNS → #39 HTTPS → #38 DNSSEC，两个 Issue 保持开放。
+- **候选实现**：独立 main 归档中的公网配置、同代 CSP、固定命令模式接线及证书 hook；沿用既有不可变 release/current/账本与兼容恢复。未知 Host/SNI、外部主动资源、内联事件/未知样式、失配或过期证书、缺模式/配置漂移均失败关闭。详情与操作边界见[公网 HTTPS 候选与验收清单](operations/public-https-setup.md)。
+- **本地验收**：fixture、固定既有镜像的真实 Nginx/TLS、完整 Node quality 与 Ruff 通过；真实当前 artifact 独立校验并经 Chrome 三页 hydration/客户端跳转验证，未见 CSP 违规、浏览器错误或外部请求尝试。首次导航超时摘录保留，30 秒等待的独立重跑通过，不声称还原首次原因。Python/本机 Nginx 门禁不冒充远端候选 CI、正式证书或公网成功。
+- **保留边界**：未创建提交/分支/PR、未触发 TAT、未改服务器配置/DNS/TLS/云规则、未申请 ACME 或购买套餐。原主工作区和 #37 收尾工作树保持原样；候选继承三份 #37 文档，仍待后续 Git 路径审查。服务器最后只读检查仍只有本机 18080。无新增第三方服务或用户数据处理；正式部署、续期演练、DNSSEC 与公网观察继续待授权和实际验收。
+
+## 2026-10-25 — #37 本机发布、账本与兼容恢复现场验收完成
+
+- **晋级与认证安装**：按 D-164，[PR #69](https://github.com/lyty1997/AxialMuseWebsite/pull/69) 的 17 文件候选进入 canonical `main@27d461b9d7d0745343f01b3c491ee68d267b4700`，没有带入 dev 的九个并行提交。精确 main 的 GitHub 内容、Git blob 和 SHA-256 交叉认证六模块；安装六个 root:root/0644 模块及四个 root:root/0755 固定命令，保留 root-only 旧入口备份，随后由新 SSH 逐项核验摘要/权限和非法参数拒绝。原 verifier、下载器、TAT command、App 凭证与 CAM 权限未改写。
+- **两次 TAT**：[run 40146353211 attempt 1](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40146353211/attempts/1) 六个 job 成功，artifact `12581107123` 在旧入口按计划以 `DEPLOY_ACTIVATION_PENDING`、exit 2 停止，18 文件与双摘要一致。安装并完成首次激活后，仅完整重跑同一 run 一次；[attempt 2](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40146353211/attempts/2) 六个 job 成功，artifact `12580683476` 对应独立 task `invt-0ab9kvg3m6` 为 `SUCCESS`、exit 0，完整五参数与实际制品一致。最终 ZIP digest 为 `c302e47f25318610f65a57788482a28220724cd2e783db60ad11c6793dc27f2a`，release tree digest 为 `dd3c2ff3284f5ca30c823e17f58e692806023752577e1bfcea8898a12a31e49d`。
+- **四次真实切换**：显式初始化新站账本，为旧 main `441b214` / run `40069951954` / artifact `12550609976` 创建并消费精确一次性批准；固定 prepared 首次激活旧代，第二笔 TAT 激活新代，再用固定 rollback 回到旧代、回到新代。四个事务均为 `local-accepted`、命令 exit 0，最终 current 为 `27d461b`。每次独立 HTTP 验收均通过 14 个 payload 字节摘要、两条 301/查询串、目标 200 和 metadata/config/未知路径 404；唯一 Web 监听是 `127.0.0.1:18080`，临时候选端口已退出。
+- **账本与现场保全**：账本 SHA-256 为 `2bd67fdfc737ea75047eb235cb64495865f5c91ac5d58bf1b2eaf42a2573d4de`，genesis 与首次发布两份连续历史保留，后续切换未删改承诺；批准消费证据保留。四个历史 staging 按身份/字节/权限指纹全部保留，包括失败零字节 ZIP，总计六个 staging。原 Nginx 配置文件摘要未变，仅新增获准的本机 server block。既有 fwupd 失败项已消失，当前失败集合是冻结身份集合的子集；未 reset-failed、修复无关服务、重启或修改管理网络。
+- **验证与收尾**：Python ops 170 项通过、1 项 opt-in 默认跳过并单独通过真实 Nginx 集成；完整 quality、Ruff、失败注入与回归通过。PR 首次最低 Node 测试仅留下 `NPM_WORKLOAD_FAILED`，内部断言被既有日志入口抑制；同版 24.16.0 本地 253 项通过，PR 重跑及两次 main CI 通过，不声称还原首次失败根因。[完整命令与现场关闭证据](https://github.com/lyty1997/AxialMuseWebsite/issues/37#issuecomment-6391457633)已回填，#38 接收固定接口；公网监听、DNS/DNSSEC、正式 TLS 未实施。未新增第三方服务、浏览器请求或用户数据处理。本条与相关收尾文档仅留在独立工作树，未追加 main push 或第三笔 TAT，后续文档晋级继续遵守发布授权。
+
+## 2026-10-24 — #37 本机原子发布候选与恢复验收
+
+- **用户选择**：D-163 确认新站首次发布为空账本起点、不追溯已删除旧站；无兼容 fallback 使用精确身份/账本摘要/有效期绑定的一次性 root-only 批准，回滚由固定 SSH 命令执行。#37 只完成本机监听验收，公网监听、DNS 与正式 TLS 留给 #38；具体生产写入方案另行审查。
+- **仓库候选**：实现规范账本摘要链与备份、事务阻断、批准消费防重放、verifier 共用锁、安装前 staging 全树复验、同 SHA 不可变 payload/config、固定 deploy/prepared/rollback/init 命令及本机 Nginx 激活。只有历史验收成功且兼容更新后完整账本的 release 可作 fallback；恢复失败或崩溃留下 pending 状态会阻断后续操作。正常 forward-only 失败保留闭包，并可使用新身份和新批准向前修复。
+- **验收发现与修正**：真实固定镜像 Nginx 证明，一次 HTTP 冒烟成功后旧 worker 仍可能接受下一连接并返回旧代。候选现按 master 与 worker 的 PID/starttime 等待旧代退出，再执行全量 HTTP 验证。真实 Nginx 已通过两代字节切换、兼容回滚、reload 故障恢复、真实无效配置拒绝、301/query 与 metadata 404；真实 SIGKILL fixture 证明未完成事务阻断下一次发布。批准过期/漂移/重放、账本断链/缺失/写入中断、摘要不符、staging 变化、不可变安装重入和不兼容回滚均有独立反例。
+- **本地与现场边界**：系统 Python 3.12 的 ops 回归、相关 Ruff、固定 Node 24.18.0 完整 `quality` 已通过；Docker 集成入口需显式启用并已单独执行，具体最后结果以本轮交付回执为准。只读 SSH 核对生产目录权限、共享 verifier 锁、Nginx 原配置摘要和两个候选端口空闲；没有服务器写入、TAT 调用或 Git 发布。可审查的窄化 Git 晋级、六模块/四命令安装、显式初始化和四次本机切换方案见[接线清单](operations/production-deploy-setup.md)。#37 继续开放，未将本地候选记为生产验收。未新增第三方服务或用户数据处理。
+
+## 2026-10-24 — #37 恢复推进：账本历史比较与现场前态复核
+
+- **上游与现场**：刷新远端确认 `main@441b2140ff0bd2e8191c107ce9ebe6f8a92eadee`，#34 已完成的调度/制品准备证据见 [交接记录](https://github.com/lyty1997/AxialMuseWebsite/issues/37#issuecomment-6380988655)。本轮严格 SSH 只读复核确认 `current`、`releases` 与生产 URL 账本均缺席；固定入口为 root:root/0755，Nginx 配置测试成功、配置摘要与 #34 收尾一致。没有新增 TAT 调用或服务器写入。
+- **独立实现与证据**：在已有 D-142 账本纯逻辑基础上增加 `assert_ledger_append_only(before, after)`，比较全部路由、边及其首次 release 身份，拒绝规范 JSON 仍合法但删除历史事实、替换目标或重写首次身份的账本；merge 返回前执行此检查。`python3 -m unittest discover -s tests/ops -p '*ledger*.py' -v` 共 21 项通过，相关 Ruff 通过。内存 mutation 将该谓词替换为恒真后，六项新增测试产生十个失败断言、零运行错误，证明反例能检测历史检查被绕过；未改写磁盘源码。
+- **决策门禁与暂停范围**：D-142 明确保留的首次账本来源、forward-only 批准承载方式与回滚通道尚待用户选择；#37 本机验收与 #38 公网接入的边界也已提交确认。仓库仅保留旧单页源码和空重定向注册表，不能据此证明历史服务器从未返回过其他 URL/301。依赖这些选择的生产持久化、激活和恢复实现及外部写入保持暂停。远端 `dev` 仍有九个并行提交，本轮未提交、推送或创建 PR，原有用户改动完整保留；本条与账本增量仅为本地候选，#37 保持开放。未新增第三方服务、浏览器请求或用户数据处理。
+
+## 2026-10-24 — #34 时序修复安装与受控验收完成
+
+- **Git 与第一次新增调用**：[PR #68](https://github.com/lyty1997/AxialMuseWebsite/pull/68) 四文件修复通过 [PR CI](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40061134461)，核对 head/base 后合并为 `main@441b2140ff0bd2e8191c107ce9ebe6f8a92eadee`。[main run 40069951954 attempt 1](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40069951954/attempts/1) 的六个 job 全部成功，返回 `inv-2aa9uagj3n`。旧入口本次未碰到时序窗口：任务 `invt-2aa9uagj3p` 以 `DEPLOY_ACTIVATION_PENDING`、exit 2 停止，artifact `12551260833` 的外层 ZIP digest 为 `bf010e31067458242e290d72cf4c9ed6580ff74c36c018a24320f9ddab05a6da`，release digest 为 `a4cc5eae66894794a163ec6a6bf72b01419faca9371fff767b19fdbf18350cad`；完整五参数命令及 18 个 verified-release 文件与 ZIP 字节一致，未激活站点。
+- **安装来源与后验**：GitHub 精确 main 内容、Git blob 和本地源码交叉认证下载器 blob `1949ffc17c3966f14bb10c2ebbfe828b0229062a`，新 SHA-256 为 `8ecf0c434c0baeaa133b020c0d303ee46736bc563602fe8d5c5da491ee013cee`。main CI 成功且无在途部署后，仅原子替换 `/usr/local/lib/axialmuse/ops/deploy/fetch_artifact.py`，保留 root-only 旧字节备份。新 SSH 会话确认 root:root/0644、其余四个固定组件未变，并以同一 main 的测试在已安装模块上通过九项测试；三个既有 staging 的字节与权限快照完全一致，Nginx 未变，current/releases 仍缺席。
+- **最后一次受控重跑**：按本轮授权，在 main 仍精确匹配且 attempt 1 成功、安装后验通过后，仅请求一次完整 rerun。[attempt 2](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40069951954/attempts/2) 六个 job 全部成功，返回 `inv-waaa2j0bwp`、artifact `12550609976`。安装后任务 `invt-waaa2j0bwq` 的完整脚本与五参数匹配，按约定以 `DEPLOY_ACTIVATION_PENDING`、exit 2 停止；TAT 的 `FAILED` 只表示该非零退出，不表示站点已激活。ZIP digest 为 `e987884970a39eb2e40f516d9561c9ff7ae8e44ada222dcfe49c4ac49a4ff22c`，release digest 为 `a4cc5eae66894794a163ec6a6bf72b01419faca9371fff767b19fdbf18350cad`；远端独立重算两个摘要并逐文件比对 18 个文件一致。
+- **收尾与下游边界**：最终新 SSH 会话确认安装源码仍匹配 canonical、新旧下载器字节保留、三个历史 staging 的内容与权限快照未变，且只新增本次验证成功的 staging；main 仍为 `441b214`，Nginx 未变，current/releases 缺席。#34 的身份/新鲜度/Secret 前门禁/受限调度与独立 task 验收闭合，关闭证据回填到 Issue；#37 的账本、不可变生产安装、原子激活、Nginx 与 DNS/TLS 仍未完成。共使用本轮授权的两次调度，没有追加 main push、本轮第三次调用、失败 staging 清理、站点激活或新第三方服务/用户数据处理。现场证据在本地进度与 GitHub Issue 保存；本条及接线清单的收尾更新尚未再次晋级 main，避免超出本轮调度次数，后续文档晋级须沿用明确的发布授权。
+
+## 2026-10-24 — #34 下载时序修复晋级与受控再验收授权
+
+- **用户决定**：用户授权现有四文件修复从基于 `main@a430009497feb80cdcda41fb27e6c1e9c6ccf52a` 的独立 `codex/*` 分支直接向 `main` 提 PR，检查全绿且 head/base 稳定后普通合并。等待精确合并 SHA 的 main CI 成功，再从同一 canonical SHA 认证并更新服务器下载器，最后完整重跑该 main CI 一次验收。最多新增两次 TAT 调度：修复合并自动触发的一次仍使用旧入口，安装后再验收一次；任一结果不明不自动追加调用。
+- **执行与验证边界**：只晋级 `ops/deploy/fetch_artifact.py`、其测试、接线清单和本进度文档，不夹带主工作区或 `dev` 改动。服务器仅替换已核验来源的下载器，保留旧字节和失败 staging；通过严格 SSH 前态、精确字节/权限后验、run/artifact/双摘要绑定、独立 task 终态与 staging 文件树复验收尾。不激活站点，不初始化账本，不修改 Nginx、DNS/TLS、网络或服务。记录时尚未执行本轮提交、安装或额外调用。
+
+## 2026-10-23 — #34 活动接线合并与首次真实调度
+
+- **已完成 Git 晋级**：[PR #67](https://github.com/lyty1997/AxialMuseWebsite/pull/67) 的九文件候选通过完整本地 quality 与提交 hook；[PR CI](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40050924472) 完成且四个前置 job 成功，producer/deploy 按 PR 规则跳过。head/base 和范围复核一致后普通合并为 `main@a430009497feb80cdcda41fb27e6c1e9c6ccf52a`；[精确 main CI](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/40051122594) 的六个 job 全部成功。未改动 `dev` 或主工作区既有内容。
+- **真实调度**：首次受控 `InvokeCommand` 返回 `inv-waa1ps06ji`，run 为 `40051122594`、artifact 为 `12542499771`，ZIP digest 为 `bce05aac3d3529fd78f01531989109c4d687ce35295abdaed9a3b6fc69353d0c`、release digest 为 `7014629a3dd0539d85d041cdc26f4781a3572d285750bae1431a2a604f1d3cc7`。这证明受保护 runner 的 CAM 凭证可签名调用指定目标；最小权限仍由所有者控制台核对支持，不声称 Agent 独立读回了完整 CAM 策略。
+- **服务器独立终态**：TAT agent 收到的完整脚本与上述五参数逐字节匹配，任务 `invt-waa1ps06jj` 为 root/SHELL、无 COS；终态为 `FAILED`、exit 1、固定码 `ARTIFACT_IDENTITY`。精确 staging 中仅有零字节 ZIP，没有 `verified-release`；`current`、`releases` 仍缺席，Nginx 配置摘要与预检一致。未重调、重跑 CI、删除失败 staging 或激活站点。
+- **缺口与本地修复**：固定下载器要求整个 run 已 `completed/success`，与同一 run 内最后一个 job 发起 TAT 存在时序竞争；任务结束时间与 deploy job 完成时间均为 `2026-10-24T01:48:39Z`，未取得当时 GitHub metadata 快照，因此该竞争是源码与现场一致的原因解释，非对所有身份字段历史值的独立还原。准备仅对相同身份的 `in_progress` run 做有界只读等待，保留完成且成功后才能下载的严格门禁。#34 保持开放，等待修复晋级、服务器安装和新的受控调用达到 `DEPLOY_ACTIVATION_PENDING` 验收边界；#37 的账本、生产安装、Nginx 与 DNS/TLS 继续待办。本条证据与修复尚在隔离工作树，未追加 main push；未引入新第三方服务或用户数据处理。
+- **修复候选验证**：四文件补丁位于基于 `main@a430009` 的独立工作树。121 项 Python 服务器测试、Ruff、固定 Node `24.18.0` 完整 `quality` 和差异检查通过；其中下载器九项测试覆盖正常完成、有界等待、失败/取消/未知状态、跨轮 attempt/SHA/repository/artifact/digest/过期变化、HTTP 不重试、签名下载无 Authorization 和短写失败。相同 pending→success fixture 独立加载 canonical 旧代码可复现 `ARTIFACT_IDENTITY`，候选通过。尚未 commit/push/PR、安装服务器或重跑 CI；首次九文件 PR 和一次受控调用授权已经执行，后续 Git 晋级及额外调度须另行确认。
+
+## 2026-10-23 — #34 活动 dispatch workflow 隔离候选
+
+- **范围与来源**：用户要求继续 #34。canonical `main@911848236b1552d3787f3cf0aeb94731f6d12a16` 保持稳定，远端 `dev` 多 9 个独立提交，主工作区含其他未提交改动；本轮仅在基于该 `main` 的隔离工作树准备活动 workflow。GitHub `production` environment 只允许 `main`，两个 Secret 名称和地域、command、实例三个变量已读回，但 Secret 值不可由 GitHub API 读取。
+- **本地候选**：把已审查的 `deploy-production` fixture 原样接入唯一 CI workflow，保留 producer 四项前置与上传后身份输出；job 仅在 canonical `main` push 且 artifact 成功时进入 `production` environment，先不接触 CAM Secret 独立复核 GitHub 身份，随后再次复核并只调用固定 `InvokeCommand`。顶层并发保留 `main` run，job 自身串行。质量门禁分别锁定原五个 producer job 和新的 deploy job；权限扩大、替换目标或跳过身份门禁均失败关闭。固定 Node `24.18.0` 的完整 `quality`、29 项 CI/部署 workflow 定向测试、Markdown/契约/Secret、YAML 解析及差异检查通过；严格 SSH 再次确认服务器五个固定入口与 canonical 字节一致、TAT agent active，站点仍未激活。
+- **所有者核对与 Git 晋级决定**：用户逐项确认腾讯云保存的固定命令 SHA-256 为 `bdce0154468ee49942a7792dfdf1d99901cf3f82b42afe8319c7031250e8be92`，采用 SHELL/root、启用五参数且没有默认值、定时器或 COS；专用 CAM 子用户含用户组继承仅有指定命令与实例的 `tat:InvokeCommand`。这是所有者控制台核对，非 Agent 独立云 API 读回。用户授权将本次九文件候选放入独立 `codex/*` 分支，直接向 `main` 提 PR；仅在 PR 检查全绿、精确 head/base 未漂移且上述核对通过后普通合并，并验收合并 `main` push 自动发起的一次 TAT 调度。不改动 `dev` 或主工作区既有改动，不 force、不 rebase、不直推 `main`。
+- **待验收**：记录授权时本地代码尚未提交或进入 PR，活动 workflow 尚未进入 `main`，没有触发 TAT。Secret 值的有效性仅能在受保护 runner 内以签名调用或首次受控调度证明；调度受理、任务终态与服务器私有 staging 必须分别取证，含糊失败不自动重调。#34 不等于 #37 发布或网站上线，首次账本、Nginx 和 DNS/TLS 继续独立待办。未新增浏览器第三方请求或用户数据处理。
+
+## 2026-10-19 — 六项制品链验收与真实 artifact 复核
+
+- **范围与当前事实**：按用户要求验收 #12、#13、#32、#33、#35、#14。新鲜 GitHub 查询确认 canonical `main@2ed430aa45b673d9cddad5d607ea837d4cc212c3`；该 SHA 的 [CI run 38908312695](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/38908312695) 是 `push`、`completed/success`，五个 job 均成功。它只证明制品生产链，不代表 #34 活动 TAT 调度或 #37 生产部署已接线。
+- **真实 artifact**：同一 run 的唯一、未过期 artifact ID 为 `12049645678`，外层 REST digest 为 `sha256:7c9b6a13a9e888b65ac09a915caff906cc62b62253bb96e9e6d3cece52ecd668`；原始 ZIP 下载后独立 SHA-256 精确相同。精确 `main` 的隔离 worktree 用 Node `24.18.0` 经 E-010 冻结安装 1298 个包、production build、封装和独立 checker 得到 `sourceBuildTreeSha256=cf9417abfc9341eb675495757597c593edb4f382f528eb807fb5953848309f6a` 与 `releaseContentSha256=506c12575736d5a21a60d3e4355130668627249e95403b05022483ed46f77b0f`；下载 ZIP 与本地重建 release 的 18 个普通文件集合和字节全部相同。这是本次额外的独立重建观察；设计不要求每次 build 都可复现。
+- **独立验证与反例**：Python verifier 用 GitHub 外层摘要、独立重建 release 摘要与精确 commit 成功解包真实 ZIP，回报 18 个 release 文件、14 个 payload 文件、3 个公开路由、0 条 registered 与 2 条 canonical-slash 规则。把同一真实 ZIP 的外层或 release 期望摘要分别改错，两次均以稳定错误非零退出、stdout 为空且未激活。verifier 生命周期 fixture 101/101、自测 6/6；历史入口核对 111 个可达提交并通过 48+2 fixture；workflow 23/23、301 逻辑 32/32、历史/封装/fresh workspace/输出四组 124/124。固定本地 Nginx 镜像实际 `nginx -t` 和 25 项 HTTP 断言通过，含 2 条故意构造的 registered 与 2 条 slash 规则；真实 M0 artifact 的注册规则仍为零。固定 Node 的完整零依赖 `quality`、`typecheck`、Markdown/契约/Secret 与差异检查通过。
+- **Issue 收尾**：按依赖顺序向 [#12](https://github.com/lyty1997/AxialMuseWebsite/issues/12)、[#13](https://github.com/lyty1997/AxialMuseWebsite/issues/13)、[#32](https://github.com/lyty1997/AxialMuseWebsite/issues/32)、[#33](https://github.com/lyty1997/AxialMuseWebsite/issues/33)、[#35](https://github.com/lyty1997/AxialMuseWebsite/issues/35)、[#14](https://github.com/lyty1997/AxialMuseWebsite/issues/14) 分别回填正常与反例、精确 SHA、实际命令和下游交接后关闭；GitHub 独立读回六项均为 `closed/completed`。#12/#13/#14 原正文的待实现提示已改为已验收，保留原始契约追溯。
+- **Git 晋级决定与授权**：用户确认本轮只把 `docs/README.md` 和 `docs/progress.md` 的收尾补丁放在以当前稳定 `main@2ed430a` 为基点的独立专题分支，普通推送后直接向 `main` 提 PR；PR 只含这两份文档，检查全部成功且 head/base 未漂移后普通合并，随后核对精确合并 SHA 的 `main` CI 为 `completed/success`。远端 `dev` 比 `main` 多 9 个并行提交，故本轮不借道或改动 `dev`；不 force、不 rebase、不直推 `main`，不操作 #34/#37、服务器、TAT、DNS 或云资源。主工作区原有改动保留，Git 晋级在隔离 worktree 执行。
+- **证据边界和交接**：GitHub REST 不提供已完成 job 的 `release-content-sha256` 输出供事后单独读取；本轮以该 job 成功状态、固定 workflow 的前后 seal/输出门禁、独立从精确 SHA 重建得到的相同摘要和逐文件字节比对共同验收 #14，不声称直接取得该历史 job output。#34 仍须从同一次活动 run 的 job output 传递摘要并做新鲜度/CAM/TAT 验证；#37 仍负责锁、账本、不可变安装、Nginx/current、恢复和现场发布。#32 的 workflow 验收不代表 GitHub 分支保护已配置；#61 CI 成本决策仍独立开放。没有服务器、TAT、DNS 或云资源写入；未新增第三方服务或用户数据处理。仓库文档的 Git 晋级另按现有规则办理，不能复用 #36 直推例外。
+
+## 2026-10-16 — D-159 #36 verifier 升级与现场验收完成
+
+- **来源与范围**：用户要求恢复 #36 闭环，延续 D-145。修复提交 `a5ad326d64cf3055c3fa312ee9df3b5bf2f143e2` 已进入 canonical `main`，[对应 CI](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/30986857755) 的五个 job 全部成功。五个升级文件分别经 GitHub 精确提交内容、Git blob identity、本地对象和 SHA-256 交叉认证；已安装 `7c0865f` 是目标的严格祖先且旧组件字节匹配。
+- **现场结果**：严格 WireGuard SSH、`sudo -n`、无在途 verifier 和既有 receipt/权限预检通过后，以 genesis receipt 摘要为 CAS head 完成唯一原子升级，返回 `status=committed`、`disposition=upgraded`。独立新会话确认正式 verifier/golden 与目标字节一致、owner/mode 和 live inode 绑定正确、追加 receipt 链闭合、旧 slot 完整保留；临时传输文件已经定向清理。
+- **独立验证**：`/usr/bin/python3 -I -B ops/deploy/verify_artifact.py --self-test` 通过 6 个 golden 向量；`/usr/bin/python3 -B -m unittest discover -s tests/ops -p 'test_artifact_verifier*.py'` 通过 101 项。服务器正式路径自测同样通过 6 向量，且与 event receipt 一致。现场 SSH/WireGuard/UFW/转发/监听/Nginx/TAT/Certbot、零 failed unit、无活动站点/ACME、无 Node/npm/源码树和生产目录缺席门禁全部通过；升级前后 boot、包、SSH、UFW、监听与 Nginx 配置摘要相同。固定 Node `24.18.0` 完整 `quality` 已通过；文档提交由 hook 复验，精确远端 CI 结果在 Issue #36 关闭证据中记录。
+- **交接与边界**：#36 服务器基线和 verifier 升级验收已闭合；`/srv/axialmuse`、`/var/lib/axialmuse` 的缺席是本项成功前态，其创建及 owner/mode 验收归 #37。调用方共享锁、部署/回滚、TAT 活动接线、Nginx 站点和 DNS/TLS 仍待后续任务。本轮未执行生产发布或重启，未改网络、服务或云配置，未清理历史 receipt/旧 slot；控制面快照、续费和恢复能力沿用所有者既有确认，不声称本轮重新验证。D-125/D-129/D-132 历史结论不变。未新增第三方运行时服务或用户数据处理。
+
+## 2026-08-05 — D-143 #36 完整验收复核与仓库侧修复候选
+
+- **验收发现与授权**：#36 完整验收复现了 `verify_artifact.py` 在 staging 字符串父路径被替换后仍可能对 displaced tree 完成激活的竞态，并确认 bootstrap 独立 fixture 未以真实 SIGINT/SIGTERM 覆盖提交边界；尝试刷新服务器只读事实时 SSH transport 返回 255，未取得新的 live 证据。用户先授权仓库侧修复、已安装 verifier 的升级设计和本地验证，随后以 D-144 另行授权把首轮 #36 修复、测试和契约文档形成一个本地提交；该提交后复审又发现四个实现缺口，最终复核再发现 upgrader 直接库入口的同源提交后信号缺口。用户现以 D-145 明确授权形成独立 follow-up 提交、仅 fast-forward 直推 `main`、等待精确 SHA CI、认证 canonical 五个 blob、以前向 CAS 升级并复核服务器组件、回填脱敏证据及关闭 Issue #36；任一范围、远端、CI 或现场门禁不唯一即停止。
+- **仓库修复**：verifier 的 archive、候选、提取、整树验证、激活、同步、最终 live 绑定和失败 residue 审计现全部从首次 held staging fd 派生。复核进一步证明 Linux/POSIX 的 pathname 删除不能原子绑定到 held source inode；为在不受信任并发 writer 下绝不删除或改名 replacement，失败处置现只读审计并保留私有 candidate 或已激活 `verified-release` residue，稳定绑定继续报告原始业务错误、任何漂移报 cleanup，下一次入口由 staging 精确成员闭包阻断。bootstrap 保持首次安装 CLI 和两 payload 不变，把激活到 committed 或隔离完成收进连续信号屏蔽区；解除 mask 时才投递的直接 `KeyboardInterrupt` 若已经越过 durable commit point，返回同一 committed 结果且不重复输出。独立 upgrader 继续以 genesis/current receipt CAS、固定 legacy lock、append-only lineage、held-fd 自测和 `RENAME_EXCHANGE` 处理字节升级；每次 lifecycle sample 均对 held/live namespace 做精确成员闭包检查，并在 lineage 加载前绑定 upgrade-root presence/inode。upgrader 的直接库入口和 CLI handler 恢复也按同一 durable commit 边界保留已提交结果并安全消费恢复窗口内的待处理双信号。自测只固定 schema/wire，`vectorCount` 接受非 bool 正整数；候选实际结果进入 receipt，正式激活和 `already-current` 复核必须与该 receipt 精确一致。
+- **本地证据**：Ubuntu 基线 `/usr/bin/python3` 的 verifier self-test 通过当前 6 个 golden 向量；verifier/bootstrap/upgrader 独立 fixture 共 101/101（28+35+38），六个 Python 实现/测试文件通过 Ruff，component manifest 的 verifier/golden 大小与 SHA-256 精确匹配且真实升级 fixture 通过，`git diff --check`、固定 Node `24.18.0` 的完整 `quality` 与 `typecheck` 均通过。新增反例精确覆盖根 identity check 后的空 replacement、内部普通文件最终 check 后的带内容 replacement，并把 `unlink`/`rmdir`/rename 设为禁止调用；另覆盖候选创建异常 residue、下一次入口阻断、namespace 初始/commit 后未知 sibling、upgrade-root 首次绑定漂移、bootstrap 与 upgrader 待处理 SIGINT 在 durable commit 后解除屏蔽、两者的双信号 handler 恢复窗口、`vectorCount=7` 持久化及候选/正式或已提交 receipt 不一致。原有 staging/lib/namespace/upgrade-root/event/genesis 替换、崩溃恢复、父目录 fsync、真实信号、锁竞争、CAS/source 顺序和长 receipt 链回归继续通过。
+- **结论与剩余边界**：四条复审缺陷及最终复核发现的同源 upgrader 信号缺口已在当前工作区闭合并通过最终本地门禁，但 follow-up 修复尚未提交、推送或进入 canonical `main`/CI，因此不等于 #36 完整通过。D-145 已授权后续精确 Git 晋级、两轮 CI、服务器维护窗口、传输、升级、现场复核、证据回填与 Issue 关闭；已安装服务器组件在这些步骤前仍未执行升级、清理、rollback 或重新验收，live 状态因上次 SSH transport 失败仍未刷新。调用方共享锁接线和 commit 后显式 rollback 仍未实现；现场不清理旧 slot、receipt 或失败 residue，也不进入 #37。未新增第三方运行时服务或依赖，也未处理用户数据。
+
 ## 2026-08-04 — D-137 授权未推送提交使用 noreply 身份重写
 
 - **失败事实**：D-136 首轮普通 topic push 被 GitHub `GH007` 邮箱隐私门禁拒绝，远端未改变。只读审计确认远端 topic 到本地 `68ee529` 之间恰有七个线性、未签名、尚未发布的提交，七者 author/committer 邮箱均不是 GitHub noreply，因此不能只修正最新提交。
 - **授权与不变量**：用户选择方案 A，授权把这七个未推送提交的 author/committer 邮箱统一改为当前已登录 GitHub 账户的 canonical noreply，作为 D-136 禁止 rebase 的一次窄化例外。允许建立不被默认推送的本地恢复 ref 和临时保存本条补丁；七组 tree、message、姓名、时间与线性父子映射必须逐项等价，只有提交邮箱、级联 parent ID 与由此产生的 SHA 可以改变。本条补丁在重写后作为新的 noreply 提交追加，不折入七个历史内容树。
-- **执行与复核**：本地恢复 ref 绑定旧 head `68ee529`；七个提交完成一一重写后，新 head 为 `19b6b9a`。对象级复核确认 tree、message、author/committer 姓名与时间、单亲顺序和相对父子映射全部等价，新范围两类邮箱均为目标 noreply；重复工具备份已清理，独立恢复 ref 继续只留本地。本条记录作为新的 noreply 提交追加后，topic head 为 `e88386b`；真实远端 CAS 复核仍为 `b38354b`，随后普通 fast-forward push 成功并再次核对远端 ref。没有 force、GitHub 设置修改、恢复 ref 推送或其他远端写入。
-- **后续门禁**：topic 身份修正与发布门禁已关闭；保留 #8 语义的本地 merge commit `0acc909` 已形成，其后的真实 release 封装门禁发现并由 `19f09c7` 修正 fresh generated files 私有日期索引缺口，该修复已通过本地 production `build -> package:artifact -> check:artifact`。首个精确 `dev` 候选 `298306a` 已普通推送，但对应 CI run `30884595401` 在最低 Node Tests 失败关闭；该失败的本地修正尚须形成新 SHA 并取得新的精确 `dev` CI。`dev -> main` PR/main CI 和 canonical `main` artifact 仍未取得。服务器、云资源、Issue、verifier、后续 evidence 晋级与 #37 仍未授权。
+- **执行与复核**：本地恢复 ref 绑定旧 head `68ee529`；七个提交完成一一重写后，新 head 为 `19b6b9a`。对象级复核确认 tree、message、author/committer 姓名与时间、单亲顺序和相对父子映射全部等价，新范围两类邮箱均为目标 noreply；重复工具备份已清理，独立恢复 ref 继续只留本地。远端 topic 仍为 `b38354b`，尚未发生成功 push、force、GitHub 设置修改或其他远端写入。
+- **后续门禁**：等价校验和远端基点复核都通过后，才可普通 push topic 并继续 D-136；禁止 force、改 GitHub 隐私设置、改写或推送其他 ref。服务器、云资源、Issue、verifier、后续 evidence 晋级与 #37 仍未授权。
 
 ## 2026-08-04 — D-136 确认 #36 两阶段晋级方案（第一阶段 Git 已授权）
 
 - **决策**：用户确认方案 A，保留 D-123 的历史事实，但以两阶段晋级取代其面向未来的单 PR 节奏。只读审计证明 canonical `main` 尚不含 bootstrap、verifier 与 golden，而 D-121 要求三者先进入同一 canonical `main` 精确提交才能安装；#36 又属于 #18 完成条件，安装结果还须回填文档，因此不能在“#18 全部完成后才首次合入”的同时只使用一个 PR。
 - **阶段边界**：第一阶段按 `codex/* -> dev -> main` 晋级仓库前置，依次要求 topic 提交、`dev` push CI、`dev -> main` PR checks 和合并后的 `main` push CI 成功；当前远端 `dev` 的既有 preview 工作必须保留并解决集成冲突。`production-artifact` 只会在 `main` push 运行，活动 workflow 尚无 `deploy-production`，第一阶段不会自动写服务器。第二阶段从最终 `main` 独立认证三项 Git blob 后，仍须重新确认快照/恢复通道并取得新的服务器写授权，才可执行 D-121 bootstrap；安装完成事实通过后续 evidence 晋级回填，可与 #37/#18 后续批次合并。
 - **当前授权**：用户随后明确授权第一阶段 Git 晋级：提交并普通推送当前 topic；保留 `origin/dev` 的既有 #8 工作，在不改变既定设计的边界内解决普通 merge 冲突后推送 `dev`；精确 `dev` CI 全绿后创建并在 checks 全绿且 head/base 未漂移时合并 `dev -> main` PR，再观察精确 `main` CI。禁止 force、rebase、直推 `main` 或绕过失败/跳过的门禁；冲突不能按既定设计消解、CI 红灯或远端漂移时停止。本授权不包含 Issue 写入、服务器或云资源写操作、verifier 安装及 #37。#36 仍只差 verifier 现场安装，#37 继续暂停。
-- **本地集成与纠错**：专题 `e88386b` 已与 `origin/dev` 的 #8 普通合并，六个文本冲突按既定边界同时保留 preview、production release、verifier、producer 与受限 dispatch 语义；自动合并的 JavaScript 明列、统一质量、模块边界、seal 和插件热点也经独立复审确认两侧覆盖完整。合并门禁先暴露调用者 `umask 0002` 会让 Docusaurus 生成组可写文件，因此构建入口现在只在同步 Docusaurus 子进程窗口固定 `0022` 并在所有路径恢复调用者原值，不放宽后续 owned-file 检查；权限根因关闭后又暴露 dev bundle 把 config chunk 映射放入 `eval` 字符串，闭包证明现同时精确接受未转义与转义 chunk key，但仍要求同一 `main.js` 内存在真实 config 模块头和对应动态导入，不能仅凭路由映射补造文件。merge commit `0acc909` 形成后的首次真实 `package:artifact` 又在 fresh release `generatedFilesDir` 因私有日期索引缺失而失败关闭：release phase 原先只重建 seal，却立即要求 checker 核对仅由 build `postBuild` 写过的索引；`19f09c7` 只让 release phase 在同一受控 fresh generated root 中先原子重建当前 session 的 `axial-muse/article-date-index.json`，再写 seal，普通 check/verify 仍保持只读，并新增先删除旧 generated tree 且锁定 index-before-seal 顺序的回归 fixture。首轮 `dev` CI 又暴露 #8 浏览器回归把当前最低 Node `process.execPath` 用于 preview 子进程，与 preview 只接受 `.nvmrc` 主端点的既定契约冲突；修正不放宽运行时契约，也不跳过最低端点测试：production build/Chrome 仍在两个端点完整执行，最低端点另须证明 preview 以 `BUILD_PREVIEW_RUNTIME_NODE` 拒绝且不生成 candidate，主端点继续完成 preview 制品与 Chrome 验收。
-- **本地证据与剩余门禁**：精确 Node `24.18.0` 已通过 fresh 隔离冻结安装、完整零依赖 `quality`、E-013 完整历史、严格 `typecheck`、16 个 TypeScript 源的 256/256 测试（含真实 production/preview Docusaurus 与 Chrome 回归）、production `build`；系统 Python 3.12 的 verifier/bootstrap 为 43/43，`git diff --check` 通过。config-chunk 定向测试另在 `umask 0002` 下为 18/18，并断言真实 preview `main.js` 无 group/other write 位。干净精确 SHA `19f09c7` 和后续候选 `298306a` 均已通过各自的 production `build -> package:artifact -> check:artifact`；`298306a` 的本地 `releaseContentSha256=36c14a01a296ca4af68e3ad076940a94973d5552a35872cfc3249e21b5e6f1ee`。这些结果只证明本地 release 链，不是 GitHub Actions artifact。`298306a` 的 dev CI run `30884595401` 中 website-quality、diagrams、supply-chain 成功，production-artifact 按 dev 谓词跳过；node-minimum 在 Tests 失败且 Production build 未运行，因此该 run 整体保持失败。修正后的同一测试源码已在固定 Node `24.18.0` 与 `24.16.0` 分别通过 256/256、零 skip，并经独立复审确认不放宽 preview runtime；修正仍须形成干净精确 SHA、重跑自身本地 artifact 链并取得新的 `dev` CI 全绿，之后才可创建 `dev -> main` PR。`main` CI 和真实 artifact 仍未发生，服务器与云资源保持未写入。
 
 ## 2026-08-04 — D-135 D-130 unit-aware v2 formal 通过（#36 仅剩 verifier 现场安装）
 

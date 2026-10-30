@@ -2876,7 +2876,7 @@ test("I-14 production artifact 精确闭合详情关联列表并省略空关系�
   });
 });
 
-test("D-152 production 搜索控件仅接受固定属性与空初始查询", async () => {
+test("D-184 production 搜索控件仅接受固定属性与空初始查询", async () => {
   const mutations = [
     (html: string) => html.replace("<input ", '<input oninput="window.__query=this.value" '),
     (html: string) => html.replace("<input ", '<input onfocus="window.__focused=true" '),

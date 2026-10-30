@@ -5,25 +5,13 @@ import {
   realpathSync,
 } from "node:fs";
 import {join, resolve} from "node:path";
+import {CI_ACTIONS} from "./ci-actions.mjs";
+import {
+  DEPLOY_SAFE_CI_CONCURRENCY,
+  validateDeployProductionJob,
+} from "./deploy-workflow.mjs";
 
-export const CI_ACTIONS = Object.freeze({
-  checkout: Object.freeze({
-    reference: "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
-    version: "v5.1.0",
-  }),
-  setupJava: Object.freeze({
-    reference: "actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95",
-    version: "v5.6.0",
-  }),
-  setupNode: Object.freeze({
-    reference: "actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444",
-    version: "v5.0.0",
-  }),
-  uploadArtifact: Object.freeze({
-    reference: "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-    version: "v7.0.1",
-  }),
-});
+export {CI_ACTIONS} from "./ci-actions.mjs";
 
 const HEADER = `name: CI
 
@@ -34,10 +22,7 @@ on:
       - main
       - dev
 
-concurrency:
-  group: ci-\${{ github.workflow }}-\${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
+${DEPLOY_SAFE_CI_CONCURRENCY}
 permissions:
   contents: read
 `;
@@ -391,13 +376,14 @@ const JOBS = Object.freeze({
   }),
 });
 
-const JOB_ORDER = Object.freeze([
+const BASE_JOB_ORDER = Object.freeze([
   "website-quality",
   "node-minimum",
   "diagrams",
   "supply-chain",
   "production-artifact",
 ]);
+const JOB_ORDER = Object.freeze([...BASE_JOB_ORDER, "deploy-production"]);
 
 const FORBIDDEN_PATTERNS = Object.freeze([
   Object.freeze({
@@ -553,13 +539,21 @@ function assertActionPins(source) {
 
 export function checkCiWorkflowSource(source) {
   const lines = splitWorkflow(source);
-  for (const {code, pattern} of FORBIDDEN_PATTERNS) {
-    if (pattern.test(source)) fail(code);
-  }
-  assertProductionTopology(lines);
-  assertActionPins(source);
   const jobs = extractJobs(lines);
-  for (const jobName of JOB_ORDER) {
+  const deployLines = jobs.get("deploy-production");
+  try {
+    validateDeployProductionJob(`${deployLines.join("\n")}\n`);
+  } catch {
+    fail("CI_WORKFLOW_DEPLOY");
+  }
+  const baseLines = lines.slice(0, -deployLines.length);
+  const baseSource = `${baseLines.join("\n")}\n`;
+  for (const {code, pattern} of FORBIDDEN_PATTERNS) {
+    if (pattern.test(baseSource)) fail(code);
+  }
+  assertProductionTopology(baseLines);
+  assertActionPins(baseSource);
+  for (const jobName of BASE_JOB_ORDER) {
     const actualSteps = extractSteps(jobs.get(jobName), jobName);
     const expectedSteps = JOBS[jobName].steps;
     if (
@@ -570,7 +564,7 @@ export function checkCiWorkflowSource(source) {
     }
   }
   return Object.freeze({
-    actionCount: 12,
+    actionCount: 14,
     jobCount: JOB_ORDER.length,
   });
 }

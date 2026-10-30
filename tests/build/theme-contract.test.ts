@@ -145,7 +145,7 @@ test("CODE-008 全局主题只声明已确认令牌、Infima 映射与无动效�
   );
 });
 
-test("D-151 选定的书架之门 A Logo 字节固定且不含 PNG 元数据", () => {
+test("D-183 选定的书架之门 A Logo 字节固定且不含 PNG 元数据", () => {
   const logo = readFileSync(resolve(ROOT, "static-public/assets/brand/axial-muse-mark.png"));
   const css = source("src/css/custom.css");
   const headerCss = source("src/components/SiteHeader/SiteHeader.module.css");
@@ -186,7 +186,7 @@ test("D-151 选定的书架之门 A Logo 字节固定且不含 PNG 元数据", (
   );
 });
 
-test("D-144 首页不重复项目/文章入口且页脚不重复 GitHub", () => {
+test("D-176 首页不重复项目/文章入口且页脚不重复 GitHub", () => {
   const home = source("src/pages/index.tsx");
   const config = source("docusaurus.config.ts");
   assert.equal(/\b(?:ProjectList|WritingList|heroActions)\b/u.test(home), false);
@@ -195,7 +195,7 @@ test("D-144 首页不重复项目/文章入口且页脚不重复 GitHub", () => 
   assert.match(config, /label: "沪ICP备2026029086号"/u);
 });
 
-test("D-141 正文保持自然字距，品牌标签使用局部字距且不引入远程资源", () => {
+test("D-173 正文保持自然字距，品牌标签使用局部字距且不引入远程资源", () => {
   const globalCss = source("src/css/custom.css");
   const headerCss = source("src/components/SiteHeader/SiteHeader.module.css");
   const homeCss = source("src/pages/index.module.css");
@@ -211,7 +211,7 @@ test("D-141 正文保持自然字距，品牌标签使用局部字距且不引�
   }
 });
 
-test("D-141 页头搜索只匹配公开安全投影且不持久化查询", () => {
+test("D-173 页头搜索只匹配公开安全投影且不持久化查询", () => {
   const header = source("src/components/SiteHeader/SiteHeader.tsx");
   const config = source("docusaurus.config.ts");
   const registry = source("docs/contracts/static-public-assets.json");
@@ -235,7 +235,7 @@ test("D-141 页头搜索只匹配公开安全投影且不持久化查询", () =>
   );
 });
 
-test("D-152 手机页头保留相对字号和内容驱动的换行高度", () => {
+test("D-184 手机页头保留相对字号和内容驱动的换行高度", () => {
   const css = source("src/components/SiteHeader/SiteHeader.module.css");
   const mobile = extractCssBlock(css, "@media (max-width: 620px)").block;
   const fontSizes = [...mobile.matchAll(/font-size:\s*([^;]+);/gu)];

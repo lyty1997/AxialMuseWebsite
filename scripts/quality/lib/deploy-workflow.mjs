@@ -1,7 +1,7 @@
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import {projectRoot} from "./files.mjs";
-import {CI_ACTIONS} from "./ci-workflow.mjs";
+import {CI_ACTIONS} from "./ci-actions.mjs";
 
 const ROOT = projectRoot();
 export const DEPLOY_WORKFLOW_FIXTURE_PATH = "tests/fixtures/deploy-production-job.yml";

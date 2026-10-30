@@ -150,7 +150,7 @@ Acme --> Nginx : HTTP-01 与证书续期
 10. #37 在部署排他锁内重新核对 verified staging 的身份与整树摘要，再把 payload 与两个可部署派生文件安装到同一 `releases/<sha>/payload/`、`config/`。root-owned 脚本用只追加 URL 暴露账本证明历史 source/target 仍收敛到同一当前 200，再生成只引用该 SHA 的 Nginx 包装；候选的全部规范路由和新增或改指的 registered 边在 reload 前预写，只有通过更新后账本的 fallback 才可自动回滚，否则默认停止或经生产授权进入 forward-only。
 11. GitHub runner 完成公网 HTTPS、canonical、单跳 301、目标 200、关键页面与资源冒烟，并保留 deployment 记录。
 
-当前 `public/` 仍是迁移前公开入口，但仓库的 Docusaurus production build、#13 重定向派生、#33 `payload/` + `metadata/` release 封装/复验和 #35 服务器独立 verifier 已经具备；#14 已由专题提交 `a9a2f29` 把 CODE-015/CODE-019/CODE-020 入口接入 `production-artifact` 的 fresh build 与单次上传，并随 topic `e88386b` 普通推送。本地生成的 `dist/release/` 不是已上传 Actions artifact，本地 verifier 与 workflow fixture 通过也不是 canonical `main` 真实 producer run 或完整目标服务器验收，不能据此声明实际 artifact ID/digest/ZIP 或生产发布完成；#36 已确认系统运行时并固定安装路径，仍须在源提交进入 canonical `main` 后经单独授权安装/验收副本，#37 才消费 `verified-release`。生产服务器最终只安装已验证 payload 和非公开运行配置，不解释源注册表、不拉取源码、不运行 Node/npm 或从源码 checkout 执行脚本，也不成为内容编辑或构建源。
+当前 `public/` 仍是迁移前公开入口，但仓库的 Docusaurus production build、#13 重定向派生、#33 `payload/` + `metadata/` release 封装/复验和 #35 服务器独立 verifier 已经具备；#14 已由本地提交 `7b5cc47` 把 CODE-015/CODE-019/CODE-020 入口接入 `production-artifact` 的 fresh build 与单次上传。本地生成的 `dist/release/` 不是已上传 Actions artifact，本地 verifier 与 workflow fixture 通过也不是 canonical `main` 真实 producer run 或完整目标服务器验收，不能据此声明实际 artifact ID/digest/ZIP 或生产发布完成；#36 已确认系统运行时并固定安装路径，仍须在源提交进入 canonical `main` 后经单独授权安装/验收副本，#37 才消费 `verified-release`。生产服务器最终只安装已验证 payload 和非公开运行配置，不解释源注册表、不拉取源码、不运行 Node/npm 或从源码 checkout 执行脚本，也不成为内容编辑或构建源。
 
 ### 浏览器请求
 
