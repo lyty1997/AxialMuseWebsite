@@ -1614,17 +1614,29 @@ export async function runThemeBrowserRegression({
     // 强制产生结果列表溢出，验证键盘选择、环绕和正文滚动彼此独立。
     const searchOverflow = await evaluate<Readonly<{
       overflowing: boolean;
+      optionsFitViewport: boolean;
       pageScroll: number;
+      stableInlineSize: boolean;
     }>>(connection, `(() => {
       const list = document.querySelector("#site-search-results");
       const options = [...list.querySelectorAll('[role="option"]')];
       for (const option of options) option.style.minHeight = "120px";
+      // 先产生滚动条再测行高，避免传统滚动条挤窄文本后再次换行。
+      list.style.maxHeight = "1px";
+      const inlineSize = list.clientWidth;
       const tallest = Math.max(...options.map((option) => option.getBoundingClientRect().height));
       list.style.maxHeight = (tallest + 4) + "px";
-      return {overflowing: list.scrollHeight > list.clientHeight, pageScroll: window.scrollY};
+      return {
+        overflowing: list.scrollHeight > list.clientHeight,
+        optionsFitViewport: options.every((option) => option.getBoundingClientRect().height <= list.clientHeight),
+        pageScroll: window.scrollY,
+        stableInlineSize: list.clientWidth === inlineSize,
+      };
     })()`);
     assert.ok(openSearch.resultCount >= 2, "键盘溢出 fixture 至少需要两个结果");
     assert.equal(searchOverflow.overflowing, true, "搜索列表未实际产生溢出");
+    assert.equal(searchOverflow.stableInlineSize, true, "滚动条出现后仍改变了夹具的可用宽度");
+    assert.equal(searchOverflow.optionsFitViewport, true, "完整可见性夹具必须容得下每个结果");
     let expectedSearchIndex = 0;
     for (const key of [
       ...Array.from({length: openSearch.resultCount}, () => "ArrowDown"),
