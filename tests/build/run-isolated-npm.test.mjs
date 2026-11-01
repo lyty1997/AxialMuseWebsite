@@ -65,6 +65,7 @@ import {
   runIsolatedNpm,
 } from "../../scripts/quality/lib/supply-chain/runner.mjs";
 import { canonicalJsonBytes } from "../../scripts/quality/lib/supply-chain/spdx.mjs";
+import {summarizeTestFailure} from "../../scripts/quality/lib/supply-chain/test-diagnostics.mjs";
 import {
   findShellPackageManagerCommands,
   findWorkflowPackageManagerCommands,
@@ -79,6 +80,52 @@ const REPOSITORY_ROOT = projectRoot();
 const TEST_NPM_VERSIONS = Object.freeze({
   primary: ACTUAL_NPM_VERSION,
   minimum: "0.0.0",
+});
+
+test("test failure diagnostics retain only closed codes, counts and tracked source locations", () => {
+  const sentinel = "PRIVATE_DIAGNOSTIC_SENTINEL";
+  const result = {stdout: [
+    `AssertionError [ERR_ASSERTION]: actual=${sentinel}`,
+    "ℹ fail 1",
+    "    at assertSearch (<test-output>/tests/build/browser-regression.js:123:4)",
+    "test at tests/build/public-presentation-build.test.ts:456:7",
+    `    at hidden (/home/${sentinel}/tests/build/browser-regression.js:2:1)`,
+    `    at fake (<test-output>/tests/build/${sentinel}.ts:3:1)`,
+    "    at escape (<test-output>/tests/build/../../private.ts:4:1)",
+    `environment=${sentinel}; expected=${sentinel}; command=${sentinel}`,
+    "[TEST_EXECUTION] failed",
+  ].join("\n"), stderr: `[UNKNOWN_${sentinel}] ${sentinel}`};
+  const summary = summarizeTestFailure(result, REPOSITORY_ROOT);
+  assert.deepEqual(summary, {codes: ["TEST_EXECUTION", "ERR_ASSERTION"], failedCount: 1,
+    locations: [
+      {source: "tests/build/browser-regression.ts", emittedLine: 123, emittedColumn: 4},
+      {source: "tests/build/public-presentation-build.test.ts", emittedLine: 456, emittedColumn: 7},
+    ]});
+  assert.ok(!JSON.stringify(summary).includes(sentinel));
+  assert.ok(!JSON.stringify(summary).includes("/home/"));
+  const many = summarizeTestFailure({stdout: Array.from({length: 20}, (_, i) =>
+    `at tests/build/browser-regression.ts:${i + 1}:1`).join("\n")}, REPOSITORY_ROOT);
+  assert.equal(many.locations.length, 8);
+});
+
+test("only failing test workloads expose a bounded diagnostic while preserving exit failure and cleanup", () => {
+  for (const scriptName of ["test", "quality"]) {
+    const fixture = createFixture();
+    fixture.workloadResultOverride = {status: 1, signal: null,
+      stdout: "ℹ fail 2\n[TEST_EXECUTION] PRIVATE_DIAGNOSTIC_SENTINEL", stderr: "PRIVATE_DIAGNOSTIC_SENTINEL"};
+    try {
+      assert.throws(() => runFixture(fixture, {profile: "run-script", scriptName}), (error) => {
+        assert.equal(error.code, "NPM_WORKLOAD_FAILED");
+        assert.ok(!error.message.includes("PRIVATE_DIAGNOSTIC_SENTINEL"));
+        assert.equal(error.message.includes("[NPM_TEST_FAILURE]"), scriptName === "test");
+        if (scriptName === "test") assert.ok(error.message.includes('"failedCount":2'));
+        return true;
+      });
+      assert.ok(!existsSync(readCalls(fixture)[0].home));
+    } finally {
+      destroyFixture(fixture);
+    }
+  }
 });
 
 function expectedNpmrc() {

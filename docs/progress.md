@@ -4,6 +4,15 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-10-31 — 第二阶段 PR 测试失败，发布暂停（本地回执，未新增 Git 发布）
+
+- **后续授权**：用户已同意有限续做：最多一次脱敏诊断 push 与一次直接缺陷修复 push，保留旧失败 run、不 rerun。仅输出封闭错误码、有限失败数和仓库真实源码位置，不输出原始日志、环境或断言值；最终全绿且身份稳定后才恢复第二阶段合并。原 TAT/reload 总上限不变，详见[有限诊断与续做授权](architecture/open-decisions.md#已由用户确认)。下方授权缺口仅描述此前暂停时点。
+
+- **已完成前置**：PR #75、`main@d09f2b5` 的成功 CI/TAT、单模块认证安装和公网复验保持有效。全轮累计一次新增 TAT、一次 Nginx reload；新 SSH 确认 current 仍为该 main，11 个完成事务无 pending，安装模块及配置正常。第二次 TAT 未发生。
+- **第二阶段**：[PR #76](https://github.com/lyty1997/AxialMuseWebsite/pull/76) 的精确 head 为 `79ea21e3f703e246ed6f61083b77a7bed64554e2`，差异仅为已批准的 80 文件；run `41263260392` 的供应链和图表成功，主/最低 Node 的质量、内容历史、类型检查通过，但各自 Tests 步骤失败；production artifact/deploy 按设计跳过。未合并、重跑 CI 或继续服务器写入。
+- **本地证据与缺口**：本地完整 quality、内容历史、类型、263 项 TypeScript 和 production/preview 浏览器、production build、223 项含真实 Nginx/TLS 的运维测试均通过。失败后最低 Node 配合 CI 环境标志的 263 项测试通过；主 Node 使用本机既有 Chromium 156.0.8078.47（与 CI 版本一致）完整测试也通过。版本差异不是已证实原因。现有 npm 隔离入口对失败 workload 丢弃 stdout/stderr，仅返回 `NPM_WORKLOAD_FAILED`；远端没有测试诊断 artifact，因此具体断言尚未定位。
+- **暂停与后续**：遵守本轮失败即停、不得重跑 CI/TAT 的边界。暂停时尚未取得必要的脱敏失败诊断、对应缺陷修复及有限新 PR 检查授权，后续新增授权见本节上方；不得放宽测试、内容、安全或发布门禁，不把本地全绿代替远端通过。原 dev、stash、真实 8088 和当前线上页面均保留，无新增费用、外部服务或用户数据处理。
+
 ## 2026-10-31 — 两阶段公网晋级：前置完成、新界面候选准备
 
 - **第一阶段**：[PR #75](https://github.com/lyty1997/AxialMuseWebsite/pull/75) 的四个 PR 门禁通过后普通合并为 `main@d09f2b5`；run `41262490462` 六 job 成功，独立 ZIP verifier 通过，唯一 TAT agent 为 SUCCESS/exit 0 且五参数脚本完全一致。服务器 current 为该 main，11 个完成事务无 pending，账本未变。唯一公网模块由 Git blob/本地/GitHub 内容认证后，持既有双锁及部署锁备份安装，摘要 `b13841940ae7081fb61e217daed09c3044d5f36abce58158840c4222bcfe316a`；其他组件、current、账本和配置不变，无新增 failed unit、无手工 reload，公网 43 项/15 文件及桌面/手机三页通过。
