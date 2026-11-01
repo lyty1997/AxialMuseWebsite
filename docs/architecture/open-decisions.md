@@ -26,6 +26,10 @@
 
 ## 已由用户确认
 
+- **2026-10-31 / 两阶段公网晋级授权**：用户确认按已审查清单上线并验收本机候选。原 dev 工作区及其未提交改动保留；从精确新鲜 main 的独立 `codex/*` 分支直接提两个 main PR，不经过仍有并行开发的远端 dev。第一阶段只晋级 `ops/deploy/public_site.py` 的固定本地搜索表单白名单、对应测试及必要文档；review、检查全绿且 head/base 稳定才合并，观察精确 main CI/TAT 至成功后，经 Git blob 与 SHA-256 认证，在既有 verifier 双锁和部署锁内备份并原子安装唯一公网模块，不改配置或手工 reload。第二阶段基于此时 main 重应用已审查 dev 候选的其余 80 文件及授权记录，完整质量、类型、Node/Python、生产构建、真实浏览器/Nginx 验收通过后，独立 PR 按相同门禁合并并验收公网真实字节、导航/搜索与桌面/手机效果。
+
+  全轮最多新增两次 main push/TAT、累计四次 Nginx reload（含两次正常自动发布及各至多一次完整账本兼容恢复），不重跑 CI/TAT或自动扩大预算。planned 项目与草稿仅留源码/开发预览，不新增公开正文、试用或采集；保留旧 release、备份、失败与恢复证据，不删除分支，不改 DNS/DNSSEC、云规则、CAM、App、凭证、证书、活动定时器或付费服务。身份漂移、失败、终态不明或预算不足即留证并停止。当前记录为已授权执行范围，实际完成以精确 PR/main/服务器及公网回执为准。
+
 - **D-141 / 2026-08-04**：用户依据 PR #62 把未完成 `dev` 一并带入 `main` 的事故，确认专题分支借道 `dev` 的晋级方式改为条件式，而不是固定流程。每次晋级前必须刷新远端引用并核对 merge-base、`origin/main..origin/dev` 提交集合和两个远端 tip 的 tracked tree；只有 `origin/dev` 没有相对 `origin/main` 的独有提交，并已通过普通 fast-forward 与精确 `origin/main` 对齐时，专题分支才可先合入 `dev`。只要 `dev` 有未晋级的并行开发提交或树差异，专题分支就必须保持独立，经用户确认后直接向 `main` 提 PR，或等待明确的 dev 集成窗口，禁止用临时 merge、rebase、cherry-pick、回退或 ref 移动伪造空闲 `dev`。
 
   两条晋级路径都必须普通 push 来源分支，核对提交集合与 PR 文件差异只含本任务，等待 required checks 全部成功、head/base 未漂移且 PR 可合并后普通合并，并观察精确 `main` push CI 至 `completed/success`。若旧 topic 已是 `main` 祖先但内容后来被回退，普通 merge/PR 是 no-op；必须另行授权并基于当前稳定 `main` 形成新的可审计提交，不能用 revert-of-revert 恢复无关范围。`main` 后续是否同步到仍有并行工作的 `dev` 也必须重新核对祖先与树状态，不得作为专题晋级的自动收尾。当前工作区 13 份未提交文档已按用户明确要求丢弃，本地 `dev` 已回到旧 #18 合并前的 preview-only `5cf5afd`，#37 转到 `codex/issue-18-production-baseline` 继续；将已发布 `origin/dev@cfc4058` 非快进回退到该点会改写远端历史，仍须在明确接受该风险后以固定 lease 单独授权，不能从本决定推导 force 权限。

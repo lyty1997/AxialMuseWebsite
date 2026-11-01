@@ -47,6 +47,12 @@ def content_hash(value):
     return "'sha256-" + base64.b64encode(hashlib.sha256(normalized.encode()).digest()).decode() + "'"
 
 
+def _search_attributes(attributes, required, optional=()):
+    require(set(attributes) <= set(required) | set(optional)
+            and all(attributes.get(name) == value for name, value in required.items()),
+            "PUBLIC_HTML_ELEMENT")
+
+
 class InlinePolicy(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=False)
@@ -55,6 +61,33 @@ class InlinePolicy(HTMLParser):
         self.scripts = set()
         self.styles = set()
         self.style_attributes = set()
+        self.search_seen = False
+        self.in_search = False
+        self.search_inputs = 0
+        self.search_buttons = 0
+
+    def check_search(self, tag, attrs):
+        # D-184 只批准固定的本地搜索；不得顺带允许普通表单或持久化字段。
+        if tag == "form":
+            require(not self.search_seen and not self.in_search, "PUBLIC_HTML_ELEMENT")
+            _search_attributes(attrs, {"role": "search"}, ("class",))
+            self.search_seen = self.in_search = True
+        elif tag == "input":
+            require(self.in_search and self.search_inputs == 0, "PUBLIC_HTML_ELEMENT")
+            _search_attributes(attrs, {
+                "type": "search", "role": "combobox", "value": "",
+                "aria-label": "搜索公开项目和文章", "aria-autocomplete": "list",
+                "aria-controls": "site-search-results", "aria-expanded": "false",
+                "autocomplete": "off",
+            }, ("placeholder", "spellcheck"))
+            require("spellcheck" not in attrs or attrs["spellcheck"] == "false", "PUBLIC_HTML_ELEMENT")
+            self.search_inputs += 1
+        elif tag == "button" and self.in_search:
+            require(self.search_buttons == 0 and "disabled" in attrs, "PUBLIC_HTML_ELEMENT")
+            _search_attributes(attrs, {"type": "submit", "aria-label": "打开搜索结果"}, ("disabled",))
+            self.search_buttons += 1
+        elif self.in_search:
+            require(tag in ("div", "span", "svg", "circle", "path"), "PUBLIC_HTML_ELEMENT")
 
     def handle_starttag(self, tag, attributes):
         require(len({name for name, _ in attributes}) == len(attributes), "PUBLIC_HTML_ATTRIBUTES")
@@ -65,7 +98,8 @@ class InlinePolicy(HTMLParser):
             # CSP3 精确哈希只允许该字节值；未知属性必须重新审查。
             require(tag == "svg" and attrs["style"] == "display: none;", "PUBLIC_INLINE_ATTRIBUTE")
             self.style_attributes.add(content_hash(attrs["style"]))
-        require(tag not in ("base", "iframe", "object", "embed", "form"), "PUBLIC_HTML_ELEMENT")
+        self.check_search(tag, attrs)
+        require(tag not in ("base", "iframe", "object", "embed"), "PUBLIC_HTML_ELEMENT")
         if tag == "script" and "src" in attrs:
             require(local_resource(attrs["src"]), "PUBLIC_EXTERNAL_RESOURCE")
         if tag == "link" and set((attrs.get("rel") or "").lower().split()) & {
@@ -86,12 +120,20 @@ class InlinePolicy(HTMLParser):
             self.fragments.append(data)
 
     def handle_endtag(self, tag):
+        if tag == "form":
+            require(self.in_search and self.search_inputs == 1 and self.search_buttons == 1,
+                    "PUBLIC_HTML_ELEMENT")
+            self.in_search = False
         if self.active is not None and tag == self.active[0]:
             content = "".join(self.fragments)
             if not self.active[1] and content:
                 (self.scripts if tag == "script" else self.styles).add(content_hash(content))
             self.active = None
             self.fragments = []
+
+    def close(self):
+        super().close()
+        require(not self.in_search, "PUBLIC_HTML_ELEMENT")
 
 
 def csp_for_store(store, sha):
