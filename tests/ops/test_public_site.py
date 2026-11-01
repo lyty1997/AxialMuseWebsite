@@ -19,6 +19,17 @@ from ops.deploy.renew_public_certificate import record_success, renew, renewal_c
 from test_release_transaction import ReleaseFixture
 
 
+LOCAL_SEARCH = (
+    '<form class="site-search" role="search"><div><svg viewBox="0 0 24 24">'
+    '<circle cx="10" cy="10" r="6"></circle><path d="m16 16 4 4"></path></svg>'
+    '<input type="search" role="combobox" aria-label="搜索公开项目和文章" '
+    'aria-autocomplete="list" aria-controls="site-search-results" aria-expanded="false" '
+    'autocomplete="off" spellcheck="false" value="">'
+    '<button type="submit" aria-label="打开搜索结果" disabled=""><span>↵</span></button>'
+    '</div></form>'
+)
+
+
 class PublicSiteTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="axial-public-unit-")
@@ -46,6 +57,41 @@ class PublicSiteTests(unittest.TestCase):
         self.assertIn(content_hash("next"), second)
         self.assertNotIn(content_hash("abc"), second)
         self.assertNotEqual(first, second)
+
+    def test_approved_local_search_does_not_weaken_csp(self):
+        first = csp_for_store(self.fixture.store, self.sha)
+        stage, identity = self.fixture.stage("b" * 40, payload_index=(
+            "<script>abc</script>" + LOCAL_SEARCH
+        ).encode())
+        self.fixture.engine.execute(identity=identity, stage=stage)
+        self.assertEqual(csp_for_store(self.fixture.store, "b" * 40), first)
+        self.assertIn("form-action 'none'", first)
+
+    def test_local_search_rejects_extra_capabilities_and_incomplete_markup(self):
+        invalid = [
+            LOCAL_SEARCH.replace('<form ', '<form action="/collect" ', 1),
+            LOCAL_SEARCH.replace('<form ', '<form method="post" ', 1),
+            LOCAL_SEARCH.replace('<form ', '<form onsubmit="collect()" ', 1),
+            LOCAL_SEARCH.replace('<input ', '<input name="query" ', 1),
+            LOCAL_SEARCH.replace('<input ', '<input formaction="/collect" ', 1),
+            LOCAL_SEARCH.replace('value=""', 'value="stored query"'),
+            LOCAL_SEARCH.replace('role="combobox"', 'role="searchbox"'),
+            LOCAL_SEARCH.replace('autocomplete="off"', 'autocomplete="on"'),
+            LOCAL_SEARCH.replace(' disabled=""', ''),
+            LOCAL_SEARCH.replace('<button ', '<button formaction="/collect" ', 1),
+            LOCAL_SEARCH.replace('</form>', '<input type="hidden" name="extra"></form>'),
+            LOCAL_SEARCH.replace('</form>', '<script>collect()</script></form>'),
+            LOCAL_SEARCH.replace('</form>', '<form role="search"></form></form>'),
+            LOCAL_SEARCH.replace('</form>', ''),
+            LOCAL_SEARCH + LOCAL_SEARCH,
+            '<form role="search"></form>',
+            '<input type="search">',
+        ]
+        for html in invalid:
+            with self.subTest(html=html), self.assertRaises(DeploymentError):
+                parser = InlinePolicy()
+                parser.feed(html)
+                parser.close()
 
     def test_external_active_resource_and_inline_attributes_rejected(self):
         for html in ('<script src="https://outside.invalid/a.js"></script>',

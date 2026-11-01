@@ -26,6 +26,8 @@
 
 ## 不变量与前置
 
+2026-10-31 两阶段晋级：本机真实 dev 制品触发旧公网模块的 `PUBLIC_HTML_ELEMENT`，原因是已批准的固定本地搜索包含 search form。先独立晋级并认证安装服务器白名单，再发布新页面；禁止把两者合成一次自动部署。白名单只接受单一 `role=search` 表单、固定空值且无 name 的 combobox 输入框及初始 disabled 的固定按钮，拒绝提交端点、事件属性、额外字段、重复/嵌套或未闭合结构；CSP 的 `form-action 'none'`、脚本/样式哈希和来源限制不变。旧页面不含表单时派生的配置必须逐字节保持一致。执行授权和总预算见[两阶段公网晋级授权](../architecture/open-decisions.md#已由用户确认)；本条不宣称生产模块已经安装。
+
 正式内容只由 `https://www.axialmuse.com/` 提供；HTTP 与 HTTPS 根域保留路径、查询串并单跳到 canonical。旧路径和尾斜杠 exact 规则优先，未知 Host/SNI 不提供正式内容。payload、重定向与 CSP 必须来自同一精确 release，公网检查失败仍进入 #37 的完整账本兼容恢复流程。
 
 D-165 已授权候选和本机隔离验收。DNSPod 后台 A 已由所有者核对，公共 A/NS 与服务器匹配；DNSSEC 缺席且免费套餐无此能力，#38 不关闭。原始全量 DNS 清单与旧值仍须在任何写入前私密保存。实际公网、ACME、服务器和 Git 写入另行确认。
