@@ -4,12 +4,55 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
-## 2026-10-31 — 两阶段公网晋级第一阶段准备
+## 2026-10-31 — 第二阶段 PR 测试失败，发布暂停（本地回执，未新增 Git 发布）
 
-- **范围**：用户授权先独立晋级服务器固定搜索白名单及测试/必要文档，main CI/TAT 成功后认证安装唯一 `public_site.py`，随后才晋级已验收的 dev 新界面。普通 PR、review、全绿和稳定 head/base 门禁保持不变；全轮最多新增两次 TAT、四次 reload（含恢复）。原工作区、其他分支和备份保留。
-- **依据与实现**：现有 main/current `489562e` 的只读公网 43 项、15 文件哈希和桌面/手机三页通过，但已安装模块仍拒绝所有表单。候选只允许既定本地搜索的固定结构和属性；对应正反例验证完整性与额外能力拒绝，CSP 不放宽。生产安装和第二阶段公开页面尚未执行，以后续精确回执为准。
-- **边界**：不重跑 CI/TAT，不改 DNS、凭证、证书、定时器或费用，不发布 planned 项目和草稿正文，不新增第三方页面请求或用户数据处理。
+- **诊断与修复候选**：有限诊断 push `f822231` 的 run `41267523861` 在两个 Node 端点均返回相同的仓库位置：搜索键盘回归的“选中项完整可见”断言。隔离负面变体模拟列表可用宽度缩小 30 像素，复现同一断言：先测得最高行约 120.59 像素，限制高度后行重新换行为约 146.98 像素，而视口仅 123 像素，完整可见在几何上不可能。候选仅改测试夹具：先强制溢出稳定滚动条布局，再测最高行并设置视口；新增宽度稳定和各行能容入视口的前置断言，保留原结果可见、焦点、正文滚动和可访问性断言，不修改产品滚动实现。最终本地/远端复验结果仍按后续回执记录。
 
+- **后续授权**：用户已同意有限续做：最多一次脱敏诊断 push 与一次直接缺陷修复 push，保留旧失败 run、不 rerun。仅输出封闭错误码、有限失败数和仓库真实源码位置，不输出原始日志、环境或断言值；最终全绿且身份稳定后才恢复第二阶段合并。原 TAT/reload 总上限不变，详见[有限诊断与续做授权](architecture/open-decisions.md#已由用户确认)。下方授权缺口仅描述此前暂停时点。
+
+- **已完成前置**：PR #75、`main@d09f2b5` 的成功 CI/TAT、单模块认证安装和公网复验保持有效。全轮累计一次新增 TAT、一次 Nginx reload；新 SSH 确认 current 仍为该 main，11 个完成事务无 pending，安装模块及配置正常。第二次 TAT 未发生。
+- **第二阶段**：[PR #76](https://github.com/lyty1997/AxialMuseWebsite/pull/76) 的精确 head 为 `79ea21e3f703e246ed6f61083b77a7bed64554e2`，差异仅为已批准的 80 文件；run `41263260392` 的供应链和图表成功，主/最低 Node 的质量、内容历史、类型检查通过，但各自 Tests 步骤失败；production artifact/deploy 按设计跳过。未合并、重跑 CI 或继续服务器写入。
+- **本地证据与缺口**：本地完整 quality、内容历史、类型、263 项 TypeScript 和 production/preview 浏览器、production build、223 项含真实 Nginx/TLS 的运维测试均通过。失败后最低 Node 配合 CI 环境标志的 263 项测试通过；主 Node 使用本机既有 Chromium 156.0.8078.47（与 CI 版本一致）完整测试也通过。版本差异不是已证实原因。现有 npm 隔离入口对失败 workload 丢弃 stdout/stderr，仅返回 `NPM_WORKLOAD_FAILED`；远端没有测试诊断 artifact，因此具体断言尚未定位。
+- **暂停与后续**：遵守本轮失败即停、不得重跑 CI/TAT 的边界。暂停时尚未取得必要的脱敏失败诊断、对应缺陷修复及有限新 PR 检查授权，后续新增授权见本节上方；不得放宽测试、内容、安全或发布门禁，不把本地全绿代替远端通过。原 dev、stash、真实 8088 和当前线上页面均保留，无新增费用、外部服务或用户数据处理。
+
+## 2026-10-31 — 两阶段公网晋级：前置完成、新界面候选准备
+
+- **第一阶段**：[PR #75](https://github.com/lyty1997/AxialMuseWebsite/pull/75) 的四个 PR 门禁通过后普通合并为 `main@d09f2b5`；run `41262490462` 六 job 成功，独立 ZIP verifier 通过，唯一 TAT agent 为 SUCCESS/exit 0 且五参数脚本完全一致。服务器 current 为该 main，11 个完成事务无 pending，账本未变。唯一公网模块由 Git blob/本地/GitHub 内容认证后，持既有双锁及部署锁备份安装，摘要 `b13841940ae7081fb61e217daed09c3044d5f36abce58158840c4222bcfe316a`；其他组件、current、账本和配置不变，无新增 failed unit、无手工 reload，公网 43 项/15 文件及桌面/手机三页通过。
+- **第二阶段范围**：按用户授权在基于该 main 的独立 `codex/*` 分支重应用已验收 dev 候选的其余 80 文件，包含品牌/导航/本地搜索、preview 与已核实 review 修复。runtime 字节须与冻结候选相同，只同步必要授权、状态和前置证据文档；不使用整个 dev 分支合并，不携带其父历史，不修改原 dev 工作区、stash 或真实 8088。
+- **发布前门禁与预算**：完整 quality、类型、Node/Python、内容历史、真实 production 构建及浏览器/Nginx 验收通过后再普通推送、PR、review、精确 head/base 稳定后合并；全轮最多两次新增 TAT、四次 reload（含恢复），第一阶段已用一次 TAT/一次 reload。planned 项目与草稿仍由生产门禁隐藏，不改 DNS、证书、凭证、定时器或费用，不新增第三方页面请求和用户数据处理。下方“待授权/尚未安装/未提交”均为此前日期快照，本条不预先宣称第二阶段远端或公网完成。
+
+## 2026-10-31 — 实际候选部署与视觉验收
+
+- **身份与范围**：对当前 dev 与未提交修复建立私有 Git fixture；修复后受测快照为 `d98742bf2db1d535d86a0fa0318524b5437a9f16`，不是 canonical main。原仓库仍停在 `ab1629f`，未提交或推送。真实 8088、生产、DNS、证书和云资源不改。
+- **发现并修复**：真实新页面触发 `PUBLIC_HTML_ELEMENT`，公网 CSP 派生器仍禁止所有 form，与既定本地搜索不兼容。按 D-184 同步固定表单/combobox/初始 disabled 按钮的属性白名单、唯一性和闭合检查；`form-action 'none'` 不变。相同脚本/样式输入加入固定搜索后 CSP 字节相同，新增正常和负面回归在旧实现下变红、修复后通过。
+- **实际部署**：当前源码及 main 基线分别真实 build/package；本机已有固定 digest Nginx 镜像完成原始 ZIP 独立 verifier、release 安装、候选发布、回滚基线与恢复候选四次真实事务，逐文件 HTTP 字节和账本保持断言通过。临时 CA 的真实 TLS、Host/SNI、安全头、300 秒 HSTS 及完整公网适配器冒烟通过。真实 preview 控制器在独立状态目录完成同代重启、错误分支获取、状态/恢复与新代实际构建切换，PID 保持。最初隔离夹具的路径类型/权限和复用 dist 预检失败均留证，只修正夹具，不放宽生产门禁。
+- **视觉与测试**：Chrome 145 保存 44 张实际内容截图，覆盖 1440/1024/768/360 并另测 320；生产三页空状态、预览两项目/草稿、noindex、hydration、CSP/资源/请求来源及搜索空状态通过。人工抽查未发现重叠或横向页面溢出；手机草稿流程图文字偏小，留待正式发布文章前决定放大或移动端图形方案。系统 Python 3.12 的 223 项运维测试全部通过、零跳过，包含三个真实 Nginx/TLS 场景；完整 Node quality 和 Ruff 通过。
+- **收尾与遗留**：隔离容器与测试预览已关闭，源码快照、截图、原始失败与验收回执保留于本机独立验收目录。公网尚未安装 CSP 修复；正式发布需先将该模块修复独立晋级并认证安装，再发布搜索页面，具体 Git/安装/TAT 范围仍待授权。不新增依赖、外部服务、费用或用户数据处理；本机通过不冒充公网或远端 CI 验收。
+
+## 2026-10-31 — preview 作者事务竞态复审修复
+
+- **核实与修复**：preview 首次作者 residue 检查后、取得 build lock 前仍可能出现作者 lock/staging；原实现会在作者现场存在时启动 Docusaurus。取得 preview build lock 后补做同一 `assertAuthorTransactionClear` 检查，复用既有失败与事务回收路径，不改变锁格式或 CLI。
+- **独立验证**：隔离子进程在 build lock 创建前注入作者 lock/staging，两项新增回归在旧实现下均以错误的 `BUILD_PREVIEW_DOCUSAURUS` 失败；修复后在启动假 CLI 前以 `BUILD_AUTHOR_TRANSACTION` 拒绝。断言作者现场字节/权限、既有 production/preview 制品不变，本次 build lock、候选与临时事务全部回收。主 Node 24.18.0 的构建/控制器 25 项、完整隔离 quality、typecheck、263 项 TypeScript 测试及 production/preview 真实 Chromium 回归通过；最低 Node 24.16.0 的两项新增竞态回归通过，未宣称完成最低端点全量验收。
+- **边界**：原有未提交修复保留，本次修改留在本地；未提交、推送、创建 PR 或部署，未操作真实预览/生产配置与状态，未新增依赖、外部服务、费用或用户数据处理。
+
+## dev 两项复审修复 — 独立端口配置与搜索组合框
+
+- **修复**：preview 文本制品检查增加独立端口配置匹配，覆盖赋值、对象及 HTML 属性，保留普通数字、较长数字及其他端口；搜索输入声明 `combobox`，production 属性白名单同步固定该角色。
+- **验证**：固定 Node 24.18.0 的隔离完整 quality、typecheck 和 263 项 TypeScript 测试全部通过、零跳过；真实 production/preview fixture 构建及 Chrome 145 回归通过，覆盖桌面/移动截图、键盘选择/清空、组合框展开状态、结果列表和当前活动选项在可访问性树中的关联。未进行独立屏幕阅读器人工验收。
+- **边界**：保留已有输入法和测试隔离的未提交改动；本次修复留在本地，未提交、推送或部署，没有新增依赖、第三方服务、浏览器外部请求或用户数据处理。
+
+## 2026-10-31 — main 更新合入本地 dev
+
+- **授权与前态**：用户要求先将 main 更新拉入 dev；远端核对为 `main@489562e` 与 `dev@e9c06da`，两侧各有 40/9 个独有提交。七个未提交 review 修复文件已逐字节备份并保存于独立 stash，既有 stash 和其他工作树保留。
+- **整合边界**：普通合并保留两侧历史，处理 14 个冲突文件及自动合并中的历史 preview 回退；保留 main 生产部署、verifier、独立运行命名空间与活动 CI，保留 dev 的 preview/原子 current、品牌、搜索、草稿文章、项目叙事与回归。静态素材同时登记品牌 PNG 和 robots；dev 品牌决策按既有映射消歧为 D-173 至 D-184，main 运维编号不变。
+- **验收与遗留**：合并结果连同恢复后的七文件修复通过完整隔离 quality、独立 typecheck、262 项 TypeScript 测试（零跳过）、production/preview 真实 Chromium 回归及 production 构建；系统 Python 3.12 的 221 项运维测试通过，三个既有可选 Nginx 集成场景未启用。初次质量/测试在根配置的历史 preview 开关回退处失败关闭，修正后完整重跑成功，原日志保留。merge 提交只记录 main 整合及冲突消歧，原七文件 review 修复继续为未提交状态；上述工作区验收不冒充不含这七文件修复的独立提交验收。没有 push、PR、远端 CI、服务器/真实预览配置操作或部署，没有新增依赖、第三方服务、费用或用户数据处理。
+
+
+## 2026-10-28 — dev 复审：控制器测试隔离与搜索输入法修复
+
+- **预览测试**：控制器 fixture 将真实 `preview.sh` 的完整字节复制到独立临时脚本目录，再从临时 Git 仓库调用；真实开发配置不被复制或执行。新增源目录配置污染反例，覆盖 host/port/state 覆盖及加载标记，并证明另一个预览的 current 与 release 字节保持不变；既有首次构建失败、冒烟失败恢复、PID 保持与并发锁断言继续通过。
+- **搜索交互**：在处理快捷键前跳过原生组合事件及兼容性键码 229。真实 Chromium 在 production 与 preview 两类制品上验证组合中的上下键和 Escape 不取消事件、不改变查询、选择或焦点，随后验证正常方向选择、环绕、结果自身滚动及 Escape 清空；桌面与移动视口、网络和控制台检查通过。
+- **验证与边界**：固定 Node 24.18.0 的隔离完整 quality、独立 typecheck、262 项 TypeScript 测试均通过，控制器定向五项零跳过通过；真实 production/preview fixture 构建通过。新增浏览器断言首次因 TS7022 编译失败，补充显式类型后完整测试通过，原失败日志保留。本轮仅为当前 dev 的未提交修复，未提交、推送、创建 PR、触发 CI 或部署，也未修改真实预览配置与状态；没有新增依赖、第三方服务或用户数据处理。
 ## 2026-10-28 — 三项复审文档修正独立晋级
 
 - **范围**：用户授权提交、推送并经 PR 合并到 main。基于 `main@cdcccc7` 的独立 `codex/review-docs-closeout` 只整理文档/规则及配套图，不经含九个并行提交的 dev，不修改运行代码或 workflow。编号协调登记 D-173 至 D-184，并固定精确 dev 快照和旧新映射；原 main 运维记录不变。dev 的九文件引用替换保留隔离候选，随其内容另行晋级，不能以本次映射登记宣称那些文件已经进入 main。
@@ -241,6 +284,18 @@
 - **额外管理身份处置**：用户先按 D-118 选择方案 1，随后在确认快照正常后明确授权执行。root-only 事务入口先复核唯一候选、首启来源、无活动会话/进程/定时任务/linger/systemd 引用/业务目录所有权、无特权组和唯一受控直接 sudo 规则，再原子移除该规则、保持密码字段锁定并设置账户过期、把登录 shell 改为系统 `nologin`；账户、home、密钥和其他文件均不删除。事务在 180 秒提交窗口内由第二条 SSH 独立验证当前管理员 `sudo -n`、`sshd -t`、非目标配置、运行时和 sudo 图后才提交；持久化回执确认 `committed` 后清理私有回滚材料。
 - **后验与下一门禁**：最终脱敏后验证明目标身份没有活动引用或业务所有权、无特权组或 sudo 能力、shell/过期终态正确，home 仍存在且事务前后摘要一致，passwd/sudoers/sshd 与运行时基线有效；当前管理 SSH/sudo 未受影响。快照仍未授权恢复或删除，重新启用或删除该账户/文件也未授权；SSH 全局策略随后已按 D-119/D-120 达到 `committed_clean`，OS/腾讯云防火墙、软件、服务、维护重启、verifier/Certbot、#37 和 GitHub/Git 操作仍须分别决定和授权。#36 下一项最小门禁应从防火墙最终闭环、维护重启或 verifier 安装中按依赖顺序另行确认，#37 继续暂停。
 
+## 2026-07-30 — D-144 至 D-146 浏览器批注收口（部分完成）
+
+- **首页与页脚去重**：按浏览器批注明确首页只保留愿景、品牌含义和关于区，删除首屏“浏览项目 / 查看踩过的坑”按钮及首页内重复的“项目介绍 / 踩过的坑”板块；项目和技术分享继续只由页头三项标签导航进入。关于区保留唯一 GitHub 联系卡片，页脚删除重复 GitHub，只保留已核验 ICP 链接、站名与版权。production 制品检查器和正反 fixture 同步收紧为这一精确投影，禁止后续把重复板块、入口或页脚 GitHub 静默加回。
+- **项目内容事实与暂停范围**：`DocRestore` 与 `VibeCoding Project Scaffold` 的注册表、正文和仓库证据仍完整存在，不是页面链接丢失；两者当前均为 `active / planned`，按既有公开契约不会进入 production 路由或项目列表。二者还没有获批准的 1600×1000 WebP 主预览，后者同时关联仍为 draft 的 #30 技术分享。D-146 已记录“保持证据门禁、补图并成批发布”与“修改公开契约、允许仓库型项目无图发布”两种互斥方案；用户确认前不改 publicationStatus、关系、路由、图片契约或公开文案。
+- **Logo 候选与验收**：D-142 当前官方 Logo 再次被用户否决，D-145 将替换操作暂停到候选选择完成；本轮只在仓库外生成 A“轴心之门”、B“Muse 折页”、C“能力棱镜”、D“开放轴印”四版矢量候选，没有把任何候选写入正式品牌素材。持久化 WSL CI 继续复用既有 Node、npm 与冻结 `node_modules`，没有安装、删除或重建环境；production build、严格 TypeScript 和 254/254 个非浏览器测试通过，完整 255 项唯一非零项仍是既知的 WSL `PATH` 无 Linux Chromium。Codex Desktop 内置浏览器另在默认桌面视口和 `360×800` 验证首页、导航、联系方式与页脚，窄屏无横向溢出、全站 GitHub 精确 1 处、控制台日志为空。本轮未提交、推送或运行远端 CI，未引入依赖、第三方服务或新的用户数据处理。
+
+## 2026-07-30 — D-141 至 D-143 Axial Muse 品牌与首页改版（本地实现与验收）
+
+- **确认范围与公开表达**：按用户确认的方案，把 Axial Muse 固定为一条以“轴心时代的大师”和 Muse 为寓意的项目产品线；首页以“用全栈技术 + AI，让所有人用上好用的工具”为主标题，以“让生产力不再是少数人的特权”为愿景表达。页头采用品牌标志、Axial Muse 名称和本地搜索，下层固定“首页 / 项目介绍 / 踩过的坑”三项图标导航；当前不展示登录、注册或尚未实现的账户能力。首页关于区使用用户确认的工程经历、公开范围、邮箱与 GitHub 信息。
+- **实现与数据边界**：首版深色方形/轨道 Logo 经用户视觉验收否决后，D-142 将其重绘为无底框的几何字母 A、贯穿字形的稳定轴心和顶部 Muse 灵感星芒；标志与三个内容标签统一使用石墨色和低饱和青绿色。D-143 又把“品牌含义”“关于我”及联系方式从石墨黑底收口为白色至低饱和青绿色的亮色卡片。另新增双层响应式页头、首页品牌含义/项目/复盘/关于区，以及邮箱和 GitHub 动态图标卡片；动画遵守 `prefers-reduced-motion`。搜索只在浏览器内检索构建时已经投影的公开项目和非 draft 文章标题/摘要，不发送查询、不写 Cookie 或 Web Storage、不引入第三方搜索与运行时资源；production 继续排除 planned、draft 和未完成公开审核的内容。公开制品检查器只允许这一种无 action、method、name 的精确 search form，其余表单、输入与活动界面仍失败关闭。
+- **本地证据与遗留**：持久化 WSL CI 复用 Node `24.18.0`、npm `11.16.0` 与既有冻结 `node_modules`，未删除、重装或下载依赖；完整 `quality`、严格 `typecheck` 和 production build 已通过。Codex Desktop 内置浏览器在 `1440×900`、`1024×768`、`360×800` 验证品牌、双层导航、搜索空结果/Escape、标签切换、关于区与联系方式；三档均无横向溢出，手机端完整显示 Axial Muse 名称，控制台无 error/warn，请求型静态资源全部来自当前站点。完整共享测试仍以 WSL 缺少 Linux Chromium 为唯一预期非零项，真实 UI 证据由 Windows 浏览器单独记录；本轮未提交、推送或运行远端 CI，未引入依赖、第三方服务、查询存储或新的用户数据处理，既有 #30 draft 保持不变。
+
 ## 2026-07-29 — #36 生产服务器第一阶段只读核验与废弃旧站清理（GAP，待控制面和加固授权）
 
 - **授权与范围**：在已核对 SSH host key 的生产 alias 上，按 D-113 只使用非交互登录和 `sudo -n` 完成系统/架构/资源、全部监听与进程、软件/服务、账户与权限、SSH 有效配置、操作系统防火墙、TAT/云代理、生产目录、系统 Python 和 verifier 安装前基线的脱敏只读盘点。公网 IP、主机名、用户名、实例 ID、密钥/指纹、来源地址、进程参数和精确可利用安全姿态只留私密现场记录；未访问腾讯云控制面，未调用 tccli/TAT API，未操作 DNS/TLS/artifact/release，也未写入 GitHub Issue、设置或其他远端状态。
@@ -282,6 +337,14 @@
 - **验收证据**：固定 Node `24.18.0` 下，完整 E-010 `quality`、严格 `typecheck`、16 个 TypeScript 测试源的 253/253 共享测试（含真实 Chrome 回归）、production `build`、JavaScript/模块/Markdown 门禁及 `git diff --check` 全部通过；release 定向 Node 测试为 52/52。另在 `/tmp` 的干净临时 Git 提交和仓库内真实冻结依赖树上实际执行 `production build -> 默认 package:artifact -> 默认 check:artifact`，再通过 E-010 `run-script check:artifact` 精确断言 stdout digest 与 stderr 隔离摘要，完整链路通过；第二份完全不含 `.git`、`node_modules`、`build` 或 `dist` 的临时副本也通过精确 E-010 `run-script quality`，证明既有零依赖 quality/pre-commit 入口未回归。临时提交和摘要只用于本地验收，不是可部署 artifact 身份。
 - **遗留与外部边界**：实现提交 `b38354b` 已普通推送到 `origin/codex/issue-18-production-baseline`；该临时 ref 不在现有 workflow 的 `main`/`dev` push 触发范围，因此没有产生该 SHA 的远端 CI，GitHub Issue #33 验收或关闭证据也尚未形成。#14 producer/upload、#35 verifier 和 #37 deploy/服务器闭环继续独立推进；pure Node 最后一次身份检查到路径式 rename/remove 的极窄同 uid 竞态继续以仓库、`dist/` 和任务临时路径无并发写者为硬前置条件。未新增 npm 依赖、Action、外部服务、浏览器外部请求或用户数据处理；本轮真实验收只复用本机已冻结依赖，没有联网下载或向第三方发送站点内容。
 
+## 2026-07-29 — #30 AI 编码脚手架文章草稿与图表证据（待内容审核）
+
+- **事实边界与文章**：按 [Issue #30](https://github.com/lyty1997/AxialMuseWebsite/issues/30) 推进 Project Scaffold 内容准备，仓库事实固定核对到公开 `main@a9f6cd51c843f417858ae0417191523d0df11d84`。新增《VibeCoding Project Scaffold：从一次对话到可复用的工程闭环》技术文章草稿，明确它就是该项目的主技术分享和设计、实现、复盘记录，并以 classification 与项目注册表 articleId 形成双向关联。正文区分已实现的初始化、Agent 规则、零第三方基础质量、跨机预览和 CI/CD 探测/渲染，与仍为占位的 `npm test`、尚待真实绿地远端验收的 CI/CD 闭环及不存在的在线服务；不把源码复核写成新的项目仓库本地质量或远端 CI 结果。
+- **作者事务与本机边界**：用户确认 Windows 继续作为唯一源码/Git 工作区，正式作者创建事务在持久化 WSL Linux 作者副本执行，只把新文章模板补丁回传 Windows 审查；不进行 WSL Git 或目录反向覆盖。正式入口生成 articleId `019fb119-5f31-7f80-bb8b-79c2b70f1f60`，Windows 工作区继续承载正文、图表、构建验收和 Git。持久化 WSL CI 复用既有 Node `24.18.0`、冻结 `node_modules`、Temurin JRE 与 PlantUML `1.2026.1`，没有删除或重装开发环境。
+- **图表与阅读体验**：重绘四层工程控制面、单次任务闭环、脚手架迁移和模型能力演进 4 张 SVG，文章提供完整替代文本与解释性图注。PlantUML 真相源迁入索引化的 `docs/engineering/ai-coding-scaffold-diagrams.md`，仍由 `check:diagrams` 真实编译并可由 `gen:diagrams` 刷新目标 SVG；文章只展示图，不重复展开源码。Codex Desktop 内置浏览器已在 `1440×900`、`1024×768` 和 `360×800` 验证草稿提示、单一 H1、目录、图表、图注、移动导航和无横向溢出，4 张图均加载，preview 全页保留 `noindex, nofollow`。
+- **构建门禁修复**：首篇真实 draft 暴露 production 未发布内容扫描器会把作者 ID `lyty1997` 与站点已公开 GitHub 链接混淆。修复仅把既有静态页面元数据、空状态、全局导航和页脚链接纳入公开制品语料，并增加“公开链接中的 draft 作者 ID 不误报”回归；原有 draft/planned 身份、路径、摘要、正文、Markdown 渲染和链接目标泄漏反例保持通过。production 最终不包含文章 ID、slug、标题、正文或 4 张图，preview 才包含草稿路由和素材。
+- **本地验证与遗留**：WSL 本地 CI 已通过完整零依赖 `quality`、68 个提交/1 篇文章/4 个注册身份的内容历史、严格 TypeScript、7 个 PlantUML 块编译、production build 和真实 preview build/制品检查。完整共享测试为 255 项、254 项通过；唯一非零项仍是既知的 WSL `PATH` 没有 Linux Chrome/Chromium，真实页面改由 Windows Codex Desktop 内置浏览器完成，不安装 Linux 浏览器，也不把两种证据混记。文章保持 `draft`，尚未提交、推送、发布或取得远端 CI；#30 仍缺用户确认的真实项目工程截图和 1600×1000 主预览 WebP，因此不能关闭。本轮未新增依赖、第三方运行时服务或用户数据处理。
+
 ## 2026-07-28 — #13 production payload 运行时 301 派生与固定 Nginx Docker 验收（本地完成）
 
 - **范围**：在 `main@195656fcbcf05fe440bc2cf9c64e27f68d2be3ab` 建立的 `codex/issue-18-production-baseline` 上推进 #13。本轮只拥有 E-014/CODE-019 的仓库侧注册表读取、公开 HTML 路由提取、规则闭包、确定性运行清单和 Nginx exact-location 配置派生，以及 D-107 授权的本地固定 digest Docker 真实 Nginx 验收；#33 继续拥有 release 封装、摘要和独立复验，#37 继续拥有服务器账本、候选安装、原子激活与回滚兼容，不把这些后续职责或生产现场验收并入 #13。
@@ -290,6 +353,22 @@
 - **真实 Nginx 证据**：D-107 固定 Docker Official Image `nginx:1.28.3-alpine3.23` 的 `linux/amd64` child manifest `sha256:0dcc88822d45581e65ae329f8be769762bf628d3b2bb7d2a077d4aa5c98b30e3`，实际版本探针为 `nginx/1.28.3`。独立入口在空 Docker config、固定本地 socket、`--pull never`、非 root、只读、无 capability、无宿主端口和一次性内部网络下通过真实 `nginx -t`；同一派生 include 与 payload 的 25 项 HTTP/HTTPS 断言覆盖根域/`www` 四个 server、`/old` 与 `/old/`、`/projects`、原始查询串、唯一 `Location`、三个规范 target 200、source HTML 缺失、两个 HTTP ACME 200 和四个未知 Host 404。评审后，Docker/OpenSSL/HTTP/清理命令与 readiness 退避均改为异步可取消编排；SIGINT/SIGTERM 会终止并等待当前操作子进程，随后继续有界清理并以稳定中断错误失败。修复后的真实正常入口再次通过 25 项断言并确认验收容器、网络和临时目录为零残留；真实入口被定向发送 SIGINT 时以稳定中断错误和退出码 1 结束，独立标签复核确认容器与网络为空。中断 fixture 另行覆盖 SIGINT/SIGTERM 与受控资源归零，固定镜像缓存按决定保留。
 - **其余本地证据**：精确 Node `24.18.0` 下，零依赖完整 `quality`、严格 `typecheck`、16 个 TypeScript 测试源的 252/252 共享测试及真实 Chromium 回归、production `build`、JavaScript 明列语法、模块边界与 `git diff --check` 均通过。核心 fixture 覆盖空注册表、golden 字节、排序/reason 不变性、双 alias、查询变量、路径/保留空间、重复/链环、source/target payload 闭包、HTML 布局、链接成员、provenance/accessor、稳定 I/O 双故障及 Docker 入口的固定身份、四 server、硬化、无端口、原始 header、异步 readiness 取消、真实父进程 SIGINT/SIGTERM 与统一自动化隔离。真实当前站点 build 派生出 `/`、`/projects/`、`/writing/` 三条公开路由、0 条 `registered` 与 2 条 `canonical-slash`；D-107 的独立非空 Docker fixture 则刻意派生 2 条 `registered` 与 2 条 `canonical-slash`，用于真实引擎行为验收，二者不混作同一输入事实。
 - **遗留与交付边界**：#13 的仓库实现和本地真实引擎验收已闭环并形成本地实现提交，但尚无精确远端 CI 或 GitHub Issue 关闭证据；#33 的 release 封装/摘要和 #37 的服务器账本、现场 Nginx、激活、reload、回滚兼容与公网冒烟继续独立实施。本轮唯一新增外部访问是经用户授权从 Docker Hub 官方 registry 显式拉取固定 digest 镜像，传输常规 registry/网络元数据，不发送站点内容或用户数据；未新增 npm 依赖、第三方运行时服务、浏览器外部请求或用户数据处理，未安装宿主机 Nginx，未操作服务器、DNS、TLS 或 GitHub Issue/PR。
+## 2026-07-28 — GitHub Actions 额度优化提案（Issue #61，待决策）
+
+- **事实与原因**：当前 private repository 本月已观测到 64 次 workflow run；#8 的三次实际纠错 run 在两个构建 job 尚未完成 production build 时，按逐 job 分钟取整已约消耗 `6 + 8 + 8 = 22` 分钟。现有 workflow 每次启动主/最低 Node 两套完整安装与负载；静态供应链已经属于两次 `quality`，又由独立 job 第三次执行；diagrams 与 supply-chain 的十几秒负载分别占用 runner。当前计费周期额度已经用完，最新 run 未分配 runner。
+- **提案与推荐**：[Issue #61](https://github.com/lyty1997/AxialMuseWebsite/issues/61) 已记录三个互斥方案。推荐方案 A 保留本地零依赖 pre-commit，将 `dev` push 收敛为单一主 Node 安装后集成 job，在 `dev -> main` PR 才执行完整双端点远端验收并合并短 job，`main` 只运行精确 SHA 构建/制品阶段；方案 B 把完整负载移到本地 pre-push，方案 C 使用 WSL self-hosted runner。推荐不构成授权，最终方案、required-check 稳定名称和 `main` 精确 SHA 阶段仍待用户确认。
+- **本地环境决定**：开发阶段保留 `~/.local/share/axialmuse-local-ci/` 下的 WSL 本地 CI 环境，普通任务复用其中 Node `24.18.0`、npm `11.16.0`、仓库副本与冻结 `node_modules`，不在每轮结束后删除或重装。只有 `.nvmrc`、npm 版本闭包、manifest 或 lockfile 变化时才重建受影响层；该决定不把本机注册为 self-hosted runner，不引入 GitHub runner 凭证，也不把本地结果冒充远程验收。
+- **当前边界与后续验收**：本轮只记录提案并创建 Issue，没有修改 workflow、hook、测试契约、GitHub required checks、runner、凭证或计费设置；这些文档与 #8 review 修复随后获用户明确授权提交到本地 `dev`，但不 push、不重跑 Actions。下一个计费周期恢复后，实施项必须以静态正反 fixture、本地门禁、真实 `dev`/PR/`main` 或 production-artifact run 和逐 job 实际分钟共同验收，不能以本地自报或被 billing 阻断的 run 代替。
+
+## 2026-07-28 — #8 可验收草稿预览仓库实现（进行中）
+
+- **范围**：按 E-009/CODE-017 推进 [Issue #8](https://github.com/lyty1997/AxialMuseWebsite/issues/8)，只实现远端精确 checkout 后的 Docusaurus preview 候选、制品验收、原子激活、Python 服务所有权和状态报告；不安装或更新项目依赖，不修改 workflow、生产发布、DNS、云资源或用户数据处理。用户随后授权临时安装固定作者 Node，并把通过门禁的实现提交、推送到 `dev` 触发 CI；未授权 PR、Issue 写回或基础设施操作。
+- **仓库实现**：`build-site.mjs --mode preview` 现从 worktree 外 `candidates/<sha>.<pid>` 空路径执行 `build --dev`，以独立命令重载内容并检查全 HTML 唯一 `noindex, nofollow`、无 sitemap、draft/public 路由与侧栏、生产 canonical、局域网 host/IP/port 不落盘、私有日期索引不进入 Web Root、preview 静态素材白名单和整树不漂移。Docusaurus preview 配置启用全站 `noIndex`、关闭 sitemap 与 classic debug 路由，并通过官方 `DOCUSAURUS_GENERATED_FILES_DIR_NAME` 环境变量把 generated files 隔离到 owner-bound 临时事务；production 配置与既有封装边界保持独立。preview 项目导航现在包含拥有正文的未发布项目，可省略尚未批准的主预览图片；production 仍只投影 `published|archived` 且要求已验证图片。两个真实 `planned` 项目正文的设计证据链接已改为同一公开仓库 `main` 上的稳定文档 URL，避免预览页面把仓库内、站点内容根外的文件误生成为站内断链。
+- **运行控制**：`preview.sh` 已迁移到 `PREVIEW_STATE_DIR`，支持 `start`（兼容 `serve`）、`restart`、`stop`、`status`；精确 fetch `origin/<branch>` 后 detached checkout 并拒绝脏 worktree，使用非阻塞锁，先验证主 Node 以及绑定 manifest/lock/Node/npm 和完整 `node_modules` 字节树的预备证据，再构建候选、改为只读 release、原子替换 `current`。切换前失败保留旧 current/PID，切后 localhost 冒烟失败恢复旧 current，本次新启动的服务在失败时停止；已有非活动同 SHA release 不绕过本次候选验收。状态分别报告请求分支、worktree HEAD、活动制品 SHA、模式、PID/URL 和最近失败。
+- **自动化覆盖**：新增 preview 参数/状态根、冻结依赖证据、Bash 语法、noindex 精确性、preset `versions.current.noIndex`、preview 素材字节漂移测试；真实 Docusaurus fixture 新增 draft，并在同一源码上先证明 production 排除 draft/sitemap，再构建 preview、断言草稿路由与全 HTML noindex，随后复用零新增依赖的 Chromium 回归覆盖 `360/768/1024/1440` 等视口。实现级 review 又补入真实 `preview.sh`、临时 Git 远端与本地 HTTP 服务组成的 Linux 状态机测试，覆盖成功 restart 保持 PID、构建失败保留旧 current/PID、切后冒烟失败回滚、首次构建/冒烟失败不产生活动站点、排他锁阻断并发，以及正常 stop。新 `.mjs` 与测试已接入 JavaScript 明列检查和聚合质量入口。
+- **CI 纠错证据**：首个实现提交 `72c7c200aeea2db5eb027dc568c272565b36d0ee` 的 [CI run 30346480458](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/30346480458) 在双 Node 端点的独立 TypeScript 门禁暴露了 Docusaurus 3.10.2 不支持根 `generatedFilesDir` 配置；修复提交 `c468def300d87f650692660cdf0c6faddfea3607` 改用官方环境变量后，[CI run 30348715402](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/30348715402) 的双端点 typecheck 均通过，但完整测试又暴露 `build --dev` 自动启用 classic debug 页面，这些页面不满足 preview 全路由 noindex 闭包。提交 `b5d4135c344f00d5a6935a7883103b4daba7bfe2` 显式关闭 debug，并闭合真实 `planned` 项目的路由、导航、可选图片与证据链接；其 [CI run 30352878944](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/30352878944) 的双端点 quality、history、typecheck 均通过，真实 Chromium 又证明 development bundle 已把 pages config 模块合入 `main.js`，但框架预取映射仍请求未生成的 `config---projects-*.js`。三次失败均保留失败关闭，没有跳过或放宽检查。
+- **实现 review 修复**：此前只有 2026-07-18 的设计 review，`72c7c20` 至 `5cf5afd` 四个实现提交没有关联 PR、commit review 或实现后 Issue review 证据。2026-07-28 本轮在 WSL 对 `dev@5cf5afd` 真实运行 preview 时发现两项阻塞缺陷：其一，Docusaurus 3.10.2 development registry 位于 `eval(...)` 字符串内，既有检测只识别未转义 chunk key，误报 config 模块未合并；现改为同时识别普通与转义 registry，并要求同一映射项按序出现动态导入路径、精确 `@generated/docusaurus.config` 别名和 `require.resolve` 路径。其二，HTTP 服务继承控制器的 fd 9，导致首次 `serve` 后继续持有 `preview.lock`、后续 `restart` 永久报 `PREVIEW_LOCKED`；现于服务器 `exec` 前关闭 fd 9，并由完整状态机测试回归固定。
+- **当前验证与遗留**：持久化 WSL 本地 CI 环境使用精确 Node `24.18.0` / npm `11.16.0`，复用既有冻结依赖而未再次执行 `npm ci`。当前完整工作树已通过 JavaScript/Bash 语法、config-chunk 与控制器合并定向测试 19/19、完整 `quality`（含状态机 4/4）、内容历史、严格 TypeScript、production build 和真实 preview `build --dev` 及独立制品检查；真实 preview 候选保留在 `~/.local/share/axialmuse-local-ci/preview-state/candidates/`。此前完整 `npm test` 共 252 项，251 项通过；唯一非零项是 WSL `PATH` 没有可发现的 Linux Chrome/Chromium，真实浏览器入口按契约报 `[BROWSER_UNAVAILABLE]`，不能记为通过。Windows Node `24.15.0` / Chrome `150.0.7871.125` 此前已对兼容候选通过 11 个浏览器探针，但本轮修正后的完整工作树尚未在 Linux 托管机和真实局域网浏览器现场复验。本地修复随本提交纳入 `dev`，尚未 push、未消耗新 Actions 分钟；GitHub 双端点/Chromium CI、托管机 gitignored `PREVIEW_STATE_DIR` 与冻结依赖配置、真实端口/PID/局域网现场仍待额度恢复和基础设施授权，因此不能标记 #8 完成；Issue 写回仍需另行授权。
 
 ## 2026-07-28 — #25 显式文章日期命令（本地实现与 fresh checkout 验收完成）
 

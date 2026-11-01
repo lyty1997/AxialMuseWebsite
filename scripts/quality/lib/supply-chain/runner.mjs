@@ -48,6 +48,7 @@ import {
 } from "./lockfile.mjs";
 import { readAndValidateDependencyPolicy } from "./policy.mjs";
 import { buildProfileArguments, profileRequiresLockfile } from "./profiles.mjs";
+import { summarizeTestFailure } from "./test-diagnostics.mjs";
 
 function validateRoot(root) {
   if (typeof root !== "string" || !isAbsolute(root)) {
@@ -118,7 +119,7 @@ function runChild(
   arguments_,
   options,
   phase,
-  { allowedStatuses = [0] } = {},
+  { allowedStatuses = [0], testRoot = null } = {},
 ) {
   const result = runProcess(executable, arguments_, {
     ...options,
@@ -134,7 +135,9 @@ function runChild(
     || !allowedStatuses.includes(result.status)
     || (result.signal !== undefined && result.signal !== null)
   ) {
-    fail(`NPM_${phase}_FAILED`, `${phase} 子进程以非零状态退出。`);
+    const diagnostic = testRoot === null ? "" :
+      `\n[NPM_TEST_FAILURE] ${JSON.stringify(summarizeTestFailure(result, testRoot))}`;
+    fail(`NPM_${phase}_FAILED`, `${phase} 子进程以非零状态退出。${diagnostic}`);
   }
   return {
     status: result.status,
@@ -1188,7 +1191,8 @@ export function runIsolatedNpm({
         [npmRuntime.npmCli, ...workloadArguments],
         { ...childOptions, cwd: workloadRoot },
         "WORKLOAD",
-        profile === "audit" ? { allowedStatuses: [0, 1] } : undefined,
+        { allowedStatuses: profile === "audit" ? [0, 1] : [0],
+          testRoot: profile === "run-script" && scriptName === "test" ? canonicalRoot : null },
       );
     } catch (error) {
       workloadError = error;

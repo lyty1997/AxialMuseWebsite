@@ -34,7 +34,9 @@ D-064 为每篇技术文章增加必填顶层 `articleId`。该值是全站唯�
 
 D-065 将新文章的正常创建方式固定为作者显式运行仓库内 Node.js 文章创建命令。作者先显式确定符合 D-063 的 `<source-name>`；命令在同一次创建操作中建立尚不存在的文章目录、D-062 的唯一正文入口，并把新生成的 UUIDv7 作为顶层 articleId 写入一次。成功必须同时产生三者，失败必须恢复到调用前状态，不得留下目标文章目录、正文入口或本次创建产生的其他持久化结果；普通创建命令不得覆盖既有目录，也不得为既有文章覆盖、修复、轮换或补写 articleId。命令不得从 articleId、标题、slug、分类、日期、正文或其他字段相互推导、同步改写或静默纠正领域值；旧文分配使用独立迁移流程。
 
-创建命令只写入获准运行本站 Node.js 的 Linux 作者工作区，作者必须先审查 Git diff。命令不自动暂存、提交、推送或发布。Git hook、PR bot、CI、Docusaurus、预览、发布自动化和生产服务器均不得隐式触发创建命令或生成、修复 articleId；缺失、非法、重复或发生未授权修改时只能让只读门禁失败并定位源文件。命令名、参数、Markdown 模板、作者锁与 staging 原子目录、UUID 文本与历史检查、错误契约和测试由编码 Spec 固定；创建前必须通过 E-013 的同一历史实现验证工作区候选，浅克隆、缺失对象或历史冲突时不写 staging。M0 不提供 MDX 创建参数。#24 已实现上述直接 Node 入口、完整历史接线与原子事务，并依 D-103 获准纳入当前专题分支提交及同名临时 ref；远端验证仍待取得，且真实主题注册表仍为空，因此本轮不把临时 fixture 成功表述为已有真实文章可创建。
+创建命令只写入获准运行本站 Node.js 的 Linux 作者工作区，作者必须先审查 Git diff。命令不自动暂存、提交、推送或发布。Git hook、PR bot、CI、Docusaurus、预览、发布自动化和生产服务器均不得隐式触发创建命令或生成、修复 articleId；缺失、非法、重复或发生未授权修改时只能让只读门禁失败并定位源文件。命令名、参数、Markdown 模板、作者锁与 staging 原子目录、UUID 文本与历史检查、错误契约和测试由编码 Spec 固定；创建前必须通过 E-013 的同一历史实现验证工作区候选，浅克隆、缺失对象或历史冲突时不写 staging。M0 不提供 MDX 创建参数。#24 已实现上述直接 Node 入口、完整历史接线与原子事务，并依 D-103 获准纳入当前专题分支提交及同名临时 ref；远端验证仍待取得。2026-07-29 已登记首个真实主题并通过下述 Windows Codex Desktop 受控例外创建首篇 `draft`，这证明本地作者事务可生成真实模板，不替代 #24 的精确远端 CI 与 Issue 闭环。
+
+2026-07-29 用户确认 Windows Codex Desktop 的受控作者例外：当 Windows NTFS 工作区无法满足上述 Linux 锁与目录原子语义时，可以把 Windows 当前提交与待审核快照单向装配到专用 WSL 作者工作区，在那里运行一次显式创建命令，再把**仅包含该篇新文章模板**的 patch 导出并人工核对后应用到 Windows 工作区。该例外不允许整库反向同步、不允许从 WSL 提交或覆盖 Windows 已有文件，也不改变 Windows 工作区是唯一源码与 Git 工作区的边界；正文编辑、插图、验证、暂存和提交仍在 Windows 工作区完成。专用作者工作区与本地 CI 执行副本分责，均复用持久化 Node，不因普通开发任务反复重建。
 
 D-066 将未来获准执行本站命令的作者工作区、仓库质量门禁、CI 和 Docusaurus 静态构建统一到 Node 24 LTS 主版本，最低 24.16.0，允许范围为 `>=24.16.0 <25`。文章创建命令使用 `node:crypto.randomUUIDv7()`，不得引入 `uuid` 或其他 UUID npm 包、系统 CLI 或在线生成服务。原生 API 的时钟非单调，本站不要求同毫秒、时钟回退、跨进程或跨机器严格递增，也不增加计数器、共享状态、重试到大于前值或时间修正包装；当前树和 Git 历史的唯一性由 E-013 独立门禁。仓库现已建立 Node 24 版本文件和 E-010 双端点隔离校验；D-080 已让本地 pre-commit 子进程从 `.nvmrc` 选择精确 Node 24，同时系统与新 Bash 会话默认仍解析 `/usr/bin/node` `v22.22.0`。D-097 至 D-099 已把 Ubuntu workflow 迁移到 Node 24 主/最低端点，并接入完整 checkout、内容历史门禁与静态供应链证据，再依 D-100 纳入专题分支；普通 CI 不再运行 live audit。该分支已本地验收，D-101 仅授权交付到不触发现有 `main`/`dev` workflow 的同名临时 ref，因此远端运行证据仍待后续集成验收。生产 Nginx 只接收并提供静态制品，不运行作者命令或 Node.js 请求服务。
 
@@ -134,7 +136,7 @@ Docusaurus schema、错误契约、文章命令、Node 24 门禁、路径检查�
 ## 发布工作流
 
 1. **建立记录**：为选题创建 Issue 或路线条目，写明目标读者、问题、证据来源和内容状态。
-2. **创建文章**：由作者在获准的 Linux 作者环境中使用与仓库 `.nvmrc` 精确一致的 Node，显式运行 CODE-014 固定的 `node scripts/author/create-article.mjs ...`，并一次性提供 source-name、title、完整 slug、summary、1-4 个已登记 author、1-5 个已登记 topic 及可选 project/module。成功后先确认 Git diff 只新增目标文章目录及唯一 `index.md`，再继续编辑；最低版本兼容任务不能代替正常作者入口。当前实现仍未提交，且真实 topic 注册表为空，所以首次真实使用前还必须先按内容决策登记获批主题，不能复制临时 fixture ID 或手工模拟模板。
+2. **创建文章**：由作者在获准的 Linux 作者环境中使用与仓库 `.nvmrc` 精确一致的 Node，显式运行 CODE-014 固定的 `node scripts/author/create-article.mjs ...`，并一次性提供 source-name、title、完整 slug、summary、1-4 个已登记 author、1-5 个已登记 topic 及可选 project/module。成功后先确认 Git diff 只新增目标文章目录及唯一 `index.md`，再继续编辑；最低版本兼容任务不能代替正常作者入口。首次真实使用已于 2026-07-29 按内容决策登记 `ai-assisted-development` 主题，并通过受控 WSL 作者 patch 建立首篇 `draft`；后续仍不得复制 fixture ID、手工模拟模板或从该次成功推导远端闭环。
 3. **起草**：修改正文与作者确定的领域字段；事实、观点、计划和未知信息使用不同表达，不从 articleId 推导 slug、分类或日期。
 4. **自检**：检查真实姓名、联系方式、截图、日志、路径和示例数据，移除密钥与隐私信息。
 5. **准备发布**：作者先手工把已审核文章改为 `publicationStatus: published`，且不手工填写首次日期；#25 进入共享分支后，在获准 Linux 环境以 `.nvmrc` 精确 Node 显式运行 `node scripts/author/set-article-dates.mjs --source-name <name> --action publish`，确认 Git diff 只增加两个相等日期。后续公开修订使用 `--action revise`，确认 `publishedAt` 未变且只有跨日修订更新 `updatedAt`。当前临时分支的实现已通过本地验收但尚未提交、推送或取得远端证据，因此本工作区之外仍不得把示例当作已发布能力；创建命令、CI、构建和发布自动化也不承担该步骤。

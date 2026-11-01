@@ -2599,6 +2599,82 @@ class PreparedStaticAssetPlan implements StaticAssetPlan {
     }
   }
 
+  assertPreviewBuild(buildDirectory: string): void {
+    if (this.#disposed) {
+      failStaticAsset(
+        "STATIC_ASSET_PLAN_CONSUMED",
+        "已释放的静态素材计划不能再检查 preview 制品。",
+        {sourcePath: "build"},
+      );
+    }
+    if (this.#mode !== "preview") {
+      failStaticAsset(
+        "STATIC_ASSET_PREVIEW_MODE",
+        "production 静态素材计划不能进入 preview 制品判定。",
+        {sourcePath: "build"},
+      );
+    }
+    if (!this.#materialized) {
+      failStaticAsset(
+        "STATIC_ASSET_PLAN_NOT_MATERIALIZED",
+        "preview 制品判定前必须先物化同一静态素材计划。",
+        {sourcePath: "build"},
+      );
+    }
+    const evidence = scanBuildTree(buildDirectory, [], [], []);
+    const byPath = new Map(evidence.files.map((file) => [file.relativePath, file]));
+    for (const expected of this.#allowed) {
+      const actual = byPath.get(expected.manifest.targetPath);
+      if (
+        actual === undefined
+        || actual.byteLength !== expected.byteLength
+        || actual.sha256 !== expected.sha256
+      ) {
+        failStaticAsset(
+          "STATIC_ASSET_PREVIEW_WHITELIST",
+          "preview 制品中的白名单文件缺失或字节漂移。",
+          {sourcePath: expected.manifest.sourcePath},
+        );
+      }
+    }
+    const expectedProjects = new Set(
+      this.#allowed
+        .filter((file) => file.manifest.kind === "project-preview")
+        .map((file) => file.manifest.targetPath),
+    );
+    const actualProjects = evidence.files
+      .filter((file) => file.relativePath.startsWith("assets/projects/"))
+      .map((file) => file.relativePath);
+    if (
+      actualProjects.length !== expectedProjects.size
+      || actualProjects.some((path) => !expectedProjects.has(path))
+    ) {
+      failStaticAsset(
+        "STATIC_ASSET_PREVIEW_PROJECT_SET",
+        "preview 制品项目素材集合与白名单不一致。",
+        {sourcePath: "build/assets/projects"},
+      );
+    }
+    const expectedPublic = new Set(
+      this.#allowed
+        .filter((file) => file.manifest.kind === "static-public")
+        .map((file) => file.manifest.targetPath),
+    );
+    const actualPublic = evidence.files
+      .filter((file) => isManagedStaticPublicBuildPath(file.relativePath))
+      .map((file) => file.relativePath);
+    if (
+      actualPublic.length !== expectedPublic.size
+      || actualPublic.some((path) => !expectedPublic.has(path))
+    ) {
+      failStaticAsset(
+        "STATIC_ASSET_PREVIEW_PUBLIC_SET",
+        "preview 制品始终公开素材集合与登记不一致。",
+        {sourcePath: "build"},
+      );
+    }
+  }
+
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;

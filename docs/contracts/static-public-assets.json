@@ -3,8 +3,18 @@
   "kind": "axial_muse_static_public_assets",
   "status": "active",
   "owner": "AxialMuseWebsite",
-  "roleValues": ["brand", "operational"],
+  "roleValues": [
+    "brand",
+    "operational"
+  ],
   "assets": [
-    {"sourcePath": "robots.txt", "role": "operational"}
+    {
+      "sourcePath": "assets/brand/axial-muse-mark.png",
+      "role": "brand"
+    },
+    {
+      "sourcePath": "robots.txt",
+      "role": "operational"
+    }
   ]
 }

@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import {spawnSync} from "node:child_process";
 import {
+  chmodSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -18,10 +21,13 @@ import {
   BuildSiteError,
   candidateOutputPath,
   captureCandidateBuildEvidence,
+  materializePreviewConfigChunks,
   parseBuildArguments,
   publishCandidateBuild,
   runProductionArtifactCheck,
   runProductionBuild,
+  readPreviewBuildRequest,
+  runPreviewBuild,
 } from "../../scripts/build/build-site.mjs";
 
 const PROJECT_ROOT = resolve(import.meta.dirname, "../..");
@@ -33,19 +39,179 @@ function hasBuildCode(code) {
 function writeFixture(root, relativePath, contents = "") {
   const path = resolve(root, relativePath);
   mkdirSync(dirname(path), {recursive: true});
-  writeFileSync(path, contents, "utf8");
+  writeFileSync(path, contents, {encoding: "utf8", mode: 0o644});
+  chmodSync(path, 0o644);
 }
 
-test("I-12 构建参数封闭解析 production/preview 且 preview 执行仍由 #8 失败关闭", () => {
+test("E-009 development config chunk 只在模块已合并且映射缺文件时补齐", () => {
+  const root = mkdtempSync(join(tmpdir(), "axial-muse-preview-config-chunk-"));
+  const generatedFilesDirectory = resolve(root, "generated");
+  const candidatePath = resolve(root, "candidate");
+  const chunkName = "config---projects-5-e-9-87c";
+  try {
+    mkdirSync(generatedFilesDirectory, {mode: 0o700});
+    mkdirSync(candidatePath, {mode: 0o700});
+    writeFixture(
+      generatedFilesDirectory,
+      "routesChunkNames.json",
+      `${JSON.stringify({
+        "/projects/-17c": {config: chunkName},
+        "/writing/-5e1": {config: chunkName},
+      })}\n`,
+    );
+    writeFixture(
+      candidatePath,
+      "main.js",
+      [
+        `(self["webpackChunkfixture"] = self["webpackChunkfixture"] || []);`,
+        `"../../transaction/generated/docusaurus.config.mjs"(__unused_module, __webpack_exports__, __webpack_require__) {}`,
+        `eval(${JSON.stringify([
+          "const registry = {",
+          `  "${chunkName}": [`,
+          '    ()=>Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, "../../transaction/generated/docusaurus.config.mjs")),',
+          '    "@generated/docusaurus.config",',
+          '    /*require.resolve*/("../../transaction/generated/docusaurus.config.mjs")',
+          "  ]",
+          "};",
+        ].join("\n"))});`,
+        "",
+      ].join("\n"),
+    );
+    assert.deepEqual(materializePreviewConfigChunks({
+      candidatePath,
+      generatedFilesDirectory,
+    }), [chunkName]);
+    const chunkPath = resolve(candidatePath, `${chunkName}.js`);
+    assert.equal(
+      readFileSync(chunkPath, "utf8"),
+      `(self["webpackChunkfixture"] = self["webpackChunkfixture"] || []).push([["${chunkName}"],{}]);\n`,
+    );
+    assert.deepEqual(materializePreviewConfigChunks({
+      candidatePath,
+      generatedFilesDirectory,
+    }), []);
+    rmSync(chunkPath);
+    writeFixture(
+      candidatePath,
+      "main.js",
+      [
+        `(self["webpackChunkfixture"] = []);`,
+        `"../../transaction/generated/docusaurus.config.mjs"(__unused_module, __webpack_exports__, __webpack_require__) {}`,
+        `eval(${JSON.stringify([
+          "const registry = {",
+          `  "${chunkName}": [`,
+          '    ()=>Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, "../../transaction/generated/docusaurus.config.mjs")),',
+          '    "@generated/docusaurus.config",',
+          '    /*require.resolve*/("../../transaction/generated/globalData.json")',
+          "  ]",
+          "};",
+        ].join("\n"))});`,
+        "",
+      ].join("\n"),
+    );
+    assert.throws(
+      () => materializePreviewConfigChunks({candidatePath, generatedFilesDirectory}),
+      hasBuildCode("BUILD_PREVIEW_CONFIG_CHUNK"),
+    );
+    writeFixture(
+      candidatePath,
+      "main.js",
+      [
+        `(self["webpackChunkfixture"] = []);`,
+        `"../../transaction/generated/docusaurus.config.mjs"(__unused_module, __webpack_exports__, __webpack_require__) {}`,
+        `eval(${JSON.stringify([
+          "const registry = {",
+          `  "${chunkName}": [`,
+          '    ()=>Promise.resolve(/* import() */).then(__webpack_require__.bind(__webpack_require__, "../../transaction/generated/globalData.json")),',
+          '    "@generated/globalData",',
+          '    /*require.resolve*/("../../transaction/generated/globalData.json")',
+          "  ]",
+          "};",
+        ].join("\n"))});`,
+        "",
+      ].join("\n"),
+    );
+    assert.throws(
+      () => materializePreviewConfigChunks({candidatePath, generatedFilesDirectory}),
+      hasBuildCode("BUILD_PREVIEW_CONFIG_CHUNK"),
+    );
+    assert.equal(existsSync(chunkPath), false);
+  } finally {
+    rmSync(root, {recursive: true, force: true});
+  }
+});
+
+test("I-12/E-009 构建参数封闭解析 production/preview 且两种模式均可执行", () => {
   assert.deepEqual(parseBuildArguments(["--mode", "production"]), {mode: "production"});
   assert.deepEqual(parseBuildArguments(["--mode", "preview"]), {mode: "preview"});
   assert.doesNotThrow(() => assertBuildModeAvailable("production"));
-  assert.throws(() => assertBuildModeAvailable("preview"), hasBuildCode("BUILD_MODE_UNAVAILABLE"));
+  assert.doesNotThrow(() => assertBuildModeAvailable("preview"));
   assert.throws(() => parseBuildArguments([]), hasBuildCode("BUILD_ARGUMENTS"));
   assert.throws(
     () => parseBuildArguments(["--mode", "other"]),
     hasBuildCode("BUILD_MODE"),
   );
+});
+
+test("E-009 preview 请求绑定仓库外私有状态根与 sha.pid 候选", {
+  skip: process.platform !== "linux",
+}, () => {
+  const outer = mkdtempSync(join(tmpdir(), "axial-muse-preview-request-"));
+  const root = resolve(outer, "repository");
+  const systemTemporaryRoot = resolve(outer, "system-temporary");
+  const stateRoot = resolve(outer, "state");
+  const commitSha = "9".repeat(40);
+  const controllerPid = "4321";
+  try {
+    for (const path of [root, systemTemporaryRoot, stateRoot]) {
+      mkdirSync(path, {mode: 0o700});
+      chmodSync(path, 0o700);
+    }
+    for (const name of ["candidates", "releases", "run", "logs"]) {
+      const path = resolve(stateRoot, name);
+      mkdirSync(path, {mode: 0o700});
+      chmodSync(path, 0o700);
+    }
+    const candidatePath = resolve(
+      stateRoot,
+      "candidates",
+      `${commitSha}.${controllerPid}`,
+    );
+    const environment = {
+      PREVIEW_STATE_DIR: stateRoot,
+      AXIAL_MUSE_PREVIEW_CANDIDATE: candidatePath,
+      AXIAL_MUSE_PREVIEW_COMMIT_SHA: commitSha,
+      AXIAL_MUSE_PREVIEW_CONTROLLER_PID: controllerPid,
+      AXIAL_MUSE_PREVIEW_ACCESS_HOST: "192.168.0.162",
+      AXIAL_MUSE_PREVIEW_ACCESS_PORT: "8088",
+    };
+    assert.deepEqual(readPreviewBuildRequest({
+      root,
+      environment,
+      systemTemporaryRoot,
+    }), {
+      accessHost: "192.168.0.162",
+      accessPort: "8088",
+      candidatePath,
+      candidatesRoot: resolve(stateRoot, "candidates"),
+      commitSha,
+      controllerPid,
+      stateRoot,
+    });
+    assert.throws(
+      () => readPreviewBuildRequest({
+        root,
+        environment: {
+          ...environment,
+          AXIAL_MUSE_PREVIEW_CANDIDATE: resolve(stateRoot, "candidates", commitSha),
+        },
+        systemTemporaryRoot,
+      }),
+      hasBuildCode("BUILD_PREVIEW_CANDIDATE_PATH"),
+    );
+  } finally {
+    rmSync(outer, {recursive: true, force: true});
+  }
 });
 
 test("D-067 构建入口只接受主 Node 与 engines 下界", () => {
@@ -63,13 +229,17 @@ test("D-067 构建入口只接受主 Node 与 engines 下界", () => {
   );
 });
 
-test("CODE-014 production build 在读取内容前拒绝作者 lock", () => {
+test("CODE-014 production/preview build 在读取内容前拒绝作者 lock", () => {
   const root = mkdtempSync(join(tmpdir(), "axial-muse-build-author-lock-"));
   try {
     mkdirSync(resolve(root, "site-content/writing"), {recursive: true});
     writeFixture(root, ".axial-muse-author.lock", "fixture\n");
     assert.throws(
       () => runProductionBuild({root}),
+      hasBuildCode("BUILD_AUTHOR_TRANSACTION"),
+    );
+    assert.throws(
+      () => runPreviewBuild({root}),
       hasBuildCode("BUILD_AUTHOR_TRANSACTION"),
     );
   } finally {
@@ -114,6 +284,103 @@ test("CODE-014 production build 持有 build lock 后二次拒绝并发作者 lo
     rmSync(root, {recursive: true, force: true});
   }
 });
+
+for (const residue of ["lock", "staging"]) {
+  test(`CODE-014 preview 加锁后拒绝并发作者 ${residue} 且保留既有制品`, {
+    skip: process.platform !== "linux",
+  }, () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "axial-muse-preview-author-race-"));
+    const root = resolve(fixtureRoot, "repo");
+    const stateRoot = resolve(fixtureRoot, "state");
+    const runtimeTemporaryRoot = resolve(fixtureRoot, "runtime-tmp");
+    const launchedMarker = resolve(root, "child-launched");
+    try {
+      mkdirSync(root, {mode: 0o700});
+      mkdirSync(runtimeTemporaryRoot, {mode: 0o700});
+      mkdirSync(stateRoot, {mode: 0o700});
+      for (const name of ["candidates", "releases", "run", "logs"]) {
+        mkdirSync(resolve(stateRoot, name), {mode: 0o700});
+      }
+      // fixture 将当前受支持端点设为主端点，使双端点都能验证互斥逻辑。
+      writeFixture(root, ".nvmrc", `${process.versions.node}\n`);
+      writeFixture(root, "package.json", readFileSync(resolve(PROJECT_ROOT, "package.json")));
+      mkdirSync(resolve(root, "site-content/writing"), {recursive: true});
+      writeFixture(root, "build/index.html", "existing production\n");
+      writeFixture(stateRoot, "releases/previous/index.html", "existing preview\n");
+      // 假 CLI 只记录是否被启动，不读取正文，也不加载真实依赖。
+      writeFixture(root, "node_modules/@docusaurus/core/bin/docusaurus.mjs", [
+        'import {writeFileSync} from "node:fs";',
+        `writeFileSync(${JSON.stringify(launchedMarker)}, "launched\\n");`,
+        "process.exit(97);",
+      ].join("\n"));
+      const result = spawnSync(process.execPath, [
+        "--input-type=module",
+        "--eval",
+        `
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import {syncBuiltinESMExports} from "node:module";
+import {resolve} from "node:path";
+const [moduleUrl, root, stateRoot, residue] = process.argv.slice(1);
+const {runPreviewBuild} = await import(moduleUrl);
+const buildLock = resolve(root, ".axial-muse-build.lock");
+const authorResidue = residue === "lock"
+  ? resolve(root, ".axial-muse-author.lock")
+  : resolve(root, "site-content", ".author-staging-" + "b".repeat(64));
+const originalOpen = fs.openSync;
+let injections = 0;
+fs.openSync = function(path, ...arguments_) {
+  if (path === buildLock && (arguments_[0] & fs.constants.O_CREAT) !== 0) {
+    assert.equal(fs.existsSync(authorResidue), false);
+    if (residue === "lock") fs.writeFileSync(authorResidue, "author owns this\\n", {mode: 0o600});
+    else fs.mkdirSync(authorResidue, {mode: 0o700});
+    injections += 1;
+  }
+  return originalOpen.call(fs, path, ...arguments_);
+};
+syncBuiltinESMExports();
+try {
+  const sha = "a".repeat(40);
+  assert.throws(() => runPreviewBuild({root, environment: {
+    PREVIEW_STATE_DIR: stateRoot,
+    AXIAL_MUSE_PREVIEW_CANDIDATE: resolve(stateRoot, "candidates", sha + "." + process.pid),
+    AXIAL_MUSE_PREVIEW_COMMIT_SHA: sha,
+    AXIAL_MUSE_PREVIEW_CONTROLLER_PID: String(process.pid),
+    AXIAL_MUSE_PREVIEW_ACCESS_HOST: "127.0.0.1",
+    AXIAL_MUSE_PREVIEW_ACCESS_PORT: "8088",
+  }}), (error) => error.code === "BUILD_AUTHOR_TRANSACTION");
+  assert.equal(injections, 1);
+  assert.equal(fs.existsSync(buildLock), false);
+  assert.equal(fs.existsSync(authorResidue), true);
+  assert.equal(fs.statSync(authorResidue).mode & 0o777, residue === "lock" ? 0o600 : 0o700);
+  if (residue === "lock") assert.equal(fs.readFileSync(authorResidue, "utf8"), "author owns this\\n");
+} finally {
+  fs.openSync = originalOpen;
+  syncBuiltinESMExports();
+}
+`,
+        new URL("../../scripts/build/build-site.mjs", import.meta.url).href,
+        root,
+        stateRoot,
+        residue,
+      ], {
+        encoding: "utf8",
+        env: {...process.env, TMPDIR: runtimeTemporaryRoot},
+        timeout: 10_000,
+      });
+      assert.equal(result.error, undefined);
+      assert.equal(result.signal, null);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(existsSync(launchedMarker), false);
+      assert.equal(readFileSync(resolve(root, "build/index.html"), "utf8"), "existing production\n");
+      assert.equal(readFileSync(resolve(stateRoot, "releases/previous/index.html"), "utf8"), "existing preview\n");
+      assert.deepEqual(readdirSync(resolve(stateRoot, "candidates")), []);
+      assert.deepEqual(readdirSync(runtimeTemporaryRoot), []);
+    } finally {
+      rmSync(fixtureRoot, {recursive: true, force: true});
+    }
+  });
+}
 
 test("#33 production artifact checker 只持验证锁并保留既有 retired 状态", () => {
   const root = mkdtempSync(join(tmpdir(), "axial-muse-production-check-"));

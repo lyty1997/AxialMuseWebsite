@@ -26,8 +26,6 @@
 
 ## 不变量与前置
 
-2026-10-31 两阶段晋级：本机真实 dev 制品触发旧公网模块的 `PUBLIC_HTML_ELEMENT`，原因是已批准的固定本地搜索包含 search form。先独立晋级并认证安装服务器白名单，再发布新页面；禁止把两者合成一次自动部署。白名单只接受单一 `role=search` 表单、固定空值且无 name 的 combobox 输入框及初始 disabled 的固定按钮，拒绝提交端点、事件属性、额外字段、重复/嵌套或未闭合结构；CSP 的 `form-action 'none'`、脚本/样式哈希和来源限制不变。旧页面不含表单时派生的配置必须逐字节保持一致。执行授权和总预算见[两阶段公网晋级授权](../architecture/open-decisions.md#已由用户确认)；本条不宣称生产模块已经安装。
-
 正式内容只由 `https://www.axialmuse.com/` 提供；HTTP 与 HTTPS 根域保留路径、查询串并单跳到 canonical。旧路径和尾斜杠 exact 规则优先，未知 Host/SNI 不提供正式内容。payload、重定向与 CSP 必须来自同一精确 release，公网检查失败仍进入 #37 的完整账本兼容恢复流程。
 
 D-165 已授权候选和本机隔离验收。DNSPod 后台 A 已由所有者核对，公共 A/NS 与服务器匹配；DNSSEC 缺席且免费套餐无此能力，#38 不关闭。原始全量 DNS 清单与旧值仍须在任何写入前私密保存。实际公网、ACME、服务器和 Git 写入另行确认。
@@ -53,7 +51,9 @@ D-165 已授权候选和本机隔离验收。DNSPod 后台 A 已由所有者核�
 
 HTTP bootstrap 对两个精确 Host 只提供 ACME token，其他路径返回 503，未知 Host 返回 421。正式模式只监听 IPv4 80/443；本机 18080 保留，隔离候选使用 18082/18443，全部候选端口只绑定 `127.0.0.1`。无 AAAA、项目域名、通配证书或第三方浏览器来源。
 
-CSP 使用 `default-src 'none'`、本站脚本及实际内联 SHA-256、本站样式及实际内联样式 SHA-256，图片仅本站及 data，连接仅本站；禁用 object、base、form、frame 和事件属性。真实 Docusaurus 制品的隐藏 SVG sprite 使用唯一静态样式属性 `display: none;`，仅此值通过 CSP3 `style-src-attr 'unsafe-hashes'` 与精确 SHA-256 授权；其余样式属性失败关闭，不使用 `unsafe-inline` 或 `unsafe-eval`。CSP 每次从验证后的完整 payload 派生，不修改不可变 release。HSTS 生产仍关闭；D-169 已确认新增 300 秒候选，不使用 preload 或 includeSubDomains，具体安装/reload 待授权。旧 schema 1 的 true 保持历史半年语义，新的 schema 2 不允许任意延长期限，详见[模式兼容与迁移边界](production-health.md)。
+CSP 使用 `default-src 'none'`、本站脚本及实际内联 SHA-256、本站样式及实际内联样式 SHA-256，图片仅本站及 data，连接仅本站；禁用 object、base、frame 和事件属性，始终用 `form-action 'none'` 禁止表单提交。D-184 的固定本地搜索仅允许一份无提交端点的 search 表单、一份初值为空且无 name 的固定 combobox 输入框，以及一个初始 disabled 的固定 submit 按钮；按属性白名单、唯一性和完整闭合检查，其他表单或字段失败关闭。真实 Docusaurus 制品的隐藏 SVG sprite 使用唯一静态样式属性 `display: none;`，仅此值通过 CSP3 `style-src-attr 'unsafe-hashes'` 与精确 SHA-256 授权；其余样式属性失败关闭，不使用 `unsafe-inline` 或 `unsafe-eval`。CSP 每次从验证后的完整 payload 派生，不修改不可变 release。HSTS 生产仍关闭；D-169 已确认新增 300 秒候选，不使用 preload 或 includeSubDomains，具体安装/reload 待授权。旧 schema 1 的 true 保持历史半年语义，新的 schema 2 不允许任意延长期限，详见[模式兼容与迁移边界](production-health.md)。
+
+2026-10-31 的 dev 实际候选验收确认旧服务器派生器仍拒绝所有 form，本地已补齐上述搜索白名单。在相同脚本/样式输入上增加固定搜索后，CSP 字节相同、表单提交限制不变。用户随后授权两阶段晋级；[PR #75](https://github.com/lyty1997/AxialMuseWebsite/pull/75) 已进入 `main@d09f2b5`，六 job、独立 ZIP 和 TAT agent SUCCESS/exit 0 验收通过，公网模块已从该精确 main 持锁认证安装，SHA-256 为 `b13841940ae7081fb61e217daed09c3044d5f36abce58158840c4222bcfe316a`。新 SSH 证实仅该模块改变，current/账本/配置未变；无手工 reload，公网 43 项及桌面/手机三页再次通过。原件保留在 root-only `public-search-upgrade-d09f2b58e641fe14a683e374e34307f0da5c0489` 目录。第二阶段的新页面仍须独立 PR/全绿/稳定身份后发布；全轮最多两次 TAT、四次 reload，详见[已授权次序与边界](../architecture/open-decisions.md#已由用户确认)。
 
 所有响应（含重定向/错误）继承安全头。缓存按设计区分 HTML、短期索引、普通资源、指纹资源、媒体；错误为 no-store。gzip 按 MIME 启用且保留 Vary。请求 access log 关闭；候选公开 vhost 将请求 error log 丢弃，避免 URL/query 写入错误日志，配置测试和 reload 的受控诊断继续保留在 root 运维记录。该候选日志取舍须包含在正式安装审查中。
 

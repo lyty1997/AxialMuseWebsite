@@ -1,104 +1,287 @@
 .page {
-  width: min(calc(100% - 2rem), 1120px);
+  width: min(calc(100% - 2rem), 1180px);
   margin-inline: auto;
-  padding-block: clamp(2.5rem, 7vw, 5.5rem) 5rem;
+  padding-block: clamp(2.75rem, 6vw, 5.5rem) 5rem;
 }
 
 .hero {
-  max-width: 760px;
-  padding-bottom: clamp(3rem, 7vw, 5rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(18rem, 0.72fr);
+  gap: clamp(2rem, 6vw, 5rem);
+  align-items: center;
+  padding-bottom: clamp(2.5rem, 5vw, 4rem);
+}
+
+.heroCopy {
+  min-width: 0;
+}
+
+.eyebrow,
+.aboutEyebrow {
+  margin: 0 0 0.85rem;
+  color: var(--am-accent);
+  font-size: 0.74rem;
+  font-weight: 780;
+  letter-spacing: 0.14em;
 }
 
 .hero h1 {
-  margin-bottom: 1rem;
+  max-width: 14ch;
+  margin: 0 0 1.35rem;
   color: var(--am-ink);
-  font-size: 4.5rem;
+  font-size: clamp(2.75rem, 6.2vw, 5.25rem);
+  letter-spacing: -0.055em;
+  line-height: 1.04;
 }
 
 .lede {
-  max-width: 34em;
-  margin-bottom: 0.75rem;
+  max-width: 37em;
+  margin-bottom: 0.8rem;
   color: var(--am-ink);
-  font-size: 1.55rem;
-  line-height: 1.55;
+  font-size: clamp(1.1rem, 2vw, 1.35rem);
+  line-height: 1.65;
 }
 
 .stage {
   max-width: 48em;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.75rem;
   color: var(--am-muted);
 }
 
-.primaryLink,
-.primaryLink:visited {
-  --ifm-link-color: var(--am-surface);
-  --ifm-link-hover-color: var(--am-surface);
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  padding: 0.65rem 1rem;
-  border: 1px solid var(--am-accent);
-  border-radius: 8px;
-  background: var(--am-accent);
-  color: var(--am-surface);
-  font-weight: 650;
-  text-decoration: none;
-}
-
-.primaryLink:hover {
-  background: #095f55;
-  color: var(--am-surface);
-  text-decoration: none;
-}
-
-.section {
-  padding-block: clamp(2.25rem, 5vw, 4rem);
-  border-top: 1px solid var(--am-line);
-}
-
-.section h2 {
-  margin-bottom: 1.25rem;
+.brandStory {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  padding: 2rem;
+  border: 1px solid color-mix(in srgb, var(--am-accent) 24%, var(--am-line));
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, var(--am-surface), color-mix(in srgb, var(--am-accent-soft) 72%, var(--am-surface)));
   color: var(--am-ink);
-  font-size: 2rem;
 }
 
-.section p {
-  max-width: 72ch;
+.storyLabel {
+  margin: 0 0 1.5rem;
+  color: var(--am-accent);
+  font-size: 0.72rem;
+  font-weight: 780;
+  letter-spacing: 0.15em;
 }
 
-.roadmap {
+.brandStory dl {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-  padding: 0;
-  list-style: none;
+  gap: 1.3rem;
+  margin: 0;
 }
 
-.roadmap li {
-  padding-top: 0.75rem;
-  border-top: 3px solid var(--am-line);
+.brandStory dl > div {
+  padding-top: 0.85rem;
+  border-top: 1px solid color-mix(in srgb, var(--am-accent) 18%, var(--am-line));
+}
+
+.brandStory dt {
+  margin-bottom: 0.35rem;
+  color: var(--am-ink);
+  font-size: 0.95rem;
+  font-weight: 720;
+}
+
+.brandStory dd {
+  margin: 0;
   color: var(--am-muted);
+  font-size: 0.88rem;
+  line-height: 1.7;
 }
 
-@media (max-width: 767px) {
+.axisMark {
+  position: absolute;
+  top: 0;
+  right: 1.5rem;
+  width: 4.5rem;
+  height: 2.8rem;
+  border-right: 1px solid color-mix(in srgb, var(--am-accent) 42%, transparent);
+}
+
+.axisMark::after {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--am-accent);
+  content: "";
+}
+
+.axisMark span {
+  position: absolute;
+  right: -2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--am-accent) 58%, var(--am-surface));
+}
+
+.axisMark span:nth-child(1) {
+  top: 0.85rem;
+}
+
+.axisMark span:nth-child(2) {
+  top: 1.55rem;
+}
+
+.axisMark span:nth-child(3) {
+  top: 2.25rem;
+}
+
+.about {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+  gap: clamp(2rem, 6vw, 5rem);
+  margin-top: 0;
+  padding: clamp(2rem, 5vw, 4rem);
+  border: 1px solid color-mix(in srgb, var(--am-accent) 22%, var(--am-line));
+  border-radius: 1.4rem;
+  background: linear-gradient(135deg, var(--am-surface), color-mix(in srgb, var(--am-accent-soft) 74%, var(--am-surface)));
+  color: var(--am-ink);
+}
+
+.aboutEyebrow {
+  color: var(--am-accent);
+}
+
+.about h2 {
+  margin: 0 0 1.3rem;
+  color: var(--am-ink);
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  letter-spacing: -0.04em;
+}
+
+.aboutCopy p:not(.aboutEyebrow) {
+  max-width: 47rem;
+  margin-bottom: 0.8rem;
+  color: var(--am-muted);
+  line-height: 1.8;
+}
+
+.contacts {
+  display: grid;
+  align-content: center;
+  gap: 0.8rem;
+}
+
+:global(#__docusaurus#__docusaurus) .contactLink,
+:global(#__docusaurus#__docusaurus) .contactLink:visited {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem;
+  border: 1px solid var(--am-line-strong);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--am-surface) 88%, transparent);
+  color: var(--am-accent);
+  text-decoration: none;
+  transition: border-color 180ms ease, transform 180ms ease, background-color 180ms ease;
+}
+
+:global(#__docusaurus#__docusaurus) .contactLink:hover {
+  border-color: var(--am-accent);
+  background: var(--am-accent-soft);
+  color: var(--am-ink);
+  text-decoration: none;
+  transform: translateX(4px);
+}
+
+.contactIcon {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border-radius: 0.7rem;
+  background: var(--am-accent-soft);
+  color: var(--am-accent);
+  transition: transform 180ms ease;
+}
+
+.contactLink:hover .contactIcon {
+  transform: rotate(-4deg) scale(1.04);
+}
+
+.contactIcon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.contactLink small,
+.contactLink strong {
+  display: block;
+}
+
+.contactLink small {
+  margin-bottom: 0.15rem;
+  color: var(--am-muted);
+  font-size: 0.66rem;
+  letter-spacing: 0.11em;
+}
+
+.contactLink strong {
+  overflow-wrap: anywhere;
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.contactArrow {
+  color: var(--am-accent);
+  transition: transform 180ms ease;
+}
+
+.contactLink:hover .contactArrow {
+  transform: translate(2px, -2px);
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brandStory {
+    max-width: 40rem;
+  }
+
+  .about {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
   .page {
     width: min(calc(100% - 2rem), 1120px);
     padding-top: 2.5rem;
   }
 
-  .roadmap {
-    grid-template-columns: minmax(0, 1fr);
+  .hero {
+    gap: 2.25rem;
+    padding-bottom: 2.5rem;
   }
 
   .hero h1 {
-    font-size: 2.5rem;
+    font-size: clamp(2.45rem, 13vw, 3.4rem);
   }
 
   .lede {
-    font-size: 1.2rem;
+    font-size: 1.08rem;
   }
 
-  .section h2 {
-    font-size: 1.5rem;
+  .brandStory {
+    padding: 1.4rem;
+  }
+
+  .about {
+    margin-inline: -0.15rem;
+    padding: 1.4rem;
   }
 }

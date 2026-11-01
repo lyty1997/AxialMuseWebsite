@@ -195,6 +195,7 @@ function createCatalogInput(): ProjectCatalogInput {
       projectSource("zeta-published"),
       projectSource("empty-published"),
       projectSource("alpha-archived"),
+      projectSource("private-planned"),
     ],
   };
 }
@@ -396,7 +397,7 @@ test("CODE-013 项目与技术分享导航按显式顺序稳定派生并省略�
   const sources = createArticleSources();
   const articles = createValidatedArticles(catalog, sources);
 
-  const projects = expectSuccess(buildProjectNavigation({catalog, articles}));
+  const projects = expectSuccess(buildProjectNavigation({mode: "production", catalog, articles}));
   assert.deepEqual(projects, [
     {
       projectId: "alpha-archived",
@@ -459,6 +460,25 @@ test("CODE-013 项目与技术分享导航按显式顺序稳定派生并省略�
   assert.deepEqual(
     Object.keys(projects[0]?.previewImage ?? {}),
     ["publicUrl", "width", "height", "alt"],
+  );
+
+  const previewProjects = expectSuccess(buildProjectNavigation({
+    mode: "preview",
+    catalog,
+    articles,
+  }));
+  assert.deepEqual(
+    previewProjects.map((project) => [
+      project.projectId,
+      project.publicationStatus,
+      Object.hasOwn(project, "previewImage"),
+    ]),
+    [
+      ["alpha-archived", "archived", true],
+      ["zeta-published", "published", true],
+      ["private-planned", "planned", false],
+      ["empty-published", "published", true],
+    ],
   );
 
   const production = expectSuccess(buildWritingNavigation({
@@ -548,6 +568,7 @@ test("CODE-013 项目与技术分享导航按显式顺序稳定派生并省略�
     buildWritingNavigation({mode: "production", catalog, articles}),
   );
   assertDeepFrozen(projects);
+  assertDeepFrozen(previewProjects);
   assertDeepFrozen(production);
 });
 
@@ -624,7 +645,7 @@ test("CODE-013 显式关联只投影当前可见目标的标题与规范路径�
   };
   const articles = createValidatedArticles(catalog, sources);
 
-  const projects = expectSuccess(buildProjectNavigation({catalog, articles}));
+  const projects = expectSuccess(buildProjectNavigation({mode: "production", catalog, articles}));
   assert.deepEqual(projects[0]?.relatedWriting, [
     {
       title: "General Older",
@@ -677,7 +698,12 @@ test("CODE-013 显式关联只投影当前可见目标的标题与规范路径�
     (article) => article.articleId === ARTICLE_IDS.draftUndated,
   );
   assert.ok(projectedDraft);
-  assert.deepEqual(projectedDraft.relatedProjects, []);
+  assert.deepEqual(projectedDraft.relatedProjects, [
+    {
+      title: "Private Planned",
+      canonicalPath: "/projects/private-planned/",
+    },
+  ]);
   assert.deepEqual(projectedDraft.relatedArticles, [
     {
       title: "Draft Older",
@@ -728,11 +754,11 @@ test("E-016 catalog、文章 clone/伪造及跨 catalog 混用均按稳定 issue
   const clonedArticles = structuredClone(articles);
 
   expectFailure(
-    buildProjectNavigation({catalog: clonedCatalog, articles}),
+    buildProjectNavigation({mode: "production", catalog: clonedCatalog, articles}),
     "CONTENT_NAVIGATION_CATALOG_INVALID",
   );
   expectFailure(
-    buildProjectNavigation({catalog, articles: clonedArticles}),
+    buildProjectNavigation({mode: "production", catalog, articles: clonedArticles}),
     "CONTENT_NAVIGATION_ARTICLES_INVALID",
   );
   expectFailure(
@@ -755,6 +781,7 @@ test("E-016 catalog、文章 clone/伪造及跨 catalog 混用均按稳定 issue
   );
   expectFailure(
     buildProjectNavigation({
+      mode: "production",
       catalog: structuredClone(catalog) as ProjectCatalog,
       articles,
     }),
