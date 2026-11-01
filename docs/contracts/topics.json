@@ -3,5 +3,11 @@
   "kind": "axial_muse_topics",
   "status": "active",
   "owner": "AxialMuseWebsite",
-  "topics": {}
+  "topics": {
+    "ai-assisted-development": {
+      "displayName": "AI 辅助开发",
+      "navigationOrder": 10,
+      "status": "active"
+    }
+  }
 }

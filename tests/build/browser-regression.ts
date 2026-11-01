@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {spawn, spawnSync, type ChildProcess} from "node:child_process";
+import {spawn, type ChildProcess} from "node:child_process";
 import {createHash} from "node:crypto";
 import {
   accessSync,
@@ -90,7 +90,7 @@ interface DetailSnapshot {
   readonly mobileTocVisible: boolean;
   readonly pageOverflows: boolean;
   readonly toggleVisible: boolean;
-  readonly visibleNavbarItems: number;
+  readonly visibleSectionTabs: number;
 }
 
 interface FixedViewportReceipt {
@@ -157,29 +157,8 @@ function executableFromPath(name: string): string | undefined {
       accessSync(candidate, constants.X_OK);
       const metadata = statSync(candidate);
       if (!metadata.isFile()) continue;
-      const canonicalCandidate = realpathSync(candidate);
-      if (process.platform === "win32") return canonicalCandidate;
-      const version = spawnSync(canonicalCandidate, ["--version"], {
-        encoding: "utf8",
-        env: {
-          LANG: process.env.LANG ?? "C.UTF-8",
-          PATH: process.env.PATH,
-        },
-        maxBuffer: 64 * 1024,
-        stdio: ["ignore", "pipe", "ignore"],
-        timeout: COMMAND_TIMEOUT_MS,
-      });
-      assert.equal(
-        version.status,
-        0,
-        "[BROWSER_VERSION] Chromium 版本探针失败",
-      );
-      assert.match(
-        version.stdout,
-        /(?:Google Chrome|Chromium)[ /][0-9.]+/u,
-        "[BROWSER_VERSION] 浏览器产品不属于 Chromium",
-      );
-      return canonicalCandidate;
+      // 这里只解析可执行文件身份；产品与版本由成功启动后的 Browser.getVersion 校验。
+      return realpathSync(candidate);
     } catch {
       // 继续检查下一个受控 PATH 候选。
     }
@@ -726,6 +705,42 @@ async function evaluate<T>(
   return result.value as T;
 }
 
+async function assertSearchAccessibility(
+  connection: DevToolsConnection,
+  expanded: boolean,
+  selectedId?: string,
+): Promise<void> {
+  const snapshot = await connection.send("Accessibility.getFullAXTree");
+  assert.ok(Array.isArray(snapshot.nodes));
+  const nodes = snapshot.nodes.filter(isJsonRecord);
+  const search = nodes.find((node) => (
+    isJsonRecord(node.role) && node.role.value === "combobox"
+    && isJsonRecord(node.name) && node.name.value === "搜索公开项目和文章"
+  ));
+  assert.ok(search, "可访问性树缺少搜索组合框");
+  assert.ok(Array.isArray(search.properties));
+  const properties = search.properties.filter(isJsonRecord);
+  const expandedState = properties.find((property) => property.name === "expanded");
+  assert.ok(isJsonRecord(expandedState?.value));
+  assert.equal(expandedState.value.value, expanded);
+  if (selectedId === undefined) return;
+  for (const [propertyName, id, role] of [
+    ["controls", "site-search-results", "listbox"],
+    ["activedescendant", selectedId, "option"],
+  ]) {
+    const relation = properties.find((property) => property.name === propertyName);
+    assert.ok(isJsonRecord(relation?.value));
+    assert.ok(Array.isArray(relation.value.relatedNodes));
+    const target = relation.value.relatedNodes.filter(isJsonRecord)
+      .find((node) => node.idref === id);
+    assert.ok(target, `组合框缺少 ${propertyName} 关联`);
+    assert.ok(nodes.some((node) => (
+      node.backendDOMNodeId === target.backendDOMNodeId
+      && isJsonRecord(node.role) && node.role.value === role
+    )), `组合框关联目标缺少 ${role} 角色`);
+  }
+}
+
 async function isolatePage(connection: DevToolsConnection): Promise<void> {
   const currentUrl = await evaluate<string>(connection, "location.href");
   if (currentUrl === "about:blank") return;
@@ -849,7 +864,7 @@ const DETAIL_SNAPSHOT_EXPRESSION = `(() => {
       > document.documentElement.clientWidth + 1
       || document.body.scrollWidth > document.body.clientWidth + 1,
     toggleVisible: isVisible(navbarToggle),
-    visibleNavbarItems: [...document.querySelectorAll(".navbar__item")]
+    visibleSectionTabs: [...document.querySelectorAll('[aria-label="内容导航"] a')]
       .filter(isVisible).length,
   };
 })()`;
@@ -910,6 +925,8 @@ function assertDetailSnapshot(snapshot: DetailSnapshot, width: number): void {
   );
   assert.equal(snapshot.leftDetailsClosed, true, "浏览本栏目必须默认收起");
   assert.equal(snapshot.leftDetailsAboveArticle, true, "浏览本栏目必须位于正文上方");
+  assert.equal(snapshot.toggleVisible, false, `${width}px 不应出现旧版汉堡导航`);
+  assert.equal(snapshot.visibleSectionTabs, 3, `${width}px 三个内容标签必须保持可见`);
   if (width >= 1280) {
     assert.equal(snapshot.desktopDirectoryVisible, true);
     assert.equal(snapshot.leftDetailsVisible, false);
@@ -920,15 +937,11 @@ function assertDetailSnapshot(snapshot: DetailSnapshot, width: number): void {
   if (width >= 996) {
     assert.equal(snapshot.desktopTocVisible, true);
     assert.equal(snapshot.mobileTocVisible, false);
-    assert.equal(snapshot.toggleVisible, false);
-    assert.ok(snapshot.visibleNavbarItems >= 5, `${width}px 桌面导航项缺失`);
   } else {
     assert.equal(snapshot.desktopTocVisible, false);
     assert.equal(snapshot.mobileTocVisible, true);
     assert.equal(snapshot.mobileTocClosed, true);
     assert.equal(snapshot.mobileTocAboveMarkdown, true);
-    assert.equal(snapshot.toggleVisible, true);
-    assert.equal(snapshot.visibleNavbarItems, 0);
   }
   if (snapshot.desktopTocVisible) {
     assert.ok(snapshot.desktopTocRect !== undefined);
@@ -1122,35 +1135,35 @@ async function probeNoHydrationStaticContent(
       false,
     );
     const home = await evaluate<Readonly<{
-      actionHref: string;
-      actionVisible: boolean;
       h1: string;
       h1Visible: boolean;
       hasHydrated: boolean;
       pageOverflows: boolean;
+      projectTabHref: string;
+      projectTabVisible: boolean;
     }>>(connection, `(() => {
       const h1 = document.querySelector("h1");
-      const action = [...document.querySelectorAll("main a")].find(
-        (element) => element.textContent?.trim() === "浏览项目",
+      const projectTab = [...document.querySelectorAll("nav a")].find(
+        (element) => element.textContent?.trim() === "项目介绍",
       );
       return {
-        actionHref: action?.getAttribute("href") ?? "",
-        actionVisible: (action?.getBoundingClientRect().height ?? 0) > 0,
         h1: h1?.textContent?.trim() ?? "",
         h1Visible: (h1?.getBoundingClientRect().height ?? 0) > 0,
         hasHydrated: document.documentElement.dataset.hasHydrated === "true",
         pageOverflows: document.documentElement.scrollWidth
           > document.documentElement.clientWidth + 1
           || document.body.scrollWidth > document.body.clientWidth + 1,
+        projectTabHref: projectTab?.getAttribute("href") ?? "",
+        projectTabVisible: (projectTab?.getBoundingClientRect().height ?? 0) > 0,
       };
     })()`);
     assert.deepEqual(home, {
-      actionHref: "/projects/",
-      actionVisible: true,
-      h1: "Axial Muse",
+      h1: "用全栈技术 + AI，让所有人用上好用的工具。",
       h1Visible: true,
       hasHydrated: false,
       pageOverflows: false,
+      projectTabHref: "/projects/",
+      projectTabVisible: true,
     });
     assertExpectedLocalFailures(
       observation,
@@ -1431,8 +1444,8 @@ export async function runThemeBrowserRegression({
       900,
     );
     assert.equal(
-      await evaluate(connection, "document.querySelector('main img')?.loading"),
-      "lazy",
+      await evaluate(connection, "document.querySelector('main img') === null"),
+      true,
     );
     assertObservationClean(observation);
 
@@ -1469,9 +1482,9 @@ export async function runThemeBrowserRegression({
         (entry) => Number.parseFloat(entry) === 0,
       );
       const elements = [
-        document.querySelector(".navbar-sidebar"),
-        document.querySelector(".navbar-sidebar__backdrop"),
-        document.querySelector(".navbar-sidebar__items"),
+        document.querySelector(".navbar"),
+        document.querySelector('[aria-label="内容导航"]'),
+        document.querySelector('[role="search"]'),
       ].filter(Boolean);
       const root = getComputedStyle(document.documentElement);
       return {
@@ -1498,28 +1511,6 @@ export async function runThemeBrowserRegression({
     assert.equal(reducedMotion.matches, true);
     assert.equal(reducedMotion.scrollBehavior, "auto");
     assert.match(reducedMotion.slow, /^0(?:\.0+)?(?:ms|s)$/u);
-    assert.equal(
-      await evaluate(connection, `new Promise((resolve) => {
-        document.querySelector(".navbar__toggle")?.click();
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          resolve(document.querySelector(".navbar-sidebar--show") !== null);
-        }));
-      })`),
-      true,
-    );
-    assert.equal(
-      await evaluate(connection, `(() => {
-        const elements = [
-          document.querySelector(".navbar-sidebar"),
-          document.querySelector(".navbar-sidebar__backdrop"),
-          document.querySelector(".navbar-sidebar__items"),
-        ].filter(Boolean);
-        return elements.every((element) => getComputedStyle(element)
-          .transitionDuration.split(",")
-          .every((entry) => Number.parseFloat(entry) === 0));
-      })()`),
-      true,
-    );
     assertObservationClean(observation);
 
     await navigate(
@@ -1529,52 +1520,175 @@ export async function runThemeBrowserRegression({
       360,
       800,
     );
-    const navbarToggleFocused = await evaluate<boolean>(connection, `(() => {
-      const toggle = document.querySelector(".navbar__toggle");
-      toggle?.focus();
-      return document.activeElement === toggle;
-    })()`);
-    assert.equal(navbarToggleFocused, true, "小屏导航按钮无法获得键盘焦点");
-    await dispatchEnter(connection);
-    const openedNavbar = await evaluate<Readonly<{
-      closeButtonVisible: boolean;
-      drawerOpen: boolean;
-      expanded: string;
+    const headerKeyboard = await evaluate<Readonly<{
+      searchFocused: boolean;
+      tabHrefs: readonly string[];
+      tabsFocusable: boolean;
+      tabsVisible: boolean;
     }>>(connection, `(() => {
-      const closeButton = document.querySelector(".navbar-sidebar__close");
-      const closeRect = closeButton?.getBoundingClientRect();
+      const tabs = [...document.querySelectorAll('[aria-label="内容导航"] a')];
+      const tabsFocusable = tabs.every((tab) => {
+        tab.focus();
+        return document.activeElement === tab;
+      });
+      const search = document.querySelector('input[aria-label="搜索公开项目和文章"]');
+      search?.focus();
       return {
-        closeButtonVisible: closeRect !== undefined
-          && closeRect.width > 0
-          && closeRect.height > 0,
-        drawerOpen: document.querySelector(".navbar-sidebar--show") !== null,
-        expanded: document.querySelector(".navbar__toggle")
-          ?.getAttribute("aria-expanded") ?? "",
+        searchFocused: document.activeElement === search,
+        tabHrefs: tabs.map((tab) => tab.getAttribute("href") ?? ""),
+        tabsFocusable,
+        tabsVisible: tabs.length === 3 && tabs.every((tab) => {
+          const rect = tab.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        }),
       };
     })()`);
-    assert.deepEqual(openedNavbar, {
-      closeButtonVisible: true,
-      drawerOpen: true,
-      expanded: "true",
+    assert.deepEqual(headerKeyboard, {
+      searchFocused: true,
+      tabHrefs: ["/", "/projects/", "/writing/"],
+      tabsFocusable: true,
+      tabsVisible: true,
     });
+    await evaluate(connection, `new Promise((resolve) => {
+      const input = document.querySelector('input[aria-label="搜索公开项目和文章"]');
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      setter?.call(input, "Fixture");
+      input?.dispatchEvent(new Event("input", {bubbles: true}));
+      input?.focus();
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    })`);
+    const openSearch = await evaluate<Readonly<{
+      expanded: string;
+      resultCount: number;
+      value: string;
+    }>>(connection, `(() => {
+      const input = document.querySelector('input[aria-label="搜索公开项目和文章"]');
+      return {
+        expanded: input?.getAttribute("aria-expanded") ?? "",
+        resultCount: document.querySelectorAll('#site-search-results [role="option"]').length,
+        value: input?.value ?? "",
+      };
+    })()`);
+    assert.equal(openSearch.expanded, "true");
+    assert.ok(openSearch.resultCount > 0, "搜索输入未展示公开内容结果");
+    assert.equal(openSearch.value, "Fixture");
+    await assertSearchAccessibility(connection, true, "site-search-result-0");
+    for (const composition of [
+      {isComposing: true, keyCode: 0},
+      {isComposing: false, keyCode: 229},
+    ]) {
+      for (const key of ["ArrowDown", "ArrowUp", "Escape"]) {
+        const inputState: Readonly<{
+          canceled: boolean;
+          selectedId: string;
+          value: string;
+          focusRetained: boolean;
+        }> = await evaluate(connection, `new Promise((resolve) => {
+          const input = document.querySelector('input[aria-label="搜索公开项目和文章"]');
+          const event = new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            key: ${JSON.stringify(key)},
+            isComposing: ${composition.isComposing},
+            keyCode: ${composition.keyCode},
+          });
+          input.dispatchEvent(event);
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve({
+            canceled: event.defaultPrevented,
+            selectedId: input.getAttribute("aria-activedescendant"),
+            value: input.value,
+            focusRetained: document.activeElement === input,
+          })));
+        })`);
+        assert.deepEqual(inputState, {
+          canceled: false,
+          selectedId: "site-search-result-0",
+          value: "Fixture",
+          focusRetained: true,
+        }, `输入法组合快捷键被搜索消费：${key} / ${JSON.stringify(composition)}`);
+      }
+    }
+    // 强制产生结果列表溢出，验证键盘选择、环绕和正文滚动彼此独立。
+    const searchOverflow = await evaluate<Readonly<{
+      overflowing: boolean;
+      pageScroll: number;
+    }>>(connection, `(() => {
+      const list = document.querySelector("#site-search-results");
+      const options = [...list.querySelectorAll('[role="option"]')];
+      for (const option of options) option.style.minHeight = "120px";
+      const tallest = Math.max(...options.map((option) => option.getBoundingClientRect().height));
+      list.style.maxHeight = (tallest + 4) + "px";
+      return {overflowing: list.scrollHeight > list.clientHeight, pageScroll: window.scrollY};
+    })()`);
+    assert.ok(openSearch.resultCount >= 2, "键盘溢出 fixture 至少需要两个结果");
+    assert.equal(searchOverflow.overflowing, true, "搜索列表未实际产生溢出");
+    let expectedSearchIndex = 0;
+    for (const key of [
+      ...Array.from({length: openSearch.resultCount}, () => "ArrowDown"),
+      "ArrowUp",
+    ]) {
+      expectedSearchIndex = (expectedSearchIndex + (key === "ArrowDown" ? 1 : -1)
+        + openSearch.resultCount) % openSearch.resultCount;
+      await connection.send("Input.dispatchKeyEvent", {
+        code: key,
+        key,
+        type: "keyDown",
+        windowsVirtualKeyCode: key === "ArrowDown" ? 40 : 38,
+      });
+      await connection.send("Input.dispatchKeyEvent", {code: key, key, type: "keyUp"});
+      await evaluate(connection, `new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      })`);
+      const selection: Readonly<{
+        focusRetained: boolean;
+        pageScroll: number;
+        selectedVisible: boolean;
+        selectedId: string;
+      }> = await evaluate(connection, `(() => {
+        const input = document.querySelector('input[type="search"]');
+        const list = document.querySelector("#site-search-results");
+        const selected = document.getElementById(input.getAttribute("aria-activedescendant"));
+        const viewport = list.getBoundingClientRect();
+        const item = selected.getBoundingClientRect();
+        const top = viewport.top + list.clientTop;
+        return {
+          focusRetained: document.activeElement === input,
+          pageScroll: window.scrollY,
+          selectedId: selected.id,
+          selectedVisible: item.top >= top - 1 && item.bottom <= top + list.clientHeight + 1,
+        };
+      })()`);
+      assert.equal(selection.selectedVisible, true, `${key} 选中了不可见的搜索结果`);
+      assert.equal(selection.selectedId, `site-search-result-${expectedSearchIndex}`);
+      assert.equal(selection.focusRetained, true);
+      assert.equal(selection.pageScroll, searchOverflow.pageScroll, "搜索选择带动了正文滚动");
+      await assertSearchAccessibility(connection, true, selection.selectedId);
+    }
     await dispatchEscape(connection);
-    const closedNavbar = await evaluate<Readonly<{
-      drawerOpen: boolean;
+    const closedSearch = await evaluate<Readonly<{
       expanded: string;
-      focusReturned: boolean;
+      focusRetained: boolean;
+      resultsPresent: boolean;
+      value: string;
     }>>(connection, `(() => {
-      const toggle = document.querySelector(".navbar__toggle");
+      const input = document.querySelector('input[aria-label="搜索公开项目和文章"]');
       return {
-        drawerOpen: document.querySelector(".navbar-sidebar--show") !== null,
-        expanded: toggle?.getAttribute("aria-expanded") ?? "",
-        focusReturned: document.activeElement === toggle,
+        expanded: input?.getAttribute("aria-expanded") ?? "",
+        focusRetained: document.activeElement === input,
+        resultsPresent: document.querySelector("#site-search-results") !== null,
+        value: input?.value ?? "",
       };
     })()`);
-    assert.deepEqual(closedNavbar, {
-      drawerOpen: false,
+    assert.deepEqual(closedSearch, {
       expanded: "false",
-      focusReturned: true,
+      focusRetained: true,
+      resultsPresent: false,
+      value: "",
     });
+    await assertSearchAccessibility(connection, false);
     for (const label of ["浏览本栏目", "本页目录"]) {
       const focused: boolean = await evaluate<boolean>(connection, `(() => {
         const summary = [...document.querySelectorAll("summary")].find(
@@ -1614,9 +1728,19 @@ export async function runThemeBrowserRegression({
       afterFontSize: number;
       baselineFontSize: number;
       criticalElementsFit: boolean;
+      headerFontsScale: boolean;
+      headerContentsFit: boolean;
       pageOverflows: boolean;
     }>>(connection, `new Promise((resolve) => {
       const baselineFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const headerText = [
+        document.querySelector(".navbar__title"),
+        document.querySelector('input[type="search"]'),
+        ...document.querySelectorAll('[aria-label="内容导航"] a'),
+      ];
+      const baselineHeaderFonts = headerText.map(
+        (element) => Number.parseFloat(getComputedStyle(element).fontSize),
+      );
       const style = document.createElement("style");
       style.textContent = "html { font-size: 200% !important; }";
       document.head.append(style);
@@ -1625,6 +1749,7 @@ export async function runThemeBrowserRegression({
           getComputedStyle(document.documentElement).fontSize,
         );
         const critical = [
+          ...headerText,
           document.querySelector("h1"),
           document.querySelector(".theme-doc-markdown"),
           ...document.querySelectorAll("summary"),
@@ -1633,6 +1758,15 @@ export async function runThemeBrowserRegression({
         resolve({
           afterFontSize,
           baselineFontSize,
+          headerFontsScale: headerText.every((element, index) => (
+            Number.parseFloat(getComputedStyle(element).fontSize) >= baselineHeaderFonts[index] * 1.9
+          )),
+          headerContentsFit: headerText.every((element) => {
+            const rect = element.getBoundingClientRect();
+            const navbar = document.querySelector(".navbar").getBoundingClientRect();
+            return rect.top >= navbar.top && rect.bottom <= navbar.bottom
+              && element.scrollWidth <= element.clientWidth + 1;
+          }),
           criticalElementsFit: critical.every((element) => {
             const rect = element.getBoundingClientRect();
             return rect.left >= -1 && rect.right <= document.documentElement.clientWidth + 1;
@@ -1648,6 +1782,8 @@ export async function runThemeBrowserRegression({
       "200% 根文本探针未实际放大字号",
     );
     assert.equal(textResize.criticalElementsFit, true, "200% 文本裁切关键内容");
+    assert.equal(textResize.headerFontsScale, true, "200% 文本未实际放大页头品牌、搜索与导航文字");
+    assert.equal(textResize.headerContentsFit, true, "200% 页头文字裁切或超出导航容器");
     assert.equal(textResize.pageOverflows, false, "200% 文本产生页面级横向溢出");
     assertObservationClean(observation);
 
@@ -1678,7 +1814,7 @@ export async function runThemeBrowserRegression({
         "h4-only-empty-toc",
         "hydration-ready",
         "keyboard-details",
-        "keyboard-navbar-escape",
+        "keyboard-header-search",
         "no-hydration-static-content",
         "priority-project-image",
         "prose-link-decoration",

@@ -10,6 +10,11 @@ const PROJECT_STATUS = {
   archived: "已归档",
 } as const;
 
+const PROJECT_PUBLICATION_STATUS = {
+  draft: "草稿预览",
+  planned: "计划预览",
+} as const;
+
 function RelatedLinks({
   label,
   links,
@@ -49,6 +54,14 @@ export function ContentMeta() {
               <>
                 <dt>公开状态</dt>
                 <dd>已归档</dd>
+              </>
+            )
+            : null}
+          {project.publicationStatus === "draft" || project.publicationStatus === "planned"
+            ? (
+              <>
+                <dt>公开状态</dt>
+                <dd>{PROJECT_PUBLICATION_STATUS[project.publicationStatus]}</dd>
               </>
             )
             : null}

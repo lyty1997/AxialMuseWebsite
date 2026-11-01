@@ -675,6 +675,7 @@ test("E-010 npm isolation contract", async (t) => {
       ["--test", "tests/build/production-artifact-outputs.test.mjs"],
       ["--test", "tests/build/build-site.test.mjs"],
       ["--test", "tests/build/author-transaction.test.mjs"],
+      ["--test", "tests/build/preview-workflow.test.mjs"],
     ]);
     assert.deepEqual(CONTENT_HISTORY_COMMANDS, [
       ["scripts/quality/check-content-history.mjs"],

@@ -24,7 +24,7 @@ import {
   resolve,
   sep,
 } from "node:path";
-import test from "node:test";
+import test, {after} from "node:test";
 import {
   formatStaticAssetError,
   prepareStaticAssetPlan,
@@ -67,6 +67,14 @@ const STATIC_BRAND_BYTES = Buffer.from("<svg xmlns=\"http://www.w3.org/2000/svg\
 const STATIC_ROBOTS_BYTES = Buffer.from("User-agent: *\nDisallow:\n");
 const DRAFT_ARTICLE_BYTES = Uint8Array.from([0xde, 0xad, 0xfa, 0xce, 0x01]);
 const DRAFT_ARTICLE_URL = "/writing/draft-entry/assets/private-diagram.png";
+const GENERATED_TRANSACTION_ROOTS = new Set<string>();
+
+after(() => {
+  for (const transactionRoot of GENERATED_TRANSACTION_ROOTS) {
+    rmSync(transactionRoot, {recursive: true, force: true});
+  }
+  GENERATED_TRANSACTION_ROOTS.clear();
+});
 
 type FileSystemOverrides = Partial<Pick<
   typeof fs,
@@ -309,10 +317,20 @@ function createBuildContext(mode: StaticAssetMode): Readonly<{
   root: string;
 }> {
   const root = mkdtempSync(join(tmpdir(), "axial-muse-build-"));
+  const transactionRoot = mkdtempSync(join(tmpdir(), "axial-muse-build-transaction-"));
+  const generatedFilesDirectory = resolve(transactionRoot, "generated");
+  GENERATED_TRANSACTION_ROOTS.add(transactionRoot);
   chmodSync(root, 0o700);
+  chmodSync(transactionRoot, 0o700);
+  mkdirSync(generatedFilesDirectory, {mode: 0o700});
   mkdirSync(resolve(root, "static"), {mode: 0o700});
   chmodSync(resolve(root, "static"), 0o700);
   const owner = mode === "production" ? "a".repeat(64) : "b".repeat(64);
+  writeFileSync(
+    resolve(transactionRoot, ".axial-muse-build-transaction-owner"),
+    `${mode}:${owner}\n`,
+    {encoding: "utf8", mode: 0o600},
+  );
   writeFileSync(
     resolve(root, ".axial-muse-build-owner"),
     `${mode}:${owner}\n`,
@@ -324,6 +342,7 @@ function createBuildContext(mode: StaticAssetMode): Readonly<{
     context: readBuildContext({
       AXIAL_MUSE_BUILD_MODE: mode,
       AXIAL_MUSE_BUILD_ROOT: root,
+      AXIAL_MUSE_BUILD_GENERATED_FILES: generatedFilesDirectory,
       AXIAL_MUSE_BUILD_OWNER: owner,
     }),
   };
@@ -407,6 +426,7 @@ function createSealControlFixture(
     "axial-muse-build-transaction-",
   ));
   chmodSync(transactionRoot, 0o700);
+  mkdirSync(resolve(transactionRoot, "generated"), {mode: 0o700});
   writeFileSync(resolve(repositoryRoot, ".axial-muse-build.lock"), `${owner}\n`, {
     encoding: "utf8",
     mode: 0o600,
@@ -888,6 +908,7 @@ test("I-12 production/preview 从同一非空源生成隔离且按 publicationSt
   const repositoryRoot = createRepositoryFixture();
   const productionContext = createBuildContext("production");
   const previewContext = createBuildContext("preview");
+  const previewBuildRoot = mkdtempSync(join(tmpdir(), "axial-muse-preview-artifact-"));
   try {
     const production = prepareStaticAssetPlan(planInput(repositoryRoot, "production"));
     const preview = prepareStaticAssetPlan(planInput(repositoryRoot, "preview"));
@@ -931,10 +952,22 @@ test("I-12 production/preview 从同一非空源生成隔离且按 publicationSt
       () => Object.defineProperty(production, "manifest", {value: preview.manifest}),
       TypeError,
     );
+    copyTreeBytes(previewContext.context.staticDirectory, previewBuildRoot);
+    assert.doesNotThrow(() => preview.assertPreviewBuild(previewBuildRoot));
+    writeFixture(
+      previewBuildRoot,
+      "assets/projects/draft-project/draft-project.webp",
+      "tampered-preview-bytes",
+    );
+    assert.throws(
+      () => preview.assertPreviewBuild(previewBuildRoot),
+      hasStaticAssetCode("STATIC_ASSET_PREVIEW_WHITELIST"),
+    );
   } finally {
     rmSync(repositoryRoot, {recursive: true, force: true});
     rmSync(productionContext.root, {recursive: true, force: true});
     rmSync(previewContext.root, {recursive: true, force: true});
+    rmSync(previewBuildRoot, {recursive: true, force: true});
   }
 });
 

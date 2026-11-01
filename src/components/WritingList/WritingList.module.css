@@ -38,15 +38,24 @@
 
 .article {
   height: 100%;
-  padding: 1rem;
+  padding: 1.15rem;
   border: 1px solid var(--am-line);
-  border-radius: 8px;
+  border-radius: 1rem;
   background: var(--am-surface);
+  box-shadow: 0 12px 34px rgb(21 58 91 / 6%);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.article:hover {
+  border-color: var(--am-line-strong);
+  box-shadow: 0 18px 44px rgb(21 58 91 / 10%);
+  transform: translateY(-3px);
 }
 
 .articleTitle {
   margin: 0 0 0.65rem;
-  font-size: 1.2rem;
+  font-size: 1.22rem;
+  letter-spacing: -0.018em;
   overflow-wrap: anywhere;
 }
 
@@ -64,7 +73,8 @@
   max-width: 66ch;
   margin: 0;
   padding: 1rem;
-  border-left: 3px solid var(--am-line);
+  border-left: 3px solid var(--am-accent);
+  border-radius: 0 0.7rem 0.7rem 0;
   background: var(--am-surface);
   color: var(--am-muted);
 }

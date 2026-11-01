@@ -1,7 +1,7 @@
 # VibeCoding Project Scaffold 项目展示设计
 
 状态：active
-最近更新：2026-07-22
+最近更新：2026-07-29
 适用范围：主站项目说明、公开仓库、视觉证据与公开表达
 
 ## 目的
@@ -24,10 +24,14 @@
 | 首版第三方 npm 依赖 | 无；质量脚本使用 Node.js 内置能力 |
 | 许可证 | Apache License 2.0 |
 | 仓库最早提交 | 2026-07-05，本地 Git 历史核对 |
-| `origin/main` 最近核对提交 | 2026-07-15，本地 Git 历史与远端 `main` 核对 |
+| `origin/main` 最近核对提交 | `a9f6cd51c843f417858ae0417191523d0df11d84`，2026-07-26，通过 GitHub `main` 核对 |
 | 在线体验 | 不提供 |
 
 本地克隆的 origin 已核对为 `https://github.com/lyty1997/project-scaffold.git`。README 中保留 `__PROJECT_NAME__` 等占位符是脚手架模板的一部分，使用者运行初始化命令后才替换为实际项目信息。
+
+本轮项目正文与关联技术分享的工程事实固定核对
+[`main@a9f6cd51c843f417858ae0417191523d0df11d84`](https://github.com/lyty1997/project-scaffold/tree/a9f6cd51c843f417858ae0417191523d0df11d84)。
+后续仓库变化不会自动改写已经发布的文章结论；涉及能力、命令或边界变化时，必须重新核对并形成文章修订。
 
 ## 主站项目正文
 
@@ -40,6 +44,18 @@
 | 主动作 | 查看源码 | `https://github.com/lyty1997/project-scaffold` |
 | 在线体验 | 不显示 | 该项目没有需要运行的公共 Web 体验 |
 | 演示视频 | 首版不显示 | 当前不是发布前置条件 |
+
+## 关联技术分享
+
+《VibeCoding Project Scaffold：从一次对话到可复用的工程闭环》不是与项目并列的泛化文章，
+而是该项目的主技术分享和设计、实现、复盘记录。源码位于
+`site-content/writing/ai-coding-scaffold-engineering-loop/index.md`，文章以 classification
+归入项目根级，项目注册表再用稳定 articleId 建立反向关联，并归入
+`ai-assisted-development` 主题。文章先以 `draft` 进入 preview，完成事实、图表、链接、
+桌面与移动阅读体验审核后，再由作者显式切换为 `published` 并写入发布日期。
+
+文章中的四张 PlantUML 图解释脚手架分层、任务闭环、迁移流程和演进方向，属于技术说明，
+不替代本项目仍待准备的真实终端或仓库工程截图，也不作为项目主预览证据。
 
 ## 视觉证据
 
