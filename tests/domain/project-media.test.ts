@@ -466,11 +466,21 @@ test("I-11 真实 VP8L 正常路径覆盖公开、归档、草稿与 planned 省
   assert.deepEqual(shuffled, expected);
 });
 
-test("I-11 当前真实两个 planned 项目无预览和无媒体候选通过", () => {
+test("I-11 真实项目接入获批主图且缺失字节仍失败", () => {
   const catalog = expectCatalogSuccess(validateProjectCatalog(repositoryCatalogInput()));
-  assert.deepEqual(catalog.projects.map((project) => project.publicationStatus), ["planned", "planned"]);
-  assert.ok(catalog.projects.every((project) => project.previewImage === undefined));
-  assert.deepEqual(expectMediaSuccess(validateProjectMedia({catalog, sources: []})), []);
+  assert.deepEqual(catalog.projects.map((project) => project.publicationStatus), ["published", "planned"]);
+  const registered = catalog.projects.filter((project) => project.previewImage !== undefined);
+  assert.deepEqual(registered.map(({id}) => id), ["docrestore"]);
+  const sources = registered.map((project) => {
+    assert.ok(project.previewImage);
+    return scanFixtureAsset(resolve(process.cwd(), "site-assets"), project.previewImage.sourcePath);
+  });
+  const previews = expectMediaSuccess(validateProjectMedia({catalog, sources}));
+  assert.equal(previews.length, 1);
+  assert.equal(previews[0]?.publicUrl, "/assets/projects/docrestore/docrestore-preview.webp");
+  assert.equal(previews[0]?.width, 1600);
+  assert.equal(previews[0]?.height, 1000);
+  expectMediaFailure(validateProjectMedia({catalog, sources: []}), ["CONTENT_PROJECT_MEDIA_MISSING"]);
 });
 
 test("I-11 preview schema、公开基数、登记尺寸与 alt 反例由 catalog 先失败关闭", () => {
