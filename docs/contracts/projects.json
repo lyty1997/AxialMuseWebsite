@@ -14,13 +14,19 @@
       "navigationOrder": 10,
       "summary": "将连续文档照片或 PDF 经 OCR、清洗、去重合并与可选脱敏、精修，还原为可审阅的 Markdown 或按模式生成的结构化结果。",
       "status": "active",
-      "publicationStatus": "planned",
+      "publicationStatus": "published",
       "startedAt": "2026-04",
       "updatedAt": "2026-07-03",
       "repositoryUrl": "https://github.com/lyty1997/DocRestore",
       "productionBranch": "main",
       "showcaseMode": "repository",
       "demoVideoStatus": "asset-pending",
+      "previewImage": {
+        "sourcePath": "projects/docrestore/docrestore-preview.webp",
+        "width": 1600,
+        "height": 1000,
+        "alt": "DocRestore 公开快照的真实处理结果：左侧为项目 README 的屏幕实拍照片，右侧为同一照片经本地 PP-OCRv5 识别得到的原文节选，保留识别误差，未做 LLM 精修。"
+      },
       "experienceRegistryId": "docrestore",
       "writingModules": [],
       "source": [

@@ -140,7 +140,9 @@ test("I-10 迁移事实留在正文，原过渡章节只保留所有权链接", 
     "连续拍摄的文档照片重新组织成可审阅、可编辑的结果",
     "OCR、清洗去重、隐私处理、LLM 与输出",
     "当前没有公共在线体验",
-    "主预览、演示视频、封面和字幕尚未通过本站公开性审核",
+    "主图与实机截图已完成来源、隐私与公开使用审核",
+    "不是应用界面截图",
+    "不替代跨页去重、LLM 精修、PPT 或多格式导出的完整效果验收",
   ]) assert.match(docrestoreBody, new RegExp(fact, "u"));
 
   const scaffoldBody = readFileSync(resolve(ROOT, PROJECT_SOURCE_PATHS[1]), "utf8");

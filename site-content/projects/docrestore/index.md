@@ -28,13 +28,41 @@ OCR 引擎运行在独立子进程中，并通过统一协议接入 Pipeline。�
 
 第三阶段主要不是继续堆功能，而是复核边界。进度记录显示，项目通过错误处理审计、代码审查和真实任务反馈修复了静默数据丢失、导出临时文件格式误判、查询 token 日志泄漏、PDF 坏页隔离等问题；也主动停止了收益不足的反向联动和行级 bbox 方案。后两项并非技术上完全做不到，而是经过试验后发现，LLM 重排后的正文缺少可靠的逐行对齐信号，低精度联动会比稳定的块级提示更误导。
 
+## 主图证据范围
+
+主图左侧是该公开快照中项目 README 的真实屏摄测试照片，右侧为同一照片经该提交的 OCR worker 本地复跑得到的连续原文节选，保留识别误差，未做 LLM 精修或人工纠错。它是处理结果的展示排版，不是应用界面截图；本次使用 PP-OCRv5 basic、CPU 和当前已安装的模型/依赖，不声称重建了 2026-07-03 的完整运行环境。
+
+图中 README 保留拍摄时的旧安装说明，仅作为识别输入；安装和版本要求以本文固定快照的 README 为准。该素材证明单图本地 OCR 的实际输入与输出，不替代跨页去重、LLM 精修、PPT 或多格式导出的完整效果验收。
+
+## 实机界面演示
+
+以下三张图由项目作者提供，来自私有环境中的真实 Web 前端演示，依次展示输入、配置与结果审阅。它们尚未绑定精确源码提交、拍摄日期与完整运行参数，仅作为界面记录；本文的工程事实仍以前述固定快照为准。这组截图与上方 CPU、无 LLM 的主图复跑是不同的证据，不表示本站提供在线上传或公共处理服务。
+
+### 输入与上传预览
+
+![DocRestore 实机新建任务页面：选择文档模式后显示九张已上传照片的缩略图，并可逐张移除。](./assets/upload-preview.png)
+
+上传区把待处理照片显示为缩略图，便于提交前检查输入。截图中的文档、代码和 PPT 模式入口展示了界面的任务分类，不代表所有模式都在这次演示中完成了处理。
+
+### OCR 与可选精修配置
+
+![DocRestore 实机处理配置页面：可选择 OCR 引擎与 GPU，设置可选 LLM 精修；密钥字段已遮蔽。](./assets/processing-options.png)
+
+这张配置图显示 PaddleOCR-VL、GPU 选择和已开启的 LLM 精修配置，密钥字段处于遮蔽状态。它与主图使用的 PP-OCRv5 basic、CPU、无 LLM 条件不同；选择云端服务可能传输文档内容，实际处理仍应结合具体隐私要求配置并复核。
+
+### 原图对照与结果审阅
+
+![DocRestore 实机结果审阅页面：左侧为带版面标注的文档照片，右侧为可预览或编辑的识别结果。](./assets/result-review.png)
+
+结果区将带版面标注的原图与输出并列显示，便于人工对照；上方提供预览、编辑、附加导出选项和结果下载入口。截图证明这些界面在实机中可见，不替代逐项导出、来源联动精度或完整流水线的效果验收。
+
 ## 当前限制
 
 - 当前没有公共在线体验；后端只用于本地开发和私有运行，不是公网多用户服务。现有 device token 是受控设备访问凭证，不是用户账号、租户隔离或公共登录系统。
 - OCR、脱敏与 LLM 精修的效果依赖输入质量、模型和运行配置。选择云端 LLM 时可能发生外部数据传输；是否启用 PII 处理、实体检测是否完整以及最终结果是否可公开，都需要针对具体任务人工复核。
 - GPU OCR、PDF 渲染和多格式导出依赖相应本地环境与工具，公开仓库存在代码不等于任意机器开箱即可完成全部模式。
 - 本文核对的是 2026-07-03 的 `main` 快照。后续仓库变化不会自动成为本站事实；需要重新审核源码、测试和公开表达。
-- 主预览、演示视频、封面和字幕尚未通过本站公开性审核，因此当前项目仍保持计划状态，不以占位图或合成界面替代真实视觉证据。
+- 主图与实机截图已完成来源、隐私与公开使用审核；演示视频、封面和字幕尚未准备完成，作为后续增量。本站仅展示项目说明、源码与演示素材，不提供在线体验。
 
 ## 证据说明
 
@@ -42,7 +70,7 @@ OCR 引擎运行在独立子进程中，并通过统一协议接入 Pipeline。�
 - 分层、三条处理分支和并发模型由[架构设计](https://github.com/lyty1997/DocRestore/blob/19ca6b1444758d076d5c3e66b78f68d0066a4694/docs/zh/architecture.md)、[Pipeline 源码](https://github.com/lyty1997/DocRestore/blob/19ca6b1444758d076d5c3e66b78f68d0066a4694/backend/docrestore/pipeline/pipeline.py)与[后端测试](https://github.com/lyty1997/DocRestore/tree/19ca6b1444758d076d5c3e66b78f68d0066a4694/tests)交叉核对。
 - 任务界面和人工审阅路径由[前端功能设计](https://github.com/lyty1997/DocRestore/blob/19ca6b1444758d076d5c3e66b78f68d0066a4694/docs/zh/frontend/features.md)、[前端装配源码](https://github.com/lyty1997/DocRestore/blob/19ca6b1444758d076d5c3e66b78f68d0066a4694/frontend/src/App.tsx)与[前端测试](https://github.com/lyty1997/DocRestore/tree/19ca6b1444758d076d5c3e66b78f68d0066a4694/frontend/tests)交叉核对。
 - 设计反转、错误处理审计和范围收缩来自同一提交的[开发进度记录](https://github.com/lyty1997/DocRestore/blob/19ca6b1444758d076d5c3e66b78f68d0066a4694/docs/zh/progress.md)；隐私相关表述另核对了[云端出站门禁源码](https://github.com/lyty1997/DocRestore/blob/19ca6b1444758d076d5c3e66b78f68d0066a4694/backend/docrestore/llm/egress_gate.py)。
-- [本站项目展示与未来体验设计](https://github.com/lyty1997/AxialMuseWebsite/blob/main/docs/projects/docrestore-experience.md)继续约束未实施的在线体验、安全和数据边界。真实视觉证据完成审核前，源码链接不能替代截图验收。
+- [本站项目展示与未来体验设计](https://github.com/lyty1997/AxialMuseWebsite/blob/main/docs/projects/docrestore-experience.md)继续约束未实施的在线体验、安全和数据边界，并记录主图来源、原始摘要和独立公开批准；源码交叉核对与真实视觉证据各自保留验收边界。
 
 ## 复盘
 
