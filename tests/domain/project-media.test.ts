@@ -468,18 +468,27 @@ test("I-11 真实 VP8L 正常路径覆盖公开、归档、草稿与 planned 省
 
 test("I-11 真实项目接入获批主图且缺失字节仍失败", () => {
   const catalog = expectCatalogSuccess(validateProjectCatalog(repositoryCatalogInput()));
-  assert.deepEqual(catalog.projects.map((project) => project.publicationStatus), ["published", "planned"]);
+  assert.deepEqual(catalog.projects.map((project) => project.publicationStatus), ["published", "published"]);
   const registered = catalog.projects.filter((project) => project.previewImage !== undefined);
-  assert.deepEqual(registered.map(({id}) => id), ["docrestore"]);
+  assert.deepEqual(registered.map(({id}) => id), ["docrestore", "vibecoding-project-scaffold"]);
   const sources = registered.map((project) => {
     assert.ok(project.previewImage);
     return scanFixtureAsset(resolve(process.cwd(), "site-assets"), project.previewImage.sourcePath);
   });
   const previews = expectMediaSuccess(validateProjectMedia({catalog, sources}));
-  assert.equal(previews.length, 1);
+  assert.equal(previews.length, 2);
   assert.equal(previews[0]?.publicUrl, "/assets/projects/docrestore/docrestore-preview.webp");
   assert.equal(previews[0]?.width, 1600);
   assert.equal(previews[0]?.height, 1000);
+  assert.equal(previews[1]?.publicUrl, "/assets/projects/vibecoding-project-scaffold/scaffold-preview.webp");
+  assert.equal(previews[1]?.width, 1600);
+  assert.equal(previews[1]?.height, 1000);
+  for (const missing of sources) {
+    expectMediaFailure(validateProjectMedia({
+      catalog,
+      sources: sources.filter((source) => source !== missing),
+    }), ["CONTENT_PROJECT_MEDIA_MISSING"]);
+  }
   expectMediaFailure(validateProjectMedia({catalog, sources: []}), ["CONTENT_PROJECT_MEDIA_MISSING"]);
 });
 

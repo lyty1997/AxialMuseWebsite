@@ -42,12 +42,18 @@
       "navigationOrder": 20,
       "summary": "用于启动 AI 辅助开发项目的可复用工程脚手架，把设计文档、Agent 规则、质量门禁和 CI 纳入同一仓库基线。",
       "status": "active",
-      "publicationStatus": "planned",
+      "publicationStatus": "published",
       "startedAt": "2026-07",
-      "updatedAt": "2026-07-26",
+      "updatedAt": "2026-11-04",
       "repositoryUrl": "https://github.com/lyty1997/project-scaffold",
       "productionBranch": "main",
       "showcaseMode": "repository",
+      "previewImage": {
+        "sourcePath": "projects/vibecoding-project-scaffold/scaffold-preview.webp",
+        "width": 1600,
+        "height": 1000,
+        "alt": "VibeCoding Project Scaffold 架构示意图：目标项目事实与脚手架资料分开，通过 Agent 规则、工程工具和质量检查形成反馈，实际环境验收仍独立完成。"
+      },
       "writingModules": [],
       "relatedWriting": [
         "019fb119-5f31-7f80-bb8b-79c2b70f1f60"
@@ -55,7 +61,7 @@
       "source": [
         "docs/projects/vibecoding-project-scaffold.md",
         "https://github.com/lyty1997/project-scaffold",
-        "https://github.com/lyty1997/project-scaffold/tree/a9f6cd51c843f417858ae0417191523d0df11d84"
+        "https://github.com/lyty1997/project-scaffold/tree/4fc47cfbe508023df2bdaefd61a8a87532a297bf"
       ]
     }
   ]

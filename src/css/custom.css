@@ -150,6 +150,12 @@ a {
   background: var(--am-surface);
 }
 
+.theme-doc-markdown img[alt^="工程示意图："] {
+  width: auto;
+  max-width: 100%;
+  margin-inline: auto;
+}
+
 .breadcrumbs__link,
 .pagination-nav__link {
   border-radius: 8px;

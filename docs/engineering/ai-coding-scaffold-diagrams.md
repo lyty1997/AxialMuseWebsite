@@ -1,129 +1,167 @@
 # AI 编码脚手架文章图表源
 
-本文档维护技术文章
-[`ai-coding-scaffold-engineering-loop`](../../site-content/writing/ai-coding-scaffold-engineering-loop/index.md)
-的 PlantUML 真相源。每段源码必须紧跟目标 SVG；`npm run check:diagrams`
-负责真实编译，设置 `PUML_JAR` 后运行 `npm run gen:diagrams` 可刷新目标文件。
+状态：active
+最近更新：2026-11-04
+适用范围：Scaffold 项目介绍与技术文章的静态示意图
 
-文章正文只引用 SVG，不重复展示 PlantUML 源码。这样公开阅读优先呈现图表，
-仓库仍保留可审查、可编译、可再生成的源文件。
+本文件是图表的唯一可编辑源码，依据公开 `project-scaffold@4fc47cf` 与本轮本地核对记录。
+图表示意职责和控制路径，不作为实机演示或执行成功证明。
+本地使用 PlantUML 编译 SVG；公开页只加载静态图片，不运行图表插件。
+每段源码紧跟其目标 SVG，使用既有 `scripts/quality/render-diagrams.mjs` 生成。
 
-## 四层工程控制面
+## 项目职责架构
 
 ```plantuml
 @startuml
+top to bottom direction
 skinparam shadowing false
-skinparam backgroundColor transparent
+skinparam backgroundColor #FAF8F2
+skinparam defaultFontName "SansSerif"
+skinparam defaultFontSize 18
 skinparam defaultTextAlignment center
 skinparam ArrowColor #486581
 skinparam rectangleBorderColor #486581
 skinparam rectangleBackgroundColor #F0F4F8
+skinparam nodesep 20
+skinparam ranksep 30
 
-rectangle "项目负责人\n目标、取舍、授权" as Owner #D9EAF7
-rectangle "1  项目真相层\ndocs/\n事实、决定、计划、未决项" as Docs
-rectangle "2  Agent 上下文层\nAGENTS.md + 规则路由\n稳定边界常驻，任务细则按需加载" as Context
-rectangle "3  工程执行层\nAgent + 源码 + scripts/\n判断、修改与确定性执行" as Execution
-rectangle "4  反馈证据层\n契约 + 本地门禁 + CI\n失败可定位，通过可复核" as Evidence #D9EAD3
+rectangle "目标项目\nREADME / docs / build\n项目介绍、决定与产物" as Project #D9EAF7
+rectangle "脚手架资料\nSCAFFOLD / scaffold\n模板设计、初始化与维护" as Scaffold #FBE5D6
+rectangle "规则与日常工具\nAgent 入口 / 任务规则\nscripts / Git hooks" as Tools
+rectangle "确定性检查\nquality / 布局回归\n文档、契约与 CI/CD 边界" as Checks
+rectangle "独立环境证据\n实际 CI / 业务测试\n部署与恢复验收" as Real #D9EAD3
 
-Owner -right-> Docs : 写入决定
-Docs -right-> Context : 提供事实
-Context -down-> Execution : 约束任务
-Execution -left-> Evidence : 接受验证
-Evidence -up-> Docs : 回写结果与遗留
+Project -down-> Scaffold : 区分所有权
+Scaffold -down-> Tools : 提供机制
+Project -right-> Tools : 提供项目事实
+Tools -down-> Checks : 执行验证
+Checks -down-> Real : 本地通过后仍需验证
 @enduml
 ```
 
-![AI 编码脚手架从项目事实到验证证据的四层结构](../../site-content/writing/ai-coding-scaffold-engineering-loop/assets/ai-scaffold-layers.svg)
+![项目与脚手架资料、工具和环境证据的职责架构](../../site-content/projects/vibecoding-project-scaffold/assets/scaffold-architecture.svg)
 
-## 单次任务闭环
+## 上下文与执行职责
 
 ```plantuml
 @startuml
+top to bottom direction
 skinparam shadowing false
-skinparam backgroundColor transparent
+skinparam backgroundColor #FAF8F2
+skinparam defaultFontName "SansSerif"
+skinparam defaultFontSize 18
 skinparam defaultTextAlignment center
 skinparam ArrowColor #486581
 skinparam rectangleBorderColor #486581
 skinparam rectangleBackgroundColor #F0F4F8
+skinparam ranksep 30
 
-rectangle "01  装配上下文\ndocs/ + 任务规则" as Load
-rectangle "02  分清信息\n用户要求 / 事实 / 决定" as Split
-rectangle "03  决策门\n是否仍有关键未决项" as Gate #D9EAF7
-rectangle "暂停依赖分支\n说明选项与影响" as Pause #FBE5D6
-rectangle "04  先更设计\n设计 / 契约 / 决策记录" as Design
-rectangle "05  小步实现\n一次最小修改" as Implement
-rectangle "06  运行门禁\n保留真实错误" as Verify
-rectangle "07  交付证据\n结果 / 边界 / 遗留" as Evidence #D9EAD3
+rectangle "项目负责人\n目标、关键取舍与授权" as Owner #D9EAF7
+rectangle "项目文档 docs/\n当前事实、决定与未决项" as Docs
+rectangle "Agent 上下文\n根规则 → 任务规则 → Skill\n根据任务读取所需内容" as Context
+rectangle "任务执行\n修改代码 / 调用脚本\n保留检查结果" as Execution
+rectangle "反馈与收尾\n结果、局限和下一步\n回写对应作用域进度" as Evidence #D9EAD3
 
-Load -right-> Split
-Split -right-> Gate
-Gate -right-> Pause : 未决
-Gate -down-> Design : 已明确
-Design -left-> Implement
-Implement -left-> Verify
-Verify -right-> Implement : 失败
-Verify -down-> Evidence : 通过
+Owner -down-> Docs : 确认并记录
+Docs -down-> Context : 读取事实
+Context -down-> Execution : 指导执行
+Execution -down-> Evidence : 验证与说明
 @enduml
 ```
 
-![AI 编码任务从上下文装配到验证收尾的最短闭环](../../site-content/writing/ai-coding-scaffold-engineering-loop/assets/ai-scaffold-task-loop.svg)
+![项目事实进入 Agent 上下文并形成反馈证据的关系](../../site-content/writing/ai-coding-scaffold-engineering-loop/assets/ai-scaffold-layers.svg)
 
-## 脚手架迁移
+## 规范要求的单次任务流程
 
 ```plantuml
 @startuml
 skinparam shadowing false
-skinparam backgroundColor transparent
-skinparam defaultTextAlignment center
+skinparam backgroundColor #FAF8F2
+skinparam defaultFontName "SansSerif"
+skinparam defaultFontSize 18
 skinparam ArrowColor #486581
-skinparam rectangleBorderColor #486581
-skinparam rectangleBackgroundColor #F0F4F8
+skinparam activityBackgroundColor #F0F4F8
+skinparam activityBorderColor #486581
 
-rectangle "01  机械初始化\n项目名、品牌、仓库\n占位符替换" as Init #D9EAF7
-rectangle "02  事实迁移\n定位、范围、非目标\n架构与未决项" as Truth
-rectangle "03  工程对齐\n真实命令、契约\n依赖与可选模块" as Align
-rectangle "04  环境验收\n本地门禁、CI\n部署与回滚证据" as Verify #D9EAD3
-
-Init -right-> Truth
-Truth -down-> Align
-Align -left-> Verify
+start
+:查阅实际文件与已有授权;
+if (存在缺失的用户决定？) then (是)
+  :暂停依赖工作\n说明事实、选项与影响;
+  :由用户确认决定;
+else (否)
+endif
+:更新负责该事项的设计;
+:实施可审查的改动;
+while (适用检查未通过？) is (是)
+  :保留失败证据\n定位并修复问题;
+endwhile (否)
+:报告结果与未覆盖范围;
+stop
 @enduml
 ```
 
-![把通用脚手架迁移为真实项目的四个阶段](../../site-content/writing/ai-coding-scaffold-engineering-loop/assets/ai-scaffold-reuse-flow.svg)
+![任务规范中的决策、实施与验证循环](../../site-content/writing/ai-coding-scaffold-engineering-loop/assets/ai-scaffold-task-loop.svg)
 
-## 脚手架演进
+## 初始化写入边界
 
 ```plantuml
 @startuml
-left to right direction
 skinparam shadowing false
-skinparam backgroundColor transparent
+skinparam backgroundColor #FAF8F2
+skinparam defaultFontName "SansSerif"
+skinparam defaultFontSize 18
+skinparam ArrowColor #486581
+skinparam activityBackgroundColor #F0F4F8
+skinparam activityBorderColor #486581
+
+start
+:读取初始化文件清单;
+if (路径与文件均合法？) then (否)
+  :拒绝清单\n不进入项目替换;
+  stop
+else (是)
+endif
+:收集项目与可选功能输入;
+:仅替换目标清单文件\n保留 scaffold/ 资料;
+:按选择写本地配置\n或待决策记录;
+:运行 quality;
+if (检查通过？) then (是)
+  :审查初始化结果;
+else (否)
+  :保留失败\n查看 diff 并修复;
+endif
+stop
+@enduml
+```
+
+![初始化清单校验与后置质量检查流程](../../site-content/writing/ai-coding-scaffold-engineering-loop/assets/ai-scaffold-reuse-flow.svg)
+
+## CI/CD 配置与验收
+
+```plantuml
+@startuml
+top to bottom direction
+skinparam shadowing false
+skinparam backgroundColor #FAF8F2
+skinparam defaultFontName "SansSerif"
+skinparam defaultFontSize 18
 skinparam defaultTextAlignment center
 skinparam ArrowColor #486581
 skinparam rectangleBorderColor #486581
 skinparam rectangleBackgroundColor #F0F4F8
+skinparam ranksep 28
 
-rectangle "基础模型能力提升" as Model #D9EAF7
-rectangle "更薄的常驻规则\n只保留目标与不变量" as Thin
-rectangle "更精准的上下文\n按任务检索事实与历史" as Context
-rectangle "更长的验证闭环\n走到真实环境证据" as Verification
-rectangle "基于评测的治理\n失败归因、去重、删旧" as Evaluation
-rectangle "受控并行协作\n明确所有权与交付证据" as Collaboration
-rectangle "始终保留\n项目事实、权限边界\n测试与可追溯证据" as Invariants #D9EAD3
+rectangle "探测项目与 GitHub 事实\nprobe → .cicd/probe.json\n本地快照不提交" as Probe #D9EAF7
+rectangle "负责人确认命令与目标\n决策账本 cicd-answers.json\n进入 Git 审核" as Ledger
+rectangle "生成受管理配置\nrender → workflow / 配置\n预检、替换与失败恢复" as Render
+rectangle "检查配置\n漂移 / 所有权 / 发布守卫\n本地反例与边界 fixture" as Checks
+rectangle "独立远端验收\n精确提交的 CI 与发布证据\n目标项目恢复方法" as Remote #D9EAD3
 
-Model --> Thin
-Model --> Context
-Model --> Verification
-Model --> Evaluation
-Model --> Collaboration
-
-Thin --> Invariants
-Context --> Invariants
-Verification --> Invariants
-Evaluation --> Invariants
-Collaboration --> Invariants
+Probe -down-> Ledger : 事实提供依据
+Ledger -down-> Render : 决定拥有配置
+Render -down-> Checks : 验证生成结果
+Checks -down-> Remote : 需另行执行与授权
 @enduml
 ```
 
-![基础模型能力提升后脚手架应变薄但不应移除的工程地基](../../site-content/writing/ai-coding-scaffold-engineering-loop/assets/ai-scaffold-evolution.svg)
+![CI/CD 事实、决策、生成物与远端验收的单向关系](../../site-content/writing/ai-coding-scaffold-engineering-loop/assets/ai-scaffold-evolution.svg)
