@@ -233,6 +233,8 @@ Docusaurus 内部不使用 articleId 代替框架 ID。首版文章不填写原�
 
 ## 构建与生产边界
 
+E-013 对独立重号保持拒绝；已审查内容被同源重应用后汇合历史，只允许已提交的[精确导入记录](../contracts/content-history-imports.json)在两端首次引入、身份、路径和 Git blob 全部匹配时归一 origin。CLI 不增加跳过开关，其他 lineage、删除、改绑与日期约束保持既有语义，具体校验见 CODE-018。
+
 已确认的构建边界如下：
 
 1. 站点所有者在 Git 工作流中编辑内容和页面。

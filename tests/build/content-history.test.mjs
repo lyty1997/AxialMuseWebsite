@@ -602,6 +602,166 @@ test("E-013 平行分支独立首次引入同一注册表 ID 时合并失败", a
   }
 });
 
+const IMPORT_POLICY_PATH = "docs/contracts/content-history-imports.json";
+
+function createParallelImportFixture({differentBody = false, dates = null} = {}) {
+  const fixture = createFixture();
+  const root = fixture.root;
+  const base = runGit(root, ["rev-parse", "HEAD"]).stdout.trim();
+  const articlePath = "site-content/writing/imported-article/index.md";
+  const topicPath = "docs/contracts/topics.json";
+  const introduce = (body) => {
+    writeArticle(root, "imported-article", ARTICLE_A, body);
+    const topics = JSON.parse(readFileSync(join(root, topicPath), "utf8"));
+    topics.topics["imported-topic"] = {
+      displayName: "导入主题", navigationOrder: 20, status: "active",
+    };
+    writeJson(root, topicPath, topics);
+  };
+  runGit(root, ["checkout", "--quiet", "-b", "original", base]);
+  introduce("同源正文。");
+  const originalCommit = commit(root, "original identities");
+  if (dates !== null) {
+    writeArticleState(root, "imported-article", ARTICLE_A, {
+      publicationStatus: "published", publishedAt: dates[0], updatedAt: dates[0],
+    });
+    commit(root, "publish original");
+  }
+  runGit(root, ["checkout", "--quiet", "-b", "import", base]);
+  introduce(differentBody ? "不同正文。" : "同源正文。");
+  const importCommit = commit(root, "reapply identities");
+  if (dates !== null) {
+    writeArticleState(root, "imported-article", ARTICLE_A, {
+      publicationStatus: "published", publishedAt: dates[1], updatedAt: dates[1],
+    });
+    commit(root, "publish import");
+  }
+  runGit(root, ["checkout", "--quiet", "original"]);
+  runGit(root, ["merge", "--quiet", "--no-ff", "-s", "ours", "import", "-m", "integrate import"]);
+  const imports = [
+    {kind: "article", identity: ARTICLE_A, sourcePath: articlePath},
+    {kind: "topic", identity: "imported-topic", sourcePath: topicPath},
+  ].map((entry) => ({
+    ...entry, originalCommit, importCommit,
+    blob: runGit(root, ["rev-parse", `${originalCommit}:${entry.sourcePath}`]).stdout.trim(),
+  }));
+  return {...fixture, base, imports};
+}
+
+function writeImportPolicy(fixture, imports = fixture.imports, {committed = true} = {}) {
+  writeJson(fixture.root, IMPORT_POLICY_PATH, {version: 1, imports});
+  if (committed) commit(fixture.root, "record reviewed import evidence");
+}
+
+test("E-013 相同 blob 的平行引入仍须已提交的精确来源记录", async () => {
+  const fixture = createParallelImportFixture();
+  try {
+    await expectHistoryError(fixture.root, "CONTENT_HISTORY_ARTICLE_LINEAGE_CONFLICT");
+    writeImportPolicy(fixture, fixture.imports, {committed: false});
+    await expectHistoryError(fixture.root, "CONTENT_HISTORY_ARTICLE_LINEAGE_CONFLICT");
+    commit(fixture.root, "approve exact import evidence");
+    const result = await checkFixture(fixture.root);
+    assert.equal(result.articleCount, 1);
+    assert.equal(result.registryIdentityCount, 3);
+    writeImportPolicy(fixture, [fixture.imports[0]]);
+    await expectHistoryError(fixture.root, "CONTENT_HISTORY_REGISTRY_LINEAGE_CONFLICT");
+    writeImportPolicy(fixture, [fixture.imports[1]]);
+    await expectHistoryError(fixture.root, "CONTENT_HISTORY_ARTICLE_LINEAGE_CONFLICT");
+    writeImportPolicy(fixture);
+    const cli = runHistoryCli(fixture.root);
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.match(cli.stdout, /Content history checks passed/u);
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-013 来源记录逐项拒绝伪造证据与不合法 schema", async () => {
+  const fixture = createParallelImportFixture();
+  try {
+    const invalid = [
+      {record: {...fixture.imports[0], extra: true}, code: "POLICY"},
+      {record: {...fixture.imports[0], kind: "author"}, code: "POLICY"},
+      {record: {...fixture.imports[0], originalCommit: "main"}, code: "POLICY"},
+      {record: {...fixture.imports[0], importCommit: "0".repeat(40)}, code: "EVIDENCE"},
+      {record: {...fixture.imports[0], blob: "0".repeat(40)}, code: "EVIDENCE"},
+      {record: {...fixture.imports[1], blob: "0".repeat(40)}, code: "EVIDENCE"},
+      {record: {...fixture.imports[0], sourcePath: "site-content/writing/other/index.md"}, code: "EVIDENCE"},
+      {record: {...fixture.imports[0], identity: ARTICLE_B}, code: "EVIDENCE"},
+      {record: {...fixture.imports[1], identity: "other-topic"}, code: "EVIDENCE"},
+    ];
+    for (const {record, code} of invalid) {
+      writeImportPolicy(fixture, [record]);
+      await expectHistoryError(fixture.root, `CONTENT_HISTORY_IMPORT_${code}`);
+    }
+    writeImportPolicy(fixture, [...fixture.imports, fixture.imports[0]]);
+    await expectHistoryError(fixture.root, "CONTENT_HISTORY_IMPORT_POLICY");
+    writeJson(fixture.root, IMPORT_POLICY_PATH, {version: 1, imports: fixture.imports, extra: true});
+    commit(fixture.root, "reject unknown policy key");
+    await expectHistoryError(fixture.root, "CONTENT_HISTORY_IMPORT_POLICY");
+    writeText(fixture.root, IMPORT_POLICY_PATH, '{"version":1,"version":1,"imports":[]}\n');
+    commit(fixture.root, "reject duplicate JSON key");
+    await expectHistoryError(fixture.root, "CONTENT_HISTORY_IMPORT_POLICY");
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-013 来源记录拒绝不同 blob 或非首次引入提交", async () => {
+  for (const differentBody of [true, false]) {
+    const fixture = createParallelImportFixture({differentBody});
+    try {
+      if (!differentBody) {
+        writeText(fixture.root, "evidence.txt", "只改变无关文件。\n");
+        const descendant = commit(fixture.root, "not an introduction");
+        fixture.imports[0].originalCommit = descendant;
+      }
+      writeImportPolicy(fixture);
+      await expectHistoryError(fixture.root, "CONTENT_HISTORY_IMPORT_EVIDENCE");
+    } finally {
+      destroyFixture(fixture);
+    }
+  }
+});
+
+test("E-013 同源归一不接受第三条未登记谱系", async () => {
+  const fixture = createParallelImportFixture();
+  try {
+    writeImportPolicy(fixture);
+    await checkFixture(fixture.root);
+    runGit(fixture.root, ["checkout", "--quiet", "-b", "third", fixture.base]);
+    writeArticle(fixture.root, "imported-article", ARTICLE_A, "同源正文。");
+    commit(fixture.root, "third independent identity");
+    runGit(fixture.root, ["checkout", "--quiet", "original"]);
+    runGit(fixture.root, ["merge", "--quiet", "--no-ff", "-s", "ours", "third", "-m", "third identity"]);
+    await expectHistoryError(fixture.root, "CONTENT_HISTORY_ARTICLE_LINEAGE_CONFLICT");
+  } finally {
+    destroyFixture(fixture);
+  }
+});
+
+test("E-013 同源归一继续拒绝删除后重引与首次发布日期冲突", async () => {
+  const fixture = createParallelImportFixture();
+  try {
+    writeImportPolicy(fixture);
+    await checkFixture(fixture.root);
+    rmSync(join(fixture.root, "site-content/writing/imported-article"), {recursive: true});
+    commit(fixture.root, "delete imported article");
+    writeArticle(fixture.root, "imported-article", ARTICLE_A, "同源正文。");
+    commit(fixture.root, "reintroduce imported article");
+    await expectHistoryError(fixture.root, "CONTENT_HISTORY_ARTICLE_REINTRODUCED");
+  } finally {
+    destroyFixture(fixture);
+  }
+  const dates = createParallelImportFixture({dates: ["2026-07-20", "2026-07-21"]});
+  try {
+    writeImportPolicy(dates);
+    await expectHistoryError(dates.root, "CONTENT_HISTORY_DATE_LINEAGE_CONFLICT");
+  } finally {
+    destroyFixture(dates);
+  }
+});
+
 test("E-013 合并父历史对同一 source-name 的不同绑定失败", async () => {
   const fixture = createFixture();
   try {

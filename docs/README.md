@@ -27,6 +27,7 @@
 - [自动化维护与运行手册](operations/maintenance.md)
 - [生产环境清单](operations/production-inventory.md)
 - [契约词表](contracts/contract-terms.json)
+- [内容历史同源导入记录](contracts/content-history-imports.json)
 - [主站项目目录](contracts/projects.json)
 - [作者注册表](contracts/authors.json)
 - [主题注册表](contracts/topics.json)

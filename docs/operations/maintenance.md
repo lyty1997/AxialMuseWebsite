@@ -57,6 +57,7 @@ D-053 至 D-079 与 E-005/E-010 至 E-015 已固定静态站、工具链、供�
 - 失败关闭检查 D-075 的物理层边界、跨层深层导入、宽泛 `export *` 与未批准自定义路径别名；具体工具和接线按 D-078 在实现前落盘并验证。
 - E-012 的 `test` 入口必须在系统临时目录编译并执行领域/构建 TypeScript 测试，稳定显式列出 `*.test.js`，拒绝零测试、无扩展名或 `.ts` 运行时说明符、loader、实验解析、按需下载的包执行器和仓库内 emit，并在主 Node 与最低 Node 端点运行同一测试集合。
 - E-013 的历史门禁必须以统一结构化 frontmatter 解码，从完整非浅 Git worktree 扫描当前 `HEAD` 可达祖先和 PR merge commit 两个父历史；拒绝 partial/promisor/alternate object store、缺失对象、任何协议访问、source-name/articleId 改绑或删除后重引、平行分支独立引入同一 ID，以及稳定注册表 ID 重引。不得扫描 `--all`、远端废弃分支或用当前树 fallback 代替历史。
+- 已审查内容被独立重应用后需要汇合历史时，只接受[同源导入记录](../contracts/content-history-imports.json)所绑定的文章/主题身份、首次引入 commit、同一路径和相同 blob；逐项证据不匹配则拒绝。该例外的 schema 与失败边界见 CODE-018，不自动把相同 ID 或正文视为同源，不读取未提交白名单，不放宽删除、改绑或日期门禁。
 - lint、Markdown/MDX frontmatter 和内容模型校验。
 - 内部链接、资源、路由、canonical、sitemap、草稿泄漏和关键公开事实检查；E-014 还要求同一 production payload 派生旧路径/无斜杠 301，拒绝静态 source HTML、缺失目标、链、环和配置注入。
 - 发布态项目素材与机器路径白名单检查：根配置固定 `staticDirectories: []`，仅服务端 `postBuild` 从已验证私有临时树复制；`build/assets/projects/**` 与 production 白名单逐路径、逐字节一致，未发布素材的路径/字节，以及仓库根、候选输出、generated files、受控构建与事务临时根等服务端绝对路径及其 JSON/JavaScript slash 转义、单层或双层 percent/file URL、Base64/Base64URL、十六进制等受控常见可逆文本表示均未进入最终文本制品；percent 与十六进制的 ASCII 大小写组合同样阻断。
