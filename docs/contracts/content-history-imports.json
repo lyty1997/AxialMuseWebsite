@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "imports": [
+    {
+      "kind": "article",
+      "identity": "019fb119-5f31-7f80-bb8b-79c2b70f1f60",
+      "sourcePath": "site-content/writing/ai-coding-scaffold-engineering-loop/index.md",
+      "originalCommit": "2d24891864a485d8a8fd60e6ec15636e15f1abc9",
+      "importCommit": "79ea21e3f703e246ed6f61083b77a7bed64554e2",
+      "blob": "d18dd89d3784c3aec1998cb2f1b1aea09556892d"
+    },
+    {
+      "kind": "topic",
+      "identity": "ai-assisted-development",
+      "sourcePath": "docs/contracts/topics.json",
+      "originalCommit": "2d24891864a485d8a8fd60e6ec15636e15f1abc9",
+      "importCommit": "79ea21e3f703e246ed6f61083b77a7bed64554e2",
+      "blob": "a143d73a6baa1027dde6be86792cab7f77d5f920"
+    }
+  ]
+}

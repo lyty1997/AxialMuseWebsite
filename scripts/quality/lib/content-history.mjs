@@ -24,6 +24,7 @@ const MAX_GIT_OUTPUT_BYTES = 64 * 1024 * 1024;
 const MAX_ARTICLE_BYTES = 4 * 1024 * 1024;
 const UNKNOWN_SOURCE_PATH = "site-content";
 const WORKTREE_ID = "WORKTREE";
+const IMPORT_POLICY_PATH = "docs/contracts/content-history-imports.json";
 const REGISTRY_PATHS = Object.freeze({
   authors: "docs/contracts/authors.json",
   projects: "docs/contracts/projects.json",
@@ -31,6 +32,7 @@ const REGISTRY_PATHS = Object.freeze({
 });
 const HISTORY_PATHS = Object.freeze([
   "site-content/writing",
+  IMPORT_POLICY_PATH,
   REGISTRY_PATHS.projects,
   REGISTRY_PATHS.authors,
   REGISTRY_PATHS.topics,
@@ -1127,11 +1129,105 @@ function mergePublishedAtLedger(parentStates, commit) {
   return merged;
 }
 
+function hasExactKeys(value, expected) {
+  return isPlainRecord(value)
+    && Object.keys(value).length === expected.length
+    && expected.every((key) => Object.hasOwn(value, key));
+}
+
+async function readVerifiedImports(repository, environment, dag, readSnapshot) {
+  const entry = readTree(repository, environment, repository.head).get(IMPORT_POLICY_PATH);
+  if (entry === undefined) return [];
+  let policy;
+  try {
+    policy = decodeJsonDocument({
+      bytes: readBlob(repository, environment, repository.head, entry),
+      sourcePath: IMPORT_POLICY_PATH,
+    });
+  } catch {
+    fail("CONTENT_HISTORY_IMPORT_POLICY", {sourcePath: IMPORT_POLICY_PATH});
+  }
+  if (
+    !hasExactKeys(policy, ["version", "imports"])
+    || policy.version !== 1
+    || !Array.isArray(policy.imports)
+    || policy.imports.length > 128
+  ) {
+    fail("CONTENT_HISTORY_IMPORT_POLICY", {sourcePath: IMPORT_POLICY_PATH});
+  }
+  const nodes = new Map(dag.map((node) => [node.commit, node]));
+  const seen = new Set();
+  const records = [];
+  for (const record of policy.imports) {
+    if (
+      !hasExactKeys(record, [
+        "kind", "identity", "sourcePath", "originalCommit", "importCommit", "blob",
+      ])
+      || !["article", "topic"].includes(record.kind)
+      || ["identity", "sourcePath", "originalCommit", "importCommit", "blob"]
+        .some((key) => typeof record[key] !== "string")
+      || ![record.originalCommit, record.importCommit, record.blob]
+        .every((value) => OBJECT_ID_PATTERN.test(value))
+      || record.originalCommit === record.importCommit
+      || (record.kind === "article" && (
+        !UUID_V7_PATTERN.test(record.identity)
+        || !ARTICLE_PATH_PATTERN.test(record.sourcePath)
+      ))
+      || (record.kind === "topic" && (
+        !isKebabId(record.identity)
+        || record.sourcePath !== REGISTRY_PATHS.topics
+      ))
+      || seen.has(`${record.kind}:${record.identity}`)
+    ) {
+      fail("CONTENT_HISTORY_IMPORT_POLICY", {sourcePath: IMPORT_POLICY_PATH});
+    }
+    seen.add(`${record.kind}:${record.identity}`);
+    const identity = record.kind === "article" ? record.identity : `topic:${record.identity}`;
+    const field = record.kind === "article" ? "articleOrigins" : "registryOrigins";
+    const containsIdentity = (snapshot) => record.kind === "article"
+      ? snapshot.sourcePathByArticle.get(identity) === record.sourcePath
+      : snapshot.registryIds.has(identity);
+    for (const commit of [record.originalCommit, record.importCommit]) {
+      const node = nodes.get(commit);
+      if (node === undefined) {
+        fail("CONTENT_HISTORY_IMPORT_EVIDENCE", {commit, sourcePath: IMPORT_POLICY_PATH});
+      }
+      const source = readTree(repository, environment, commit).get(record.sourcePath);
+      if (
+        source?.mode !== "100644"
+        || source.type !== "blob"
+        || source.objectId !== record.blob
+        || !containsIdentity(await readSnapshot(commit))
+      ) {
+        fail("CONTENT_HISTORY_IMPORT_EVIDENCE", {commit, sourcePath: record.sourcePath});
+      }
+      for (const parent of node.parents) {
+        const snapshot = await readSnapshot(parent);
+        const aliveInParent = record.kind === "article"
+          ? snapshot.articleIds.has(identity)
+          : snapshot.registryIds.has(identity);
+        if (aliveInParent) {
+          fail("CONTENT_HISTORY_IMPORT_EVIDENCE", {commit, sourcePath: record.sourcePath});
+        }
+      }
+    }
+    records.push(Object.freeze({...record, field, identity}));
+  }
+  return Object.freeze(records);
+}
+
+function importedOrigin(imports, field, identity, commit) {
+  const record = imports.find((item) => (
+    item.field === field && item.identity === identity && item.importCommit === commit
+  ));
+  return record?.originalCommit ?? commit;
+}
+
 function articleSourcePath(snapshot, articleId) {
   return snapshot.sourcePathByArticle.get(articleId) ?? UNKNOWN_SOURCE_PATH;
 }
 
-function transitionState(commit, snapshot, parentStates) {
+function transitionState(commit, snapshot, parentStates, imports = []) {
   const reservedSources = mergeReservedSources(parentStates, commit);
   const articleOrigins = mergeOrigins(
     parentStates,
@@ -1170,7 +1266,7 @@ function transitionState(commit, snapshot, parentStates) {
       }
     } else {
       if (aliveInParent) fail("CONTENT_HISTORY_STATE", {commit});
-      articleOrigins.set(articleId, commit);
+      articleOrigins.set(articleId, importedOrigin(imports, "articleOrigins", articleId, commit));
     }
     reservedSources.set(sourceName, articleId);
   }
@@ -1185,7 +1281,7 @@ function transitionState(commit, snapshot, parentStates) {
       }
     } else {
       if (aliveInParent) fail("CONTENT_HISTORY_STATE", {commit});
-      registryOrigins.set(identity, commit);
+      registryOrigins.set(identity, importedOrigin(imports, "registryOrigins", identity, commit));
     }
   }
 
@@ -1401,6 +1497,14 @@ async function readHeadHistory() {
   const environment = buildContentHistoryGitEnvironment();
   const repository = inspectRepository(process.cwd(), environment);
   const dag = readDag(repository, environment);
+  const snapshots = new Map();
+  const readSnapshot = async (commit) => {
+    if (!snapshots.has(commit)) {
+      snapshots.set(commit, await readHistoricalSnapshot(repository, environment, commit));
+    }
+    return snapshots.get(commit);
+  };
+  const imports = await readVerifiedImports(repository, environment, dag, readSnapshot);
   const states = new Map();
   for (const node of dag) {
     const parentStates = node.parents.map((parent) => {
@@ -1408,14 +1512,10 @@ async function readHeadHistory() {
       if (state === undefined) fail("CONTENT_HISTORY_DAG", {commit: node.commit});
       return state;
     });
-    const snapshot = await readHistoricalSnapshot(
-      repository,
-      environment,
-      node.commit,
-    );
+    const snapshot = await readSnapshot(node.commit);
     states.set(
       node.commit,
-      transitionState(node.commit, snapshot, parentStates),
+      transitionState(node.commit, snapshot, parentStates, imports),
     );
   }
 

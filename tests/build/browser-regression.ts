@@ -38,7 +38,8 @@ const BROWSER_NAMES = Object.freeze([
 ]);
 const BROWSER_PROFILE_PREFIX = "axial-muse-browser-profile-";
 const COMMAND_TIMEOUT_MS = 15_000;
-const STARTUP_TIMEOUT_MS = 20_000;
+// CI 中浏览器进程存活但调试端口可能慢于 20 秒，仍以真实就绪为准且有界等待。
+const STARTUP_TIMEOUT_MS = 60_000;
 const NETWORK_IDLE_TIMEOUT_MS = 10_000;
 const CONTENT_TYPES: Readonly<Record<string, string>> = Object.freeze({
   ".css": "text/css; charset=utf-8",
