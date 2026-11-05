@@ -318,6 +318,7 @@ D-097 至 D-102 已把固定 SHA 的官方 Action、Node 24 主/最低端点、�
 
 ### CODE-014 作者命令
 
+- 作者专用验收入口为 `node scripts/author/run-create-article-tests.mjs`，仅在 `.nvmrc` 精确 Linux 主端点显式运行。真实 Git fixture 继承当前注册表，新增测试主题的 `navigationOrder` 必须在已有最大顺序之后分配，不能假定 10/20 空闲；保留既有主题、顺序唯一性及真实 CLI/I-06/E-013 断言。该入口的结果独立于常规 CI 共享测试，不能以共享测试绿色代替。
 - 新文章入口固定为 `node scripts/author/create-article.mjs --source-name <name> --title <text> --slug </writing/...> --summary <text> --author <id> --topic <id>`。`--author` 与 `--topic` 可重复，`--project`、`--module` 可选。M0 只创建 `index.md`，不提供 `--format` 或 MDX 快捷入口；未来 MDX 白名单出现真实获批组件后再扩展命令。
 - 命令只接受完整非交互参数，先验证全部字段、注册表引用、目标目录不存在和精确 Node 版本，再取得排他作者锁并重新验证目标与当前工作区。随后只在内存生成 UUIDv7 并渲染完整模板，由冻结 frontmatter 解析器逐字段回读；CODE-018 的严格候选 API 只接收 `{articleId,sourceName}`，不得把其他字段塞入该身份接口或绕过 I-06 自建第二套整批 schema。完整历史与身份候选同时通过后才能创建同一文件系统内的 `site-content/.author-staging-*` 并写入完整 `index.md`。flush 文件、staging 目录和 rename 的 source/destination 两个父目录后，仍持有作者锁时必须由 I-06 与 E-013 从目标实际字节完成终态读回，随后删除 lock 才是 commit point。任一步失败都回滚目标、删除本次临时目录并释放锁；质量、预览和构建发现作者锁或残留 staging 时失败，不读取半成品。不得覆盖、修复或补写既有文章。
 - draft 模板不填写 `publishedAt`，不从系统时间、UUID、标题或路径推导任何业务字段；`updatedAt` 也不由创建命令自动写入。命令不运行 Git add/commit/push，不调用发布、预览或构建，也不得被 CI、hook 或 Docusaurus 隐式调用。
