@@ -16,8 +16,11 @@ MAX_METADATA_BYTES = 64 * 1024
 MAX_ZIP_BYTES = 2 * 1024 * 1024 * 1024
 READ_SIZE = 64 * 1024
 REQUIRED_JOBS = frozenset({
-    "Website quality gates", "Minimum Node compatibility", "Diagram compile check",
-    "Supply chain evidence", "Production artifact",
+    "Website quality gates", "Minimum Node compatibility", "Production artifact",
+})
+# 兼容升级先于 CI 切换；旧独立门禁仍出现时，必须完整且成功，不能降级放行。
+LEGACY_REQUIRED_JOBS = REQUIRED_JOBS | frozenset({
+    "Diagram compile check", "Supply chain evidence",
 })
 DECIMAL = re.compile(r"[1-9][0-9]{0,15}\Z", re.ASCII)
 SHA = re.compile(r"[0-9a-f]{40}\Z", re.ASCII)
@@ -157,11 +160,11 @@ def _assert_producer_ready(value, *, workflow_run_id, commit_sha):
                 or not isinstance(job.get("name"), str)):
             raise ArtifactFetchError("ARTIFACT_JOBS")
         seen.add(job["id"])
-        if job["name"] in REQUIRED_JOBS:
+        if job["name"] in LEGACY_REQUIRED_JOBS:
             if job["name"] in required:
                 raise ArtifactFetchError("ARTIFACT_JOBS")
             required[job["name"]] = job
-    if set(required) != REQUIRED_JOBS or any(
+    if frozenset(required) not in (REQUIRED_JOBS, LEGACY_REQUIRED_JOBS) or any(
         job.get("status") != "completed" or job.get("conclusion") != "success"
         for job in required.values()
     ):
