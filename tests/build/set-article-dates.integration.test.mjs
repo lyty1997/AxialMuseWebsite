@@ -303,9 +303,13 @@ function createFixture() {
 
     const topicsPath = resolve(root, "docs/contracts/topics.json");
     const topics = JSON.parse(readFileSync(topicsPath, "utf8"));
+    const maxOrder = Math.max(
+      0,
+      ...Object.values(topics.topics).map((topic) => topic.navigationOrder),
+    );
     topics.topics[TOPIC_ID] = {
       displayName: "日期命令验收",
-      navigationOrder: 10,
+      navigationOrder: maxOrder + 10,
       status: "active",
     };
     writeFileSync(topicsPath, `${JSON.stringify(topics, null, 2)}\n`, "utf8");
