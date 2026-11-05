@@ -19,6 +19,38 @@ Axial Muse Website 是个人项目与技术分享网站。第一版聚焦个人�
 - Codex 规则：[codex-rules/global-AGENTS.md](codex-rules/global-AGENTS.md)
 - 质量门禁脚本：[scripts/quality](scripts/quality)
 
+## 新增与编辑文章
+
+当前通过 Git 管理 Markdown 内容，网站没有网页端的新增、编辑或管理后台。在获准的 Linux 作者工作区，从仓库根目录执行以下命令；先加载已安装的 nvm，再按 `.nvmrc` 切换到精确 Node 版本：
+
+```bash
+source "$HOME/.nvm/nvm.sh"
+nvm use
+node scripts/author/create-article.mjs \
+  --source-name my-ai-experience \
+  --title "一次 AI 辅助开发实践" \
+  --slug /writing/my-ai-experience \
+  --summary "记录一次真实的 AI 辅助开发实践，说明问题背景、方案取舍和验证结果。" \
+  --author lyty1997 \
+  --topic ai-assisted-development
+```
+
+运行前替换示例中的源码名、标题、URL 和摘要。创建命令会生成以下正文入口及草稿元数据，自动分配一次 `articleId`，不会覆盖已有文章目录：
+
+```text
+site-content/writing/my-ai-experience/index.md
+```
+
+- **编辑正文**：直接修改该 `index.md`，保留生成的 `articleId`。
+- **添加图片**：在文章目录下创建 `assets/`，例如放入 `assets/example.png`，正文使用 `![图片说明](./assets/example.png)` 引用。
+- **源码名与 URL**：`--source-name` 决定源码目录名，`--slug` 显式决定公开路径，二者相互独立；源码名只使用小写英文字母、数字和连字符。
+- **作者与主题**：`--author`、`--topic` 使用[作者注册表](docs/contracts/authors.json)和[主题注册表](docs/contracts/topics.json)中的 ID。示例所用 ID 已登记；多作者或多主题分别重复对应参数。
+- **关联项目**：按需追加 `--project <project-id>` 和 `--module <module-id>`，使用[项目注册表](docs/contracts/projects.json)中的 ID；指定模块时必须同时指定其所属项目。
+
+创建后先检查 Git diff，再继续写作。命令只创建草稿，不会自动暂存、提交、推送或上线；草稿不进入生产构建。发布前还需内容审核、发布状态与日期处理、质量检查及 PR 合并，完整流程见[内容发布流程](docs/operations/content-publishing.md)。
+
+项目介绍使用另一套目录：DocRestore 正文位于 [site-content/projects/docrestore/index.md](site-content/projects/docrestore/index.md)，正文图片放在同目录的 `assets/`；项目标题、摘要等结构化信息位于[项目注册表](docs/contracts/projects.json)，主预览图位于 `site-assets/projects/docrestore/`。修改前请确认当前分支包含需要编辑的最新内容。
+
 ## Linux 执行环境检查
 
 本机系统与新 Bash 会话继续使用原有 Node；仓库 hook 会在自己的子进程内从固定 `~/.nvm` 核对 nvm 和 `.nvmrc`，只把该次门禁切换到已安装的精确 Node。手工运行同一自动选择入口：

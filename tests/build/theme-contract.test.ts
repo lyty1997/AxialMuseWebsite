@@ -145,13 +145,13 @@ test("CODE-008 全局主题只声明已确认令牌、Infima 映射与无动效�
   );
 });
 
-test("D-183 选定的书架之门 A Logo 字节固定且不含 PNG 元数据", () => {
+test("2026-11-05 选定的书架之门 A Logo 字节固定且不含 PNG 元数据", () => {
   const logo = readFileSync(resolve(ROOT, "static-public/assets/brand/axial-muse-mark.png"));
   const css = source("src/css/custom.css");
   const headerCss = source("src/components/SiteHeader/SiteHeader.module.css");
   assert.equal(
     createHash("sha256").update(logo).digest("hex"),
-    "a5ee5de5e63b2ec3b43ba9d06e980fcc58423aab8e6a8100b2c86cdc221b6a77",
+    "5ece4b0f830fad812cb86ba6306e2e6868c519370de3c106c56a18eaf068c094",
   );
   assert.equal(logo.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
   assert.equal(logo.readUInt32BE(16), 1254);
