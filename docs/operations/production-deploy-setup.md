@@ -1,5 +1,13 @@
 # 生产调度接线清单
 
+## 2026-11-05 — #61 下载器兼容阶段
+
+本次先行候选保持六 job workflow，只交付下载器及回归测试。旧版验收集合为 Website quality gates、Minimum Node compatibility、Diagram compile check、Supply chain evidence、Production artifact；新版为前三者中的主质量、最低 Node 与 Production artifact 三项。每项必须唯一且 completed/success；两项旧独立检查出现时必须成对且成功。Deploy production 可以仍在运行，无须等待整体 run 完成。
+
+完成精确 canonical main CI 后，冻结下载器 blob/SHA-256、服务器前态和恢复清单。在既有生命周期/部署双锁内确认事务 idle、备份当前模块，再原子替换 `/usr/local/lib/axialmuse-release/ops/deploy/fetch_artifact.py`，保持 root:root/0644、普通文件与单链接；新进程核对摘要，真实下载旧拓扑的精确制品并由已安装 verifier 独立复验。只变更此模块，不修改凭证、TAT 模板、Nginx 或账本；安装本身不调用 TAT、激活或 reload。安装失败保留现场和备份，不重试其他发布动作。
+
+只有上述安装及旧拓扑真实下载得到独立回执后，才允许另一个候选晋级四 job CI。本候选不得包含四 job workflow、配套静态检查器或其他并行开发改动；后续拓扑切换的 CI/TAT 证据独立验收。
+
 ## 2026-10-27 命名空间修复候选（尚未安装）
 
 复审发现，下方历史布局把发布模块和 TAT 解析器放入 verifier 的闭合命名空间，阻断后续升级。修复候选将所有发布运行模块安装在 `/usr/local/lib/axialmuse-release/ops/deploy/`，解析器安装在 `/usr/local/lib/axialmuse-release/tat-entry.py`；旧准备入口、四个固定命令和证书续期 hook 均从新的固定根导入。目录保持 root:root/0755，模块和解析器为 root:root/0644；命令与 hook 为 root:root/0755。verifier 的 `/usr/local/lib/axialmuse/artifact-verifier/`、闭合成员列表、receipt 和既有双锁不变，不允许链接或未知成员。

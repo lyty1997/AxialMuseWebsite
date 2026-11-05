@@ -1,6 +1,8 @@
 import hashlib
 import io
 import json
+from pathlib import Path
+import re
 import unittest
 import urllib.error
 
@@ -16,6 +18,9 @@ SIGNED = "https://example.blob.core.windows.net/path?sig=private"
 JOB_NAMES = (
     "Website quality gates", "Minimum Node compatibility", "Diagram compile check",
     "Supply chain evidence", "Production artifact",
+)
+LAYERED_JOB_NAMES = (
+    "Website quality gates", "Minimum Node compatibility", "Production artifact",
 )
 
 
@@ -35,7 +40,7 @@ class Response:
 
 
 class FakeOpener:
-    def __init__(self, *, digest=DIGEST, signed=SIGNED):
+    def __init__(self, *, digest=DIGEST, signed=SIGNED, job_names=JOB_NAMES):
         self.digest = digest
         self.signed = signed
         self.requests = []
@@ -47,7 +52,7 @@ class FakeOpener:
         self.workflow_reads = 0
         self.jobs = [dict(id=index, name=name, run_id=int(RUN_ID), head_sha=SHA,
                           status="completed", conclusion="success")
-                     for index, name in enumerate(JOB_NAMES, 1)]
+                     for index, name in enumerate(job_names, 1)]
         self.jobs_changes = {}
 
     def open(self, request, timeout):
@@ -127,11 +132,49 @@ class FetchArtifactTests(unittest.TestCase):
         self.assertEqual(self.fetch(opener), len(ZIP))
         self.assertIn("/attempts/1/jobs?per_page=100", opener.requests[2].full_url)
 
+    def test_both_complete_topologies_download_while_deployment_is_running(self):
+        for names in (JOB_NAMES, LAYERED_JOB_NAMES):
+            with self.subTest(names=names):
+                opener = FakeOpener(job_names=names)
+                opener.workflow_changes = {"status": "in_progress", "conclusion": None}
+                opener.jobs.append(dict(id=99, name="Deploy production", run_id=int(RUN_ID),
+                                        head_sha=SHA, status="in_progress", conclusion=None))
+                output = io.BytesIO()
+                self.assertEqual(fetch_artifact.fetch_exact_artifact(
+                    workflow_run_id=RUN_ID, artifact_id=ARTIFACT_ID, commit_sha=SHA,
+                    artifact_digest=DIGEST, destination=output,
+                    token="ghs_" + "x" * 32, opener=opener,
+                ), len(ZIP))
+                self.assertEqual(output.getvalue(), ZIP)
+                self.assertEqual(len(opener.requests), 7)
+                self.assertIn("/attempts/1/jobs?per_page=100", opener.requests[2].full_url)
+                self.assertNotIn("Authorization", opener.requests[-1].headers)
+
+    def test_repository_workflow_producer_prerequisites_can_be_downloaded(self):
+        # 从实际 workflow 读取名称与 needs，防止 CI 改名/删 job 后下载器再次失配。
+        source = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text()
+        blocks = dict(re.findall(r"^  ([a-z-]+):\n(.*?)(?=^  [a-z-]+:|\Z)",
+                                 source, re.MULTILINE | re.DOTALL))
+        producer = blocks["production-artifact"]
+        needs = re.search(r"^    needs:\n((?:      - [a-z-]+\n)+)", producer, re.MULTILINE)
+        self.assertIsNotNone(needs)
+        job_ids = re.findall(r"      - ([a-z-]+)", needs[1]) + ["production-artifact"]
+        names = tuple(re.search(r"^    name: (.+)$", blocks[job_id], re.MULTILINE)[1]
+                      for job_id in job_ids)
+        self.assertIn(set(names), (set(JOB_NAMES), set(LAYERED_JOB_NAMES)))
+        opener = FakeOpener(job_names=names)
+        opener.workflow_changes = {"status": "in_progress", "conclusion": None}
+        self.assertEqual(self.fetch(opener), len(ZIP))
+
     def test_prerequisites_and_producer_must_each_be_successful_and_unique(self):
-        for name in JOB_NAMES:
+        for names in (JOB_NAMES, LAYERED_JOB_NAMES):
+            self.assert_jobs_reject_mutations(names)
+
+    def assert_jobs_reject_mutations(self, names):
+        for name in names:
             for mutation in ("missing", "duplicate", "failure", "cancelled", "skipped", "pending", "sha", "run"):
-                with self.subTest(name=name, mutation=mutation):
-                    opener = FakeOpener()
+                with self.subTest(topology=names, name=name, mutation=mutation):
+                    opener = FakeOpener(job_names=names)
                     job = next(job for job in opener.jobs if job["name"] == name)
                     if mutation == "missing":
                         opener.jobs.remove(job)
@@ -145,8 +188,11 @@ class FetchArtifactTests(unittest.TestCase):
                         job["run_id"] += 1
                     else:
                         job["conclusion"] = mutation
-                    with self.assertRaises(fetch_artifact.ArtifactFetchError):
+                    code = ("ARTIFACT_JOBS" if mutation in ("duplicate", "sha", "run")
+                            else "ARTIFACT_PRODUCER_NOT_READY")
+                    with self.assertRaisesRegex(fetch_artifact.ArtifactFetchError, f"^{code}$"):
                         self.fetch(opener)
+                    self.assertEqual(len(opener.requests), 3)
                     self.assertFalse(any(request.full_url.endswith("/zip") for request in opener.requests))
 
     def test_attempt_drift_bad_workflow_and_incomplete_job_listing_reject(self):
