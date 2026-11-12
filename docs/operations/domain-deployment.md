@@ -1,7 +1,7 @@
 # 域名与生产发布设计
 
 状态：draft
-最近更新：2026-10-25
+最近更新：2026-11-05
 适用范围：M0 腾讯云域名、DNS、轻量应用服务器、HTTPS、自动发布与回滚
 
 ## 目的
@@ -254,11 +254,11 @@ graceful reload 只证明信号已发送，不能用一次成功 HTTP 请求宣�
 
 M0 生产 workflow 仅由 canonical repository 的 `main` push 触发，不提供普通 `workflow_dispatch` 发布入口；历史 SHA 恢复必须走另行授权的恢复流程。发布链满足：
 
-- `website-quality`、`node-minimum`、`diagrams` 和 `supply-chain` 对精确 `GITHUB_SHA` 运行各自发布必需门禁；任一 failure、cancelled 或 skipped 都阻止最终 job，禁止 `always()` 或 `continue-on-error` 绕过。D-099 后 `supply-chain` 的普通 CI 结论只来自失败关闭的静态供应链证据，live audit 保留给显式依赖准入/重准入，不属于生产 prerequisite。
+- 按 2026-11-05 的 #61 分层决定，`website-quality`（主 Node 断言与图表）和 `node-minimum`（最低 Node 完整负载）对精确 main `GITHUB_SHA` 运行发布必需门禁；任一 failure、cancelled 或 skipped 都阻止最终 job，禁止 `always()` 或 `continue-on-error` 绕过。静态供应链归入 quality，live audit 仍只属于显式依赖准入/重准入。新拓扑本地验收不代表远端已启用。
 - 非 matrix `production-artifact` 在 fresh runner 对同一 SHA 完整 checkout，使用 E-010 为本次 job 新建且不复用的私有 npm cache 冻结安装，并重新执行主端点的零依赖 `quality`、独立 E-013 历史入口、`typecheck`、`test` 与 production `build`，实际生成并重验唯一 production `build/`；它不下载或复用 `website-quality` 的 job-local build，不配置 `actions/setup-node` cache、不调用 cache restore/save Action、不读取任何共享或复用的依赖/build cache，也不接受 preview 或本地旧目录 fallback。
 - 上述五个负载成功后立即按 CODE-015/CODE-019/CODE-020 将同一 `build/` 封装为 `payload/`，从同一 payload 路由和源注册表派生 `runtime-redirects.json`、`nginx/redirects.conf`，并附 source build tree、精确提交标识与逐文件 SHA-256 `metadata/`；独立复验后只上传一次精确 `dist/release/`。
 - Artifact 展示名含 SHA、run ID 和 run attempt；deploy 只消费 `production-artifact` 输出的唯一 artifact ID、外层 `artifactDigest`、上传前独立计算且不写入 artifact 的 `releaseContentSha256`、repository、run 和 SHA，不按名称、pattern、latest、URL 或跨 run 查询。
-- 四个 prerequisite 与 `production-artifact` 的 `GITHUB_TOKEN` 权限仅为 `contents: read`；`deploy-production` 仅为新鲜度和 artifact 元数据复核使用 `contents: read`、`actions: read`，未列权限全部为 `none`，禁止 write、OIDC/attestation scope 和 producer Secret。
+- 两个 prerequisite 与 `production-artifact` 的 `GITHUB_TOKEN` 权限仅为 `contents: read`；`deploy-production` 仅为新鲜度和 artifact 元数据复核使用 `contents: read`、`actions: read`，未列权限全部为 `none`，禁止 write、OIDC/attestation scope 和 producer Secret。
 - 使用 `production` environment 保存腾讯云部署凭证。`deploy-production` 在引用 CAM Secret 或调用腾讯云 API 前，先用只读 GitHub API 证明 canonical `refs/heads/main` 仍等于本次 SHA，并复核当前 run/artifact/head SHA/digest；失败立即停止。普通人工重跑不能发布旧 SHA，历史恢复必须使用另行授权流程。
 - 顶层 CI 对非 `main` 保留旧 run 取消，但不得因后续 push 中断已经运行的 `main` 发布链；生产 job 使用固定 concurrency group 且 `cancel-in-progress: false`，任一时刻只允许一个生产发布。GitHub 不保证等待顺序且可能替换等待中的旧 run，因此 concurrency 不能替代上述 main HEAD 新鲜度检查。
 - 将当前 `GITHUB_SHA` 作为唯一发布版本，不发布浮动的“最新 main”。
@@ -404,14 +404,14 @@ Nginx 为 HTML、CSS、XML、SVG、JSON 和 WebVTT 启用 gzip，不重复压缩
 4. #36 的 SSH/UFW/软件基线已验收；D-159 又复核当前 WireGuard、服务、监听、零 failed unit 与无站点/源码边界。D-125/D-129/D-132 历史结果不改写，D-135 的接受残余结论继续有效；第二次重启或恢复仍须独立授权。
 5. verifier/golden 已在 D-159 从同一已认证 canonical `main@a5ad326` 原子升级，独立自测和 receipt/权限验收通过。保留 Nginx、TAT、Certbot 和系统下载/归档/哈希/Python 工具；生产不安装 Node/npm，不克隆主站源码。
 6. 由 #37 创建并验收生产 release/current/账本目录、root-owned 发布/回滚脚本、只追加 URL 暴露账本和固定 TAT command；#36 已记录这些目录当前不存在，该目录缺席是 #36 的成功前态，创建后的 owner/mode 验收由 #37 提供。部署脚本必须整版安装 payload/config、生成精确 SHA 包装，并拒绝历史 source/target 不再收敛到同一 200 的回滚。ZIP 下载按 D-161 使用服务器专用 GitHub App，只授予本仓库 `Actions:read`；首次账本和公开激活继续独立授权。
-7. 配置通过准入并固定 commit SHA 的 GitHub Actions、四个 prerequisite、E-015 `production-artifact`、`production` environment、最小 CAM 凭证与 deployment workflow；最终 job 不使用 environment/Secret，只有 deploy job 可以读取 CAM 凭证。
+7. 配置通过准入并固定 commit SHA 的 GitHub Actions、#61 的两个 prerequisite、E-015 `production-artifact`、`production` environment、最小 CAM 凭证与 deployment workflow；最终 job 不使用 environment/Secret，只有 deploy job 可以读取 CAM 凭证。
 8. 先通过服务器公网 IP 的受控测试或临时 hosts 验证 Nginx；使用最小 release 覆盖 exact 301、查询保留、目标 200、ACME 和未知 Host，不提前公开未完成页面。
 9. 保存 DNS 旧值，添加或修改 `@` 与 `www` A 记录。
 10. 签发证书，验证四种 HTTP/HTTPS 主机名行为、同版本旧路径/尾斜杠 301 和未知 Host 拒绝策略。
 11. 从 `main` 走两轮自动发布；先演练无新增永久边的兼容回滚，再证明“有历史 target 但缺 source 规则”的旧 release 会被拒绝，并分别验证有兼容 fallback 和经授权 forward-only 的恢复语义。
 12. 发布 canonical、`robots.txt`、`sitemap.xml`、ICP 页脚和安全响应头。
 13. 按 D-168 记录 DNSSEC 延期状态，完成桌面端、移动端、公共解析、TLS 和生产冒烟验证；未来启用 DNSSEC 单独审查。
-14. 连续观察至少 24 小时，更新生产清单；开站后按时完成公安联网备案。
+14. 按 #40 当前要求连续观察至少 3×24 小时，更新生产清单；开站后按时完成公安联网备案。
 
 项目体验在主站完成基础上线后按 [项目体验子域名架构](../architecture/project-experience-hosting.md) 逐个接入，不与主站首次 DNS 切换打包执行。
 

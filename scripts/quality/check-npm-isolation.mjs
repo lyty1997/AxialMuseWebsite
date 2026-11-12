@@ -17,6 +17,7 @@ import { readAndValidateLockfile } from "./lib/supply-chain/lockfile.mjs";
 import { projectRoot } from "./lib/files.mjs";
 import { CONTENT_HISTORY_COMMANDS } from "./run-content-history.mjs";
 import { QUALITY_COMMANDS } from "./run-quality.mjs";
+import { checkCiWorkflowSource } from "./lib/ci-workflow.mjs";
 
 const ROOT = projectRoot();
 const QUALITY_ENTRY_COMMANDS = Object.freeze([
@@ -243,6 +244,16 @@ function hasTopLevelRuntimeOverride(text) {
   });
 }
 
+function hasApprovedLayeredQuality(text) {
+  // 只允许完整静态契约通过的分层接线，不能把任意条件质量步骤视作门禁。
+  try {
+    checkCiWorkflowSource(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function containsAuthorMutationMarker(value) {
   return typeof value === "string"
     && AUTHOR_MUTATION_MARKERS.some((marker) => value.includes(marker));
@@ -356,7 +367,7 @@ function assertQualityTopology(root, hookPath, manifest, workflowTargets) {
   const workflowHasQuality = ciText !== null
     && !hasTopLevelRuntimeOverride(ciText)
     && qualityJob !== null
-    && hasUnconditionalQualityStep(qualityJob);
+    && (hasUnconditionalQualityStep(qualityJob) || hasApprovedLayeredQuality(ciText));
   const hookLines = readFileSync(hookPath, "utf8").split(/\r?\n/).map((line) => line.trim());
   const hookHasQuality = QUALITY_ENTRY_COMMANDS.some((command) => hookLines.includes(command));
   if (!workflowHasQuality || !hookHasQuality) {

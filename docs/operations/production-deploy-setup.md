@@ -1,5 +1,25 @@
 # 生产调度接线清单
 
+## 2026-11-05 — #61 下载器兼容升级前置
+
+#61 的本地候选移除了两个独立 CI job，旧下载器仍要求它们成功，会以 `ARTIFACT_PRODUCER_NOT_READY` 拒绝新拓扑制品。兼容候选只接受以下两套完整成功集合；`Deploy production` 可以仍在运行，无须等待整体 run 完成。
+
+| 拓扑 | 下载前必须各自唯一且 completed/success 的检查 |
+|---|---|
+| 旧六 job | Website quality gates、Minimum Node compatibility、Diagram compile check、Supply chain evidence、Production artifact |
+| 新四 job | Website quality gates、Minimum Node compatibility、Production artifact |
+
+旧独立检查出现时必须成对且成功，禁止把失败、跳过、取消或部分缺失解释为新拓扑。原有精确 run/attempt/SHA、下载前身份复验、摘要及签名 URL 凭证隔离继续执行。
+
+后续 Git 和生产操作须另行授权，并严格分两阶段：
+
+1. **先交付兼容下载器，保留旧 workflow**。独立候选只包含下载器、相应测试和升级说明，不携带本地四 job workflow 或要求该新拓扑的静态检查器。完成原拓扑 canonical main CI 后，从其精确提交认证 `ops/deploy/fetch_artifact.py` 的 blob 和 SHA-256；检查依赖接口未变，准备服务器前态、备份及恢复清单。
+2. **先安装并验收，再切换拓扑**。在既有生命周期/部署锁内备份并原子替换 `/usr/local/lib/axialmuse-release/ops/deploy/fetch_artifact.py`，保持 root:root/0644、普通文件、非链接及既有权限边界；以新进程复核安装摘要，并用旧拓扑的精确制品验证真实下载入口。不触发额外 TAT、激活或 reload 作为替代验收。安装摘要和旧拓扑下载均获独立回执后，才允许四 job workflow 进入 main；随后独立核验新 main CI、制品和自动 TAT 终态。
+
+本地夹具不能替代现场安装及下载回执。2026-11-05 服务器 root-only 隔离候选测试、旧拓扑真实下载及独立 verifier 已通过，详见[历史现场进度](../progress.md#2026-11-05--61-服务器隔离候选验收通过正式安装待-git-前置)。当时活动下载器尚未替换；后续实际晋级和安装以本节下方记录为准。回退 workflow 到旧拓扑时，兼容下载器仍适用，无需为此回退模块。
+
+2026-11-12：兼容补丁已由 PR #83 进入 `main@05984ea43bf167b4a3d03bb82dc86cf1f2b528b4`，旧六 job CI 成功。按用户授权持双锁安装该提交认证的下载器 SHA-256 `b65de8e5455ad19b74f0f6b242fa06fb456694ab6753d125af2e54ef2fd2e457`；用新进程真实下载当前 artifact `13433568915` 并通过独立 verifier，新 SSH 后验确认权限、备份、current 和账本。回执及旧字节保留于服务器 `/var/lib/axialmuse/issue61-downloader-install-tkv2hhev/`，完整证据见[最新进度](../progress.md#2026-11-12--61-下载器兼容安装与-41-git-交付复核)。未增加 TAT、激活或 reload；四 job workflow 仍待独立晋级和实际 CI 验收。
+
 ## 2026-11-05 — #61 下载器兼容阶段
 
 本次先行候选保持六 job workflow，只交付下载器及回归测试。旧版验收集合为 Website quality gates、Minimum Node compatibility、Diagram compile check、Supply chain evidence、Production artifact；新版为前三者中的主质量、最低 Node 与 Production artifact 三项。每项必须唯一且 completed/success；两项旧独立检查出现时必须成对且成功。Deploy production 可以仍在运行，无须等待整体 run 完成。

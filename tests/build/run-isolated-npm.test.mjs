@@ -692,6 +692,7 @@ test("E-010 npm isolation contract", async (t) => {
       ["scripts/quality/check-static-site.mjs"],
       ["scripts/quality/check-runtime-redirects.mjs"],
       ["scripts/quality/check-supply-chain.mjs"],
+      ["--test", "tests/build/monthly-report.test.mjs"],
       ["--test", "tests/build/run-isolated-npm.test.mjs"],
       ["--test", "tests/build/ci-workflow.test.mjs"],
       ["--test", "tests/build/deploy-workflow.test.mjs"],
@@ -892,6 +893,31 @@ test("E-010 npm isolation contract", async (t) => {
         assert.throws(() => checkNpmIsolation(nonExecuting.root), /CI 与 pre-commit/);
       } finally {
         destroyFixture(nonExecuting);
+      }
+    }
+  });
+
+  await t.test("#61 only the exact layered CI contract can replace unconditional quality wiring", () => {
+    const canonical = readFileSync(join(projectRoot(), ".github/workflows/ci.yml"), "utf8");
+    const condition = "if: github.event_name == 'pull_request' || github.ref == 'refs/heads/dev'";
+    const mutations = [
+      canonical,
+      canonical.replaceAll(condition, "if: false"),
+      canonical.replaceAll(condition, "if: github.ref == 'refs/heads/dev'"),
+      canonical.replace("node scripts/quality/run-isolated-npm.mjs run-script quality", "node --version"),
+      canonical.replace("      - node-minimum\n", ""),
+      canonical.replace("          fetch-depth: 0", "          fetch-depth: 1"),
+      canonical.replace("          package-manager-cache: false", "          package-manager-cache: false\n          cache: npm"),
+    ];
+    for (const [index, workflow] of mutations.entries()) {
+      if (index !== 0) assert.notEqual(workflow, canonical);
+      const fixture = createFixture();
+      try {
+        writeControlledQualityPaths(fixture, {workflow});
+        if (index === 0) assert.doesNotThrow(() => checkNpmIsolation(fixture.root));
+        else assert.throws(() => checkNpmIsolation(fixture.root), /CI 与 pre-commit/);
+      } finally {
+        destroyFixture(fixture);
       }
     }
   });

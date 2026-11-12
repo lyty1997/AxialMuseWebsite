@@ -188,7 +188,7 @@ class Transport:
             connection.close()
 
 
-def sample(baseline, transport=None, now=None):
+def sample(baseline, transport=None, now=None, *, internal_links=False, dns=False, external_links=False):
     validate_baseline(baseline)
     observed_at = utc()
     transport = transport or Transport()
@@ -219,7 +219,7 @@ def sample(baseline, transport=None, now=None):
             certificates.append(round(remaining, 2))
         for key, value in {**SECURITY, "Content-Security-Policy": baseline["csp"]}.items():
             require(header_values(headers, key) == [value], "HEALTH_HEADERS")
-        expected_hsts = [baseline["hsts"]] if secure and baseline["hsts"] else []
+        expected_hsts = [baseline["hsts"]] if secure and baseline["hsts"] and host_header is None else []
         require(header_values(headers, "Strict-Transport-Security") == expected_hsts, "HEALTH_HSTS")
         require(not header_values(headers, "Set-Cookie"), "HEALTH_COOKIE")
         require(not any("noindex" in h.lower() or re.search(r"\bnone\b", h.lower())
@@ -227,9 +227,9 @@ def sample(baseline, transport=None, now=None):
         return status, headers, body
 
     for host in HOSTS:
-        def dns(host=host):
+        def addresses(host=host):
             require(address_digest(transport.addresses(host)) == baseline["addressDigest"], "HEALTH_DNS_TARGET")
-        attempt("dns:" + host, dns)
+        attempt("dns:" + host, addresses)
 
     for path, expected in baseline["files"].items():
         def payload(path=path, expected=expected):
@@ -273,6 +273,34 @@ def sample(baseline, transport=None, now=None):
                 == {ORIGIN + p for p in baseline["pages"]}, "HEALTH_SITEMAP")
     attempt("sitemap", sitemap)
 
+    if internal_links:
+        def links():
+            if __package__:
+                from ops.monitor.internal_links import check_internal_links
+            else:
+                from internal_links import check_internal_links
+            require(all(path in bodies for path in baseline["pages"]), "HEALTH_PAGE_MISSING")
+            pages = {path: bodies[path] for path in baseline["pages"]}
+            failures = check_internal_links(pages, baseline["files"], baseline["rules"], ORIGIN)
+            for failure in failures:
+                checks.append({"check": f"link:{failure['source']}:{failure['linkIndex']}",
+                               "status": "failed", "code": failure["code"]})
+            require(not failures, "HEALTH_INTERNAL_LINKS")
+        attempt("internal-links", links)
+
+    if external_links:
+        def external():
+            if __package__:
+                from ops.monitor.external_links import check_external_links
+            else:
+                from external_links import check_external_links
+            require(all(path in bodies for path in baseline["pages"]), "HEALTH_PAGE_MISSING")
+            pages = {path: bodies[path] for path in baseline["pages"]}
+            results = check_external_links(pages, ORIGIN)
+            checks.extend(results)
+            require(all(result["status"] == "passed" for result in results), "HEALTH_EXTERNAL_LINKS")
+        attempt("external-links", external)
+
     for path in ("/metadata/release.json", "/config/site-release.conf", "/does-not-exist/"):
         def hidden(path=path):
             require(checked(True, HOSTS[1], path)[0] == 404, "HEALTH_METADATA_EXPOSURE")
@@ -282,6 +310,13 @@ def sample(baseline, transport=None, now=None):
             require(checked(secure, HOSTS[1], "/", host_header="unknown.invalid")[0] == 421, "HEALTH_HOST")
         attempt("unknown-host:" + str(int(secure)), unknown)
 
+    if dns:
+        if __package__:
+            from ops.monitor.dns_health import check_dns
+        else:
+            from dns_health import check_dns
+        checks.extend(check_dns(baseline))
+
     failures = [c for c in checks if c["status"] == "failed"]
     return {"schema": 1, "status": "failed" if failures else "passed", "observedAtUtc": observed_at,
             "completedAtUtc": utc(),
@@ -289,10 +324,11 @@ def sample(baseline, transport=None, now=None):
             "checks": checks, "failedCount": len(failures), "checkCount": len(checks),
             "certificateDaysRemaining": min(certificates) if certificates else None,
             "expectedPayloadCount": len(baseline["files"]), "payloadHashesPassed": len(bodies),
-            "serverLedgerInspected": False, "mutationsPerformed": False}
+            "serverLedgerInspected": False, "mutationsPerformed": False,
+            "dnsPolicy": "deferred-unsigned" if dns else "not-inspected"}
 
 
-def observation_result(samples, *, duration=86400, interval=900):
+def observation_result(samples, *, duration=259200, interval=900):
     require(samples and duration >= 0 and interval > 0, "HEALTH_OBSERVATION_INPUT")
     times = [datetime.fromisoformat(s["observedAtUtc"]).timestamp() for s in samples]
     require(all(t2 > t1 for t1, t2 in zip(times, times[1:])), "HEALTH_OBSERVATION_ORDER")
@@ -309,7 +345,7 @@ def observation_result(samples, *, duration=86400, interval=900):
         "baselineSha256": identity, "mutationsPerformed": False}
 
 
-def observe(baseline, output, *, duration=86400, interval=900):
+def observe(baseline, output, *, duration=259200, interval=900):
     output = Path(output)
     output.mkdir(mode=0o700)
     started = time.monotonic()
@@ -344,10 +380,15 @@ def main(arguments=None):
     parser.add_argument("--baseline", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--observe", action="store_true")
+    parser.add_argument("--internal-links", action="store_true", help="同时检查已认证页面中的站内链接")
+    parser.add_argument("--dns", action="store_true", help="按当前未签名基线检查递归、权威与父区 DNS")
+    parser.add_argument("--external-links", action="store_true", help="检查已认证页面的公开 Web 外链")
     args = parser.parse_args(arguments)
     try:
+        require(not (args.observe and (args.internal_links or args.dns or args.external_links)), "HEALTH_OPTIONS")
         baseline = validate_baseline(private_json(args.baseline))
-        receipt = observe(baseline, args.output) if args.observe else sample(baseline)
+        receipt = observe(baseline, args.output) if args.observe else sample(
+            baseline, internal_links=args.internal_links, dns=args.dns, external_links=args.external_links)
         if not args.observe:
             write_receipt(args.output, receipt)
         print(json.dumps({k: receipt[k] for k in ("status",)

@@ -4,6 +4,78 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-11-12 — #61 下载器兼容安装与 #41 Git 交付复核
+
+- **授权与基线**：用户授权按先晋级兼容下载器、再认证安装并验收的顺序处理复审缺陷。远端只读核对发现兼容补丁已经由 [PR #83](https://github.com/lyty1997/AxialMuseWebsite/pull/83) 合入 `main@05984ea43bf167b4a3d03bb82dc86cf1f2b528b4`；[run 42066991961](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/42066991961) 六个旧拓扑 job 均成功。该提交下载器 SHA-256 为 `b65de8e5455ad19b74f0f6b242fa06fb456694ab6753d125af2e54ef2fd2e457`；现场旧版为 `e462ba6977a66423ebcef228a231223bc289ce17c1e25a71a369618204340e2b`。因此没有重复提交、推送或创建 PR。
+- **现场安装与独立后验**：在生命周期/部署双锁内确认 current、精确发布身份、账本和旧文件权限后，备份旧字节并原子安装已认证兼容版本。新进程以真实凭证只读下载当前旧拓扑 artifact `13433568915`，外层摘要 `c74ca607bbe871ced4d048796f01b1bfb268be4f0b716aff9cae215b1cef1fa6`，独立 verifier 的 release 内容摘要为 `ad0dcfabcdbdd0be406d953d5e60e4652d4906d5b27f687878c351bc67faf749`。新 SSH 会话重新取双锁，复核下载器 root:root/0644、单链接和摘要、备份、ZIP 与 verifier 回执；current 不变、账本四代。服务器私有回执及旧文件位于 `/var/lib/axialmuse/issue61-downloader-install-tkv2hhev/`，未新增 TAT、激活或 reload。
+- **Git 交付完整性**：将 #41 的 19 个新增源码与测试加入原工作区 Git 暂存区；已跟踪文件的既有修改保持未暂存。独立候选将全部 44 个当前工作区变更纳入 Git 树，在候选中运行完整隔离 quality 通过，下载器与监测 Python 测试 120 项通过；随后仅移除一处新增测试末尾空行，更新候选索引并重新运行该测试和 `git diff --cached --check` 均通过。候选树为 `be457945f226f407d863824fdc6b31d9cc8eb111`，候选和日志位于 `/tmp/axial-delivery-audit-69lb5ttp/candidate` 与 `/tmp/axial-delivery-candidate-*-normal.log`。该候选包含 #61 和 #41 两组工作，只用于完整性验证，不是已批准的提交范围；沙箱首次运行因子进程和 owner/socket 限制失败，正常用户环境未放宽校验后通过。
+- **边界**：本轮消除了新拓扑在下载器端的兼容阻塞，但四 job workflow 尚未远端晋级或验收，#41 的认证接线与真实通知仍未完成。后续提交必须同时选择相关已跟踪修改和已暂存新增文件，并按专题检查干净检出；不能仅提交当前暂存区或把两组候选一并晋级生产。未新增第三方服务或用户数据处理。
+
+## 2026-11-12 — #41 根因修复与独立验收
+
+- **根因与执行要求**：既有工作流已要求处理根因、用可使错误实现变红的证据验证不变量；此前修复没有完整落实。复现确认站内非法 HTTPS:80 被放行，以及默认 runner 实际缓存 16 MiB、超过声明的 8 MiB。检查同类入口发现 URL 校验和分流各自解释规则，DNS/外链/月度命令分别管理进程，容量限制停留在结果层。
+- **子任务一已验收**：不变量是每个 Web URL 必须先通过同一 authority/协议/端口校验才能分流；保留站内 fragment、外链请求去重和非 Web 跳过语义。共用 `web_urls.web_target` 后两个入口的校验不再各自解释；协议×端口×本站/外站矩阵、基址与非法输入、base 拒绝、真实 sample 的组合失败和脱敏通过。URL/站内及外链纯 fixture 共 22 项与相关 Ruff 通过；该项不依赖进程控制器。
+- **子任务二已验收**：不变量是监测子进程在执行中受合并输出容量与绝对截止时间约束，违例在返回稳定失败前完成进程组清理。`bounded_process.run_process` 同时非阻塞读写管道；容量在每次读取时累计，超限后不再 `communicate()` 缓存残余。DNS/外链/月度适配器复用同一控制器，分别保留稳定错误码。真实进程验证了 stdout/stderr/合计超限、恰好上限与多一个字节、大 stdin 与双输出并发、无输入 EOF、持续输出、后代持管道、无输出挂起、提前关闭管道、中断与启动耗时。超量生产者在完成写入和落地结束标记前被终止；真实月度组合保留 `PERIODIC_OUTPUT_LIMIT`、停止 history/typecheck/test/build，回执无原始输出。
+- **反证与组合结果**：在隔离副本中分别放宽协议端口校验、禁用流式容量限制，对应矩阵与边界测试均变红，证明测试能识别错误机制。最终九组监测 Python 测试共 110 项通过，含真实慢响应、阻塞 DNS 和六项隔离 ReleaseStore 集成；正常用户环境的完整 Node 24.18.0 E-010 quality、相关 Ruff、py_compile、Markdown、diff 检查通过。回归与 quality 日志分别为 `/tmp/axialmuse-issue41-root-regression-final.log`、`/tmp/axialmuse-issue41-root-quality.log`，mutation 结果为 `/tmp/axialmuse-issue41-root-mutations.json`。
+- **失败记录与边界**：首轮新增 stdout/stderr 生产者 fixture 因拼接出重复分号未执行预期输出，修正测试脚本后通过。首次完整回归遇到已回收进程的 `/proc` 描述符读取返回 ESRCH；测试此前仅覆盖 ENOENT，补充“进程已不存在”的判定后原检查完整通过，原失败保留于 `/tmp/axialmuse-issue41-root-regression.log`。工作流原有根因条款已细化为复现、追踪因果链、同类扫描、修复所属层、行为反证及范围声明。仅修改本地候选和操作规则，保留其他专题改动；未提交、推送、部署或修改 Issue，未引入第三方服务、依赖或用户数据处理。#41 认证接线、活动 schedule、真实通知和到期配置仍未验收；进程组隔离不覆盖主动脱组的恶意代码，不能据本轮宣称整个 #41 已完成。
+
+## 2026-11-11 — #41 外链总时限复审修复
+
+- **修复**：原先只在请求前后判断 300 秒截止时间，无法打断 DNS 解析或持续缓慢发送的响应头。现在每次完整请求在独立解释器进程执行，父进程将启动后剩余预算用于管道等待；超时或 Python 异常中断时终止并回收该进程。预算耗尽稳定返回 `LINK_EXTERNAL_BUDGET`，重定向、HEAD→GET 和其他目标共用原截止时间，剩余目标不再请求。保留地址固定、TLS 校验、10 秒 socket 超时及失败脱敏；URL 通过 stdin 传递，子进程不继承凭证环境。
+- **验证**：新增六项回归，覆盖真实子进程中的阻塞 DNS、本机逐字节慢响应头、成功与网络错误的管道返回、Python 中断回收、真实脚本入口的私网拒绝，以及重定向/GET 共用预算和剩余目标失败。七组 Python 监测测试共 96 项通过，包含六项真实隔离 ReleaseStore 集成；Node 24.18.0 完整 E-010 `run-script quality`、相关 Ruff、py_compile、Markdown 和 diff 检查通过。沙箱首次定向测试因禁止 socket 无法创建回环服务器，改在正常用户环境完成原验证，未放宽检查。
+- **边界**：仅修改外链候选、测试与维护记录，保留其他专题已有改动；未提交、推送或部署，无新增依赖、第三方服务或用户数据处理。#41 活动接线、schedule、通知与到期配置仍待后续验收。
+
+## 2026-11-11 — #41 月度组合复审修复
+
+- **进程清理**：修复超时仅结束直接 Node 进程的问题。默认命令 runner 为每个命令创建独立进程组，超时或中断后对整组发送 SIGKILL，排空管道并回收直接子进程，再传播原异常。主线程的默认 SIGTERM 临时转为清理后的退出，完成后恢复原处理器；自定义信号策略仍由调用者负责。
+- **失败证据**：报告正常生成但 exit 1 时继续校验私有 JSON，确认必需检查集合、失败数量、状态、错误码和退出码一致后，合并具体到期或内容日期错误，整体保持失败并停止后续 quality/history/typecheck/test/build。缺失或不一致的报告仍失败，原始命令输出不进入共享回执。
+- **验证**：新增真实进程测试覆盖超时、父进程先退出但后代持管道、KeyboardInterrupt、默认 SIGTERM，以及成功命令的输出/退出码；后代即使忽略 SIGTERM 也必须停止，不能继续写文件。新增报告回归覆盖到期临近、过期、核验过旧、未来内容日期、缺失报告和退出码/结构不一致。七组 Python 监测测试共 90 项通过，含六项真实隔离 ReleaseStore 集成；Node 24.18.0 完整 E-010 `run-script quality`、相关 Ruff、py_compile、Markdown 与 diff 检查通过。
+- **失败与边界**：沙箱首次完整复验的六项集成因 UID 映射触发 `DEPLOY_OWNER`，quality 预检因子进程限制无法启动；正常用户环境复验未放宽校验。一次真实进程测试遇到后代已回收、`/proc` 文件在读取前消失的竞态，按“进程已终止”处理后完整复验通过。仅修改本地候选、测试和维护记录，保留其他专题改动；未提交、推送或部署，未新增服务或用户数据处理。#41 认证接线、活动 schedule、真实通知与到期配置仍按前条留待验收。
+
+## 2026-11-11 — #41 周期监测继续本地实现
+
+- **范围与不变量**：按用户“开始推进 #41 / 继续做实现”推进本地候选，沿用受限只读服务器证据及 GitHub 默认通知。`server_evidence.challenged_snapshot` 与 `bound_probe.run_bound_sample` 通过本轮随机量、120 秒时效、精确发布身份/账本及完整前后快照约束公网检查；前置失败不访问公网，公网失败仍留存并复查终点，旧证据不自动回退。账本路由必须覆盖当前 canonical 页，历史边在当前规则收敛；调用者仍须提供真实认证 reader，模块不证明网络来源或提供新凭证。
+- **每周候选**：`public_health.py` 新增 `--dns` / `--external-links`，可与既有 `--internal-links` 组合，均禁止在观察模式中被忽略。`dns_health.py` 使用系统 dig 固定 TCP 参数检查递归、两台 DNSPod 权威及父区委派/DS；当前 DNSSEC 结论为 `deferred-unsigned`。`external_links.py` 对同版已认证页面的 Web 外链去重、限制跳数/预算，逐跳限制公网单播目标并固定实际连接地址，验证 TLS，拒绝凭证、内网、组播、保留/过渡地址及降级；任何状态或传输失败使整体失败，回执不含完整 href、查询参数或异常原文。站内/外链阶段有失败时组级状态也失败。
+- **月度与组合接口**：`scripts/maintenance/monthly-report.mjs` 复用冻结 frontmatter 解码器及项目注册表，仅输出公开内容日期/年龄；不增加内容陈旧阈值。真实域名/实例到期信息来自所有者核验的 0600 私有记录，验证时间最多 35 天，45 天窗口发出失败提醒，缺失不能假设自动续费成功。`periodic.run_period` 固定 daily/weekly/monthly 分工；月度要求精确 Node、与基线一致且干净的源码，依次冻结安装、报告、quality/history/typecheck/test/build，失败即停，结束再核对源码与服务器。当前无 live 项目体验；注册表缺失/错误或未来出现未接线 live 体验时失败，不能默默跳过。
+- **实际验证**：系统 Python 3.12 的七组监测测试共 85 项通过，其中六项使用真实隔离 ReleaseStore；十项无依赖月度 fixture 和一项冻结解析器真实 CLI 集成通过。新月度 unit fixture 已进入 `quality`，另在只有五个必要源文件、无 `node_modules` 的隔离目录验证十项通过；真实解析器集成留在安装后验证范围。精确 Node 24.18.0 的完整 E-010 `run-script quality`、相关 Ruff、模块边界、Markdown、契约、Secret 及 diff 检查通过。本轮没有把月度命令 runner fixture 当作真实 `ci/typecheck/test/build` 执行，也没有重新安装依赖。
+- **真实公网与失败**：独立 DNS 初测 26 项通过；两次每周组合均确认本站 36 个公开文件字节通过。首轮 143 项中八项失败：六个外链来源失败、两项递归 NODATA 缺 SOA 的误报。按 RFC 2308 修正递归空答分类，保留权威/父区 AA/SOA 门禁；下一轮 DNS 全通过，但外链有 30 个来源超时、六个来源返回 HTTP 521，整体仍 exit 1。错误不作供应商豁免，不等同本站宕机；本机网络未证明外链普遍不可用。两份旧回执及最初错误均保留；这些实测复用 #40 的既有私有基线，`serverLedgerInspected=false`，不替代 #41 新的服务器认证与新鲜度验收。后续组级状态补强未重跑整轮网络，不改写既有回执。
+- **排错记录**：一次组合测试因本轮日志命令的 `umask 077` 收紧 fixture 的 0755 目录而失败；改为默认掩码后原权限检查下全部通过，无生产校验放宽。完整 quality 首次接入月度测试时漏同步精确命令清单的 fixture，聚合报 `NPM_WORKLOAD_FAILED`；直接共享检查器定位固定清单不一致，补齐单条期望后正式隔离入口通过。失败和最终日志分别保留，不宣称首轮全绿。
+- **证据与未完成项**：本机私有目录 `/tmp/axialmuse-issue41-dns-qij09a2i/` 保存 `dns.json`、`weekly-public.json`、`weekly-public-with-status.json`、失败及最终监测日志；最终质量日志为 `/tmp/axialmuse-issue41-quality-verified.log`，此前 quality 的聚合/诊断失败日志仍在相邻文件。认证传输、受限服务器安装/凭证、当前制品的自动认证发现、活动 GitHub schedule、真实默认通知送达、真实供应商到期配置及外链失败处理均未验收，#41 保持开放。原工作区其他专题改动保留，未提交、推送、修改 Issue、触发远端 CI、安装生产组件或配置任务；新增的维护侧公开外链探测不携带访问者数据，不引入新监控供应商、依赖包或浏览器请求。
+
+## 2026-11-11 — #40 验收证据回填并关闭
+
+- 按用户要求将 72 小时观察、精确制品与服务器身份、公网及浏览器检查、历史失败和边界写入 [#40 验收评论](https://github.com/lyty1997/AxialMuseWebsite/issues/40#issuecomment-6787165536)，独立读取并逐字比对后以 `completed` 关闭，随后重新读取 Issue 确认关闭状态。评论明确监测实现和测试含本地未提交候选，不视为已部署或远端 CI 成功。
+- #41 的定时检查/可达通知与 #42 的服务器维护均已解除 #40 前置，#43 仍依赖这两项；各自实际接线、服务器写入和通知送达需按对应范围独立完成。本次仅进行 Issue 评论与状态更新及本地记录，没有提交、推送、生产部署或新增第三方服务、用户数据处理。
+
+## 2026-11-10 — #40 明确技术验收通过，GitHub 证据尚未回填
+
+- **授权与观察**：按用户要求继续验收并配置当前本地环境，复用现有 Python、Node、Chrome、SSH 和代理。290 份原始回执逐份复算与汇总一致，覆盖 259216.010 秒、22910 项检查和 10440 次公开文件哈希，零失败/空档/基线漂移，最大间隔 900.001 秒；原件和历史失败均保留，派生清单另存。
+- **生产证据**：`main@05984ea43bf167b4a3d03bb82dc86cf1f2b528b4` 的 run `42066991961` attempt 1 六项 CI、artifact `13433568915`、deployment `7579620285` 均独立核对。ZIP、release 整树与服务器身份一致；两次 fresh SSH 只读会话验证 39 个 release 文件、四代账本、22 个终结事务及零 pending，current 和事务最后变化均早于观察开始。Nginx 配置/服务与零 failed unit 通过，浏览器后终态复验一致。
+- **页面与浏览器**：当前公网含站内链接 80 项通过；六页四视口 24 项独立页面与截图通过，系统 TLS 信任、关闭缓存，全部图片加载，582 次页面请求无第三方、CSP、脚本或 HTTP 错误；客户端导航、搜索键盘和零 Cookie 检查通过。移动视口不冒充真实手机；临时入口的 15 秒导航超时与后续未定位请求 URL 的 `ERR_ABORTED` 均留证，最终独立页面仍保留资源零失败断言。冷加载最慢约 36.748 秒，不宣称性能验收。
+- **网络与遗留**：代理全量探针中止、共享连接第四页超时均保留；独立 curl 连接的八条 HTTPS 路由最终在 60 秒预算内逐字节匹配。代理上游出口/运营商未核实，外部抓取工具无法访问，因此只认定直连与既有代理两路径验证通过。经重新核对 #40 正文，多网络 smoke 属于建议入口，并无独立出口来源核验要求；首次将其列为阻塞是 Agent 的解释错误，已修正全部本轮记录，不是用户批准放宽标准。明确技术验收通过，多网络扩展为可选补充，GitHub 回填与关闭尚未执行。#31/#39 已关闭，当前内容依 #31 批准为双项目和一篇文章。详细身份、命令、回执和边界见[终点独立复核](operations/production-health.md#2026-11-10-终点独立复核)，本机证据位于 `/tmp/axialmuse-issue40-acceptance-20261110/`。
+- **检查与边界**：探针 23 项、站内链接 4 项既有测试通过；Markdown、契约词和 diff 检查通过。本轮只更新五份文档，保留原工作区其余改动；未提交、推送、操作 Issue 或重跑远端 CI，无部署、reload、生产配置/凭证/定时任务变更，无新增依赖、第三方服务、产品外部请求或访问者数据处理。#41 的活动监测与通知不因本项通过而完成。
+
+## 2026-11-05 — #61 服务器隔离候选验收通过，正式安装待 Git 前置
+
+- **授权与现态**：用户要求进行现场升级测试；经既有 WireGuard / `ssh axialmuse-prod` 通道确认系统 Python 3.12.3，current 为 `04fa914cdb1efa3cd015a2891d9b71977d184151`。活动下载器 root:root/0644、单链接、SHA-256 为 `e462ba6977a66423ebcef228a231223bc289ce17c1e25a71a369618204340e2b`，与该 canonical main 的 blob `d6f25aa8e9dcd8cd4d83173a828d9d75fbacc3e7` 一致；修复尚未晋级，所以只在 root-only 私有目录测试候选，未替换活动模块。
+- **现场证据**：持既有生命周期/部署双锁并确认事务 idle 后，服务器隔离候选的 10 项测试通过；已安装版拒绝新三项门禁的原触发得到复现，候选接受新完整集合并保留 64 个定向反例。已安装版和候选版各真实下载成功 main run `42034312878` attempt 1 的 artifact `13417198500`；两份 ZIP 都为 4,654,913 字节、SHA-256 `6f130d67fdc1eb9629eebfd68216c5eb6070ef21ef14887d052b105be910dd42`，已安装独立 verifier 对两份 ZIP 的外层摘要、release 内容摘要与精确 SHA 均通过。候选源码 SHA-256 为 `b65de8e5455ad19b74f0f6b242fa06fb456694ab6753d125af2e54ef2fd2e457`。新四 job main 的真实发布尚未执行，现场新拓扑输入仍为明确标识的 fixture。
+- **独立后验与失败留证**：下载缓慢导致本机等待控制器在 600 秒超时，服务器已完成并写入成功回执，未重跑下载。新 SSH 会话重新取得并释放双锁，独立复核 root-only 回执、两份 ZIP 和 verifier 结果，以及 current、账本、事务、运行模块和 Nginx 配置的 owner/mode/inode/摘要均与前态一致；账本仍为四代，Nginx active，零新增 TAT、激活或 reload。服务器证据保留于 `/var/lib/axialmuse/issue61-downloader-test-n3d2nbzo/`，本机独立后验为 `/tmp/axialmuse-issue61-onsite/final-readback.json`，不输出或保存令牌、签名 URL。
+- **可晋级候选与暂停范围**：基于精确 canonical main 整理五文件独立候选（下载器、测试和三份直接文档），保留旧六 job workflow；完整隔离 quality 和下载器 10 项通过。首次归档缺少 Git 跟踪元数据使既有诊断路径 fixture 失败，补齐原仓库元数据的私有副本后原门禁通过，无源码或断言放宽；原仓库分支、索引和既有改动未被移动。候选及补丁位于 `/tmp/axialmuse-issue61-onsite/compatibility-source/` 和同目录上层的 `compatibility.patch`、`compatibility-manifest.json`。正式安装仍须先另行授权此独立补丁的 Git 晋级，待成功 main 后认证单模块安装并复验；不包括四 job CI 晋级，不新增第三方服务或用户数据处理。
+
+## 2026-11-05 — #61 下载器兼容缺陷修复（本地）
+
+- **复现与修复**：用户要求修复复审 P1。原下载器在旧五项成功门禁下可下载，新三项及实际 workflow 的 producer 前置夹具均以 `ARTIFACT_PRODUCER_NOT_READY` 拒绝。现在仅接受新旧两种完整成功集合；旧独立图表/供应链检查出现时必须成对、唯一且成功，部分缺失、重复、失败、取消、跳过及身份漂移均在 ZIP 请求之前拒绝。不改变 API、run attempt、摘要、凭证隔离或 TAT 协议。
+- **独立证据**：下载器 10 项测试通过，包括两套成功入口、64 个定向门禁变形子用例及真实 workflow 前置名称接线。隔离副本 `/tmp/issue61-compatibility-zexths7q/` 只包含修复后的下载器/认证依赖/测试和 HEAD 的旧 workflow，10 项也全部通过，证明兼容补丁可先独立交付。系统 Python 3.12.3 的完整 ops 回归 225 项（222 通过、三个 opt-in 跳过），精确 Node 24.18.0 的完整隔离 quality、相关 Python Ruff 和 diff 检查通过。最初默认 Python 3.13 与沙箱 owner 映射不满足固定运行时/权限契约，改用真实权限环境及系统 Python 后原门禁通过，未修改生产检查。复现、quality 和 ops 日志分别保留于 `/tmp/issue61-fetch-before.log`、`/tmp/issue61-quality-after.log`、`/tmp/issue61-ops-system-after.log`。
+- **发布前置与边界**：已将[两阶段升级顺序](operations/production-deploy-setup.md#2026-11-05--61-下载器兼容升级前置)写入设计和运维说明：先在旧 CI 下晋级兼容补丁，认证安装服务器模块并独立验证旧拓扑真实下载，再允许四 job workflow 进入 main。本轮未提交、推送、连接或修改服务器，现场安装、真实下载和新拓扑远端验收仍未完成；不得将当前全部未提交改动一次性合入 main。未新增依赖、外部服务或用户数据处理。
+
+## 2026-11-05 — #61 分层 CI 本地候选
+
+- **决定与范围**：用户确认[修订方案 A](architecture/open-decisions.md#2026-11-05--61-修订方案-a本地实施授权)，先完成本地实现和验证。仓库 public、标准 runner 免费，main 未设分支保护或规则集，因而保留 main 自身最低 Node 与图表验收，不借用历史 PR 结论。旧私有仓库额度提案按其历史日期保留；本轮不追加 Git/远端执行授权。
+- **已实现不变量**：workflow 从六个声明 job 收敛为四个，保留原检查名称；dev 只运行主 Node 完整集成，PR 运行双端点完整验收并在主 job 编译图表，main 主 job 只编译图表、最低 Node 完整验收后才允许 fresh producer 自包含完整重验。静态供应链由 quality 承担，移除两个短 job。`CI_WORKFLOW_FAILURE_BYPASS` 拒绝非获准条件，job/步骤/Action/前置身份漂移继续失败；npm 隔离检查仅允许完整静态契约通过的分层接线。无路径过滤、cache、浮动 Action、额外 hook 或失败绕过。
+- **独立证据**：`node --test tests/build/ci-workflow.test.mjs tests/build/run-isolated-npm.test.mjs` 共 92 项通过，覆盖 dev/PR/main、fork、非监听事件、条件删除/放宽/漂移、旧短 job 回潮，以及 main 前置 failure/cancelled/skipped 时 producer 和 deploy 都不运行。新旧 workflow 的 producer 全部步骤与 deploy 整个 job 分别逐字节相同；HEAD、manifest、lock 和 `.nvmrc` 均未改变。
+- **本地组合验收**：Node 24.18.0 的隔离 quality、安装后历史 55 项、typecheck、263 项行为测试（含真实浏览器）和 production build 全部通过；独立完整源码副本在没有 `node_modules` 时实跑既有 pre-commit 成功。固定 SHA-256 的 PlantUML 1.2026.1 jar 真实编译 8 个图表通过，本机沿用 Java 8，远端仍固定 Temurin 21；不将本机结果视为远端 Java 环境证明。最低 Node 24.16.0 的隔离 quality、历史 55 项、typecheck、263 项行为测试和 production build 也全部通过，零失败、取消或跳过；最后文档、契约、Secret、npm 接线与 diff 检查再次通过。两个 Node 端点均复用既有冻结依赖，本轮未重新联网安装。
+- **交接与未完成项**：本地证据位于 `/tmp/axialmuse-issue61-LvDBTVHE/`，包括双端点日志、无依赖 hook、图表和 `production-boundary.json`。最后三次成功旧拓扑 run 的实际 runner 时间基线为 `332 + 315 + 511 = 1158` 秒，尚无新拓扑远端执行或节省比例。后续须另行授权 Git 晋级，核对精确 dev/PR/main 的 job 与步骤、成功传播、独立 artifact/TAT 结果和实际时长，再回填 #61；本轮不修改或关闭远端 Issue，不提交、推送或操作生产。未新增第三方依赖、Action、服务、浏览器外部请求或用户数据处理。
+
 ## 2026-11-05 — #61 下载器独立兼容候选
 
 复审 P1 指出新 CI 删除的两项检查仍被服务器下载器强制要求。本候选只包含下载器、新旧两套完整成功集合回归及直接升级说明，保留当前六 job workflow 和所有 Node/供应链门禁。下载器 10 项测试覆盖两种成功路径、64 个定向门禁变形及实际 workflow 前置接线；缺项、重复、失败、取消、跳过、run/SHA 漂移均在 ZIP 请求前拒绝，精确 attempt、身份复验和凭证隔离不变。

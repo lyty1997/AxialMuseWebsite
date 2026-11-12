@@ -40,7 +40,7 @@ python3 -m http.server -d public 8000                   # 临时手动预览当�
 - **check:contracts**：真相源是 `docs/contracts/contract-terms.json`（稳定契约名与枚举）和 `docs/contracts/contract-rules.json`（`forbidden_terms` 防旧名回潮、`scoped_terms` 防契约词跨层误用）。改契约名先动这两个 JSON，再改引用处。
 - **check:npm-isolation**：校验项目 npm 配置、Node/npm 双端点、隔离环境、manifest/lockfile 来源、受控 profile、CI/hook 接线和操作文档旁路；真实包管理器进程只能由隔离 runner 派生并在预检通过后启动。
 - **check:site**：读取 `docs/contracts/site-checks.json` 配置的 `entryFile` 与 `requiredSnippets`，校验入口文件含必需结构片段且引用的本地资源都存在。入口文件尚不存在时打印提示并跳过，不报错。改首页结构或锚点时必须同步改 `site-checks.json`。
-- **check:diagrams**：扫描所有 Markdown 里的 ` ```plantuml ` 块并用 `java -jar $PUML_JAR` 真实编译，只认编译退出码、不比较字节内容。仓库里一个块都没有时直接跳过；有块但没设 `PUML_JAR` 则报错退出，不静默跳过。CI 由独立的 `diagrams` job（只跑 `ubuntu-latest`）下载校验过 SHA256 的官方 jar 后执行，因此本地不装 Java 也能跑主 `quality`。
+- **check:diagrams**：扫描所有 Markdown 里的 ` ```plantuml ` 块并用 `java -jar $PUML_JAR` 真实编译，只认编译退出码、不比较字节内容。仓库里一个块都没有时直接跳过；有块但没设 `PUML_JAR` 则报错退出，不静默跳过。#61 分层候选在 PR/main 的 `website-quality` job 下载并校验固定 SHA256 的官方 jar 后执行，dev push 不编译图表；它仍在零依赖 `quality` 之外，因此本地不装 Java 也能跑主 `quality`。远端是否已使用新拓扑以精确 workflow/run 为准。
 
 ## 坑点
 
