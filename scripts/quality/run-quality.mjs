@@ -18,6 +18,7 @@ export const QUALITY_COMMANDS = Object.freeze([
   ["scripts/quality/check-static-site.mjs"],
   ["scripts/quality/check-runtime-redirects.mjs"],
   ["scripts/quality/check-supply-chain.mjs"],
+  ["--test", "tests/build/monthly-report.test.mjs"],
   ["--test", "tests/build/run-isolated-npm.test.mjs"],
   ["--test", "tests/build/ci-workflow.test.mjs"],
   ["--test", "tests/build/deploy-workflow.test.mjs"],

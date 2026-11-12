@@ -3,7 +3,7 @@ import { compilePlantumlToSvg, findAllPlantumlBlocks } from "./lib/plantuml.mjs"
 import { projectRoot } from "./lib/files.mjs";
 
 // 独立于 npm run quality 之外：quality 门禁承诺"零第三方依赖、纯 Node 内置能力"，
-// 而本检查依赖外部 Java + plantuml.jar，只作为单独脚本本地跑，CI 里由专属 job 负责装好依赖后执行。
+// 而本检查依赖外部 Java + plantuml.jar，CI 在 PR/main 的主质量 job 准备依赖后独立执行。
 //
 // 只校验"能编译"，不比较字节内容——不同 PlantUML 版本渲染同一份源码字节上并不相同（版本号写进了
 // SVG 头），本地随便什么版本的 jar 跑这个检查都该稳定通过。

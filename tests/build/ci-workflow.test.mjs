@@ -25,8 +25,6 @@ const CANONICAL = readFileSync(
 const JOB_NAMES = Object.freeze([
   "website-quality",
   "node-minimum",
-  "diagrams",
-  "supply-chain",
   "production-artifact",
 ]);
 const BUILD_JOB_NAMES = Object.freeze([
@@ -36,40 +34,29 @@ const BUILD_JOB_NAMES = Object.freeze([
 const PREREQUISITE_JOB_NAMES = Object.freeze([
   "website-quality",
   "node-minimum",
-  "diagrams",
-  "supply-chain",
 ]);
 const PRIMARY_NODE_JOB_NAMES = Object.freeze([
   "website-quality",
-  "diagrams",
-  "supply-chain",
   "production-artifact",
 ]);
 const PRIVATE_RUNTIME_JOB_NAMES = Object.freeze([
   "website-quality",
   "node-minimum",
-  "supply-chain",
   "production-artifact",
 ]);
 const JOB_ANCHORS = Object.freeze({
   "website-quality": "      - name: Frozen dependency install",
   "node-minimum": "      - name: Frozen dependency install",
-  diagrams: "      - name: Set up Java",
-  "supply-chain": "      - name: Static supply chain evidence",
   "production-artifact": "      - name: Frozen dependency install",
 });
 const JOB_TIMEOUTS = Object.freeze({
   "website-quality": 45,
   "node-minimum": 45,
-  diagrams: 15,
-  "supply-chain": 20,
   "production-artifact": 60,
 });
 const JOB_RUN_COMMANDS = Object.freeze({
   "website-quality": "node scripts/quality/run-isolated-npm.mjs ci",
   "node-minimum": "node scripts/quality/run-isolated-npm.mjs ci",
-  diagrams: "node scripts/quality/check-diagrams.mjs",
-  "supply-chain": "node scripts/quality/check-supply-chain.mjs",
   "production-artifact": "node scripts/quality/check-production-artifact-outputs.mjs",
 });
 
@@ -120,8 +107,8 @@ function withTemporaryRoot(callback) {
 
 test("CODE-020 canonical CI topology passes with deploy job and pinned Actions", () => {
   assert.deepEqual(checkCiWorkflowSource(CANONICAL), {
-    actionCount: 14,
-    jobCount: 6,
+    actionCount: 10,
+    jobCount: 4,
   });
 });
 
@@ -131,8 +118,8 @@ test("CODE-020 repository workflow file set contains only regular ci.yml", () =>
     mkdirSync(directory, {recursive: true});
     writeFileSync(join(directory, "ci.yml"), CANONICAL, "utf8");
     assert.deepEqual(checkCiWorkflow(root), {
-      actionCount: 14,
-      jobCount: 6,
+      actionCount: 10,
+      jobCount: 4,
     });
     writeFileSync(
       join(directory, "release.yml"),
@@ -250,7 +237,7 @@ test("D-097 floating and unapproved Action references fail", () => {
   expectCode(
     replaceInJob(
       CANONICAL,
-      "diagrams",
+      "website-quality",
       "actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95",
       "actions/setup-java@v5",
     ),
@@ -369,7 +356,7 @@ test("D-067 primary and minimum Node endpoints cannot drift", () => {
   expectCode(
     replaceInJob(
       CANONICAL,
-      "diagrams",
+      "website-quality",
       "process.versions.node + \"\\n\"",
       "process.versions.node",
     ),
@@ -643,34 +630,26 @@ test("CODE-020 job outputs come only from the validated identity step", () => {
   }
 });
 
-test("D-099 routine CI keeps static supply-chain evidence and excludes live audit", () => {
-  expectCode(
-    replaceOnce(
-      CANONICAL,
-      "node scripts/quality/check-supply-chain.mjs",
-      "node --version",
-    ),
-    "CI_WORKFLOW_JOB_STEPS",
-  );
-  assert.equal(
-    CANONICAL.includes("node scripts/quality/run-supply-chain-audit.mjs"),
-    false,
-  );
+test("D-099 static supply-chain evidence stays in quality without duplicate or live job", () => {
+  const quality = readFileSync(resolve(ROOT, "scripts/quality/run-quality.mjs"), "utf8");
+  assert.equal(quality.split('["scripts/quality/check-supply-chain.mjs"]').length - 1, 1);
+  assert.equal(CANONICAL.includes("node scripts/quality/check-supply-chain.mjs"), false);
+  assert.equal(CANONICAL.includes("node scripts/quality/run-supply-chain-audit.mjs"), false);
   expectCode(
     replaceInJob(
       CANONICAL,
-      "supply-chain",
-      "      - name: Static supply chain evidence",
+      "website-quality",
+      "      - name: Type check",
       `      - name: Live dependency audit
         run: node scripts/quality/run-supply-chain-audit.mjs
 
-      - name: Static supply chain evidence`,
+      - name: Type check`,
     ),
     "CI_WORKFLOW_JOB_STEPS",
   );
 });
 
-test("D-097 failure bypass, matrix and conditional jobs are rejected", () => {
+test("D-097 failure bypass, matrix and unapproved conditions are rejected", () => {
   for (const jobName of JOB_NAMES) {
     const timeout = `    timeout-minutes: ${JOB_TIMEOUTS[jobName]}`;
     expectCode(
@@ -712,12 +691,140 @@ test("D-097 failure bypass, matrix and conditional jobs are rejected", () => {
   }
 });
 
+// 独立读取实际 YAML 的受控子集，验证调度语义，不复用检查器的条件常量或 JOBS。
+function planWorkflow(source, event, outcomes = {}) {
+  const header = source.slice(0, source.indexOf("jobs:\n"));
+  const branches = [...header.matchAll(/^      - (.+)$/gmu)].map((match) => match[1]);
+  if (
+    !(event.event_name === "pull_request" && header.includes("  pull_request:\n"))
+    && !(event.event_name === "push" && branches.includes(event.ref.replace("refs/heads/", "")))
+  ) return new Map();
+  const jobSource = source.slice(source.indexOf("jobs:\n") + "jobs:\n".length);
+  const matches = [...jobSource.matchAll(/^  ([a-z][a-z0-9-]*):$/gmu)];
+  const conditionMatches = (condition) => condition === undefined || condition.split(" || ").some((group) => (
+    group.split(" && ").every((term) => {
+      const match = /^github\.(event_name|ref|repository) == '([^']+)'$/u.exec(term);
+      assert.ok(match, `调度 fixture 不支持该条件：${term}`);
+      return event[match[1]] === match[2];
+    })
+  ));
+  const plan = new Map();
+  for (const [index, match] of matches.entries()) {
+    const block = jobSource.slice(match.index, matches[index + 1]?.index ?? jobSource.length);
+    const prefix = block.slice(0, block.indexOf("    steps:\n"));
+    const condition = /^    if: (.+)$/mu.exec(prefix)?.[1];
+    const needs = /^    needs: (.+)$/mu.exec(prefix)?.[1];
+    const prerequisites = needs === undefined
+      ? [...prefix.matchAll(/^      - (.+)$/gmu)].map((item) => item[1])
+      : [needs];
+    const active = conditionMatches(condition)
+      && prerequisites.every((name) => plan.get(name)?.status === "success");
+    const steps = [...block.matchAll(/^      - name: (.+)$/gmu)];
+    plan.set(match[1], {
+      status: active ? (outcomes[match[1]] ?? "success") : "skipped",
+      steps: active ? steps.flatMap((step, stepIndex) => {
+        const body = block.slice(step.index, steps[stepIndex + 1]?.index ?? block.length);
+        return conditionMatches(/^        if: (.+)$/mu.exec(body)?.[1]) ? [step[1]] : [];
+      }) : [],
+    });
+  }
+  return plan;
+}
+
+const COMMON_WORKLOAD = Object.freeze([
+  "Materialize private Node runtime",
+  "Frozen dependency install",
+  "Quality gates",
+  "Content history",
+  "Type check",
+  "Tests",
+  "Production build",
+]);
+const PRIMARY_PREFIX = Object.freeze([
+  "Checkout full history", "Set up primary Node", "Assert primary Node runtime",
+]);
+const DIAGRAM_WORKLOAD = Object.freeze([
+  "Set up Java", "Download pinned plantuml.jar", "Check diagrams compile",
+]);
+const MAIN_EVENT = Object.freeze({
+  event_name: "push", ref: "refs/heads/main", repository: "lyty1997/AxialMuseWebsite",
+});
+
+test("#61 event golden: dev has one complete primary integration and no diagrams/artifact", () => {
+  const plan = planWorkflow(CANONICAL, {...MAIN_EVENT, ref: "refs/heads/dev"});
+  assert.deepEqual([...plan].filter(([, job]) => job.status === "success").map(([name]) => name), ["website-quality"]);
+  assert.deepEqual(plan.get("website-quality").steps, [...PRIMARY_PREFIX, ...COMMON_WORKLOAD]);
+});
+
+test("#61 event golden: every PR uses both complete Node endpoints and compiles diagrams", () => {
+  for (const repository of [MAIN_EVENT.repository, "fork/AxialMuseWebsite"]) {
+    const plan = planWorkflow(CANONICAL, {
+      event_name: "pull_request", ref: "refs/pull/99/merge", repository,
+    });
+    assert.deepEqual([...plan].filter(([, job]) => job.status === "success").map(([name]) => name), ["website-quality", "node-minimum"]);
+    assert.deepEqual(plan.get("website-quality").steps, [...PRIMARY_PREFIX, ...COMMON_WORKLOAD, ...DIAGRAM_WORKLOAD]);
+    assert.deepEqual(plan.get("node-minimum").steps, ["Checkout full history", "Set up minimum Node", ...COMMON_WORKLOAD]);
+  }
+});
+
+test("#61 event golden: main keeps diagrams, full minimum and exact producer without duplicate primary build", () => {
+  const plan = planWorkflow(CANONICAL, MAIN_EVENT);
+  assert.deepEqual([...plan.values()].map((job) => job.status), ["success", "success", "success", "success"]);
+  assert.deepEqual(plan.get("website-quality").steps, [...PRIMARY_PREFIX, ...DIAGRAM_WORKLOAD]);
+  assert.deepEqual(plan.get("node-minimum").steps, ["Checkout full history", "Set up minimum Node", ...COMMON_WORKLOAD]);
+  assert.deepEqual(plan.get("production-artifact").steps, [
+    "Checkout exact production commit", "Set up primary Node", "Assert fresh production checkout",
+    ...COMMON_WORKLOAD, "Package production artifact", "Check release package",
+    "Upload production artifact", "Validate production artifact outputs",
+  ]);
+  assert.deepEqual(plan.get("deploy-production").steps, [
+    "Checkout exact production commit", "Set up primary Node",
+    "Verify production deploy identity before CAM Secret access",
+    "Reverify identity and invoke fixed TAT command",
+  ]);
+});
+
+test("#61 foreign main cannot publish; topic push and manual events have no workflow", () => {
+  const fork = planWorkflow(CANONICAL, {...MAIN_EVENT, repository: "fork/AxialMuseWebsite"});
+  assert.equal(fork.get("production-artifact").status, "skipped");
+  assert.equal(fork.get("deploy-production").status, "skipped");
+  assert.equal(planWorkflow(CANONICAL, {...MAIN_EVENT, ref: "refs/heads/topic"}).size, 0);
+  assert.equal(planWorkflow(CANONICAL, {...MAIN_EVENT, event_name: "workflow_dispatch"}).size, 0);
+});
+
+test("#61 main failure, cancel or skip blocks producer/upload and deployment", () => {
+  for (const job of ["website-quality", "node-minimum"]) {
+    for (const status of ["failure", "cancelled", "skipped"]) {
+      const plan = planWorkflow(CANONICAL, MAIN_EVENT, {[job]: status});
+      assert.deepEqual(plan.get("production-artifact"), {status: "skipped", steps: []});
+      assert.deepEqual(plan.get("deploy-production"), {status: "skipped", steps: []});
+    }
+  }
+  assert.equal(planWorkflow(CANONICAL, MAIN_EVENT, {"production-artifact": "failure"}).get("deploy-production").status, "skipped");
+});
+
+test("#61 each approved condition rejects removal, widening and event drift", () => {
+  const conditions = [...CANONICAL.matchAll(/^\s+if: .+$/gmu)];
+  for (const match of conditions) {
+    const condition = match[0];
+    for (const replacement of ["", condition.replace(/if: .+$/u, "if: true"), condition.replace("pull_request", "workflow_dispatch").replace("refs/heads/main", "refs/heads/topic").replace("refs/heads/dev", "refs/heads/topic")]) {
+      if (replacement === condition) continue;
+      const mutated = CANONICAL.slice(0, match.index) + replacement + CANONICAL.slice(match.index + condition.length);
+      assert.throws(() => checkCiWorkflowSource(mutated), CiWorkflowError);
+    }
+  }
+  for (const job of ["diagrams", "supply-chain"]) {
+    expectCode(`${CANONICAL}\n  ${job}:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Duplicate\n        run: true\n`, "CI_WORKFLOW_JOBS");
+  }
+  expectCode(replaceOnce(CANONICAL, "  pull_request:\n", "  pull_request:\n    paths: ['src/**']\n"), "CI_WORKFLOW_HEADER");
+});
+
 test("E-015 producer directly needs every prerequisite exactly once", () => {
   for (const [search, replacement] of [
     ["      - website-quality\n", ""],
     ["      - node-minimum\n", "      - website-quality\n"],
-    ["      - diagrams\n", "      - supply-chain\n"],
-    ["      - supply-chain\n", "      - deploy-production\n"],
+    ["      - node-minimum\n", "      - diagrams\n"],
+    ["      - node-minimum\n", "      - deploy-production\n"],
   ]) {
     expectCode(
       replaceInJob(

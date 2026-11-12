@@ -75,15 +75,6 @@ const FULL_CHECKOUT_STEP = actionStep(
   ],
 );
 
-const SHALLOW_CHECKOUT_STEP = actionStep(
-  "Checkout",
-  CI_ACTIONS.checkout,
-  [
-    "fetch-depth: 1",
-    "persist-credentials: false",
-  ],
-);
-
 const PRODUCTION_CHECKOUT_STEP = actionStep(
   "Checkout exact production commit",
   CI_ACTIONS.checkout,
@@ -200,47 +191,66 @@ function runStep(name, command, environmentLines = []) {
   ].join("\n");
 }
 
+const INTEGRATION_CONDITION = "github.event_name == 'pull_request' || github.ref == 'refs/heads/dev'";
+const RELEASE_CHECK_CONDITION = "github.event_name == 'pull_request' || github.ref == 'refs/heads/main'";
+
+function when(step, condition) {
+  return step.replace("\n", `\n        if: ${condition}\n`);
+}
+
 const JOBS = Object.freeze({
   "website-quality": Object.freeze({
     prefix: `  website-quality:
     name: Website quality gates
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      PUML_VERSION: "1.2026.1"
+      PUML_SHA256: "89c116168a2a0f7cf5292e11617ba22abd743f891914f1fec5bc9c7d257b3092"
 
     steps:`,
     steps: Object.freeze([
       FULL_CHECKOUT_STEP,
       PRIMARY_NODE_STEP,
-      MATERIALIZE_PRIVATE_NODE_STEP,
-      runStep(
+      ASSERT_PRIMARY_NODE_STEP,
+      when(MATERIALIZE_PRIVATE_NODE_STEP, INTEGRATION_CONDITION),
+      when(runStep(
         "Frozen dependency install",
         "node scripts/quality/run-isolated-npm.mjs ci",
-      ),
-      runStep(
+      ), INTEGRATION_CONDITION),
+      when(runStep(
         "Quality gates",
         "node scripts/quality/run-isolated-npm.mjs run-script quality",
-      ),
-      runStep(
+      ), INTEGRATION_CONDITION),
+      when(runStep(
         "Content history",
         "node scripts/quality/run-content-history.mjs",
-      ),
-      runStep(
+      ), INTEGRATION_CONDITION),
+      when(runStep(
         "Type check",
         "node scripts/quality/run-isolated-npm.mjs run-script typecheck",
-      ),
-      runStep(
+      ), INTEGRATION_CONDITION),
+      when(runStep(
         "Tests",
         "node scripts/quality/run-isolated-npm.mjs run-script test",
-      ),
-      runStep(
+      ), INTEGRATION_CONDITION),
+      when(runStep(
         "Production build",
         "node scripts/quality/run-isolated-npm.mjs run-script build",
-      ),
+      ), INTEGRATION_CONDITION),
+      when(JAVA_STEP, RELEASE_CHECK_CONDITION),
+      when(DOWNLOAD_PLANTUML_STEP, RELEASE_CHECK_CONDITION),
+      when(runStep(
+        "Check diagrams compile",
+        "node scripts/quality/check-diagrams.mjs",
+        ["PUML_JAR: \${{ github.workspace }}/plantuml.jar"],
+      ), RELEASE_CHECK_CONDITION),
     ]),
   }),
   "node-minimum": Object.freeze({
     prefix: `  node-minimum:
     name: Minimum Node compatibility
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -275,54 +285,12 @@ const JOBS = Object.freeze({
       ),
     ]),
   }),
-  diagrams: Object.freeze({
-    prefix: `  diagrams:
-    name: Diagram compile check
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      PUML_VERSION: "1.2026.1"
-      PUML_SHA256: "89c116168a2a0f7cf5292e11617ba22abd743f891914f1fec5bc9c7d257b3092"
-
-    steps:`,
-    steps: Object.freeze([
-      SHALLOW_CHECKOUT_STEP,
-      PRIMARY_NODE_STEP,
-      ASSERT_PRIMARY_NODE_STEP,
-      JAVA_STEP,
-      DOWNLOAD_PLANTUML_STEP,
-      runStep(
-        "Check diagrams compile",
-        "node scripts/quality/check-diagrams.mjs",
-        ["PUML_JAR: \${{ github.workspace }}/plantuml.jar"],
-      ),
-    ]),
-  }),
-  "supply-chain": Object.freeze({
-    prefix: `  supply-chain:
-    name: Supply chain evidence
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:`,
-    steps: Object.freeze([
-      SHALLOW_CHECKOUT_STEP,
-      PRIMARY_NODE_STEP,
-      MATERIALIZE_PRIVATE_NODE_STEP,
-      runStep(
-        "Static supply chain evidence",
-        "node scripts/quality/check-supply-chain.mjs",
-      ),
-    ]),
-  }),
   "production-artifact": Object.freeze({
     prefix: `  production-artifact:
     name: Production artifact
     needs:
       - website-quality
       - node-minimum
-      - diagrams
-      - supply-chain
     if: github.repository == 'lyty1997/AxialMuseWebsite' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -379,8 +347,6 @@ const JOBS = Object.freeze({
 const BASE_JOB_ORDER = Object.freeze([
   "website-quality",
   "node-minimum",
-  "diagrams",
-  "supply-chain",
   "production-artifact",
 ]);
 const JOB_ORDER = Object.freeze([...BASE_JOB_ORDER, "deploy-production"]);
@@ -491,15 +457,20 @@ function extractSteps(jobLines, jobName) {
   });
 }
 
-function assertProductionTopology(lines) {
-  const conditions = lines.filter((line) => /^\s+if\s*:/u.test(line));
-  if (
-    conditions.length !== 1
-    || conditions[0] !== "    if: github.repository == 'lyty1997/AxialMuseWebsite' && github.event_name == 'push' && github.ref == 'refs/heads/main'"
-  ) {
-    fail("CI_WORKFLOW_FAILURE_BYPASS");
+function assertProductionTopology(jobs) {
+  for (const jobName of BASE_JOB_ORDER) {
+    const actual = jobs.get(jobName).filter((line) => /^\s+if\s*:/u.test(line));
+    const expected = [JOBS[jobName].prefix, ...JOBS[jobName].steps]
+      .join("\n").split("\n").filter((line) => /^\s+if\s*:/u.test(line));
+    if (
+      actual.length !== expected.length
+      || actual.some((line, index) => line !== expected[index])
+    ) {
+      fail("CI_WORKFLOW_FAILURE_BYPASS");
+    }
   }
-  const needs = lines.filter((line) => /^\s+needs\s*:/u.test(line));
+  const needs = jobs.get("production-artifact")
+    .filter((line) => /^\s+needs\s*:/u.test(line));
   if (needs.length !== 1 || needs[0] !== "    needs:") {
     fail("CI_WORKFLOW_NEEDS");
   }
@@ -515,8 +486,8 @@ function assertActionPins(source) {
     return [Object.freeze({reference: match[1], version: match[2] ?? ""})];
   });
   const expected = [
-    ...Array.from({length: 5}, () => CI_ACTIONS.checkout),
-    ...Array.from({length: 5}, () => CI_ACTIONS.setupNode),
+    ...Array.from({length: 3}, () => CI_ACTIONS.checkout),
+    ...Array.from({length: 3}, () => CI_ACTIONS.setupNode),
     CI_ACTIONS.setupJava,
     CI_ACTIONS.uploadArtifact,
   ];
@@ -551,7 +522,7 @@ export function checkCiWorkflowSource(source) {
   for (const {code, pattern} of FORBIDDEN_PATTERNS) {
     if (pattern.test(baseSource)) fail(code);
   }
-  assertProductionTopology(baseLines);
+  assertProductionTopology(jobs);
   assertActionPins(baseSource);
   for (const jobName of BASE_JOB_ORDER) {
     const actualSteps = extractSteps(jobs.get(jobName), jobName);
@@ -564,7 +535,7 @@ export function checkCiWorkflowSource(source) {
     }
   }
   return Object.freeze({
-    actionCount: 14,
+    actionCount: 10,
     jobCount: JOB_ORDER.length,
   });
 }

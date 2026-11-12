@@ -173,6 +173,8 @@ deactivate Preview
 
 ## 从开发预览晋级到生产
 
+2026-11-05 的 [#61 分层候选](open-decisions.md#2026-11-05--61-修订方案-a本地实施授权)只改变 CI 负载，不改变下述 Git 授权与晋级流程。dev push 只有主 Node 完整集成；生产 PR 仍须核对 `Website quality gates`（含图表）与 `Minimum Node compatibility` 都绑定当前 merge ref 并成功。main 上这两个名称分别承担图表与最低 Node 验收，随后独立 producer 完整重验精确 SHA；不能把 main 图表 job 误认成第二次主 Node 站点测试。本地候选尚未推送，真实调度待授权后验证。
+
 本地预览闭环结束不代表可以直接更新 `main`。主站按 D-141 先判断并行状态，再选择晋级路径：
 
 1. 准备发布的改动在其来源 topic 或 `dev` 形成完整提交并普通推送；刷新远端 `main`、`dev` 和 topic。

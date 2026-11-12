@@ -53,7 +53,7 @@ class Fixture:
 
     def request(self, secure, host, path, host_header=None):
         headers = list({**SECURITY, "Content-Security-Policy": self.baseline["csp"]}.items())
-        if secure and self.baseline["hsts"]:
+        if secure and self.baseline["hsts"] and host_header != "unknown.invalid":
             headers.append(("Strict-Transport-Security", self.baseline["hsts"]))
         clean = path.split("?", 1)[0]
         suffix = "?" + path.split("?", 1)[1] if "?" in path else ""
@@ -89,6 +89,14 @@ class PublicHealthTests(unittest.TestCase):
         self.assertEqual(result["certificateDaysRemaining"], 90)
         self.assertFalse(result["serverLedgerInspected"])
 
+    def test_internal_link_option_fails_for_authenticated_broken_link(self):
+        self.fixture.bodies['/'] += b'<a href="/missing?private=value">broken</a>'
+        self.fixture.baseline['files']['/'] = digest(self.fixture.bodies['/'])
+        result = sample(self.fixture.baseline, self.fixture, now=NOW, internal_links=True)
+        self.assert_code(result, 'LINK_TARGET_MISSING')
+        self.assert_code(result, 'HEALTH_INTERNAL_LINKS')
+        self.assertNotIn('private', json.dumps(result))
+
     def test_trial_policy_accepts_exact_300_and_detects_legacy_duration(self):
         self.fixture.baseline["hsts"] = "max-age=300"
         self.assertEqual(self.run_sample()["status"], "passed")
@@ -99,6 +107,17 @@ class PublicHealthTests(unittest.TestCase):
             return status, headers, body, certificate
         self.fixture.transform = legacy
         self.assert_code(self.run_sample(), "HEALTH_HSTS")
+
+    def test_unknown_host_must_not_receive_hsts(self):
+        self.fixture.baseline['hsts'] = 'max-age=300'
+        self.assertEqual(self.run_sample()['status'], 'passed')
+        def unexpected(secure, host, path, result):
+            status, headers, body, certificate = result
+            if secure and status == 421:
+                headers.append(('Strict-Transport-Security', 'max-age=300'))
+            return status, headers, body, certificate
+        self.fixture.transform = unexpected
+        self.assert_code(self.run_sample(), 'HEALTH_HSTS')
 
     def test_payload_byte_change_is_identity_failure(self):
         self.fixture.bodies["/"] += b"modified"
@@ -222,16 +241,16 @@ class PublicHealthTests(unittest.TestCase):
 
 
 class ObservationTests(unittest.TestCase):
-    def receipts(self, count=97):
+    def receipts(self, count=289):
         start = datetime(2026, 10, 26, tzinfo=timezone.utc)
         return [{'observedAtUtc': (start + timedelta(seconds=i * 900)).isoformat(),
                  'baselineSha256': 'a' * 64, 'status': 'passed'} for i in range(count)]
 
     def test_single_or_short_observation_is_running_not_passed(self):
-        for count in (1, 2, 96):
+        for count in (1, 2, 97, 288):
             self.assertEqual(observation_result(self.receipts(count))['status'], 'running')
 
-    def test_24_hours_passes_only_with_all_success_and_no_gaps(self):
+    def test_72_hours_passes_only_with_all_success_and_no_gaps(self):
         self.assertEqual(observation_result(self.receipts())['status'], 'passed')
         for kind in ('failure', 'gap', 'drift'):
             receipts = self.receipts()

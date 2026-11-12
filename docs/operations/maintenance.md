@@ -1,8 +1,21 @@
 # 自动化维护与运行手册
 
 状态：draft
-最近更新：2026-08-04
+最近更新：2026-11-11
 适用范围：M0 腾讯云主站与项目体验子域名的自动发布、监测、备份、安全维护与故障处理
+
+## 2026-11-05 — #61 分层 CI 本地候选
+
+当前分层决定见 [#61 修订方案 A](../architecture/open-decisions.md#2026-11-05--61-修订方案-a本地实施授权)，更新原四个 prerequisite 的职责。标准托管 runner 的公开仓库计算时间免费；本次只减少重复执行，不声称账单收益，不修改 artifact 保留、计费或分支保护。
+
+- dev push 只运行 `Website quality gates` 的主 Node 完整集成，包括零依赖 quality、安装后完整历史、typecheck、test 和 production build；不编译图表，不运行最低 Node，不上传制品。
+- 任意 PR 使用默认 merge ref，主/最低 Node 各执行完整相同负载，主 job 另编译 PlantUML；PR 不上传、不部署。
+- main push 的 `Website quality gates` 只断言主 Node 并编译图表，`Minimum Node compatibility` 完整验收。`Production artifact` 直接 needs 这两个 job 且只接受全部成功，再在全新 runner 对精确 main SHA 自包含完整重验、构建和上传；既有 `Deploy production` 消费同一 run outputs，协议与身份门禁不变。
+- `Diagram compile check`、`Supply chain evidence` 不再是独立检查，前者并入主质量 job，后者由 quality 内的静态供应链检查负责。本地 hook 和四个保留的检查名称不变。分层不会新建 GitHub required checks；main 当前未配置分支保护和 ruleset，晋级仍须人工核对当前 PR 的两个完整检查。
+
+本地验收依次使用 `node scripts/quality/check-ci-workflow.mjs`、CI 调度和 npm 隔离正反 fixture、双 Node 完整 quality/history/typecheck/test/build，以及固定 jar 的真实图表编译。静态契约拒绝额外 job、事件/条件漂移、required workflow 顶层路径过滤、共享缓存、浅历史、浮动 Action 和失败绕过。真实 dev/PR/main 执行、耗时对比与 Issue 关闭仍待后续 Git 授权；不得把本地事件 fixture 当作 GitHub 已调度证据。
+
+**服务器兼容前置**：旧下载器要求已移除的两个独立 job，会阻断新拓扑发布。必须按[下载器兼容升级顺序](production-deploy-setup.md#2026-11-05--61-下载器兼容升级前置)，先在旧 CI 下交付、认证安装兼容模块并验证旧拓扑真实下载，再晋级四 job workflow。下载器同时接受新旧完整成功集合，不放行部分缺失或失败的旧检查；本地候选通过不代表服务器已更新。
 
 ## 目的
 
@@ -93,7 +106,7 @@ D-097 至 D-099 已实现固定 Action SHA、Node 24 双端点、完整 checkout
 
 1. PR required checks 与本地预览验收均通过。
 2. PR 合入 `main`。
-3. GitHub Actions 对精确 `GITHUB_SHA` 运行 `website-quality`、`node-minimum`、`diagrams`、`supply-chain`；四项必须全部成功，不能用 `always()`、`continue-on-error` 或 skipped 结果绕过。D-099 后 `supply-chain` 的发布必需结论只来自静态供应链证据，普通 CI 不执行 live audit。
+3. GitHub Actions 对精确 `GITHUB_SHA` 运行 `website-quality`（主 Node 断言与图表）和 `node-minimum`（完整负载）；两项必须全部成功，不能用 `always()`、`continue-on-error` 或 skipped 结果绕过。静态供应链属于 quality，普通 CI 不执行 live audit。
 4. 非 matrix `production-artifact` 在 fresh runner 对同一 SHA 完整 checkout，验证 `HEAD` 后证明 checkout 中没有预存 `build/`/`dist/`，再以全新隔离 cache 冻结安装，并依次重新执行主端点零第三方依赖 `quality`、独立 E-013 历史入口、`tsc --noEmit`、E-012 Node ESM 测试和 Docusaurus production build，同时完成资源白名单与制品泄漏检查。它不下载 `website-quality` 输出，不读取 preview、原始素材目录或本地旧 build。
 5. 同一 job 紧接着对该唯一 `build/` 计算前后树摘要，在 `dist/release/` 生成 `payload/`、确定性 `metadata/runtime-redirects.json`、`metadata/nginx/redirects.conf`、release 身份和逐文件摘要；独立复验后，从 exact release 全文件树计算不写入 artifact 的 `releaseContentSha256`，随即只上传一次并取得外层 `artifactDigest`。`deploy-production` 只消费 artifact ID、两个独立摘要及 repository/run/SHA job outputs，不按名称、latest 或跨 run 搜索。
 6. `production` environment job 只以 `contents: read`、`actions: read` 的 `GITHUB_TOKEN` 复核 canonical `refs/heads/main` 仍等于本次 SHA，并验证当前 run/artifact/head SHA/外层 digest；通过前不得引用 CAM Secret 或调用腾讯云 API。随后最小权限 CAM 只向指定 TAT command 传递 workflow run/artifact 标识、提交 SHA、`artifactDigest` 与 `releaseContentSha256`。旧 run 晚到、人工重跑旧 SHA 或 main 已移动都失败；历史恢复另行授权。`InvokeCommand` 返回 invocation ID 只代表调度被接受，不能把该时刻标记成 deployment 成功。
@@ -102,7 +115,7 @@ D-097 至 D-099 已实现固定 Action SHA、Node 24 双端点、完整 checkout
 9. 账本预写成功后才切换 `current`、执行 `nginx -t` 和 graceful reload，再逐条检查 301、唯一 `Location`、查询保留、目标 200 与关键静态页面。失败只能整版恢复预选的兼容 release；forward-only 则保持历史闭包并向前修复。成功后核对预写摘要并完成账本备份与部署审计记录，随后才标记 deployment 成功；不得把规范路由延迟到冒烟后追加。
 10. GitHub runner 从公网检查 HTTPS、canonical、登记和尾斜杠重定向、关键锚点和资源；发布者记录 run、artifact、payload/规则摘要、账本前后摘要、fallback/forward-only 结论、TAT invocation、部署 SHA、时间和验证结论。
 
-四个 prerequisite 与 `production-artifact` 的 `GITHUB_TOKEN` 仅有 `contents: read`，`deploy-production` 仅有 `contents: read`、`actions: read`，未列权限全部为 `none`；禁止 write、OIDC/attestation scope 和 producer Secret。production environment 限制为 `main`，deployment concurrency 同时只允许一个发布；concurrency 只保证互斥且不保证等待顺序，不能替代 main HEAD 新鲜度检查。CAM 凭证只允许调用和查询指定 command/instance，不允许执行任意命令或管理其他云资源。
+两个 prerequisite 与 `production-artifact` 的 `GITHUB_TOKEN` 仅有 `contents: read`，`deploy-production` 仅有 `contents: read`、`actions: read`，未列权限全部为 `none`；禁止 write、OIDC/attestation scope 和 producer Secret。production environment 限制为 `main`，deployment concurrency 同时只允许一个发布；concurrency 只保证互斥且不保证等待顺序，不能替代 main HEAD 新鲜度检查。CAM 凭证只允许调用和查询指定 command/instance，不允许执行任意命令或管理其他云资源。
 
 项目体验由各自仓库的 production workflow 发布，使用独立 environment、CAM 凭证、TAT command、deploy key、release 目录和 concurrency group。一个项目的发布失败不得占用或回滚主站及其他项目的版本。
 
@@ -125,6 +138,54 @@ M0 在 GitHub Actions 增加以下计划任务：
 | 每月 | 内容更新时间、域名/实例到期提醒、仓库全量质量 | 生成维护 Issue 或检查报告 |
 
 GitHub 计划任务可能延迟，不作为分钟级监控。M0 不注入浏览器端监测脚本；需要高频告警时再评估服务端外部监控及其数据边界。
+
+### #41 每周 DNS 本地检查契约
+
+本地入口为 `python3 -m ops.monitor.public_health --baseline <0600基线> --output <新回执> --internal-links --dns`。`--dns` 只用于单次检查，不能与 `--observe` 混用；复用已认证基线的 `addressDigest`，其余期望来自[生产清单](production-inventory.md)：固定根域/www、两台 DNSPod NS、无 AAAA/CNAME、DNSSEC 暂缓。主站无已登记 `live` 项目体验；以后启用项目须先扩展相应监测契约，不能自动把 planned 主机加入查询。
+
+检查器通过 `/usr/bin/dig` 发起有界 TCP 查询，禁用用户 dig 配置、搜索后缀及自动重试，不调用 shell；显式保留 DNS 状态、问题区、应答区和授权区。非零退出、超时、非 NOERROR、截断、问题不匹配和不完整记录均失败。系统递归检查 A/AAAA/CNAME/NS；两台登记权威分别检查相同记录及 DNSKEY，空答必须有 AA 和所属区 SOA。通过系统查询发现 `.com` NS 后选择排序第一台查询父区委派和 DS，DS 空答必须是父区权威的 NOERROR/SOA。父区委派 NS、域内 NS 与登记值一致才通过；任何新 DS 或 DNSKEY 都失败并要求复核 DNSSEC 决策。DNSSEC 结果明确为 `deferred-unsigned`，不宣称密码学验证链通过。
+
+仅在回执中保留查询角色、公开域名、记录类型、状态和稳定错误码，不记录 RR 原值、IP、解析器地址或原始 stderr。单次查询和整体命令均有超时，无旧应答回退；一次正常查询不能消除同轮其他来源的失败。该检查依赖系统解析和未签名 DNS 信任边界，不能证明未启用 DNSSEC 的防篡改能力，也不是完整 zone 枚举。底层选项依据 [ISC dig 手册](https://bind9.readthedocs.io/en/latest/manpages.html#dig-dns-lookup-utility)。
+
+递归服务器可能返回没有 SOA 的 NOERROR/NODATA（[RFC 2308 第 2.2 节](https://www.rfc-editor.org/rfc/rfc2308.html#section-2.2)）；只要状态、问题区和 RR 计数完整，它本身不代表站点 DNS 故障。记录缺席的来源证明仍由同轮两台权威的 AA/SOA 及父区 AA/SOA 承担，不能用递归空答替代这些检查。传输失败或缺少 DNS 头部/问题区继续失败。
+
+### #41 每周外链本地检查契约
+
+站内/外链共用 Web URL 解析与校验后才按主机分流：相对 URL 先按源页面解析，非 Web 协议跳过；HTTP 只允许默认端口或 80，HTTPS 只允许默认端口或 443，凭证、控制字符、反斜杠和非法 authority 均拒绝。相同 Web URL 的有效性不随本站/外站主机变化；外链入口也不能因本站主机名而跳过一个非法 Web URL。站内路径与锚点校验保留 fragment，外链请求规范化时才去除 fragment。页面出现 `<base>` 时两个入口都失败，不能使用错误基址。
+
+同一单次入口增加 `--external-links`，只能在全部基线页面逐字节校验通过后读取其公开 `<a href>`；站内链接由 `--internal-links` 负责，mailto/tel 等非 Web 协议不作为 HTTP 健康目标。最多 256 个不同外链，按去除 fragment 后的 URL 去重，每次连接超时 10 秒、最多五次重定向，使用 HEAD；仅遇 405/501 时改用不读取正文的 GET，同样检查状态。最终 2xx 才通过，403/404/429/5xx 都保留为真实检查失败，不根据供应商绕过。外部 fragment 不属于该可达性检查。
+
+全部外链共享 300 秒单调时钟预算，重定向和 GET 回退不重置。每次 DNS 解析、地址验证、连接、TLS 与完整响应头读取在独立短生命周期进程中执行，父进程以剩余预算等待；预算耗尽后终止并回收进程，返回 `LINK_EXTERNAL_BUDGET`，其余目标同样失败且不再请求。10 秒 socket 无活动超时仍返回 `LINK_EXTERNAL_TIMEOUT`；持续缓慢发送响应头不能延长总预算。Python 异常中断也须清理请求进程，不遗留后台解析线程或网络请求；URL 通过私有管道传递，不进入进程命令行或共享诊断。
+
+初始 URL 及每一跳都拒绝凭证、异常端口、控制字符、超长 URL 和非 HTTP(S)；解析地址必须全部为公网地址，并把连接固定到已验证的单个地址，TLS 继续按原主机名验证，避免 DNS 再绑定及跳转访问内网。HTTPS 不允许降级 HTTP。页面出现未支持的 `<base>` 时失败，不能按错误基址检查。请求不携带 Cookie、访问者身份、Referer 或浏览器数据；只按已公开链接向其目标发送维护请求，无新监控供应商。外链回执只记录公开源路径、链接序号、稳定错误码及状态，不输出完整 href、查询参数或网络异常原文；同一 URL 的检查结果映射到全部来源。外链失败使整体探针非零；页面缺失时不发送任何外链请求。
+
+“公网地址”还明确排除组播、保留地址和 IPv4 映射/6to4/Teredo 等过渡形式，避免把 `is_global` 对组播的宽泛分类当作可连接的公共单播地址；这些边界有定向反例，不随某一上游链接检查成功而绕过。
+
+### #41 月度本地报告契约
+
+`node scripts/maintenance/monthly-report.mjs --expiry <0600私有到期记录> --output <新0600回执>` 使用冻结的既有结构化 frontmatter 解码器读取文章，项目日期来自唯一项目注册表；不另写 YAML/正则解析器。仅输出公开 published/archived 项目的 ID、源路径、更新时间及距今天数；草稿不会进入报告，日期非法或晚于当天则失败。年龄用于人工内容复核，没有新增“文章超过固定天数即故障”的内容政策。输入文件和目录的链接、非普通对象、超限、读取中或解析后的漂移均须拒绝，报告范围为当前源码 checkout，不能替代活动 release 身份核验。
+
+私有到期记录为 schema 1，只有 `schema`、`verifiedAtUtc`（带 UTC 时区的 ISO 时间）、`domainExpiresOn` 与 `instanceExpiresOn`（`YYYY-MM-DD`）。记录必须由当前用户持有、单硬链且 mode 0600；不把供应商账户、支付信息、自动续费判断或实例标识写入报告。核验时间最多允许距今 35 天，未来时间拒绝；两项到期天数不超过 45 天即以 `MONTHLY_EXPIRY_APPROACHING` 失败，过期单列 `MONTHLY_EXPIRED`，保证正常月度间隔下有提前处理窗口。缺失或过期核验记录不能自动假设续费成功。当前生产清单尚无可用精确到期日，因此真实到期验收仍待所有者在供应商后台核验并私密配置；自包含正常 fixture 不表示线上到期配置已经完成。
+
+月度执行还必须在同一 checkout 运行既定 `quality`、内容历史、`typecheck`、`test` 和 production `build` 全量命令；报告通过不替代质量门禁通过。定时 workflow 的固定调度、精确身份、认证证据获取和通知演练在独立候选接线后验收，本地模块不创建活动任务或自动维护 Issue。
+
+### #41 周期组合接口
+
+`ops.monitor.periodic.run_period(period, baseline, read_evidence, ...)` 是本地组合 API，`period` 只允许 `daily`、`weekly`、`monthly`。daily 使用带前后服务器证据的公网检查；weekly 在同一入口启用站内链接、DNS 和外链；monthly 在 daily 证据通过后执行固定源码与运行时校验、冻结安装、月度报告和全部质量命令。服务器 reader 是必填依赖，未接线时不提供跳过或使用旧基线单独宣告整体成功的 CLI。
+
+每个周期先读取同一 checkout 的项目体验注册表；当前只有 planned 体验，不向其主机发请求。若注册表缺失/损坏、出现未知状态，或未来出现尚无监测实现的 live 体验，则在公网步骤前分别以 `PERIODIC_PROJECT_REGISTRY` / `PERIODIC_LIVE_EXPERIENCE_UNSUPPORTED` 失败，禁止默默跳过 live 目标。项目体验启用前须扩展健康路径、回主站入口、备案和 DNS 监测；当前候选不宣称已实现这项未来能力。
+
+monthly 要求调用方提供绝对 Node 路径、当前仓库根、私有到期记录及新的报告路径；先验证精确 `.nvmrc`、Git HEAD 等于基线发布 SHA，且没有 tracked/untracked 工作区改动，再执行 E-010 `ci`。后续固定顺序为月度报告、E-010 `run-script quality`、既有内容历史、E-010 `run-script typecheck` / `test` / `build`。任何命令非零、信号、启动失败或超时都停止后续步骤；每步最多 45 分钟，调用者/未来 workflow 还须设置整体超时。子进程不经过 shell，清空环境后只透传运行时所需的 PATH/HOME/locale/临时目录及公开 GitHub 上下文字段；原始输出不写入共享回执，结果只保留固定步骤名、退出码和稳定错误码。环境不带服务器凭证、Cookie、proxy 凭证或其他任意外部变量。
+
+每个命令使用独立进程组；超时或 Python 中断时终止整个进程组，关闭管道并回收直接子进程后才返回或传播中断，避免 npm、测试或构建后代在任务结束后继续写入。主线程调用时临时接管默认 SIGTERM，清理后以 143 退出并恢复原处理器；已有自定义处理器或工作线程调用的信号策略仍由调用方负责。月度报告返回 1 时仍须读取新生成的私有报告，校验检查集合、计数、状态及退出码一致后，将具体失败项（如 `expiry:domain` / `MONTHLY_EXPIRY_APPROACHING`）合并到组合回执；整体保持失败并停止后续质量命令。缺失、损坏或状态不一致的报告不能通过，也不能用通用命令错误替代有效报告中的检查证据。
+
+监测的月度命令、dig 和外链请求进程共用 `bounded_process.run_process`：非阻塞同时读取 stdout/stderr，按两者合计容量累计；最多保留上限字节，只读取一个额外字节识别超限，立即清理整个进程组并失败，不能截断后记成功。月度上限为 8 MiB（`PERIODIC_OUTPUT_LIMIT`），dig 为 64 KiB（`DNS_RESPONSE_SIZE`），外链内部响应为 8 MiB（`LINK_EXTERNAL_RESPONSE_SIZE`）。超时覆盖启动后的管道读写、等待 EOF 和进程退出，使用同一绝对单调截止时间，持续输出不能续期；标准输入也以非阻塞方式发送，未提供输入时关闭，禁止维护命令等待交互。异常路径关闭管道并回收直接子进程，不再调用无容量限制的 `communicate()` 读取剩余数据。该边界约束进程组内的后代；主动脱离进程组的恶意进程隔离需要独立的系统容器/cgroup 策略，本地 runner 不宣称具备该能力。
+
+组合回执继续保留所有已运行检查的失败和精确基线身份，任何缺失的必需步骤都不能转换成 pass。该 API 的自包含 runner fixture 只证明调度/失败传播；不表示真实 npm 安装、远端 CI、计划任务、生产服务器接入或默认通知已经发生。
+
+月度所有质量步骤结束后重新核验 Git HEAD 与工作区，并用第三个新随机量读取服务器快照；其身份、账本与完整快照摘要必须仍等于本轮公网核验的快照，防止长时间质量检查期间发布变化却仍记旧基线通过。月度回执使用 `productionMutationsPerformed=false` 明确生产只读边界；本地冻结安装和构建会写入正常的依赖/构建目录，不以通用“无修改”字段掩盖这些本地写入。
+
+月度报告的十项无依赖 fixture 进入既有 `quality`；冻结 frontmatter 的真实 CLI 集成另以 `node --test tests/build/monthly-report-integration.test.mjs` 验收，不加入无 `node_modules` 也必须运行的质量入口。该集成使用明确标记的私有到期 fixture，不证明供应商真实到期日期或线上到期配置。
 
 ## 服务器例行任务
 

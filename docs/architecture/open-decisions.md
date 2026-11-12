@@ -1,7 +1,51 @@
 # 待决策问题
 
 状态：active  
-最近更新：2026-11-05
+最近更新：2026-11-11
+
+## 2026-11-11 / #41 继续本地实现
+
+用户要求开始推进并继续实现 #41。沿用已选的受限只读证据和 GitHub 默认通知，先完成本地检查器、反例与定时任务候选；保留当前工作区其他专题改动。本轮采用既有系统 `dig` 的固定参数入口，不新增 Python 包：每周分别检查系统递归解析、两台已登记权威服务器和一台从 `.com` NS 应答发现的父区服务器。DNSSEC 仍按 D-168 验证 DNSKEY 与父区 DS 缺席，不生成签名链通过的结论；失败退出、超时或不完整应答均不可当作空记录成功。具体接口及失败边界先写入维护文档再实现，使用自包含 fixture 验证正常、错地址/NS、陈旧 DS、DNSKEY、非权威空答和传输错误。该工程选择不改变 DNS 记录、DNSSEC 决定或既有运维职责。
+
+本地候选允许复用既有公网基线中的地址摘要，不持久化实际地址，不读取访问者日志。Git 晋级、生产接口安装/凭证、活动 schedule 与真实通知送达仍须按具体清单完成接线及独立验收；本轮实现本身不证明这些能力已上线。
+
+## 2026-11-10 / #40 继续验收与本地环境配置
+
+用户要求继续验收 #40，并允许在当前环境配置所需工具。委托范围为保留原始 72 小时回执、逐样本独立复算、既有 SSH 通道的生产只读取证、制品与 GitHub 身份复核，以及本机浏览器、视口和网络检查所需的临时脚本与隔离目录；复用现有工具，不增加收费服务或处理访问者数据。验收须分别记录连续观察、窗口部署历史、终点身份、页面和浏览器结果及网络来源，真实缺口不得用模拟或单一网络结果代替。本次不扩大为 Git 发布、远端 CI 重跑、生产配置/凭证变更、部署、reload 或活动定时任务授权；先形成可审查的本地验收结果。
+
+验收范围复核：#40 将多网络 smoke 列为“建议入口”，正常路径的明确要求是生产路由/SEO/HTTPS/制品一致及同版本 72 小时观察，没有代理上游出口或运营商身份核验要求。Agent 首次收尾将独立外网来源证明误列为关闭前置，现按原 Issue 更正；这不是用户批准降低验收标准。已通过的明确技术验收可形成通过结论，多网络扩展保留为可选补充，既有超时和未确认的网络覆盖仍如实保留，不要求用户提供热点或额外出口。
+
+## 2026-11-06 / #40 连续观察时长
+
+用户要求启动 #40 测试并将观察时长调整为至少 3×24 小时（259200 秒）。沿用每 900 秒采样和现有失败、空档、身份漂移门禁；真实观察必须绑定经认证的当前生产版本，未满时长或未完成其他独立验收不得宣称通过。该请求授权本机只读采样及为认证基线而进行的生产只读核验，不包含部署或服务器配置变更。
+
+## 2026-11-06 / #41 只读服务器证据方案
+
+用户选择通过受限只读服务器接口为定时检查提供生产发布身份和账本证据，使用既有 GitHub 默认失败通知，不增加通知供应商。先在本地设计、实现并以隔离 fixture 验证；证据必须绑定活动 release，校验账本历史及 release 兼容性，缺失、漂移或事务未完成时失败，不能以静态旧基线代替现场身份。接口仅输出完成监测所需的脱敏字段，不读取访问者日志或执行部署、修复和其他写操作。GitHub runner 到接口的安全接入、受限身份与凭证、服务器安装、定时接线及真实通知送达均须以具体方案另行验收；本决定不宣称 #40 或 #41 已完成。
+
+## 2026-11-05 — #61 修订方案 A：本地实施授权
+
+用户确认按修订方案 A 推进本地实现与验证。委托范围为 CI 事件分层、短 job 合并、既有检查器与正反 fixture，以及直接设计和操作文档；不提交、推送、创建或合并 PR，不重跑远端 Actions，不修改计费、required checks、runner、凭证或生产基础设施。该记录替代下文 #61 的旧待确认提案，不延续其历史 Git 授权。
+
+复审后用户要求修复服务器下载契约遗漏，本轮授权包含 `ops/deploy/fetch_artifact.py` 及回归测试的本地兼容修复。下载器只接受两种完整门禁集合：旧版五项（主质量、最低 Node、独立图表、独立供应链和 producer）或新版三项（主质量、最低 Node 和 producer）；集合内每项均须唯一且 `completed/success`。若旧独立检查只剩一项，或仍出现但失败/跳过，不得退回新版集合放行。精确 run attempt、SHA、artifact 身份复验、ZIP 摘要和凭证隔离不变。验收先以现有完整下载入口夹具复现新拓扑拒绝，再验证两套成功集合及缺项、重复、失败、取消和跳过时不请求 ZIP。
+
+发布存在强制依赖：必须先在保留旧 CI 拓扑的独立兼容阶段，将修复进入成功的 canonical main；认证并安装服务器下载器、独立验证旧拓扑仍可下载后，才可晋级删除两个 job 的 workflow。安装前须冻结精确源 blob/SHA-256、服务器前态与恢复方案；不得把本地修复或同一次合并当作服务器已升级证据。具体顺序见[调度接线清单](../operations/production-deploy-setup.md#2026-11-05--61-下载器兼容升级前置)。本次不执行 Git 晋级或服务器安装，未满足前置时暂停新拓扑进入 main。
+
+用户随后要求“进行现场升级测试”。授权范围为既有 `ssh axialmuse-prod` 通道下的前态核验、服务器 root-only 隔离候选及下载器现场验证；不触发 TAT、生产激活或 reload。现场查得 canonical main 仍为 `04fa914cdb1efa3cd015a2891d9b71977d184151`，其成功旧拓扑 run 为 `42034312878` attempt 1，修复尚未晋级。正式安装仍依赖上述 canonical main 来源认证，本请求不被解释为额外 commit/push/PR/merge 授权；先完成可独立运行的现场候选测试与具体晋级清单，保持活动下载器不变，Git 前置另行确认。现场验收比较前后 current、账本、事务、运行模块、Nginx 配置和锁状态，测试 ZIP 与收据仅保留在私有测试目录，令牌及签名 URL 不落盘、不输出。
+
+现场已只读核实仓库为 public，全部 job 使用标准 `ubuntu-latest`；依据 [GitHub 官方计费说明](https://docs.github.com/en/billing/concepts/product-billing/github-actions)，此类公开仓库 runner 不消耗付费计算额度，不能把时间优化表述为账单节省。main 分支保护端点返回 `Branch not protected`，有效分支规则和 ruleset 均为空，因此保留 main 自身的最低 Node、图表及完整制品验收，不以此前 PR 成功作为发布依据。
+
+| 事件 | Website quality gates | Minimum Node compatibility | Production artifact / Deploy production |
+|---|---|---|---|
+| dev push | 主 Node 冻结安装、quality、历史、类型、测试、production build | 跳过 | 跳过 |
+| 任意 PR（默认 merge ref，含 topic 和 fork） | 主 Node 完整负载，另编译图表 | 最低 Node 同一完整负载 | 跳过 |
+| main push | 主 Node 精确断言及图表编译，不重复依赖安装和站点构建 | 最低 Node 完整负载 | 两个前置 job 均成功后，canonical main 的 fresh producer 完整重验、构建、封装与上传；随后沿用既有部署身份检查 |
+
+保持四个检查名称和 job ID：`website-quality`、`node-minimum`、`production-artifact`、`deploy-production`；移除 `diagrams` 和 `supply-chain` 独立 job。图表归入主质量 job，静态供应链归入既有 `quality`，dev 仍保留主 Node quality 以获得远端独立反馈。本地 pre-commit 不变且继续零第三方依赖；不增加 pre-push hook。最低 Node job 的唯一允许条件为 PR 或 main push，主质量 job 不设 job 条件；producer 只直接依赖这两个在 main 必执行的 job，保持默认成功传播，不把跳过、失败或取消作为可发布状态。不增加手工触发、路径过滤、cache、依赖或 Action，不改变 fresh producer 字节闭包、上传与 TAT 协议。
+
+主要不变量：任意获准事件只执行表中负载，main 上传前必须已通过当前 main 的最低 Node、图表和 producer 自身完整验收；任何条件或命令漂移均由静态契约拒绝。按三个可独立验收步骤推进：①固定事件/负载表和精确检查器，以事件 golden 及条件变形拒绝证明调度正确；②同步 E-010 接线检查，证明只允许精确分层契约且任意条件跳过仍失败；③双端点完整本地回归及真实图表编译。后续步骤只消费已通过的前置，不依赖远端执行。
+
+时间基线取自同一晋级链的成功 run：dev `42033082257`、PR `42033703220`、main `42034312878`；按实际 runner job 起止相减并排除 skipped，合计 `332 + 315 + 511 = 1158` 秒（19 分 18 秒），不是账单分钟或串行耗时。main 全流程由 run 创建至末 job 完成为 5 分 48 秒。新拓扑的真实时间和收益必须等另行授权的 dev/PR/main 远端结果，不预写节省比例。#61 本轮只完成本地阶段，不修改或关闭远端 Issue。
 
 ## 2026-11-05 — #61 下载器先行兼容候选
 
@@ -503,9 +547,9 @@
   部署排他锁内先用隔离的本机 Nginx 候选实例完成配置和 HTTP 行为测试，再读取账本并验证候选。候选全部规范 200 路径、以及任何新增或改指后可能暴露的 registered 301 边，必须先并入候选账本、原子写入并 flush，随后才允许切换 `current`、执行 `nginx -t` 和 graceful reload；这同时覆盖 registered 目标与 `canonical-slash` 目标。激活前必须找出满足完整账本的 fallback release；有 fallback 时，reload 或公网冒烟失败才允许整版恢复并重新验证，没有 fallback 时默认拒绝。公网冒烟成功且账本备份完成后才能标记 deployment 成功；账本损坏、缺失或写入失败不得从注册表静默重建。#13 的规则派生、payload 校验和固定镜像真实 Nginx 验收已完成，#33/#35/#14 已形成 release、verifier 与 producer 能力；D-135 又以有效 unit-aware v2 receipt 关闭 #36 的 post-reboot semantic acceptance 门禁，但 canonical `main` artifact、#36 verifier 安装，以及 #37 账本、现场 Nginx、激活与公网冒烟仍未形成。D-125 历史回执仍为 `environmental_inconclusive`；D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成，但不证明历史因果。封装输入的 job 字节所有权由 E-015 补齐，不能把本地证据表述为生产部署完成。
 
   账本仅允许两种初始化：全新站点在 DNS 尚未对外且没有活动 release 时，经一次性上线授权创建空 schema；或既有站点迁移时，从可审计的生产路径/重定向清单显式导入并人工复核。本项目当前公共 DNS 无 A/AAAA，因此首次上线按前者设计；一旦初始化，账本缺失绝不能再被当作“首次部署”自动重建。
-- **E-015 / 2026-07-18 — production artifact 自包含重建与字节闭包**：GitHub 的 job 使用彼此隔离的 runner，`production-artifact` 不能读取 `website-quality` 的本地 `build/`。本项目不建立中间 build artifact 交接协议；`website-quality` 继续作为 PR 和 `main` 的 required check，其本地 build 不是可部署输入。`production-artifact` 是最终可部署 build 的唯一字节所有者：仅 canonical 仓库的 `main` push，或明确选择 `refs/heads/main` 的人工 run 可以进入；job 为单一非 matrix job，直接 `needs` `website-quality`、`node-minimum`、`diagrams`、`supply-chain`，沿用默认成功传播，禁止 `always()`、`continue-on-error` 或把 failure、cancelled、skipped 当作可发布状态。GitHub 对 job、runner 与 prerequisite 的说明见 [Understanding GitHub Actions](https://docs.github.com/en/actions/get-started/understand-github-actions) 和 [Defining prerequisite jobs](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-jobs#defining-prerequisite-jobs)。
+- **E-015 / 2026-07-18 — production artifact 自包含重建与字节闭包**：GitHub 的 job 使用彼此隔离的 runner，`production-artifact` 不能读取 `website-quality` 的本地 `build/`。本项目不建立中间 build artifact 交接协议；按 2026-11-05 的 #61 修订方案，`website-quality` 在 PR 执行完整主 Node 验收，在 main 只执行主 Node 断言与图表；其 job-local build 始终不是可部署输入。`production-artifact` 是最终可部署 build 的唯一字节所有者：仅 canonical 仓库的 `main` push，或明确选择 `refs/heads/main` 的人工 run 可以进入；job 为单一非 matrix job，直接 `needs` `website-quality`、`node-minimum`，沿用默认成功传播，禁止 `always()`、`continue-on-error` 或把 failure、cancelled、skipped 当作可发布状态。GitHub 对 job、runner 与 prerequisite 的说明见 [Understanding GitHub Actions](https://docs.github.com/en/actions/get-started/understand-github-actions) 和 [Defining prerequisite jobs](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-jobs#defining-prerequisite-jobs)。
 
-  `production-artifact` 在全新 Ubuntu runner 上以精确 `GITHUB_SHA` 完整 checkout，要求 `HEAD` 相等、`fetch-depth: 0`、`persist-credentials: false` 且无 partial/sparse checkout，并在安装前证明 checkout 中没有预存 `build/`、`dist/`；随后使用 `.nvmrc` 的精确 Node/npm、E-010 的全新 HOME/config/cache 隔离入口完成冻结安装，并以执行前后摘要证明 manifest/lock 不变。该 job 在主端点依次重新运行零依赖 `quality`、安装后独立 E-013 历史入口、类型检查、E-012 测试、Docusaurus production build、资源白名单和制品泄漏检查；最低 Node、PlantUML 与全图供应链审计不在本 job 重复，而由直接 `needs` 的独立 job 负责。上述门禁成功后不得插入第三方 Action、依赖安装、第二次 build 或其他可写 `build/` 的命令，立即运行 `package:artifact` 和独立 release 校验；两个入口都在新的私有验证事务中以 fresh Docusaurus `release` phase 绑定当前完整输入 seal 并重跑 production artifact checker，不借用已结束构建事务的临时 seal，也不执行第二次 build。下载失败后重建、读取其他 job artifact 或复用本机旧 `build/` 的 fallback 一律禁止。
+  `production-artifact` 在全新 Ubuntu runner 上以精确 `GITHUB_SHA` 完整 checkout，要求 `HEAD` 相等、`fetch-depth: 0`、`persist-credentials: false` 且无 partial/sparse checkout，并在安装前证明 checkout 中没有预存 `build/`、`dist/`；随后使用 `.nvmrc` 的精确 Node/npm、E-010 的全新 HOME/config/cache 隔离入口完成冻结安装，并以执行前后摘要证明 manifest/lock 不变。该 job 在主端点依次重新运行零依赖 `quality`、安装后独立 E-013 历史入口、类型检查、E-012 测试、Docusaurus production build、资源白名单和制品泄漏检查；最低 Node 由直接 `needs` 的 `node-minimum` 完整验收，PlantUML 由直接 `needs` 的 `website-quality` 编译；静态供应链已属于 quality，不另设 job，普通 CI 不运行 live audit。上述门禁成功后不得插入第三方 Action、依赖安装、第二次 build 或其他可写 `build/` 的命令，立即运行 `package:artifact` 和独立 release 校验；两个入口都在新的私有验证事务中以 fresh Docusaurus `release` phase 绑定当前完整输入 seal 并重跑 production artifact checker，不借用已结束构建事务的临时 seal，也不执行第二次 build。下载失败后重建、读取其他 job artifact 或复用本机旧 `build/` 的 fallback 一律禁止。
 
   “同一 build 字节”固定为经过 CODE-015 路径校验的规范 POSIX 相对普通文件集合及每个文件的原始字节，不包含 mtime、uid/gid、mode 或空目录语义；符号链接、硬链接、特殊文件、隐藏路径、绝对/父级路径、控制字符、重复规范化路径与大小写冲突均在 build、release 和上传前失败。封装器在复制前后重算按路径排序的 SHA-256 树摘要，`release.json` 保存 `sourceBuildTreeSha256`，并证明 `payload/` 相对路径与字节一一对应；期间任何新增、删除、改名或字节变化失败。服务器安装时统一目录 `0755`、普通文件 `0644` 并按内部清单复核，因此 GitHub 外层归档的权限归一化不参与内容身份。
 
@@ -556,7 +600,7 @@
 
 - Docusaurus、Node/npm、TypeScript、内容模型、路由、主题、注册表、Linux/Ubuntu-only 执行边界、供应链协议、默认 `build/` 产物、production job 字节所有权及 GitHub Actions/TAT 交付方向已经确定。#9/#10/#21/#22/#11/#23/#5/#6/#7/#26/#27/#28 已完成各自实现与远端闭环；D-097 至 D-103、#12、#24、#32 已完成专题实现和本地验收，#13/#33/#35/#14/#34 已形成 release、verifier、producer 与 dispatch 的仓库侧能力，但组合 CI、canonical `main` 真实 artifact 和活动 TAT 尚待。D-119/D-120 SSH、D-122 OS UFW 和 D-124 软件事务已完成；D-125 历史正式回执仍为 `environmental_inconclusive`。D-126 已关闭当前内容关系缺口，D-128 component-aware transition 已以 `status=complete outcome=committed` 完成。D-129 的唯一重启已执行、原完整 post-reboot 保持 pending；D-130 当前人工确认和新逐组件验收源码/契约本地审计已完成，D-132 首轮 formal 失败后由 D-133/D-134 完成 unit 归因与 v2 修正，D-135 已形成有效 `accepted-with-residuals` v2 receipt。#8、#14 真实 artifact、#36 verifier 安装和 #37 继续按依赖跟踪。后续依赖变化、外部工具、凭证、Git 发布和基础设施操作仍保留对应门禁。
 - E-010 的 npm 配置与缓存隔离、官方 registry/lock 来源预检、版本闭包、旁路门禁和双端点 CLI，E-011 的确定性 SPDX 规范化与证据状态机，以及 #21 的策略/admission schema、真实候选审查、tarball/NOTICE、audit 受限报告、正式三制品、静态闭包、最终证据持有、双端点冻结安装和 composite receipt 均已通过真实图验收；#22 已消费该准入图并完成 Docusaurus/TypeScript 基线的远端闭环。D-097 至 D-102 已接通 Node 24 主/最低端点、完整历史、真实内容 production build、静态供应链证据与零依赖本地质量入口并完成专题本地验收，现依 D-104 纳入 `dev`；普通 CI 不运行 live audit，已知 18 个 high 仍作为未修复风险跟踪。#28 已完成零 npm 依赖的真实 Chrome 自动回归；组合 workflow 的远端执行、`main` required checks、production artifact 和受限 retention 仍待验收或后续实现。任何依赖图变化都必须重新走包含 live audit 的准入闭环。
-- **GitHub Actions 分层与额度优化（待用户确认；[Issue #61](https://github.com/lyty1997/AxialMuseWebsite/issues/61)）**：当前 private repository 的四 job workflow 在 #8 三次实际纠错 run 中，按 GitHub-hosted runner 逐 job 分钟取整约消耗 `6 + 8 + 8 = 22` 分钟，且均尚未进入成功的 production build；本月仓库观测到 64 次 workflow run，当前计费周期额度已用完，最新 run 未获 runner。现有重复包括主/最低 Node 各自执行完整安装与负载、已属于两次 `quality` 的静态供应链又由独立 job 第三次执行，以及十几秒的 diagrams/supply-chain 分别占用 runner。候选方案互斥且尚未批准：
+- **GitHub Actions 分层与额度优化（2026-07-28 历史提案，已被本文件 2026-11-05 的 #61 决定替代；[Issue #61](https://github.com/lyty1997/AxialMuseWebsite/issues/61)）**：当前 private repository 的四 job workflow 在 #8 三次实际纠错 run 中，按 GitHub-hosted runner 逐 job 分钟取整约消耗 `6 + 8 + 8 = 22` 分钟，且均尚未进入成功的 production build；本月仓库观测到 64 次 workflow run，当前计费周期额度已用完，最新 run 未获 runner。现有重复包括主/最低 Node 各自执行完整安装与负载、已属于两次 `quality` 的静态供应链又由独立 job 第三次执行，以及十几秒的 diagrams/supply-chain 分别占用 runner。候选方案互斥且尚未批准：
   1. **方案 A（推荐）**：本地 pre-commit 保留零依赖 `quality`；`dev` push 只执行单一主 Node 安装后集成 job；`dev -> main` PR 执行完整双端点远端验收，并把 PlantUML 与静态供应链收回主 job；`main` 只承担精确 SHA 构建/制品阶段。
   2. **方案 B**：本地 pre-push 承担完整负载，`dev` push 不自动使用托管 runner，远端只在 PR 或手工触发时完整验收；节省最多，但 `dev` 不再具有 GitHub 验证结论，且本地 hook 可被绕过。
   3. **方案 C**：改用 WSL self-hosted runner；不消耗 GitHub-hosted 分钟，但新增 runner 凭证、在线可用性、隔离、升级与事故响应责任。
