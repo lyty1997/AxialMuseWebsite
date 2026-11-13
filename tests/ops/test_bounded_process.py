@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ops.monitor import bounded_process, dns_health, external_links
+from ops.monitor import bounded_process, dns_health
 from ops.monitor.bounded_process import ProcessOutputLimit, run_process
 from ops.monitor.periodic import OUTPUT_LIMIT, run_command
 from ops.monitor.public_health import HealthError
@@ -143,7 +143,7 @@ class BoundedProcessTests(unittest.TestCase):
                 run_process([sys.executable], output_limit=1, deadline=time.monotonic() - 1)
             start.assert_not_called()
 
-    def test_dns_and_external_adapters_enforce_output_cap_with_stable_redacted_failure(self):
+    def test_dns_adapter_enforces_output_cap_with_stable_redacted_failure(self):
         popen = subprocess.Popen
         processes = []
 
@@ -153,10 +153,7 @@ class BoundedProcessTests(unittest.TestCase):
             processes.append(process)
             return process
 
-        for action, code in ((lambda: dns_health.Transport().query("axialmuse.com.", "A"), "DNS_RESPONSE_SIZE"),
-                             (lambda: external_links.Transport().request("https://outside.example/?private=value", "HEAD",
-                                      deadline=time.monotonic() + 5), "LINK_EXTERNAL_RESPONSE_SIZE")):
-            with self.subTest(code=code), patch.object(bounded_process.subprocess, "Popen", side_effect=start):
-                with self.assertRaisesRegex(HealthError, "^" + code + "$"):
-                    action()
-                self.assertLess(processes[-1].returncode, 0)
+        with patch.object(bounded_process.subprocess, "Popen", side_effect=start):
+            with self.assertRaisesRegex(HealthError, "^DNS_RESPONSE_SIZE$"):
+                dns_health.Transport().query("axialmuse.com.", "A")
+            self.assertLess(processes[-1].returncode, 0)

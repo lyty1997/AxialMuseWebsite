@@ -4,6 +4,7 @@ import {
   readdirSync,
   realpathSync,
 } from "node:fs";
+import {createHash} from "node:crypto";
 import {join, resolve} from "node:path";
 import {CI_ACTIONS} from "./ci-actions.mjs";
 import {
@@ -26,6 +27,10 @@ ${DEPLOY_SAFE_CI_CONCURRENCY}
 permissions:
   contents: read
 `;
+
+// 定时 workflow 的触发、权限和固定接线按完整字节冻结，修改时须同步审查契约摘要。
+const MAINTENANCE_SHA256 = "02ff28c72750b38111807835a2ddceef994fa70d5e6e8b66665a3cc474c28aae";
+const MAINTENANCE_HELPER_SHA256 = "d78087f3c4b92df7061443c6a0c712b81936e40ee8a77cb8d18f5ba24b2c31a9";
 
 const MATERIALIZE_PRIVATE_NODE_STEP = `      - name: Materialize private Node runtime
         shell: bash
@@ -553,6 +558,7 @@ export function checkCiWorkflow(root) {
   if (canonicalRoot !== root) fail("CI_WORKFLOW_ROOT");
   const directory = join(root, ".github", "workflows");
   const path = join(directory, "ci.yml");
+  const maintenance = join(directory, "maintenance.yml");
   let source;
   try {
     const directoryMetadata = lstatSync(directory);
@@ -562,15 +568,30 @@ export function checkCiWorkflow(root) {
       realpathSync(directory) !== directory
       || directoryMetadata.isSymbolicLink()
       || !directoryMetadata.isDirectory()
-      || entries.length !== 1
-      || entries[0].name !== "ci.yml"
-      || !entries[0].isFile()
+      || entries.length !== 2
+      || entries.map((entry) => entry.name).sort().join(",") !== "ci.yml,maintenance.yml"
+      || entries.some((entry) => !entry.isFile())
       || realpathSync(path) !== path
       || fileMetadata.isSymbolicLink()
       || !fileMetadata.isFile()
       || fileMetadata.nlink !== 1
     ) {
       fail("CI_WORKFLOW_FILE_SET");
+    }
+    const maintenanceMetadata = lstatSync(maintenance);
+    if (realpathSync(maintenance) !== maintenance || maintenanceMetadata.isSymbolicLink()
+        || !maintenanceMetadata.isFile() || maintenanceMetadata.nlink !== 1) {
+      fail("CI_WORKFLOW_FILE_SET");
+    }
+    if (createHash("sha256").update(readFileSync(maintenance)).digest("hex") !== MAINTENANCE_SHA256) {
+      fail("CI_WORKFLOW_MAINTENANCE");
+    }
+    const helper = join(root, "ops/monitor/workflow_context.py");
+    const helperMetadata = lstatSync(helper);
+    if (realpathSync(helper) !== helper || helperMetadata.isSymbolicLink() || !helperMetadata.isFile()
+        || helperMetadata.nlink !== 1
+        || createHash("sha256").update(readFileSync(helper)).digest("hex") !== MAINTENANCE_HELPER_SHA256) {
+      fail("CI_WORKFLOW_MAINTENANCE");
     }
     source = readFileSync(path, "utf8");
   } catch (error) {

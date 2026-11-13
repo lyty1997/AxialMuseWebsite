@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from ops.deploy.deployment_state import DeploymentError, digest, write_new
-from ops.monitor.server_evidence import challenged_snapshot, snapshot
+from ops.monitor.server_evidence import challenged_snapshot, release_bundle, snapshot
 from test_release_transaction import ReleaseFixture
 
 
@@ -73,3 +73,21 @@ class ServerEvidenceTests(unittest.TestCase):
         self.assertRegex(envelope["observedAtUtc"], r"\+00:00$")
         with self.assertRaisesRegex(DeploymentError, "MONITOR_CHALLENGE"):
             challenged_snapshot(self.fixture.store, "invalid")
+
+    def test_release_bundle_uses_verified_current_payload_and_rules(self):
+        identity = self.deploy()
+        bundle = release_bundle(self.fixture.store)
+        _, receipt, _ = self.fixture.store.read_view(identity["commit_sha"])
+        self.assertEqual(bundle["snapshot"]["identity"], identity)
+        self.assertEqual(bundle["release"]["pages"], list(receipt["routes"]))
+        self.assertEqual(bundle["release"]["files"]["/"], receipt["files"]["payload/index.html"])
+        self.assertTrue(all(path.startswith("/") for path in bundle["release"]["files"]))
+        self.assertNotIn("/config/site-release.conf", bundle["release"]["files"])
+        self.assertEqual(bundle["release"]["rules"]["/projects"], "/projects/")
+
+    def test_release_bundle_rejects_tampered_release(self):
+        self.deploy()
+        path = self.fixture.store.releases / ("a" * 40) / "payload/index.html"
+        path.write_bytes(b"tampered")
+        with self.assertRaises(DeploymentError):
+            release_bundle(self.fixture.store)

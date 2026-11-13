@@ -2,13 +2,11 @@
 
 import json
 import os
-import secrets
 import stat
 import subprocess
-import time
 from pathlib import Path
 
-from ops.monitor.bound_probe import run_bound_sample, validate_evidence
+from ops.monitor.bound_probe import read_current_evidence, run_bound_sample
 from ops.monitor.bounded_process import ProcessOutputLimit, run_process
 from ops.monitor.public_health import HealthError, canonical, digest, private_json, require, utc
 
@@ -68,7 +66,7 @@ def run_period(period, baseline, read_evidence, *, root=None, node=None, expiry=
              if isinstance(error, HealthError) else "PERIODIC_PROJECT_REGISTRY"}],
             "failedCount": 1, "checkCount": 1, "productionMutationsPerformed": False,
             "localQualityCommandsExecuted": 0, "serverLedgerInspected": False, "completedAtUtc": utc()}
-    options = {"internal_links": True, "dns": True, "external_links": True} if period == "weekly" else {}
+    options = {"internal_links": True, "dns": True} if period == "weekly" else {}
     receipt = probe_runner(baseline, read_evidence, **options)
     receipt["checks"].append({"check": "project-experiences", "status": "passed"})
     receipt["checkCount"] += 1
@@ -151,8 +149,7 @@ def run_period(period, baseline, read_evidence, *, root=None, node=None, expiry=
                 == baseline["identity"]["commit_sha"], "PERIODIC_SOURCE_IDENTITY")
         require(not command("clean-final", ["git", "status", "--porcelain=v1", "--untracked-files=all"]).strip(),
                 "PERIODIC_DIRTY_SOURCE")
-        challenge = secrets.token_hex(32)
-        final = validate_evidence(read_evidence(challenge), challenge, baseline, time.time())
+        _, final = read_current_evidence(read_evidence, baseline)
         require(digest(canonical(final)) == receipt["serverSnapshotSha256"], "MONITOR_SNAPSHOT_DRIFT")
         checks.append({"check": "monthly-final-evidence", "status": "passed"})
     except Exception as error:

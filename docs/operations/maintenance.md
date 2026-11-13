@@ -133,11 +133,27 @@ M0 在 GitHub Actions 增加以下计划任务：
 | 每日 | URL 暴露账本可解析、只追加摘要连续，每个历史 source/target 在活动 release 收敛到同一 200 | 停止发布与自动回滚，进入人工恢复 |
 | 每日 | TLS 剩余有效期、证书主机名 | 低于 21 天或主机名错误时失败 |
 | 每日 | 注册表中所有 `live` 项目体验的 HTTPS、健康路径、返回主站入口和备案页脚 | 任一项目异常时生成失败清单 |
-| 每周 | 全站内部链接、公开外链、`robots.txt`、`sitemap.xml` | 生成失败清单 |
+| 每周 | 全站内部链接、`robots.txt`、`sitemap.xml` | 生成失败清单 |
 | 每周 | `@`/`www` 与已登记项目 DNS、nameserver、DNSSEC | 与生产清单和注册表不一致时失败 |
 | 每月 | 内容更新时间、域名/实例到期提醒、仓库全量质量 | 生成维护 Issue 或检查报告 |
 
 GitHub 计划任务可能延迟，不作为分钟级监控。M0 不注入浏览器端监测脚本；需要高频告警时再评估服务端外部监控及其数据边界。
+
+### #41 自动化接线候选
+
+依据[本轮范围和接线决定](../architecture/open-decisions.md#2026-11-13--41-自动监测工作流接线)，`.github/workflows/maintenance.yml` 候选使用三个互不相同的 UTC cron：每日 00:17、每周一 00:37、每月 1 日 00:57；这些日子每日检查仍独立运行。用户要求 #41 本批改动全部 review 通过后才开始定时任务，因此此前不得使活动 cron 在默认分支生效。手动 dispatch 必须明确选择同一三个周期之一。Pull request 运行无生产凭证的 Python 监测回归；活动任务只接受本仓库 `main`，固定 checkout SHA 和完整 Git 历史，只有 monthly 安装精确 Node。workflow 仅授予 `contents: read`；Actions 固定完整 SHA。任何认证、基线、检查或质量错误使 job 非零，失败时保留去掉到期剩余天数及私有字段的回执；回执不存在时原 job 失败不能变为成功。workflow 文件及事件/权限通过 CI 闭合文件集合和固定摘要约束，修改该文件必须同时审查并更新静态契约与反例。
+
+服务端固定入口在已安装且认证的 release 模块根内运行 `ops.monitor.installed_snapshot`，持有 verifier 和部署状态锁，校验事务、活动 release 全文件、已成功发布身份与账本兼容后，只输出同一快照、文件摘要、页面、规则和 UTC 时间。runner 从认证输出构造每次新基线，不使用固定旧 release；独立维护的 CSP、HSTS、地址摘要与证书阈值必须由 `MONITOR_POLICY_JSON` 提供，不能从同轮公网响应学习。TAT 无参数命令、单一实例和专用非交互身份经固定内容 SHA、无参数设置、用户、工作目录、时限及输出目的地预检；每次调用核对唯一 invocation、command、instance、成功终态、退出码、完整输出和执行命令内容，云调用使用有界短进程，结果新鲜度使用本机单调耗时和 UTC 双重判定。首次基线及后续两次服务器读取必须在同一身份、账本和 release 清单上，monthly 质量结束后再次核对。固定命令不接收插值参数，runner 在云接口认证并验证本次 invocation 后将本地随机量绑定到该次证据；没有使用云日志里的任意旧输出作为新证据。
+
+生产启用必须先交付并认证安装只读入口及其模块，准备 `axial-monitor` 非交互身份及只允许调用 `/usr/local/sbin/axialmuse-monitor-snapshot` 且无参数的精确 sudo 规则。安装文件均来自通过 CI 的 canonical main 精确提交：`ops/monitor/installed_snapshot.py`、`server_evidence.py` 和 `public_health.py` 作为 root:root/0644 放入 `/usr/local/lib/axialmuse-release/ops/monitor/`，固定 shell 入口 `ops/monitor/axialmuse-monitor-snapshot` 安装为 root:root/0755 的 `/usr/local/sbin/axialmuse-monitor-snapshot`；须先核验目录/文件 owner、单链接、实际权限、已有目标和旧文件备份，再认证源与安装字节并用独立会话复核。与 verifier 闭合命名空间保持分离；安装不修改 nginx、部署命令或管理 SSH 策略。sudo 规则只能授权上述无参数入口，不授权 Python、shell 或任意路径；须测试无参数调用成功、附带参数及其他命令均被拒绝。
+
+候选 sudoers 行为 `axial-monitor ALL=(root) NOPASSWD: /usr/local/sbin/axialmuse-monitor-snapshot ""`，其中空参数规范用于拒绝命令行参数；实际安装必须先通过 `visudo` 检查候选并核对该用户没有其他可扩大权限的规则。执行 TAT 前，还须在目标身份下用同一固定命令测试、校验服务器输出不含账本正文或凭证，并以非允许命令和额外参数做反例。来源认证、sudo 规则检查和独立身份测试不能由预期路径名代替。
+
+腾讯云使用独立固定无参数 TAT 命令，命令内容精确为两行 `#!/bin/sh` 和 `exec /usr/bin/sudo -n /usr/local/sbin/axialmuse-monitor-snapshot`（均含 LF）；`Username=axial-monitor`、`WorkingDirectory=/`、`Timeout` 为 1 至 60 秒、`EnableParameter=false` 且不配置 COS 输出。专用 CAM 只允许对该精确命令和实例执行 `tat:InvokeCommand`，并授予 `tat:DescribeCommands` 与 `tat:DescribeInvocationTasks` 的必要只读范围；不得授予 `RunCommand`、创建/修改命令或部署权限。TAT 元数据预检与执行不是云端原子操作，云侧命令变更权限必须限制到可信管理员；执行后还复核实际命令内容，不能以检查前快照代替云侧权限管理。执行结果 base64 输出有云端长度上限，任何截断、超限、任务身份不符或未知终态均失败，不下载 COS fallback。[腾讯云任务结果格式](https://cloud.tencent.com/document/product/1340/52687) 与 [任务查询](https://cloud.tencent.com/document/product/1340/52680) 是该传输的外部接口依据。
+
+GitHub `maintenance` environment 只允许 main，独立设置变量 `MONITOR_TAT_COMMAND_ID`、`MONITOR_TAT_INSTANCE_ID`、`MONITOR_POLICY_JSON`，以及 Secret `MONITOR_TAT_SECRET_ID`、`MONITOR_TAT_SECRET_KEY` 和 `MONITOR_EXPIRY_JSON`；不得复用 production 部署凭证。`MONITOR_POLICY_JSON` 的精确字段为 `schema:1`、`csp`、`hsts`、`addressDigest`、`minimumCertificateDays:21`；地址摘要取经独立核验的既有生产基线。月度 Secret 的 schema 与上节私有到期记录一致，真实供应商数据及核验时间由所有者提供，不能用估计日期或计划续费替代；缺失返回失败。凭证通过 GitHub Secret 安全输入，不经聊天、仓库或日志。只读命令和 CAM 配置、Secret/变量写入、手动 dispatch、真实定时 run 与维护者实际接收通知需要分层验收；当前仓库实现或本机 fixture 不代表上述远端资源已启用。
+
+通知沿用 GitHub Actions，预期接收者必须在账户设置中启用所需的 Actions 通知，并以一次可识别的受控失败及维护者实际接收记录核实；仅 job 失败不证明通知已送达。GitHub 官方说明[定时工作流通知归属会随 cron 修改或重新启用而变化](https://docs.github.com/en/actions/concepts/workflows-and-actions/notifications-for-workflow-runs)，公开仓库长期无活动时[计划工作流可能被自动停用](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows)。因此该通道不提供分钟级可用性保证，须定期人工检查 workflow 活动状态；不以 GitHub 自身计划运行证明其在运行缺席时仍可告警。
 
 ### #41 每周 DNS 本地检查契约
 
@@ -149,29 +165,29 @@ GitHub 计划任务可能延迟，不作为分钟级监控。M0 不注入浏览�
 
 递归服务器可能返回没有 SOA 的 NOERROR/NODATA（[RFC 2308 第 2.2 节](https://www.rfc-editor.org/rfc/rfc2308.html#section-2.2)）；只要状态、问题区和 RR 计数完整，它本身不代表站点 DNS 故障。记录缺席的来源证明仍由同轮两台权威的 AA/SOA 及父区 AA/SOA 承担，不能用递归空答替代这些检查。传输失败或缺少 DNS 头部/问题区继续失败。
 
-### #41 每周外链本地检查契约
+### #41 每周链接检查范围
 
-站内/外链共用 Web URL 解析与校验后才按主机分流：相对 URL 先按源页面解析，非 Web 协议跳过；HTTP 只允许默认端口或 80，HTTPS 只允许默认端口或 443，凭证、控制字符、反斜杠和非法 authority 均拒绝。相同 Web URL 的有效性不随本站/外站主机变化；外链入口也不能因本站主机名而跳过一个非法 Web URL。站内路径与锚点校验保留 fragment，外链请求规范化时才去除 fragment。页面出现 `<base>` 时两个入口都失败，不能使用错误基址。
+2026-11-13 用户决定[排除外链检查](../architecture/open-decisions.md#2026-11-13--41-排除外链检查)。每周只检查已认证页面的站内目标、登记重定向和 HTML 锚点，不访问页面中的外站链接，不以外站 HTTP 状态或执行端访问外站的网络条件判定周任务。公开内容中的普通外链和备案链接继续保留；本站页面的备案文字及链接存在性检查仍属本站内容检查。
 
-同一单次入口增加 `--external-links`，只能在全部基线页面逐字节校验通过后读取其公开 `<a href>`；站内链接由 `--internal-links` 负责，mailto/tel 等非 Web 协议不作为 HTTP 健康目标。最多 256 个不同外链，按去除 fragment 后的 URL 去重，每次连接超时 10 秒、最多五次重定向，使用 HEAD；仅遇 405/501 时改用不读取正文的 GET，同样检查状态。最终 2xx 才通过，403/404/429/5xx 都保留为真实检查失败，不根据供应商绕过。外部 fragment 不属于该可达性检查。
+站内入口 `--internal-links` 的本地 URL 解析边界继续保留：相对 URL 按源页面解析，非 Web 协议跳过；HTTP 只允许默认端口或 80，HTTPS 只允许默认端口或 443，凭证、控制字符、反斜杠和非法 authority 均拒绝。解析后只验证本站路径与 fragment；合法外站 URL 跳过，不发送 DNS 或 HTTP 请求。页面出现 `<base>` 时失败，不能使用错误基址。
 
-全部外链共享 300 秒单调时钟预算，重定向和 GET 回退不重置。每次 DNS 解析、地址验证、连接、TLS 与完整响应头读取在独立短生命周期进程中执行，父进程以剩余预算等待；预算耗尽后终止并回收进程，返回 `LINK_EXTERNAL_BUDGET`，其余目标同样失败且不再请求。10 秒 socket 无活动超时仍返回 `LINK_EXTERNAL_TIMEOUT`；持续缓慢发送响应头不能延长总预算。Python 异常中断也须清理请求进程，不遗留后台解析线程或网络请求；URL 通过私有管道传递，不进入进程命令行或共享诊断。
-
-初始 URL 及每一跳都拒绝凭证、异常端口、控制字符、超长 URL 和非 HTTP(S)；解析地址必须全部为公网地址，并把连接固定到已验证的单个地址，TLS 继续按原主机名验证，避免 DNS 再绑定及跳转访问内网。HTTPS 不允许降级 HTTP。页面出现未支持的 `<base>` 时失败，不能按错误基址检查。请求不携带 Cookie、访问者身份、Referer 或浏览器数据；只按已公开链接向其目标发送维护请求，无新监控供应商。外链回执只记录公开源路径、链接序号、稳定错误码及状态，不输出完整 href、查询参数或网络异常原文；同一 URL 的检查结果映射到全部来源。外链失败使整体探针非零；页面缺失时不发送任何外链请求。
-
-“公网地址”还明确排除组播、保留地址和 IPv4 映射/6to4/Teredo 等过渡形式，避免把 `is_global` 对组播的宽泛分类当作可连接的公共单播地址；这些边界有定向反例，不随某一上游链接检查成功而绕过。
+取消 `--external-links` CLI 和 `external_links` API 选项及专属检查器；旧调用必须显式失败，不提供兼容空操作。此前浏览器补测方案不再推进，不引入第三方浏览器请求或临时 Cookie 能力。历史失败回执保留，按新的明确范围重新运行并生成新回执。
 
 ### #41 月度本地报告契约
 
 `node scripts/maintenance/monthly-report.mjs --expiry <0600私有到期记录> --output <新0600回执>` 使用冻结的既有结构化 frontmatter 解码器读取文章，项目日期来自唯一项目注册表；不另写 YAML/正则解析器。仅输出公开 published/archived 项目的 ID、源路径、更新时间及距今天数；草稿不会进入报告，日期非法或晚于当天则失败。年龄用于人工内容复核，没有新增“文章超过固定天数即故障”的内容政策。输入文件和目录的链接、非普通对象、超限、读取中或解析后的漂移均须拒绝，报告范围为当前源码 checkout，不能替代活动 release 身份核验。
 
-私有到期记录为 schema 1，只有 `schema`、`verifiedAtUtc`（带 UTC 时区的 ISO 时间）、`domainExpiresOn` 与 `instanceExpiresOn`（`YYYY-MM-DD`）。记录必须由当前用户持有、单硬链且 mode 0600；不把供应商账户、支付信息、自动续费判断或实例标识写入报告。核验时间最多允许距今 35 天，未来时间拒绝；两项到期天数不超过 45 天即以 `MONTHLY_EXPIRY_APPROACHING` 失败，过期单列 `MONTHLY_EXPIRED`，保证正常月度间隔下有提前处理窗口。缺失或过期核验记录不能自动假设续费成功。当前生产清单尚无可用精确到期日，因此真实到期验收仍待所有者在供应商后台核验并私密配置；自包含正常 fixture 不表示线上到期配置已经完成。
+私有到期记录为 schema 1，只有 `schema`、`verifiedAtUtc`（带 UTC 时区的 ISO 时间）、`domainExpiresOn` 与 `instanceExpiresOn`（`YYYY-MM-DD`）。记录必须由当前用户持有、单硬链且 mode 0600；不把供应商账户、支付信息、自动续费判断或实例标识写入报告。核验时间最多允许距今 35 天，未来时间拒绝；两项到期天数不超过 45 天即以 `MONTHLY_EXPIRY_APPROACHING` 失败，过期单列 `MONTHLY_EXPIRED`，保证正常月度间隔下有提前处理窗口。缺失或过期核验记录不能自动假设续费成功。所有者已确认在供应商后台核实确切到期日并私密配置；真实任务读取及周期复核尚须验收，自包含正常 fixture 不表示线上月度检查已经完成。
 
 月度执行还必须在同一 checkout 运行既定 `quality`、内容历史、`typecheck`、`test` 和 production `build` 全量命令；报告通过不替代质量门禁通过。定时 workflow 的固定调度、精确身份、认证证据获取和通知演练在独立候选接线后验收，本地模块不创建活动任务或自动维护 Issue。
 
 ### #41 周期组合接口
 
-`ops.monitor.periodic.run_period(period, baseline, read_evidence, ...)` 是本地组合 API，`period` 只允许 `daily`、`weekly`、`monthly`。daily 使用带前后服务器证据的公网检查；weekly 在同一入口启用站内链接、DNS 和外链；monthly 在 daily 证据通过后执行固定源码与运行时校验、冻结安装、月度报告和全部质量命令。服务器 reader 是必填依赖，未接线时不提供跳过或使用旧基线单独宣告整体成功的 CLI。
+`ops.monitor.periodic.run_period(period, baseline, read_evidence, ...)` 是本地组合 API，`period` 只允许 `daily`、`weekly`、`monthly`。daily 使用带前后服务器证据的公网检查；weekly 在同一入口启用站内链接和 DNS，不检查外链；monthly 在 daily 证据通过后执行固定源码与运行时校验、冻结安装、月度报告和全部质量命令。服务器 reader 是必填依赖，未接线时不提供跳过或使用旧基线单独宣告整体成功的 CLI。
+
+证据读取统一由 `bound_probe.read_current_evidence` 生成本轮随机量并捕获调用前后时钟。服务器 UTC 与接收端允许最多 5 秒的未来偏差，超过即拒绝；已过去的证据仍最多允许 120 秒，不把时差额度加到旧证据年龄上。5 秒是针对现场亚秒级偏差的固定工程上限，不由服务器输入、网络结果或调用方参数扩大。随机量、发布身份、账本和完整快照验证继续必需，不能仅因时间落在区间内而通过。
+
+读取耗时另由本机单调时钟约束在 0 至 120 秒内；超限返回 `MONITOR_EVIDENCE_TIMEOUT`，即使对端重新打上当前 UTC 也不能放行。接收时间以请求前的本机 UTC 加单调耗时计算，调用期间墙钟变化与单调耗时相差超过 5 秒时以 `MONITOR_CLOCK_DRIFT` 拒绝，避免时钟回拨隐藏超时或跳变制造成功。每日/每周的前后读取及月度质量结束后的第三次读取共用此入口。该判断在同步 reader 返回后执行，reader 的网络超时与取消仍须由认证传输实现；不宣称本函数能够中断阻塞 reader。正式代码不通过 sleep、改写服务器时间戳或重新请求来绕过时效失败。
 
 每个周期先读取同一 checkout 的项目体验注册表；当前只有 planned 体验，不向其主机发请求。若注册表缺失/损坏、出现未知状态，或未来出现尚无监测实现的 live 体验，则在公网步骤前分别以 `PERIODIC_PROJECT_REGISTRY` / `PERIODIC_LIVE_EXPERIENCE_UNSUPPORTED` 失败，禁止默默跳过 live 目标。项目体验启用前须扩展健康路径、回主站入口、备案和 DNS 监测；当前候选不宣称已实现这项未来能力。
 
@@ -179,7 +195,7 @@ monthly 要求调用方提供绝对 Node 路径、当前仓库根、私有到期
 
 每个命令使用独立进程组；超时或 Python 中断时终止整个进程组，关闭管道并回收直接子进程后才返回或传播中断，避免 npm、测试或构建后代在任务结束后继续写入。主线程调用时临时接管默认 SIGTERM，清理后以 143 退出并恢复原处理器；已有自定义处理器或工作线程调用的信号策略仍由调用方负责。月度报告返回 1 时仍须读取新生成的私有报告，校验检查集合、计数、状态及退出码一致后，将具体失败项（如 `expiry:domain` / `MONTHLY_EXPIRY_APPROACHING`）合并到组合回执；整体保持失败并停止后续质量命令。缺失、损坏或状态不一致的报告不能通过，也不能用通用命令错误替代有效报告中的检查证据。
 
-监测的月度命令、dig 和外链请求进程共用 `bounded_process.run_process`：非阻塞同时读取 stdout/stderr，按两者合计容量累计；最多保留上限字节，只读取一个额外字节识别超限，立即清理整个进程组并失败，不能截断后记成功。月度上限为 8 MiB（`PERIODIC_OUTPUT_LIMIT`），dig 为 64 KiB（`DNS_RESPONSE_SIZE`），外链内部响应为 8 MiB（`LINK_EXTERNAL_RESPONSE_SIZE`）。超时覆盖启动后的管道读写、等待 EOF 和进程退出，使用同一绝对单调截止时间，持续输出不能续期；标准输入也以非阻塞方式发送，未提供输入时关闭，禁止维护命令等待交互。异常路径关闭管道并回收直接子进程，不再调用无容量限制的 `communicate()` 读取剩余数据。该边界约束进程组内的后代；主动脱离进程组的恶意进程隔离需要独立的系统容器/cgroup 策略，本地 runner 不宣称具备该能力。
+监测的月度命令和 dig 共用 `bounded_process.run_process`：非阻塞同时读取 stdout/stderr，按两者合计容量累计；最多保留上限字节，只读取一个额外字节识别超限，立即清理整个进程组并失败，不能截断后记成功。月度上限为 8 MiB（`PERIODIC_OUTPUT_LIMIT`），dig 为 64 KiB（`DNS_RESPONSE_SIZE`）。超时覆盖启动后的管道读写、等待 EOF 和进程退出，使用同一绝对单调截止时间，持续输出不能续期；标准输入也以非阻塞方式发送，未提供输入时关闭，禁止维护命令等待交互。异常路径关闭管道并回收直接子进程，不再调用无容量限制的 `communicate()` 读取剩余数据。该边界约束进程组内的后代；主动脱离进程组的恶意进程隔离需要独立的系统容器/cgroup 策略，本地 runner 不宣称具备该能力。
 
 组合回执继续保留所有已运行检查的失败和精确基线身份，任何缺失的必需步骤都不能转换成 pass。该 API 的自包含 runner fixture 只证明调度/失败传播；不表示真实 npm 安装、远端 CI、计划任务、生产服务器接入或默认通知已经发生。
 

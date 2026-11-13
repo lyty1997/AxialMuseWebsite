@@ -9,10 +9,12 @@ import sys
 import tempfile
 import time
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 from ops.monitor import bounded_process
+from ops.monitor import dns_health, public_health
 from ops.monitor.periodic import run_command, run_period
 from ops.monitor.public_health import HealthError, canonical, digest, utc, write_receipt
 from test_public_health import Fixture
@@ -174,12 +176,47 @@ class PeriodicTests(unittest.TestCase):
                           probe_runner=self.probe, command_runner=self.command)
 
     def test_daily_and_weekly_select_exact_features(self):
-        for period, expected in (("daily", {}), ("weekly", {"internal_links": True, "dns": True, "external_links": True})):
+        for period, expected in (("daily", {}), ("weekly", {"internal_links": True, "dns": True})):
             with self.subTest(period=period):
                 result = run_period(period, self.baseline, self.read, root=self.root, probe_runner=self.probe)
                 self.probe.assert_called_with(self.baseline, self.read, **expected)
                 self.assertEqual(result["period"], period)
                 self.assertFalse(result["productionMutationsPerformed"])
+
+    def test_weekly_only_contacts_site_and_preserves_internal_and_dns_failures(self):
+        for fault in (None, "internal", "dns"):
+            with self.subTest(fault=fault):
+                fixture = Fixture()
+                fixture.certificate["notAfter"] = (datetime.now(timezone.utc) + timedelta(days=90)).strftime(
+                    "%b %d %H:%M:%S %Y GMT")
+                fixture.bodies["/"] += b'<a href="https://unreachable.example/private?value=secret">outside</a>'
+                if fault == "internal":
+                    fixture.bodies["/"] += b'<a href="/missing/">missing</a>'
+                fixture.baseline["files"]["/"] = digest(fixture.bodies["/"])
+                dns = [{"check": "dns-weekly:fixture", "status": "failed" if fault == "dns" else "passed"}]
+                reads = []
+
+                def read(challenge):
+                    reads.append(challenge)
+                    return self.read(challenge)
+
+                with patch.object(public_health, "Transport", return_value=fixture), \
+                        patch.object(dns_health, "check_dns", return_value=dns) as check_dns, \
+                        patch.object(public_health.socket, "getaddrinfo", side_effect=AssertionError("unexpected DNS")), \
+                        patch.object(bounded_process, "run_process", side_effect=AssertionError("unexpected process")):
+                    result = run_period("weekly", fixture.baseline, read, root=self.root)
+                check_dns.assert_called_once_with(fixture.baseline)
+                self.assertEqual(result["status"], "passed" if fault is None else "failed")
+                self.assertTrue(result["serverLedgerInspected"])
+                self.assertEqual(len(reads), 2)
+                self.assertNotEqual(reads[0], reads[1])
+                names = {c["check"] for c in result["checks"]}
+                self.assertTrue({"server-evidence:before", "server-evidence:after", "internal-links",
+                                 "dns-weekly:fixture", "project-experiences"} <= names)
+                self.assertFalse(any(name.startswith("external") for name in names))
+                if fault == "internal":
+                    self.assertIn("LINK_TARGET_MISSING", {c.get("code") for c in result["checks"]})
+                self.assertNotIn("secret", json.dumps(result))
 
     def test_normal_monthly_plan_runs_every_required_command_in_order(self):
         result = self.monthly()
@@ -321,6 +358,29 @@ class PeriodicTests(unittest.TestCase):
                             probe_runner=self.probe, command_runner=self.command)
         self.assertEqual(result["checks"][-1]["code"], "MONITOR_SNAPSHOT_DRIFT")
         self.assertEqual(result["status"], "failed")
+
+    def test_monthly_final_evidence_allows_small_server_clock_lead(self):
+        def reader(challenge):
+            value = self.read(challenge)
+            value["observedAtUtc"] = (datetime.now(timezone.utc) + timedelta(seconds=0.5)).isoformat()
+            return value
+        result = run_period("monthly", self.baseline, reader, root=self.root, node="/fixture/node",
+                            expiry=Path(self.temporary.name) / "private.json", monthly_output=self.output,
+                            probe_runner=self.probe, command_runner=self.command)
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["checks"][-1]["check"], "monthly-final-evidence")
+
+    def test_monthly_final_read_uses_shared_monotonic_and_clock_guards(self):
+        for elapsed, wall_step, code in ((121, 0, "MONITOR_EVIDENCE_TIMEOUT"),
+                                         (0, 6, "MONITOR_CLOCK_DRIFT")):
+            with self.subTest(code=code):
+                with patch("ops.monitor.bound_probe.time.monotonic", side_effect=[0, elapsed]), \
+                        patch("ops.monitor.bound_probe.time.time", side_effect=[1000, 1000 + wall_step]):
+                    result = self.monthly()
+                self.assertEqual(result["status"], "failed")
+                self.assertEqual(result["checks"][-1]["code"], code)
+                self.assertNotIn("monthly-final-evidence", [c["check"] for c in result["checks"]])
+                self.output.unlink()
 
     def test_unknown_period_cannot_fall_back_to_daily(self):
         with self.assertRaisesRegex(HealthError, "PERIODIC_PERIOD"):

@@ -40,6 +40,86 @@ class BoundProbeTests(unittest.TestCase):
         self.assertNotEqual(result["serverEvidenceBeforeSha256"], result["serverEvidenceAfterSha256"])
         self.probe.assert_called_once_with(self.fixture.baseline, internal_links=True)
 
+    def test_subsecond_server_clock_lead_does_not_reject_current_evidence(self):
+        self.transform = lambda _index, item: {
+            **item, "observedAtUtc": datetime.fromtimestamp(NOW + 0.5, timezone.utc).isoformat()}
+        result = self.run_probe()
+        self.assertEqual(result["status"], "passed")
+        self.assertTrue(result["serverLedgerInspected"])
+        self.assertEqual(len(self.challenges), 2)
+
+    def test_clock_skew_and_age_boundaries_do_not_extend_old_evidence_lifetime(self):
+        for offset, passed in ((-120, True), (-120.001, False), (-119.999, True),
+                               (0, True), (4.999, True), (5, True), (5.001, False)):
+            with self.subTest(offset=offset):
+                self.transform = lambda _index, item: {
+                    **item, "observedAtUtc": datetime.fromtimestamp(NOW + offset, timezone.utc).isoformat()}
+                result = run_bound_sample(self.fixture.baseline, self.read, probe=self.probe,
+                                          now=lambda: NOW, monotonic=lambda: 10)
+                self.assertEqual(result["status"], "passed" if passed else "failed")
+                if not passed:
+                    self.assertEqual(result["checks"][0]["code"], "MONITOR_EVIDENCE_STALE")
+                    self.probe.assert_not_called()
+                self.probe.reset_mock()
+
+    def test_read_timeout_cannot_be_hidden_by_a_fresh_remote_timestamp(self):
+        for elapsed in (120, 120.001, -1, float("nan"), float("inf")):
+            with self.subTest(elapsed=elapsed):
+                self.transform = lambda _index, item: {
+                    **item, "observedAtUtc": datetime.fromtimestamp(NOW + 120, timezone.utc).isoformat()}
+                self.probe.reset_mock()
+                # 两轮读取各自受 120 秒单调时限约束；固定当前 UTC 防止对端重打时间戳绕过。
+                ticks = Mock(side_effect=[0, elapsed, 0, elapsed])
+                walls = Mock(side_effect=[NOW, NOW + 120, NOW, NOW + 120])
+                result = run_bound_sample(self.fixture.baseline, self.read, probe=self.probe,
+                                          now=walls, monotonic=ticks)
+                if elapsed == 120:
+                    self.assertEqual(result["status"], "passed")
+                else:
+                    self.assertEqual(result["checks"][0]["code"], "MONITOR_EVIDENCE_TIMEOUT")
+                    self.probe.assert_not_called()
+
+    def test_wall_clock_steps_cannot_hide_elapsed_time_or_create_fresh_evidence(self):
+        for step in (-6, 6, float("nan"), float("inf")):
+            with self.subTest(step=step):
+                self.probe.reset_mock()
+                result = run_bound_sample(self.fixture.baseline, self.read, probe=self.probe,
+                                          now=Mock(side_effect=[NOW, NOW + 1 + step]),
+                                          monotonic=Mock(side_effect=[0, 1]))
+                self.assertEqual(result["checks"][0]["code"], "MONITOR_CLOCK_DRIFT")
+                self.probe.assert_not_called()
+
+    def test_small_local_clock_step_does_not_rebase_remote_age(self):
+        self.transform = lambda _index, item: {
+            **item, "observedAtUtc": datetime.fromtimestamp(NOW - 120, timezone.utc).isoformat()}
+        result = run_bound_sample(self.fixture.baseline, self.read, probe=self.probe,
+                                  now=Mock(side_effect=[NOW, NOW - 4]),
+                                  monotonic=Mock(side_effect=[0, 1]))
+        self.assertEqual(result["checks"][0]["code"], "MONITOR_EVIDENCE_STALE")
+        self.probe.assert_not_called()
+
+    def test_endpoint_clock_error_is_retained_after_successful_public_checks(self):
+        def transform(index, item):
+            if index == 2:
+                item["observedAtUtc"] = datetime.fromtimestamp(NOW + 5.001, timezone.utc).isoformat()
+            return item
+        self.transform = transform
+        result = run_bound_sample(self.fixture.baseline, self.read, probe=self.probe,
+                                  now=lambda: NOW, monotonic=lambda: 10)
+        self.assertEqual(result["status"], "failed")
+        self.assertFalse(result["serverLedgerInspected"])
+        self.assertEqual(result["checks"][-1]["check"], "server-evidence:after")
+        self.assertEqual(result["checks"][-1]["code"], "MONITOR_EVIDENCE_STALE")
+        self.probe.assert_called_once()
+
+    def test_clock_tolerance_does_not_allow_replayed_challenge(self):
+        self.transform = lambda _index, item: {
+            **item, "challenge": "f" * 64,
+            "observedAtUtc": datetime.fromtimestamp(NOW + 0.5, timezone.utc).isoformat()}
+        result = self.run_probe()
+        self.assertEqual(result["checks"][0]["code"], "MONITOR_CHALLENGE")
+        self.probe.assert_not_called()
+
     def test_replayed_nonce_and_stale_or_future_timestamp_block_network(self):
         for field, value, code in (("challenge", "f" * 64, "MONITOR_CHALLENGE"),
                                    ("observedAtUtc", "2000-01-01T00:00:00Z", "MONITOR_EVIDENCE_STALE"),
