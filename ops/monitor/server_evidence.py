@@ -7,7 +7,8 @@ from ops.deploy.deployment_state import digest, require
 from ops.monitor.public_health import utc
 
 
-def snapshot(store):
+def release_bundle(store):
+    """在同一个锁内捕获身份、账本、已验证文件清单和规则。"""
     state = store.state
     with state.locked():
         state.assert_idle()
@@ -20,7 +21,7 @@ def snapshot(store):
         ledger.assert_release_compatible(exposure, view)
         require(store.current() == sha, "MONITOR_CURRENT_DRIFT")
         require(state.read_ledger() == (content, history_digest, count), "MONITOR_LEDGER_DRIFT")
-        return {
+        result = {
             "schema": 1,
             "identity": receipt["identity"],
             "ledgerSha256": digest(content),
@@ -29,6 +30,27 @@ def snapshot(store):
             "publishedRoutes": [route.path for route in exposure.published_routes],
             "redirectEdges": [{"from": edge.source, "to": edge.target} for edge in exposure.redirect_edges],
         }
+        files = {}
+        for name, expected in receipt["files"].items():
+            if not name.startswith("payload/"):
+                continue
+            path = name[len("payload/"):]
+            if path == "index.html":
+                path = "/"
+            elif path.endswith("/index.html"):
+                path = "/" + path[:-len("index.html")]
+            else:
+                path = "/" + path
+            require(path not in files, "MONITOR_PAYLOAD_DUPLICATE")
+            files[path] = expected
+        rules = {rule.source: rule.target for rule in view.rules}
+        require(len(rules) == len(view.rules), "MONITOR_RULE_DUPLICATE")
+        return {"schema": 1, "observedAtUtc": utc(), "snapshot": result,
+                "release": {"files": files, "pages": list(view.published_routes), "rules": rules}}
+
+
+def snapshot(store):
+    return release_bundle(store)["snapshot"]
 
 
 def challenged_snapshot(store, challenge):

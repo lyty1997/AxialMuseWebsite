@@ -1,6 +1,7 @@
 """组合新鲜服务器证据与公网检查；认证传输由显式 reader 提供。"""
 
 import re
+import math
 import secrets
 import time
 from datetime import datetime
@@ -8,6 +9,10 @@ from datetime import datetime
 from ops.monitor.public_health import (
     HealthError, canonical, digest, require, sample, utc, validate_baseline,
 )
+
+
+MAX_EVIDENCE_AGE = 120
+MAX_CLOCK_SKEW = 5
 
 
 def validate_evidence(envelope, challenge, baseline, now):
@@ -21,7 +26,7 @@ def validate_evidence(envelope, challenge, baseline, now):
         timestamp = datetime.fromisoformat(observed).timestamp()
     except ValueError:
         raise HealthError("MONITOR_EVIDENCE_TIME") from None
-    require(0 <= now - timestamp <= 120, "MONITOR_EVIDENCE_STALE")
+    require(-MAX_CLOCK_SKEW <= now - timestamp <= MAX_EVIDENCE_AGE, "MONITOR_EVIDENCE_STALE")
     value = envelope["snapshot"]
     require(isinstance(value, dict) and set(value) == {
         "schema", "identity", "ledgerSha256", "ledgerHistorySha256", "ledgerHistoryEntries",
@@ -57,7 +62,29 @@ def validate_evidence(envelope, challenge, baseline, now):
     return value
 
 
-def run_bound_sample(baseline, read_evidence, *, probe=sample, now=time.time, **options):
+def evidence_time(started_at, started, received_at, ended):
+    """将真实读取耗时和墙钟漂移应用到请求前 UTC，不能用对端重打时间逃避限制。"""
+    elapsed = ended - started
+    require(math.isfinite(elapsed) and 0 <= elapsed <= MAX_EVIDENCE_AGE, "MONITOR_EVIDENCE_TIMEOUT")
+    require(math.isfinite(started_at) and math.isfinite(received_at)
+            and abs(received_at - started_at - elapsed) <= MAX_CLOCK_SKEW, "MONITOR_CLOCK_DRIFT")
+    return started_at + elapsed
+
+
+def read_current_evidence(read_evidence, baseline, *, now=None, monotonic=None):
+    """随机量约束本轮，单调时钟限制耗时，UTC 只在固定时差边界内比较。"""
+    now = time.time if now is None else now
+    monotonic = time.monotonic if monotonic is None else monotonic
+    challenge = secrets.token_hex(32)
+    started_at, started = now(), monotonic()
+    envelope = read_evidence(challenge)
+    ended, received_at = monotonic(), now()
+    value = validate_evidence(envelope, challenge, baseline, evidence_time(started_at, started, received_at, ended))
+    return envelope, value
+
+
+def run_bound_sample(baseline, read_evidence, *, probe=sample, now=time.time,
+                     monotonic=time.monotonic, **options):
     """reader 必须使用已认证通道；只在本轮收到且匹配的证据上调用 probe。"""
     validate_baseline(baseline)
     checks = []
@@ -66,9 +93,7 @@ def run_bound_sample(baseline, read_evidence, *, probe=sample, now=time.time, **
                "mutationsPerformed": False}
 
     def evidence(phase):
-        challenge = secrets.token_hex(32)
-        envelope = read_evidence(challenge)
-        value = validate_evidence(envelope, challenge, baseline, now())
+        envelope, value = read_current_evidence(read_evidence, baseline, now=now, monotonic=monotonic)
         receipt["serverEvidence" + phase.title() + "Sha256"] = digest(canonical(envelope))
         return value
 

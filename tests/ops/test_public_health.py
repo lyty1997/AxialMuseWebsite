@@ -1,6 +1,8 @@
 """独立公网 fixture：身份、TLS、重定向、SEO 和观察时间边界必须可变红。"""
 
 import copy
+from contextlib import redirect_stderr
+import io
 import json
 import os
 import ssl
@@ -232,6 +234,15 @@ class PublicHealthTests(unittest.TestCase):
             with patch('ops.monitor.public_health.sample', return_value=failed):
                 self.assertEqual(main(['--baseline', str(baseline), '--output', str(output)]), 1)
             self.assertEqual(private_json(output)['status'], 'failed')
+
+    def test_removed_external_option_is_rejected_before_reading_baseline(self):
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
+            main(['--baseline', '/missing/baseline', '--output', '/missing/receipt', '--external-links'])
+        self.assertEqual(caught.exception.code, 2)
+
+    def test_removed_external_api_option_is_not_silently_ignored(self):
+        with self.assertRaises(TypeError):
+            sample(self.fixture.baseline, self.fixture, now=NOW, external_links=True)
 
     def test_registered_real_robots_matches_public_policy(self):
         root = Path(__file__).resolve().parents[2]

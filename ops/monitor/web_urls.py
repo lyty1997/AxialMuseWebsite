@@ -1,4 +1,4 @@
-"""Web 链接统一校验；通过后才能决定站内路径检查或外部请求。"""
+"""解析页面 Web 链接；校验后只由站内入口检查本站目标，不请求外站。"""
 
 from urllib.parse import urljoin, urlsplit
 

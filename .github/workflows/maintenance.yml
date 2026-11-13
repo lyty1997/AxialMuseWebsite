@@ -1,0 +1,104 @@
+name: Site maintenance
+
+on:
+  pull_request:
+  schedule:
+    - cron: '17 0 * * *'
+    - cron: '37 0 * * 1'
+    - cron: '57 0 1 * *'
+  workflow_dispatch:
+    inputs:
+      period:
+        description: Monitoring period
+        type: choice
+        required: true
+        options:
+          - daily
+          - weekly
+          - monthly
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maintenance-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.event_name == 'workflow_dispatch' && inputs.period || github.event.schedule }}
+  cancel-in-progress: false
+
+jobs:
+  monitor-tests:
+    name: Monitor regression tests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout pull request merge ref
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Test monitor contracts
+        env:
+          PYTHONPATH: tests/ops
+        run: |
+          /usr/bin/python3 -B -m unittest \
+            test_bounded_process test_web_urls test_public_health test_internal_links \
+            test_monitor_server_evidence test_dns_health test_bound_probe test_periodic \
+            test_tat_transport test_maintenance_runner test_workflow_context
+
+  maintenance:
+    name: Site maintenance
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    environment: maintenance
+    env:
+      MONITOR_PERIOD: ${{ github.event_name == 'workflow_dispatch' && inputs.period || github.event.schedule == '17 0 * * *' && 'daily' || github.event.schedule == '37 0 * * 1' && 'weekly' || github.event.schedule == '57 0 1 * *' && 'monthly' || 'invalid' }}
+
+    steps:
+      - name: Checkout exact main with full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify repository and main ref
+        run: /usr/bin/python3 -B -m ops.monitor.workflow_context verify
+
+      - name: Set up monthly Node
+        if: env.MONITOR_PERIOD == 'monthly'
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: ".nvmrc"
+          package-manager-cache: false
+
+      - name: Materialize monthly Node runtime
+        if: env.MONITOR_PERIOD == 'monthly'
+        run: /usr/bin/python3 -B -m ops.monitor.workflow_context prepare-node
+
+      - name: Run authenticated maintenance
+        shell: bash
+        env:
+          MONITOR_TAT_COMMAND_ID: ${{ vars.MONITOR_TAT_COMMAND_ID }}
+          MONITOR_TAT_INSTANCE_ID: ${{ vars.MONITOR_TAT_INSTANCE_ID }}
+          MONITOR_POLICY_JSON: ${{ vars.MONITOR_POLICY_JSON }}
+          MONITOR_TAT_SECRET_ID: ${{ secrets.MONITOR_TAT_SECRET_ID }}
+          MONITOR_TAT_SECRET_KEY: ${{ secrets.MONITOR_TAT_SECRET_KEY }}
+          MONITOR_EXPIRY_JSON: ${{ secrets.MONITOR_EXPIRY_JSON }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir --mode=700 -- "${RUNNER_TEMP}/axial-monitor"
+          /usr/bin/python3 -B -m ops.monitor.maintenance_runner \
+            --period "${MONITOR_PERIOD}" --root "${GITHUB_WORKSPACE}" \
+            --output "${RUNNER_TEMP}/axial-monitor/receipt.json" \
+            --monthly-output "${RUNNER_TEMP}/axial-monitor/monthly.json"
+
+      - name: Upload redacted maintenance receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: maintenance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/axial-monitor/receipt.json
+          if-no-files-found: warn
+          retention-days: 14

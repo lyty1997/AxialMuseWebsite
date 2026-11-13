@@ -188,7 +188,7 @@ class Transport:
             connection.close()
 
 
-def sample(baseline, transport=None, now=None, *, internal_links=False, dns=False, external_links=False):
+def sample(baseline, transport=None, now=None, *, internal_links=False, dns=False):
     validate_baseline(baseline)
     observed_at = utc()
     transport = transport or Transport()
@@ -288,19 +288,6 @@ def sample(baseline, transport=None, now=None, *, internal_links=False, dns=Fals
             require(not failures, "HEALTH_INTERNAL_LINKS")
         attempt("internal-links", links)
 
-    if external_links:
-        def external():
-            if __package__:
-                from ops.monitor.external_links import check_external_links
-            else:
-                from external_links import check_external_links
-            require(all(path in bodies for path in baseline["pages"]), "HEALTH_PAGE_MISSING")
-            pages = {path: bodies[path] for path in baseline["pages"]}
-            results = check_external_links(pages, ORIGIN)
-            checks.extend(results)
-            require(all(result["status"] == "passed" for result in results), "HEALTH_EXTERNAL_LINKS")
-        attempt("external-links", external)
-
     for path in ("/metadata/release.json", "/config/site-release.conf", "/does-not-exist/"):
         def hidden(path=path):
             require(checked(True, HOSTS[1], path)[0] == 404, "HEALTH_METADATA_EXPOSURE")
@@ -382,13 +369,12 @@ def main(arguments=None):
     parser.add_argument("--observe", action="store_true")
     parser.add_argument("--internal-links", action="store_true", help="同时检查已认证页面中的站内链接")
     parser.add_argument("--dns", action="store_true", help="按当前未签名基线检查递归、权威与父区 DNS")
-    parser.add_argument("--external-links", action="store_true", help="检查已认证页面的公开 Web 外链")
     args = parser.parse_args(arguments)
     try:
-        require(not (args.observe and (args.internal_links or args.dns or args.external_links)), "HEALTH_OPTIONS")
+        require(not (args.observe and (args.internal_links or args.dns)), "HEALTH_OPTIONS")
         baseline = validate_baseline(private_json(args.baseline))
         receipt = observe(baseline, args.output) if args.observe else sample(
-            baseline, internal_links=args.internal_links, dns=args.dns, external_links=args.external_links)
+            baseline, internal_links=args.internal_links, dns=args.dns)
         if not args.observe:
             write_receipt(args.output, receipt)
         print(json.dumps({k: receipt[k] for k in ("status",)

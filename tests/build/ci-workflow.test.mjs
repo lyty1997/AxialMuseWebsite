@@ -22,6 +22,8 @@ const CANONICAL = readFileSync(
   resolve(ROOT, ".github/workflows/ci.yml"),
   "utf8",
 );
+const MAINTENANCE = readFileSync(resolve(ROOT, ".github/workflows/maintenance.yml"), "utf8");
+const MAINTENANCE_HELPER = readFileSync(resolve(ROOT, "ops/monitor/workflow_context.py"), "utf8");
 const JOB_NAMES = Object.freeze([
   "website-quality",
   "node-minimum",
@@ -112,15 +114,30 @@ test("CODE-020 canonical CI topology passes with deploy job and pinned Actions",
   });
 });
 
-test("CODE-020 repository workflow file set contains only regular ci.yml", () => {
+test("CODE-020 repository workflow file set is closed and maintenance is immutable", () => {
   withTemporaryRoot((root) => {
     const directory = join(root, ".github", "workflows");
     mkdirSync(directory, {recursive: true});
+    mkdirSync(join(root, "ops/monitor"), {recursive: true});
     writeFileSync(join(directory, "ci.yml"), CANONICAL, "utf8");
+    writeFileSync(join(directory, "maintenance.yml"), MAINTENANCE, "utf8");
+    writeFileSync(join(root, "ops/monitor/workflow_context.py"), MAINTENANCE_HELPER, "utf8");
     assert.deepEqual(checkCiWorkflow(root), {
       actionCount: 10,
       jobCount: 4,
     });
+    writeFileSync(join(directory, "maintenance.yml"), MAINTENANCE.replace("17 0 * * *", "18 0 * * *"));
+    assert.throws(
+      () => checkCiWorkflow(root),
+      (error) => error instanceof CiWorkflowError && error.code === "CI_WORKFLOW_MAINTENANCE",
+    );
+    writeFileSync(join(directory, "maintenance.yml"), MAINTENANCE, "utf8");
+    writeFileSync(join(root, "ops/monitor/workflow_context.py"), `${MAINTENANCE_HELPER}\n`);
+    assert.throws(
+      () => checkCiWorkflow(root),
+      (error) => error instanceof CiWorkflowError && error.code === "CI_WORKFLOW_MAINTENANCE",
+    );
+    writeFileSync(join(root, "ops/monitor/workflow_context.py"), MAINTENANCE_HELPER, "utf8");
     writeFileSync(
       join(directory, "release.yml"),
       "name: bypass\non: push\njobs: {}\n",
@@ -140,6 +157,7 @@ test("CODE-020 repository workflow file set contains only regular ci.yml", () =>
     const target = join(root, "ci-target.yml");
     writeFileSync(target, CANONICAL, "utf8");
     symlinkSync(target, join(directory, "ci.yml"));
+    writeFileSync(join(directory, "maintenance.yml"), MAINTENANCE, "utf8");
     assert.throws(
       () => checkCiWorkflow(root),
       (error) => (
