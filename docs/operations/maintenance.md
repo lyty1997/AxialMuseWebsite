@@ -1,7 +1,7 @@
 # 自动化维护与运行手册
 
 状态：draft
-最近更新：2026-11-11
+最近更新：2026-11-14
 适用范围：M0 腾讯云主站与项目体验子域名的自动发布、监测、备份、安全维护与故障处理
 
 ## 2026-11-05 — #61 分层 CI 本地候选
@@ -140,6 +140,8 @@ M0 在 GitHub Actions 增加以下计划任务：
 GitHub 计划任务可能延迟，不作为分钟级监控。M0 不注入浏览器端监测脚本；需要高频告警时再评估服务端外部监控及其数据边界。
 
 ### #41 自动化接线候选
+
+2026-11-14 现场状态：已按用户授权从通过 CI 的 `main@7b224e5` 安装下述固定入口、模块、受限用户和 sudo 规则；归属/权限/摘要、正常调用和拒绝场景均通过，维护环境配置齐全。真实手动 daily [run 43574946780](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/43574946780) 的 82 项、weekly [run 43576138980](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/43576138980) 的 109 项通过。monthly 首次 quality 失败已追到权限反例夹具受 umask 影响，经只改测试及记录的 PR #86 晋级并实际部署 `main@a99e9b7` 后，[run 43601893555](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/43601893555) 的 101 项全部通过。用户确认实际收到指定自然失败运行的通知；接线后自然 schedule 成功仍待验收。详细证据及未完成项见[进度记录](../progress.md)和 [Issue #41](https://github.com/lyty1997/AxialMuseWebsite/issues/41)。以下说明保留安装与配置契约。
 
 依据[本轮范围和接线决定](../architecture/open-decisions.md#2026-11-13--41-自动监测工作流接线)，`.github/workflows/maintenance.yml` 候选使用三个互不相同的 UTC cron：每日 00:17、每周一 00:37、每月 1 日 00:57；这些日子每日检查仍独立运行。用户要求 #41 本批改动全部 review 通过后才开始定时任务，因此此前不得使活动 cron 在默认分支生效。手动 dispatch 必须明确选择同一三个周期之一。Pull request 运行无生产凭证的 Python 监测回归；活动任务只接受本仓库 `main`，固定 checkout SHA 和完整 Git 历史，只有 monthly 安装精确 Node。workflow 仅授予 `contents: read`；Actions 固定完整 SHA。任何认证、基线、检查或质量错误使 job 非零，失败时保留去掉到期剩余天数及私有字段的回执；回执不存在时原 job 失败不能变为成功。workflow 文件及事件/权限通过 CI 闭合文件集合和固定摘要约束，修改该文件必须同时审查并更新静态契约与反例。
 
@@ -380,7 +382,7 @@ monthly 要求调用方提供绝对 Node 路径、当前仓库根、私有到期
 
 ### 每月
 
-- 复核内容、外链、搜索异常、服务器更新和错误日志。
+- 复核内容、搜索异常、服务器更新和错误日志。
 - 确认域名与轻量实例续费、套餐流量、磁盘和证书状态。
 - 检查 GitHub/Tencent Cloud 安全告警和失败任务。
 - 检查 Node 24 是否发布新的非安全 patch；需要升级时创建独立 PR，不直接修改主分支或自动合并。

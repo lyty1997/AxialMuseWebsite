@@ -4,11 +4,78 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-11-14 — #41 weekly/monthly 实际验收与 Issue 勾选
+
+- **授权与周任务**：用户要求手动执行 weekly、monthly，验收可完成项目并在 #41 勾选。weekly [run 43576138980](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/43576138980) completed/success；独立下载制品 `14105614552`，109 项、零失败，包含站内链接、robots/sitemap、26 项 DNS 和前后服务器证据，无外链检查。回执 `/tmp/issue41-receipts-q1azt0zu/43576138980/receipt.json`，绑定此前成功的 `main@7b224e5`。
+- **月度首次失败与根因**：run `43576393535` 的内容及私有到期报告通过，quality 退出 1，后续命令停止；原失败回执 `/tmp/issue41-monthly-43576393535-rm30uv02/receipt.json` 保留。正常封闭环境 quality 通过，在 workflow 的 umask 077 下复现旧封装测试的 non-private empty dist 反例失败：mkdir 请求 0755 被屏蔽成合法 0700，导致“应拒绝”的测试前置条件不成立。只对该夹具显式 chmod 并断言 0755，保留原生产断言、封装器和 workflow 隐私权限。002、022、077 下完整封装回归各 52 项通过，077 下完整隔离 quality 通过。
+- **晋级与实际部署**：窄化修复 `034eae4` 及根因记录经 dev CI `43600158821`、[PR #86](https://github.com/lyty1997/AxialMuseWebsite/pull/86) 双 Node 和监测检查成功后，合并为 `main@a99e9b7b303c7a0dc506f3bfb17b2bf3dbec0dc5`。main CI `43600982751` 四个 job 成功；独立取证发现部署进程仍持锁，继续等待同一进程自然完成，未重复部署。随后确认锁释放、current 切换、受限入口输出新发布身份，再触发 monthly。该版本生产 artifact 为 `14116377618`；本次未修改监测运行代码、凭证或 workflow。
+- **月度复验通过**：[run 43601893555](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/43601893555) completed/success；独立下载制品 `14115544985`，101 项、零失败，localQualityCommandsExecuted=6；冻结安装、quality、history、typecheck、test、build 全部通过，三项内容及三项到期检查通过，源码/清洁状态和最后服务器证据齐全。回执 `/tmp/issue41-monthly-43601893555-x14bgr_b/receipt.json`，SHA-256 为 `76493bf7dd3ede68c04fe7ed77ec4fb894a8065588784726e6a063bed7c59f97`，绑定新 main；共享输出不含私有到期日期、剩余天数或密钥。
+- **反例、通知与剩余**：五类离线 CLI 子进程反例均退出 1，分别保留 LINK_INVALID、HEALTH_REDIRECT、HEALTH_CERTIFICATE_EXPIRY、LINK_TARGET_MISSING、DNS_UNEXPECTED_DS，正常路径退出 0；另七项仓库现有定向测试通过，证据 `/tmp/issue41-negative-acceptance-3biwnsab/summary.json`。真实 schedule `43565423113` 因接线前配置缺失返回 MONITOR_TAT_CONFIG，脱敏回执已核实；用户确认实际收到并核对该次通知。[Issue #41](https://github.com/lyty1997/AxialMuseWebsite/issues/41) 已按证据勾选，保留接线后自然 schedule 成功未完成且不关闭。离线故障反例、真实调度失败和用户通知确认分别记录，不混同证据层级。复用既有服务，无新增供应商或访客数据处理。
+
 ## 2026-11-14 — #41 月度验收的权限夹具根因修复
 
 - **真实验收**：只读入口已安装，手动 daily `43574946780` 的 82 项和 weekly `43576138980` 的 109 项通过。monthly `43576393535` 的内容和到期报告通过，但 quality 非零，后续命令按契约停止，未记整体成功。
 - **因果与修复**：月度固定 umask 077；封装测试的 non-private empty dist 反例只向 mkdir 请求 0755，实际被屏蔽为合法 0700，因此错误地期望封装拒绝。正常环境完整隔离 quality 通过，077 下真实 quality 在该反例稳定失败；夹具显式 chmod 为 0755 并断言实际模式，保持原拒绝断言、生产封装器和监测隐私权限不变。验证按 002、022、077 三种 umask 执行完整封装测试，并在 077 下重跑完整隔离 quality。
 - **边界**：修复只改变测试前置条件，不改生产模块、凭证、workflow 或网站内容；真实 monthly 仍须修复晋级后重跑。自然定时失败 `43565423113` 已留脱敏失败回执，用户确认实际收到并核对该次通知；接线后的自然成功运行尚待独立验收。
+
+## 2026-11-14 — #41 生产只读入口安装与真实 daily 通过
+
+- **授权与安装**：用户明确授权本轮接线和一次 daily。GitHub maintenance 环境的三个变量和三个 Secret 名称齐全，两个资源变量与用户提供值一致，未读取密钥。认证来源固定为成功 CI `43445125768` 的 `main@7b224e53ca38c1361d9734f6ac63f9f7735443c7`；安装三份 root:root/0644 Python 模块和 root:root/0755 固定入口，创建锁定、无交互 shell、无附加组的专用用户，新增 root:root/0440 精确无参数 sudo 规则，visudo 通过。
+- **现场权限与漂移验证**：安装脚本的首次最终断言因 sudo 授权重复显示而停止；追踪确认是原有全局 sudoers 将同一目录包含两次，两份展示均为同一个固定入口，无额外权限。未修改全局 sudoers，独立会话改按有效授权集合复核通过；无参数读取成功，附加参数、其他命令及 shell 均拒绝。四文件 SHA-256、归属、权限和单链接通过；安装及云端 daily 前后发布身份、账本和部署/Nginx 状态检查通过，未部署、reload 或改动网站内容。
+- **真实 daily**：[run 43574946780](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/43574946780) 为 workflow_dispatch，精确绑定上述 main，结果 completed/success；独立下载制品 `14106021825`，脱敏回执为 passed、82 项、零失败、serverLedgerInspected=true、productionMutationsPerformed=false，身份匹配生产 run `43445125768` 及 artifact `14047649642`。回执在 `/tmp/issue41-daily-43574946780-bq52f_fa/receipt.json`；服务器安装验证回执在 `/tmp/issue41-monitor-installed-receipt.json`。
+- **边界与遗留**：复用既有腾讯云 TAT 和 GitHub，无新增供应商或访客数据处理。本轮只验证一次真实 daily；真实 weekly、monthly、自然 schedule 及维护者实际收到失败通知仍须独立验收。文档更新仅留本地，未追加 Git 发布或操作 Issue。
+
+## 2026-11-14 — #41 只读入口现场预检与配置核对
+
+- **已核验**：PR #85 已合并为 canonical `main@7b224e53ca38c1361d9734f6ac63f9f7735443c7`，CI `43445125768` 全部 job 成功，服务器活动版本一致。四个入口源文件已从认证远端 Git 对象提取并冻结 SHA-256；仅在服务器内存中加载候选，使用既有 verifier 和部署锁读取真实发布证据通过，36 个文件、6 个页面，输出 4972 字节；未修改服务器。
+- **待接线**：服务器尚无 `ops/monitor` 安装目录、固定入口、`axial-monitor` 用户及对应 sudoers。用户报告已配置 CAM 和密钥，但本轮 GitHub API 名称核对显示仓库级 Secret 为空，maintenance 环境仅有私有到期 Secret，两个监测凭证及 command/instance 变量均未出现；须核对实际填写位置和保存结果，不读取或要求聊天传递密钥。生产安装与真实云端执行仍待完成。
+
+## 2026-11-13 — #41 review 前保持定时关闭与私有配置
+
+- **用户决定**：本批 #41 改动全部 review 通过后才开始定时任务；包含活动 cron 的候选仍未进入默认分支。用户确认域名与服务器到期时间均为当天从供应商控制台核实的北京时间，并明确授权向 GitHub 维护环境写入独立监测策略。
+- **配置核验**：`maintenance` 环境已限定 main；授权后写入的 `MONITOR_POLICY_JSON` 与先前认证的生产基线逐字段比对一致。到期信息经标准输入写入该环境 `MONITOR_EXPIRY_JSON` Secret，仅保留日期和保守的北京时间当日零点核验时间；已核验 Secret 名称存在，GitHub 不提供明文回读，真实读取仍须在接线后验收。私有日期未写入仓库。
+- **仍未启用**：腾讯云专用命令及 CAM、服务器固定入口、review、实际任务和通知验收尚未完成；核验时间最多有效 35 天，到期需要重新核实并更新。用户原工作区暂存状态保持不变；未新增第三方服务或访客数据处理。
+
+## 2026-11-13 — #41 自动监测接线候选与环境准备
+
+- **实现与验证**：新增每日、每周、每月 workflow 候选、固定只读服务器快照入口与受限腾讯云 TAT 传输；每周排除外站链接。按监测 workflow 的命令在正常用户环境运行 125 项回归通过，完整隔离 quality 及相关 Ruff 通过；真实生产只读快照与既有基线匹配，未安装服务器模块。独立 `main@da6d60c` 临时候选中的同一 125 项回归也通过，日志 `/tmp/issue41-candidate-regression.log`，该候选尚未加入决策文档、提交或启用。
+- **环境与限制**：已创建 GitHub `maintenance` 环境并核验其仅允许 main。将独立核验基线写入该环境变量的请求被自动审批拒绝，理由是尚未明确授权把基线字段发送至 GitHub；变量未写入。专用腾讯云命令、CAM、密钥、真实到期记录和服务器固定入口仍需完成，手动运行、自然定时和通知送达均未验收。用户提供的期限为估算，不作为精确到期记录。未新增第三方服务或访客数据处理。
+
+## 2026-11-13 — #41 按用户决定取消外链检查，每周新范围通过
+
+- **决定与范围**：用户明确要求“外链检查排除不做”，[范围决定](architecture/open-decisions.md#2026-11-13--41-排除外链检查)与[维护契约](operations/maintenance.md#41-每周链接检查范围)已同步。取消外站可达性检查及浏览器补测方案，保留本站页面、资源、备案链接存在性、站内目标/锚点、robots/sitemap、DNS 和前后服务器证据。以下浏览器讨论及外链失败按其历史范围保留，不继续作为 #41 完成条件。
+- **调用链清理与反例**：移除 `public_health.sample` 的外链参数、CLI 开关、weekly 接线、专属检查器及测试；共用 URL 校验和 DNS/月度进程控制保留。旧 API 参数报错、旧 CLI 退出 2，不保留空操作入口。新增四项用例在旧代码上真实变红，日志 `/tmp/issue41-no-external-before.log`；修订后最短每周组合证明只使用本站 fixture 和指定 DNS 检查，站内坏链接或 DNS 失败仍让结果失败，回执不输出 href 查询参数。剩余八组监测回归 102 项及相关 Ruff 通过，日志 `/tmp/issue41-no-external-regression.log`。
+- **真实每周新回执**：使用正式 `periodic.run_period('weekly', ...)`、前后随机量、既有认证管理 SSH 临时只读 reader 和真实公网执行，109 项通过、零失败、外链检查项为零，`serverLedgerInspected=true`；36 个 payload、站内链接、26 项每周 DNS、前后服务器完整快照及项目注册表检查均通过。reader 未等待时钟或重写时间戳，两个原范围失败回执保持不变。新回执位于 `/tmp/axial-issue41-acceptance-20261112/weekly-no-external.json` 和同目录 `weekly-no-external-summary.json`；新结果绑定本地候选，不宣称远端已部署本轮修订。
+- **质量与边界**：完整隔离 quality 首次返回聚合失败，直接运行同一零依赖入口定位到上轮进度记录误用仅允许在决策文档出现的契约词；修正该记录后完整 Node 24.18.0 隔离 quality 通过，日志 `/tmp/issue41-no-external-quality-fixed.log`，不修改门禁规则。源码与新回执摘要记录于同一验收目录的 `weekly-no-external-source.json`。原工作区暂存内容逐字节保留，变更前副本为 `/tmp/issue41-external-removal-r414dmf9/`。本轮未提交、推送、部署、修改 Issue 或配置活动任务、通知及代理，无新增服务、项目依赖、Cookie 或访客数据处理。#41 的正式认证接线、schedule、通知和到期记录仍须分别完成。
+
+## 2026-11-13 — #41 每周失败根因追踪，执行契约讨论
+
+- **正式入口与未通过结果**：使用 `periodic.run_period('weekly', ...)`、当前正式证据时间修复、现有管理 SSH 临时只读 reader 和真实公网执行两轮，各 146 项；分别 15、34 项失败，两轮 `serverLedgerInspected=true`，服务器前后完整快照一致，36 个公开文件、站内链接及 26 项每周 DNS 均通过。第一轮为八个 GitHub 来源超时、六个备案来源 HTTP 521 和一项组级失败；第二轮为 22 个 GitHub 来源超时、五个请求失败、六个备案来源 521 和组级失败。重复来源不等于不同外站，后续单次成功不改写原轮失败；完整周任务仍未通过。回执为 `/tmp/axial-issue41-acceptance-20261112/weekly-root-cause.json`、`weekly-followup.json` 及各自 summary。
+- **备案来源的因果链**：六页实际链接均为现有备案站根地址；本机直连 HEAD/GET、浏览器 User-Agent、已有代理及生产主机只读请求均返回 521，响应为 JavaScript 验证。最初 Chrome 对照也停在验证页，但其自动选择调试端口会引入 `webdriver` 标记，不能用它断言普通浏览器不可达。改用非零调试端口、现有 Chrome 和仅解包在 `/tmp` 的 Xvfb 运行普通非无头浏览器，无证书豁免或 navigator 覆写，实测 `navigator.webdriver=false`，同一会话的文档状态为 521 → 521 → 200，标题“ICP/IP地址/域名信息备案管理系统”、正文 405 字符。仅放行目标 origin，额外 API origin 被阻止，因此该证据证明链接导航成功，不宣称备案查询业务全功能通过。未使用个人浏览器资料或导出 Cookie，临时上下文与进程均已清理；脱敏摘要 `weekly-browser-diagnosis.json` 保留。
+- **HTTP 与浏览器边界**：当时外链契约只用不携带 Cookie 的 HTTP HEAD/有限 GET，无法执行上述真实浏览器验证；将 521 放行、只切 GET、供应商豁免或单纯调整等待都没有证明链接通过。曾向用户提交“HTTP 失败后由受限浏览器独立实测，只有有效 HTTPS 成功响应和可见页面才通过”的方案，涉及外部 JavaScript 与临时挑战 Cookie 边界，当时未获批准，未进入正式实现；其后已由本页顶部的排除外链决定取代，不再推进。
+- **GitHub 另有网络失败**：对三条原超时目标分阶段计时，DNS 均在约 0.003 至 0.008 秒返回，随后 TCP 建连约十秒超时，尚未进入 TLS 或 HTTP；回执 `weekly-network-stage-trace.json`。此前同目标的正式 Transport、直连 curl 和已有代理 curl 独立请求曾均为 200，证明路径有波动。随后在相同 HTTP/1.1、监测 User-Agent 和目标下交错对比，直连连续三次约 12 秒超时，当前已配置代理连续三次为 200（约 2.4、4.6、2.9 秒），回执 `weekly-network-route-comparison.json`。正式 Transport 显式直连，不使用环境代理；这部分失败发生于执行端出网路径，不能统一归因于备案站验证。既有代理可用性仅由本次三项对照证明，尚未成为正式监测传输；后续网络接线仍须保持目标地址校验、TLS、总预算与脱敏边界。
+- **变更边界**：本轮尚未修改监测生产代码、用户既有暂存状态或每日修复；未提交、推送、配置活动任务或通知、修改生产配置、改变备案链接或引入项目依赖与新第三方服务。只读维护探测不携带访客数据。#41 保持未验收状态。
+
+## 2026-11-13 — #41 每日证据时间根因修复
+
+- **因果与不变量**：现场每日失败发生在 `validate_evidence` 的 `0 <= 接收UTC - 服务器UTC`；服务器略快即失败，临时 reader 等待只改变到达时间，没有修复共用判定。相邻扫描发现月度终检重复直接读取，且 UTC 检查不能独立约束真实请求耗时。本轮固定为“本轮随机量匹配的证据只能在本机单调耗时不超过 120 秒、旧证据年龄不超过 120 秒且未来偏差不超过 5 秒时通过”，调用期间大幅墙钟跳变另行失败；同一入口覆盖全部阶段。
+- **共用修复**：`bound_probe.read_current_evidence` 统一生成随机量、捕获两类时钟并验证证据；每日/每周前后证据与月度终检均使用该入口。UTC 容许最多 5 秒未来偏差，旧证据仍最多 120 秒；请求单调耗时超过 120 秒返回 `MONITOR_EVIDENCE_TIMEOUT`，调用期间墙钟跳变超过 5 秒返回 `MONITOR_CLOCK_DRIFT`。传输自己的网络截止时间仍由 reader 保证，该同步函数不宣称中断阻塞调用。正式实现不 sleep、不改写时间戳、不修改本机或服务器时钟。
+- **独立验收**：新增服务器快 0.5 秒的组合反例，在修复前真实变红，日志 `/tmp/issue41-clock-before.log`；修复后验证时差/旧证据阈值、超时重新打时间戳、墙钟跳变、重放和终点失败保留，以及月度同机制接线。九组监测回归 119 项、完整 Node 24.18.0 隔离 quality、相关 Ruff 通过；在隔离副本中恢复零时差要求、延长旧证据年龄、取消耗时/墙钟保护四类 mutation 全部被对应测试检出，结果 `/tmp/issue41-clock-mutations.json`。
+- **真实每日结果与边界**：用正式修复、本轮随机量和现有管理 SSH 临时读取器执行每日公网检查，81 项通过、零失败，前后服务器证据和完整快照一致，`serverLedgerInspected=true`。本次 reader 没有 sleep；两次观测到的服务器相对本机接收时间分别约 -0.008 和 -0.012 秒，该次现场通过结合上述未来偏差反例证明修复，不宣称现场再次出现原未来偏差。回执为 `/tmp/axial-issue41-acceptance-20261112/daily-clock-fixed.json` 和同目录 `daily-clock-fixed-summary.json`，回归与 quality 日志 `/tmp/issue41-clock-regression.log`、`/tmp/issue41-clock-quality.log`。原失败和历史临时等待回执均保留。仅修改本地候选及文档，保留原暂存状态；未提交、推送或安装生产模块，GitHub 定时认证接线/通知与 #41 其余验收继续独立推进，未新增服务或用户数据处理。
+
+## 2026-11-13 — #41 真实环境验收：未通过
+
+- **范围与已部署身份**：重新读取 #41 原始验收项，默认分支目前只有 CI workflow，没有活动的每日、每周、每月监测 workflow。与 `main@da6d60ce6390c178681248ce1196753168ee9dd6` 同 Git 树的监测实现通过 110 项测试；基于当前 release 的已认证 36 个公开文件摘要、六条页面路由和服务器账本重建私有本机验收基线。旧安全头和地址期望仍按原基线检查，没有因本次检查自动改写。
+- **每日真实组合与时钟缺口**：首次经既有认证 SSH 临时运行源码读取前置证据时，服务器观测时间略快于本机，严格的未来时间拒绝返回 `MONITOR_EVIDENCE_STALE`；往返测量的服务器相对本机偏差区间为 +0.018 至 +0.949 秒，服务器 NTP 同步状态为 true。保留原失败；第二次仅在临时 SSH reader 内有界等待本机时钟追上，不改写时间戳或放宽 120 秒验证，81 项通过，`serverLedgerInspected=true`。此 reader 使用既有管理 SSH/sudo，属于一次本机真实组合验证，不能当作 GitHub runner 的受限认证接线、活动 schedule 或通知证明；读者正式实现仍须处理时钟误差且保持失败关闭。
+- **每周真实公网失败**：143 项检查中 136 项通过，36/36 个当前公开文件摘要、站内链接及 26 项每周 DNS 均通过；六个来源共用的 `beian.miit.gov.cn` 外链返回 HTTP 521，加一项组级失败。用真实当前 release 页面摘要核对来源，并分别以独立直连 HEAD 与 GET 复现 521；这是本次网络路径观察，不能推断备案站所有网络均不可用，也不得将失败豁免。该次公网回执未绑定服务器前后证据，不能当作完整周任务成功。
+- **尚缺证据**：受限认证 reader 的安装和 GitHub 接线、每日/每周/每月活动 schedule、可达失败通知和一次真实定时运行均未形成；真实域名与实例到期日仍待所有者从供应商核实。月度正常路径和现场告警未验收，#41 保持 OPEN，不关闭。原始脱敏记录保留于 `/tmp/axial-issue41-acceptance-20261112/`；本轮没有改写生产配置、凭证、定时任务或 Issue，没有新增服务或用户数据处理。
+
+## 2026-11-12 — #41 / #61 PR 晋级与部署复核
+
+- **Git 与 CI**：用户要求提交、推送、验收 PR 并合并。在基于最新 main 的隔离副本中保留主分支既有决策和历史记录，提交 `5ce2dd48a93c4b8fde57d751d5fc4c38beacc1db` 的 42 文件候选；原工作区及暂存内容未清理。首次 push 因 GitHub 私有邮箱保护 `GH007` 拒绝，修正尚未发布提交的署名并重新通过完整 hook 后成功推送 dev。dev run [43171279122](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/43171279122) 成功，最低 Node 和生产任务按事件条件跳过。
+- **PR 与 main**：[PR #84](https://github.com/lyty1997/AxialMuseWebsite/pull/84) 的精确 head/base、唯一提交及 42 个文件经核对；PR run [43171729068](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/43171729068) 主 Node、最低 Node、图表和构建通过。普通合并为 `main@da6d60ce6390c178681248ce1196753168ee9dd6`；main run [43172197960](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/43172197960) 四个 job 成功，唯一 artifact `13922777684` 的 SHA-256 为 `4d97f234873dec70e57cec7ac9df55f490b0f56f4b98aa5ba3147855e90704df`。GitHub deployment `7730754580` 标记成功；部署步骤本身回报 TAT 已调度，未独立查询云侧任务终态。
+- **独立现场与公网**：只读服务器复核首次因部署锁占用返回 `DEPLOY_VERIFIER_BUSY`；持锁进程结束后取得双锁，确认 current、artifact、外层摘要与 release 内容摘要 `5d4c493129e5a307adbb15d199dcc65d3212606099b999857f434cbc43fce4db` 匹配，39 个 release 文件通过，账本四代、零 pending，Nginx 配置和服务正常。公网首页首次使用环境代理路径请求 60 秒无响应；显式直连重试 HTTP 200，9189 字节 SHA-256 `c4ad42c87081497624afa0f137b05a671a2b6ef4154845d44428b1ac760d03ba` 与现场首页一致。这是首页单路径核验，不是全站复验；服务器回读保存在 `/tmp/axial-promotion-server-readback-final.json`。
+- **边界**：CI 拓扑已随 main 生效，#41 的真实认证通道、活动 schedule、通知送达和到期记录仍未验收；未关闭 Issue。原本地 dev 仍保留先前暂存和未暂存改动，与远端已晋级内容有重叠，不自动重置或再次提交。未新增第三方服务或用户数据处理；本条记录仅在原工作区，尚未提交。
 
 ## 2026-11-12 — #61 下载器兼容安装与 #41 Git 交付复核
 
