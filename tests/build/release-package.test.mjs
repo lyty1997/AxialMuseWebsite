@@ -390,6 +390,8 @@ test("#33 Git 工作区与既有 dist 状态失败关闭", async (t) => {
       name: "non-private empty dist",
       prepare(root) {
         mkdirSync(resolve(root, "dist"), {mode: 0o755});
+        chmodSync(resolve(root, "dist"), 0o755);
+        assert.equal(lstatSync(resolve(root, "dist")).mode & 0o777, 0o755);
       },
       preservedPath: "dist",
     },
