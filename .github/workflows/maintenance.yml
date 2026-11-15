@@ -43,7 +43,11 @@ jobs:
           /usr/bin/python3 -B -m unittest \
             test_bounded_process test_web_urls test_public_health test_internal_links \
             test_monitor_server_evidence test_dns_health test_bound_probe test_periodic \
-            test_tat_transport test_maintenance_runner test_workflow_context
+            test_tat_transport test_maintenance_runner test_workflow_context \
+            test_release_retirement test_retirement_references test_local_resources \
+            test_log_retention test_ledger_backup test_local_maintenance test_local_maintenance_integration \
+            test_retirement_commands test_release_commands test_fetch_artifact \
+            test_public_nginx_acceptance test_release_nginx_acceptance
 
   maintenance:
     name: Site maintenance

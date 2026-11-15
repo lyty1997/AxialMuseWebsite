@@ -14,6 +14,11 @@ from pathlib import Path
 from ops.deploy import url_exposure_ledger as ledger
 
 
+RETIREMENT_SCHEMA = b"axialmuse-release-retirement-v1\n"
+RETIREMENT_PROTOCOL_ID = "9e5d82c0b3a848268253a99a75b837c1"
+RETIREMENT_PROTOCOL_RESULT = {"status": "retirement-protocol-v1", "schema": 1}
+
+
 class DeploymentError(Exception):
     pass
 
@@ -153,7 +158,7 @@ class DeploymentState:
         sync_directory(self.root)
 
     @contextlib.contextmanager
-    def locked(self):
+    def locked(self, *, retirement_aware=False):
         check_directory(self.root, self.uid, 0o700)
         read_file(self.root / "initialized", self.uid, mode=0o600)
         path = self.root / "lock"
@@ -167,6 +172,10 @@ class DeploymentState:
             held = os.fstat(fd)
             live = path.lstat()
             require((held.st_dev, held.st_ino) == (live.st_dev, live.st_ino), "DEPLOY_LOCK")
+            require(type(retirement_aware) is bool, "DEPLOY_ARGUMENTS")
+            if (os.path.lexists(self.root / "retirement-schema")
+                    or os.path.lexists(self.transactions / RETIREMENT_PROTOCOL_ID)):
+                require(retirement_aware, "DEPLOY_RETIREMENT_PROTOCOL_UNSUPPORTED")
             yield
         finally:
             os.close(fd)
@@ -216,8 +225,22 @@ class DeploymentState:
             require(not os.path.lexists(directory / "pending"), "DEPLOY_RECOVERY_REQUIRED")
             require((directory / "result.json").exists(), "DEPLOY_RECOVERY_REQUIRED")
             result = decode(read_file(directory / "result.json", self.uid, mode=0o600))
+            if result.get("status") == "retirement-protocol-v1":
+                require(name == RETIREMENT_PROTOCOL_ID, "DEPLOY_RETIREMENT_PROTOCOL")
+                self.validate_retirement_protocol()
+                continue
             require(result.get("status") in ("local-accepted", "recovered", "rejected", "forward-only-failed"),
                     "DEPLOY_RECOVERY_REQUIRED")
+
+    def validate_retirement_protocol(self):
+        directory = self.transactions / RETIREMENT_PROTOCOL_ID
+        check_directory(directory, self.uid, 0o700)
+        require(set(os.listdir(directory)) == {"result.json"}, "DEPLOY_RETIREMENT_PROTOCOL")
+        require(decode(read_file(directory / "result.json", self.uid, mode=0o600)) == RETIREMENT_PROTOCOL_RESULT,
+                "DEPLOY_RETIREMENT_PROTOCOL")
+        require(read_file(self.root / "retirement-schema", self.uid, mode=0o600) == RETIREMENT_SCHEMA,
+                "DEPLOY_RETIREMENT_PROTOCOL")
+        check_directory(self.root / "retirements", self.uid, 0o700)
 
     def successful_releases(self):
         self.assert_idle()
@@ -238,6 +261,15 @@ class DeploymentState:
         write_new(directory / "pending", b"")
         write_new(directory / "request.json", canonical(request))
         return directory
+
+    def retired_releases(self):
+        # 延迟导入，保持私有状态的基础读写工具可独立加载。
+        from ops.deploy.release_retirement import retired_records
+        return set(retired_records(self))
+
+    def available_releases(self):
+        """历史成功不改写；只有完整、可验证的退役事实能移除可用资格。"""
+        return self.successful_releases() - self.retired_releases()
 
     def complete(self, transaction):
         """结果落盘后解除阻断；解除后的异常不得触发恢复。"""

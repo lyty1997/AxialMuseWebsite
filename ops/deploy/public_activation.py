@@ -200,6 +200,10 @@ class PublicNginx(LocalNginx):
         with self.public_candidate(sha):
             pass
 
+    def active_smoke(self, sha):
+        super().active_smoke(sha)
+        self.public_smoke(sha)
+
     def activate(self, sha):
         path = self.public_configuration
         check_directory(path.parent, self.store.uid, 0o755)
@@ -209,4 +213,3 @@ class PublicNginx(LocalNginx):
         os.replace(temporary, path)
         sync_directory(path.parent)
         super().activate(sha)
-        self.public_smoke(sha)

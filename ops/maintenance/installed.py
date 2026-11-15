@@ -1,0 +1,165 @@
+"""固定的本机维护入口候选；不安装、不重启、不自动退役 release。"""
+
+import grp
+import os
+import pwd
+import subprocess
+import sys
+from pathlib import Path
+
+from ops.deploy.deployment_state import DeploymentError, DeploymentState, canonical, decode, read_file, require
+from ops.deploy.release_commands import SITE, STATE, load_verifier, verifier_lock
+from ops.deploy.release_install import ReleaseStore
+from ops.maintenance.ledger_backup import LedgerBackups
+from ops.maintenance.local_state import JOBS, LocalMaintenanceState, safe_code
+from ops.maintenance.log_retention import LogArchiveRetention
+from ops.maintenance.resources import check_resources
+from ops.monitor.bounded_process import ProcessOutputLimit, run_process
+
+
+LIB = Path("/usr/local/lib/axialmuse-release")
+TEMPLATES = LIB / "ops/maintenance/templates"
+BACKUPS = Path("/var/backups/axialmuse-ledger")
+ENV = {"PATH": "/usr/sbin:/usr/bin:/bin", "LANG": "C"}
+
+
+def run_job(name, *, command=run_process):
+    require(name in JOBS, "MAINTENANCE_JOBS")
+    program = ("import sys; sys.path.insert(0, '/usr/local/lib/axialmuse-release'); "
+               "from ops.maintenance.installed import worker; "
+               f"raise SystemExit(worker('{name}'))")
+    try:
+        result = command(["/usr/bin/python3", "-I", "-B", "-c", program],
+                         timeout=120, output_limit=65536, env=ENV)
+    except subprocess.TimeoutExpired:
+        raise DeploymentError("MAINTENANCE_JOB_TIMEOUT") from None
+    except ProcessOutputLimit:
+        raise DeploymentError("MAINTENANCE_JOB_OUTPUT") from None
+    require(result.returncode in (0, 1), "MAINTENANCE_WORKER_FAILED")
+    value = decode(result.stdout)
+    require(isinstance(value, dict) and set(value) == {"schema", "status", "code"} and value["schema"] == 1
+            and (result.returncode == 0) == (value["status"] == "ok"), "MAINTENANCE_WORKER_RESULT")
+    return {"status": value["status"], "code": value["code"]}
+
+
+def command_ok(arguments, code):
+    try:
+        result = run_process(arguments, timeout=60, output_limit=65536, env=ENV)
+    except subprocess.TimeoutExpired:
+        raise DeploymentError(code + "_TIMEOUT") from None
+    except ProcessOutputLimit:
+        raise DeploymentError(code + "_OUTPUT") from None
+    require(result.returncode == 0, code)
+
+
+def check_log_configuration(store):
+    for template, actual in (
+        ("nginx.logrotate", "/etc/logrotate.d/nginx"),
+        ("rsyslog.logrotate", "/etc/logrotate.d/rsyslog"),
+        ("journald-retention.conf", "/etc/systemd/journald.conf.d/axialmuse-retention.conf"),
+    ):
+        require(read_file(TEMPLATES / template, 0, mode=0o644) == read_file(actual, 0, mode=0o644),
+                "MAINTENANCE_LOG_CONFIG")
+    effective = run_process(["/usr/bin/systemd-analyze", "cat-config", "systemd/journald.conf"],
+                            timeout=15, output_limit=65536, env=ENV)
+    require(effective.returncode == 0, "MAINTENANCE_JOURNAL_CONFIG")
+    section = None
+    settings = {}
+    for line in effective.stdout.decode("utf-8").splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            section = line
+        elif section == "[Journal]" and line and not line.startswith(("#", ";")) and "=" in line:
+            key, value = line.split("=", 1)
+            settings[key.strip()] = value.strip()
+    require(settings.get("MaxRetentionSec") == "27day" and settings.get("MaxFileSec") == "1day",
+            "MAINTENANCE_JOURNAL_CONFIG")
+    from ops.deploy.public_activation import PublicNginx, load_public_mode
+    from ops.deploy.public_site import PUBLIC_CONFIG
+    from ops.deploy.nginx_activation import local_site_config
+    with store.state.locked(retirement_aware=True):
+        store.state.assert_idle()
+        sha = store.current()
+        mode = load_public_mode(store.state)
+        require(sha is not None and mode is not None, "MAINTENANCE_PUBLIC_MODE")
+        # 校验完整已认证配置，而非搜索 access_log off 子串。
+        require(read_file(PUBLIC_CONFIG, 0, mode=0o644) == PublicNginx(store, mode=mode).render(sha),
+                "MAINTENANCE_PUBLIC_CONFIG")
+        require(read_file(Path("/etc/nginx/conf.d/axialmuse-local.conf"), 0, mode=0o644)
+                == local_site_config(store.site), "MAINTENANCE_LOCAL_CONFIG")
+
+
+def logs_job(store):
+    check_log_configuration(store)
+    adm = grp.getgrnam("adm").gr_gid
+    web = pwd.getpwnam("www-data").pw_uid
+    syslog = pwd.getpwnam("syslog").pw_uid
+    policies = [(Path("/var/log/nginx") / name, web, adm, 4) for name in ("access.log", "error.log")]
+    for name in ("syslog", "mail.log", "kern.log", "auth.log", "user.log", "cron.log"):
+        active = Path("/var/log") / name
+        if os.path.lexists(active) or name in ("syslog", "auth.log") or list(active.parent.glob(name + ".*")):
+            policies.append((active, syslog, adm, 27))
+    engine = LogArchiveRetention(policies)
+    engine.plan()  # 未知对象/权限/时间异常在轮转前暴露。
+    command_ok(["/usr/sbin/logrotate", "--force", "--state", "/var/lib/logrotate/status",
+                "/etc/logrotate.d/nginx", "/etc/logrotate.d/rsyslog"], "MAINTENANCE_LOGROTATE_FAILED")
+    engine.execute(engine.plan())
+    command_ok(["/usr/bin/journalctl", "--rotate"], "MAINTENANCE_JOURNAL_ROTATE")
+    command_ok(["/usr/bin/journalctl", "--vacuum-time=27d"], "MAINTENANCE_JOURNAL_VACUUM")
+
+
+def worker(name):
+    try:
+        require(os.geteuid() == 0 and name in JOBS, "MAINTENANCE_CONTEXT")
+        if name == "resources":
+            result = check_resources()
+            failures = sorted((c for c in result["checks"] if c["level"] != "ok"),
+                              key=lambda c: c["level"] != "critical")
+            value = {"status": result["status"], "code": failures[0]["code"] if failures else "OK"}
+        else:
+            state = DeploymentState(STATE)
+            if name == "backup":
+                backups = LedgerBackups(state, BACKUPS)
+                backups.prune(backups.create())
+            else:
+                logs_job(ReleaseStore(SITE, state, load_verifier()))
+            value = {"status": "ok", "code": "OK"}
+    except Exception as error:
+        value = {"status": "failed", "code": safe_code(error)}
+    sys.stdout.buffer.write(canonical({"schema": 1, **value}))
+    return 0 if value["status"] == "ok" else 1
+
+
+def main():
+    try:
+        require(os.geteuid() == 0 and not sys.argv[1:], "MAINTENANCE_CONTEXT")
+        # 子进程不重入此锁；父进程的锁覆盖加载、运行及退出。
+        state = LocalMaintenanceState(STATE / "maintenance")
+        result = state.execute({name: lambda name=name: run_job(name) for name in JOBS}, guard=verifier_lock)
+        print(canonical(result).decode(), end="")
+        return 0 if result["status"] == "ok" else 1
+    except Exception as error:
+        print(f"[{safe_code(error)}] 本机维护失败，保留原始状态。", file=sys.stderr)
+        return 1
+
+
+def manage():
+    try:
+        require(os.geteuid() == 0, "MAINTENANCE_CONTEXT")
+        arguments = sys.argv[1:]
+        require(arguments in (["--initialize"], ["--enable"])
+                or len(arguments) == 2 and arguments[0] == "--ack", "MAINTENANCE_ARGUMENTS")
+        with verifier_lock():
+            local = LocalMaintenanceState(STATE / "maintenance")
+            if arguments == ["--initialize"]:
+                # 不隐式重建半初始化或未知备份位置；任何失败均停下审查。
+                LedgerBackups(DeploymentState(STATE), BACKUPS).initialize()
+                local.initialize()
+            elif arguments == ["--enable"]:
+                local.enable()
+            else:
+                local.acknowledge(arguments[1])
+        return 0
+    except Exception as error:
+        print(f"[{safe_code(error)}] 维护状态操作失败。", file=sys.stderr)
+        return 1

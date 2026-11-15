@@ -1,0 +1,18 @@
+/var/log/nginx/access.log
+/var/log/nginx/error.log
+{
+    daily
+    rotate 64
+    maxage 4
+    missingok
+    ifempty
+    compress
+    delaycompress
+    nodateext
+    noolddir
+    create 0640 www-data adm
+    sharedscripts
+    postrotate
+        /usr/sbin/invoke-rc.d nginx rotate
+    endscript
+}

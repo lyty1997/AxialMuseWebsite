@@ -19,11 +19,14 @@ class ReleaseTransaction:
         require((identity is None) != (rollback_sha is None), "DEPLOY_ARGUMENTS")
         if identity is not None:
             identity_valid(identity)
-        with self.state.locked():
+        with self.state.locked(retirement_aware=True):
             self.state.assert_idle()
             before = self.state.read_ledger()[0]
             old_sha = self.store.current()
-            successful = self.state.successful_releases()
+            successful = self.state.available_releases()
+            # 可用集合中的缺失/损坏必须在新事务前暴露，不能因选中了较早的
+            # fallback 而漏掉；显式退役之外的文件丢失永远不是合法清理。
+            views = {sha: self.store.read_view(sha)[0] for sha in sorted(successful)}
             request = {"identity": identity, "rollback": rollback_sha,
                        "previous": old_sha, "ledgerBefore": digest(before)}
             transaction = self.state.begin(request)
@@ -33,6 +36,7 @@ class ReleaseTransaction:
             candidate_sha = rollback_sha or identity["commit_sha"]
             after = before
             try:
+                require(candidate_sha not in self.state.retired_releases(), "DEPLOY_RELEASE_RETIRED")
                 if rollback_sha is None:
                     if stage is None:
                         require(self.prepare is not None, "DEPLOY_ARGUMENTS")
@@ -48,7 +52,7 @@ class ReleaseTransaction:
                 self.nginx.validate(candidate_sha)
                 candidates = sorted(successful, key=lambda sha: (sha != old_sha, sha))
                 for fallback_sha in candidates:
-                    old_view = self.store.read_view(fallback_sha)[0]
+                    old_view = views[fallback_sha]
                     try:
                         ledger.assert_release_compatible(current_ledger, old_view)
                     except ledger.UrlExposureError as error:

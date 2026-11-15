@@ -81,7 +81,7 @@ def main(arguments=None, executable=None):
         arguments = sys.argv[1:] if arguments is None else arguments
         executable = Path(sys.argv[0]).name if executable is None else executable
         require(executable in ("axialmuse-deploy", "axialmuse-deploy-prepared",
-                               "axialmuse-rollback", "axialmuse-deploy-init"),
+                               "axialmuse-rollback", "axialmuse-deploy-init", "axialmuse-release-retire"),
                 "DEPLOY_COMMAND")
         identity = parse_deploy(arguments) if executable in ("axialmuse-deploy", "axialmuse-deploy-prepared") else None
         if executable == "axialmuse-rollback":
@@ -89,6 +89,9 @@ def main(arguments=None, executable=None):
             sha_valid(arguments[1])
         if executable == "axialmuse-deploy-init":
             require(arguments == ["--new-site-ledger"], "DEPLOY_ARGUMENTS")
+        if executable == "axialmuse-release-retire":
+            from ops.deploy.retirement_commands import parse_retirement
+            parse_retirement(arguments)
         for number in (signal.SIGINT, signal.SIGTERM):
             previous[number] = signal.signal(number, interrupted)
         with verifier_lock():
@@ -104,6 +107,11 @@ def main(arguments=None, executable=None):
                 print(canonical({"status": "initialized-new-site", "publicActivation": False}).decode(), end="")
                 return 0
             store = ReleaseStore(SITE, state, load_verifier())
+            if executable == "axialmuse-release-retire":
+                from ops.deploy.retirement_commands import retire_command
+                result = retire_command(store, arguments)
+                print(canonical(result).decode(), end="")
+                return 0
             from ops.deploy.prepare_artifact import prepare_artifact
             from ops.deploy.public_activation import PublicNginx, load_public_mode
             mode = load_public_mode(state)

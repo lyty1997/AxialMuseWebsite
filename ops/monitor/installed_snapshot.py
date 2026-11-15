@@ -3,11 +3,12 @@
 import sys
 from pathlib import Path
 
-from ops.deploy.deployment_state import DeploymentState
+from ops.deploy.deployment_state import DeploymentError, DeploymentState
 from ops.deploy.release_commands import load_verifier, verifier_lock
 from ops.deploy.release_install import ReleaseStore
 from ops.monitor.public_health import canonical
 from ops.monitor.server_evidence import release_bundle
+from ops.maintenance.local_state import safe_code
 
 
 def main():
@@ -22,7 +23,9 @@ def main():
             return 1
         sys.stdout.buffer.write(output)
         return 0
-    except Exception:
+    except Exception as error:
+        if isinstance(error, DeploymentError):
+            print(f"[{safe_code(error)}] 只读维护证据失败。", file=sys.stderr)
         return 1
 
 

@@ -4,6 +4,46 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-11-15 — #88 完整候选 Git 交付验证
+
+- **范围与授权**：用户授权提交、推送、开 PR，并在 CI 全绿后合并 main。以 `main@c0d4a75` 建立独立交付副本，纳入全部新增退役/维护实现、模板、入口和测试，保留 main 的历史文档及原工作区文件/暂存内容。既有定时 workflow 仅扩充 PR 回归模块，cron、权限和通知不变。
+- **当前验证**：系统 Python 全量 399 项，396 项通过、三个真实 Nginx/Docker opt-in 另行执行；完整 E-010 隔离 quality、所有变更 Python 的 Ruff、入口语法与差异检查通过。日志 `/tmp/issue88-delivery-python.log`、`/tmp/issue88-delivery-quality.log`。本次含备份清理中断恢复及过期退役计划的恢复反例，不沿用早期候选测试计数冒充当前交付结果。
+- **生产边界**：新运维组件安装、协议启用、日志迁移、备份初始化、本地定时和 release 清理仍须单独审查与现场验收；本轮生产 release 删除数为 0，#88/#42 不因代码合并自动关闭。现有 main 自动部署按原流程运行，无新增供应商或访客数据采集。
+
+## 2026-11-15 — #88 本地设计、实现与独立验收候选
+
+- **授权与根因**：用户委托限定安全边界内的本地方案设计、实现和隔离验证。先将历史成功与当前可用资格分离，保留全部原审计/账本；显式退役记录生效后才删除已认证清单，未授权缺失仍以 `DEPLOY_RELEASE_MISSING` 拒绝。初始化追加协议迁移审计，新旧调用有明确能力门禁；摘要为 `3f85658be80ee2d33a3e05ed45397e1d181470053c1f329d9a6450be2b039981` 的原状态读取器在临时目录确实拒绝新协议，新读取器通过且账本/成功集合不变。没有通过忽略 ENOENT 或改写成功历史避错。
+- **引用生命周期**：不以无打开 fd 或文件时间戳估算旧 worker 是否退出；认证激活在本机与公网 HTTP/TLS smoke 全过后，持久化绑定 boot、PID/start tick、配置及 current 的代际记录。清理重验引用和身份，旧代际、未知对象、重放、过期、漂移及锁竞争均停止；物理删除中断后保持不可部署，并可按原有效计划核对剩余子集重试。首次生产启用需要新的认证激活，初始化不自动 reload。
+- **其余独立单元**：形成日志年龄清扫与 ifempty 轮转、journal 保留模板、磁盘/剩余空间/inode 分级非零、独立一致账本备份与隔离恢复、未启用的每日 systemd 候选。运行回执持久保留失败及中断，后来的成功不自动解除；原只读监测命令验证新鲜度与启用状态，失败退出 1 且不输出成功证据。策略及完整边界见[维护候选](operations/maintenance.md#88-本地维护候选)。
+- **验证**：系统 Python 全量 `unittest discover` 共 381 项，378 通过、三个显式 opt-in 另行真实 Nginx/Docker 验收全过；日志分别为 `/tmp/axial-issue88-final-full-ops.log` 与 `/tmp/axial-issue88-protocol-real-nginx.log`。独立单元、真实空日志轮转、systemd 隔离 root 解析及最短实际只读命令链通过；两项内存 mutation 均被行为测试准确检出。完整 E-010 隔离 quality、Ruff、差异、文档/契约/秘密及四 job 静态门禁通过，quality 日志 `/tmp/axial-issue88-quality.log`。首轮全量使用非基线默认 Python，以及扩展公网夹具在配置校验前未准备 MIME 文件的失败均保留，分别改用固定系统 Python、先准备文件后校验并重跑；没有改松门禁。
+- **交付与保留**：完整候选摘要清单与旧读取器拒绝证据在 `/tmp/axial-issue88-candidate-aiy9jl66/`；后续交付须纳入全部新增源码、模板和测试，不能只提交 tracked diff。原暂存区摘要仍为 `665a730645663af23b2beb8bf25a4018eff9b569f9c20d9fd2f0213969f106cd`。本轮未提交、推送、创建/合并 PR、改 Issue 勾选或写生产；#88 与 #42 保持开放。候选审查后的生产安装、日志基线、真实定时/通知、清理以及云快照/完整恢复仍需各自现场证据；实际生产 release 删除数为 0，无新增供应商或访客数据采集。
+
+## 2026-11-14 — 退役入口与运维回归测试缺口补齐
+
+- **范围与行为**：按用户要求补齐审查缺口，新增 `tests/ops/test_retirement_commands.py` 的 12 项测试，覆盖固定命令初始化、私有不可覆盖计划、真实保存与执行、错误参数、重复初始化、SHA/授权 ID 不匹配、缺失/损坏/不安全计划，以及失败后目标与审计保留。组合链通过真实 `release_commands.main`，仅替换 root 环境、生命周期锁和外部引用，不触碰生产路径。
+- **自动检查**：既有 PR 监测 job 纳入新入口测试及遗漏的固定发布命令、制品下载器和两个 Nginx 验收模块；同步冻结摘要，并增加逐项移除测试模块的拒绝反例。变更只影响本地候选的测试接线，cron、权限、通知、生产运行代码与 Docker opt-in 保持原契约。
+- **验证**：新 12 项全部通过；系统 Python 全量运维 394 项中 391 项通过、三个 Docker opt-in 默认跳过；按 workflow 原命令 209 项中 206 项通过、同三项跳过。完整 E-010 隔离 quality、Ruff 与 `git diff --check` 通过；进程内撤销 SHA/授权 ID 绑定使新测试产生两条预期断言失败，仓库源码未被 mutation 改写。日志 `/tmp/axial-test-gap-{focused,all-ops,workflow,quality}.log`。首轮新夹具将缺失文件及 symlink 的原生异常误写为部署异常，按现有函数边界修正测试预期，并补验固定入口非零退出与无成功输出，未放宽生产检查。
+- **交付边界**：原暂存区摘要仍为 `665a730645663af23b2beb8bf25a4018eff9b569f9c20d9fd2f0213969f106cd`。未提交、推送、触发远端或操作生产；未引入第三方服务或用户数据处理。本轮未重跑 Docker 集成验收，不能据此声明所有场景覆盖完整。
+
+## 2026-11-14 — #88 推进入口与实现前基线
+
+- **事实复核**：用户要求推进 #88。已回读 Issue，安全退役仍是实际清理的前置；日志保留执行边界、资源阈值及备份策略尚未确定。此前复现的三个部署模块字节未变，不能把现有缺口当作已修复。
+- **独立基线**：在正常用户环境运行 `PYTHONPATH=.:tests/ops python3 -B -m unittest -v test_deployment_state test_release_transaction test_monitor_server_evidence`，38 项通过；日志 `/tmp/axial-issue88-baseline.log`。覆盖原部署状态、发布/恢复事务和只读证据，尚未覆盖不存在的新退役实现。
+- **决策与边界**：依项目用户决策门禁，已请求用户确认是否委托限定安全边界内的本地方案设计、实现和隔离验证，或先逐项审查具体方案。等待期间未新增退役状态格式、选择运维策略或修改依赖它们的实现；未执行 Git 发布、生产安装、release 删除、日志处理、定时或云资源写入。后续按 #88 的独立验收单元推进，无新增供应商或访客数据处理。
+
+## 2026-11-14 — #42 清理前检及盘点缺口子 Issue
+
+- **授权与现场清单**：用户要求清理不兼容 release，并为盘点缺口建立子 Issue。重新锁内核对 20 个目录均可校验，其中 10 个与当前账本不兼容；current 仍为 `c0d4a75`，四代账本和摘要不变。没有将兼容版本或默认保留数量扩大为本次删除目标。
+- **生命周期根因与反证**：`successful_releases()` 的历史成功集合没有退役语义；`ReleaseTransaction.execute()` 的 fallback 先调用 `read_view()` 再校验兼容性。生产三个模块与本地源码摘要一致。真实磁盘 fixture 的保留目录对照正常发布；仅删已不兼容旧目录后，同一有效授权发布以 `DEPLOY_REJECTED / DEPLOY_INTERNAL` 提前失败，有效审批未消费，current/账本未变。首轮诊断 fixture 的新增规则未排序，修正排序及斜杠规则闭包后两个路径均被真实入口断言确认。命令 `PYTHONPATH=.:tests/ops python3 -B /tmp/axial-issue42-cleanup-AeHeWl/reproduce_deleted_release.py`，退出 0 表示缺陷复现已确认，不表示已修复；结果 SHA-256 为 `09918c5c67c8e53c4759fd6d5a55d260e6eb214ca7f3747aa3ef320dd131f8d4`。
+- **跟进与暂停范围**：创建 [#88](https://github.com/lyty1997/AxialMuseWebsite/issues/88) 跟进 #42 的退役/清理、日志、资源阈值、账本备份与本地调度，按独立验收单元标明依赖、反例及生产授权边界。删除前置尚不满足，本轮服务器 release 实际删除数为 0；未改写历史成功记录或用忽略文件缺失绕过门禁。保留用户清理授权，待退役机制具备后重新核验目标；未修改生产组件、日志、云资源或定时配置，无新增供应商或访客数据处理。
+
+## 2026-11-14 — #42 服务器维护只读盘点
+
+- **范围与现场**：按用户要求，通过既有 SSH 只读盘点 systemd/cron、Nginx 日志开关、logrotate/journal、磁盘/inode、release 与账本备份。`certbot.timer`、`logrotate.timer`、两个 apt timer 和关键服务正常，零 failed unit；磁盘使用率 15.94%、inode 4.82%。当前没有已确认的站点资源阈值，也未发现站点专用维护或备份调度；厂商任务和系统包备份不替代 #42。
+- **保留缺口及机制**：Nginx 为 daily / rotate 14 / notifempty，auth/syslog 为 weekly / rotate 4，不能证明设计的 7 天/目标 30 天实际保留。只读 debug 退出 0、无配置错误，并明确两个当前 Nginx 文件因空而不轮转；六月/七月旧归档仍在。journal 文件头也超过 30 天。六个公网 server 的访问日志关闭、错误日志为 `/dev/null crit`，因此错误日志落盘能力本身也尚未符合维护设计；没有读取日志事件正文。
+- **账本与 release**：root:root/0600 账本和四代链通过，事务 idle；原目录中发布事务及自测副本不是独立例行备份，云快照未在本轮核验。20 个 release 均可验证，10 个账本兼容、10 个不兼容，未实际切换或清理。起终点均为 `main@c0d4a75`，账本及历史摘要未漂移。
+- **记录与边界**：详细事实及未决项见[生产环境清单](operations/production-inventory.md#2026-11-14--42-服务器维护只读盘点)，脱敏/私有元数据证据位于本机 0700 目录 `/tmp/axial-issue42-inventory-BI5RQP/`。本轮仅更新本地盘点记录；未修改服务器、云配置或 Issue，未触发任务、轮转、备份、恢复、清理、通知或 Git 发布。原暂存内容保持不变，无新增供应商或访客数据采集；正常 SSH/sudo 审计副作用不等同于绝对无文件写入。#42 保持开放。
+
 ## 2026-11-14 — #41 weekly/monthly 实际验收与 Issue 勾选
 
 - **授权与周任务**：用户要求手动执行 weekly、monthly，验收可完成项目并在 #41 勾选。weekly [run 43576138980](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/43576138980) completed/success；独立下载制品 `14105614552`，109 项、零失败，包含站内链接、robots/sitemap、26 项 DNS 和前后服务器证据，无外链检查。回执 `/tmp/issue41-receipts-q1azt0zu/43576138980/receipt.json`，绑定此前成功的 `main@7b224e5`。

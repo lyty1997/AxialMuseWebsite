@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /usr/bin/python3 -I -B -c 'import sys; sys.path.insert(0, "/usr/local/lib/axialmuse-release"); from ops.maintenance.installed import manage; raise SystemExit(manage())' "$@"
