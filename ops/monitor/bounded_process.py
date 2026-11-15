@@ -1,16 +1,49 @@
 """监测进程的执行中边界：合并输出容量、绝对时限及异常进程组回收。"""
 
+import contextlib
+import contextvars
 import math
 import os
 import selectors
 import signal
 import subprocess
+import sys
 import threading
 import time
 
 
 class ProcessOutputLimit(Exception):
     pass
+
+
+_LOCK_FDS = contextvars.ContextVar("process_lock_fds", default=())
+
+
+@contextlib.contextmanager
+def retain_locks(descriptors):
+    """登记已持有的锁供子命令继承；此处不解锁、不关闭调用者的描述符。"""
+    descriptors = tuple(descriptors)
+    for fd in descriptors:
+        if type(fd) is not int or fd < 3:
+            raise ValueError("invalid process lock descriptor")
+        os.fstat(fd)
+    token = _LOCK_FDS.set(tuple(sorted(set((*_LOCK_FDS.get(), *descriptors)))))
+    try:
+        yield
+    finally:
+        _LOCK_FDS.reset(token)
+
+
+def inherited_lock_fds():
+    descriptors = _LOCK_FDS.get()
+    runtime = sys.modules.get("_axialmuse_runtime")
+    if runtime is not None:
+        runtime.check_lock()
+        # 旧启动器缺少契约时必须失败，不能只保证父进程持锁。
+        descriptors = (*descriptors, *runtime.lock_fds)
+    for fd in descriptors:
+        os.fstat(fd)
+    return tuple(sorted(set(descriptors)))
 
 
 def run_process(arguments, *, output_limit, timeout=None, deadline=None, cwd=None, env=None, input=None):
@@ -36,6 +69,7 @@ def run_process(arguments, *, output_limit, timeout=None, deadline=None, cwd=Non
         previous = signal.signal(signal.SIGTERM, terminate)
     try:
         process = subprocess.Popen(arguments, cwd=cwd, env=env, start_new_session=True,
+                                   pass_fds=inherited_lock_fds(),
                                    stdin=subprocess.DEVNULL if input is None else subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
         stdout, stderr = bytearray(), bytearray()

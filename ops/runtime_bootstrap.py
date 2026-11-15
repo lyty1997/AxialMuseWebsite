@@ -85,6 +85,7 @@ def lifecycle(lib=LIB, lock=LOCK, *, uid=0):
             for path, fd in zip((lib, lock), descriptors):
                 value, live = os.fstat(fd), path.lstat()
                 ensure((value.st_dev, value.st_ino) == (live.st_dev, live.st_ino))
+        check_lock.lock_fds = tuple(descriptors)
         yield check_lock
     finally:
         for fd in reversed(descriptors):
@@ -128,6 +129,7 @@ def launch(command, arguments, *, lib=LIB, pointer=POINTER, versions=VERSIONS, l
         sys.path.insert(0, str(root))
         guard = type(sys)("_axialmuse_runtime")
         guard.check_lock, guard.root = check_lock, root
+        guard.lock_fds = check_lock.lock_fds
         sys.modules[guard.__name__] = guard
         sys.argv = [command, *arguments]
         module, function = ENTRY[command]

@@ -70,6 +70,36 @@ class BoundedProcessTests(unittest.TestCase):
         result = self.run_python("import sys; print(len(sys.stdin.buffer.read()))")
         self.assertEqual(result.stdout, b"0\n")
 
+    def test_only_registered_lock_descriptors_are_inherited_and_context_is_restored(self):
+        with tempfile.TemporaryFile() as lock, tempfile.TemporaryFile() as unrelated:
+            with bounded_process.retain_locks((lock.fileno(),)):
+                descriptors = bounded_process.inherited_lock_fds()
+                source = ("import os\n"
+                          f"os.fstat({lock.fileno()})\n"
+                          f"try: os.fstat({unrelated.fileno()})\n"
+                          "except OSError: print('lock-only')\n"
+                          "else: raise SystemExit(9)\n")
+                self.assertEqual(self.run_python(source).stdout, b"lock-only\n")
+                with bounded_process.retain_locks((lock.fileno(),)):
+                    self.assertEqual(bounded_process.inherited_lock_fds(), descriptors)
+            self.assertEqual(bounded_process.inherited_lock_fds(), ())
+            self.assertFalse(os.get_inheritable(lock.fileno()))
+
+    def test_timeout_and_output_failure_do_not_leave_inherited_lock_owners(self):
+        import fcntl
+        for source, error in (("import time; time.sleep(30)", subprocess.TimeoutExpired),
+                              ("import os,time; os.write(1,b'x'*4096); time.sleep(30)", ProcessOutputLimit)):
+            with self.subTest(error=error), tempfile.NamedTemporaryFile() as lock:
+                fd = os.open(lock.name, os.O_RDONLY)
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                try:
+                    with bounded_process.retain_locks((fd,)):
+                        with self.assertRaises(error):
+                            self.run_python(source, timeout=.2, output_limit=1024)
+                finally:
+                    os.close(fd)
+                fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
     def test_shared_deadline_covers_silence_drip_closed_pipes_and_blocked_stdin(self):
         cases = (("import time; time.sleep(30)", None),
                  ("import os,time; os.close(1); os.close(2); time.sleep(30)", None),

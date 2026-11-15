@@ -18,6 +18,7 @@ from ops.deploy.deployment_state import (  # noqa: E402
 from ops.deploy.nginx_activation import LocalNginx  # noqa: E402
 from ops.deploy.release_install import ReleaseStore, sha_valid  # noqa: E402
 from ops.deploy.release_transaction import ReleaseTransaction  # noqa: E402
+from ops.monitor.bounded_process import retain_locks  # noqa: E402
 
 
 SITE = Path("/srv/axialmuse")
@@ -54,7 +55,8 @@ def verifier_lock():
         fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         held, live = os.fstat(descriptor), LOCK.lstat()
         require((held.st_dev, held.st_ino) == (live.st_dev, live.st_ino), "DEPLOY_VERIFIER_LOCK")
-        yield
+        with retain_locks((parent, descriptor)):
+            yield
     except BlockingIOError as error:
         raise DeploymentError("DEPLOY_VERIFIER_BUSY") from error
     finally:

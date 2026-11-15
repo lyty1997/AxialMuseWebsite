@@ -1,5 +1,6 @@
 """时间推进、空活动日志和真实 logrotate；不读取任何生产日志。"""
 
+import fcntl
 import os
 import shutil
 import subprocess
@@ -10,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ops.deploy.deployment_state import DeploymentError, write_new
+from ops.maintenance import installed
 from ops.maintenance.log_retention import LogArchiveRetention
 
 
@@ -124,6 +126,113 @@ class LogRetentionTests(unittest.TestCase):
         write_new(self.engine.quarantine / "unknown", b"unknown")
         with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_LOG_QUARANTINE"):
             self.engine.plan()
+
+    @unittest.skipUnless(shutil.which("logrotate"), "需要实际 logrotate")
+    def rerun_after_interrupted_request(self, *, fresh=False, interrupt="move", rotated_while_down=False):
+        self.archive = self.archive.rename(self.root / "error.log.1")
+        target = ("ops.maintenance.log_retention.rename_new" if interrupt == "move"
+                  else "ops.maintenance.log_retention.exclusive_inodes")
+        with patch(target, side_effect=OSError("power loss")):
+            with self.assertRaises(OSError):
+                self.engine.execute(self.engine.plan())
+        data = next(self.engine.quarantine.glob("*/data"), self.archive)
+        if fresh:
+            data.write_bytes(b"fresh log")
+            os.utime(data, (self.now,) * 2)
+        config = self.root / "rotate.conf"
+        state = self.root / "rotate.state"
+        write_new(state, b"", 0o600)
+        config.write_text(f"{self.active} {{\n daily\n rotate -1\n ifempty\n nocompress\n create 0640\n}}\n")
+
+        def command(arguments, code):
+            if arguments[0] == "/usr/sbin/logrotate":
+                if code != "external":
+                    for record, _days in self.engine.pending():
+                        self.assertEqual(Path(record["location"]).parent.parent, self.engine.quarantine,
+                                         "待隔离请求未在轮转前进入私有目录")
+                result = subprocess.run([shutil.which("logrotate"), "-f", "-s", str(state), str(config)],
+                                        capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+
+        if rotated_while_down:
+            command(["/usr/sbin/logrotate"], "external")
+            pending = self.engine.pending()
+            self.assertEqual(pending[0][0]["location"], str(self.root / "error.log.2"))
+
+        original_open = os.open
+
+        def open_state(path, *args, **kwargs):
+            return original_open(state if str(path) == "/var/lib/logrotate/status" else path, *args, **kwargs)
+
+        with patch.object(installed, "check_log_configuration"), \
+                patch.object(installed, "LogArchiveRetention", return_value=self.engine), \
+                patch.object(installed, "LOGROTATE_STATE", state, create=True), \
+                patch.object(installed.os, "open", side_effect=open_state), \
+                patch.object(installed, "command_ok", side_effect=command):
+            installed.logs_job(None)
+        self.assertEqual(self.engine.plan()["files"], [])
+        self.assertTrue((self.root / "error.log.1").exists())
+        self.assertEqual((self.root / "error.log.1").read_bytes(), b"")
+        if fresh:
+            pending = self.engine.pending()
+            self.assertEqual(len(pending), 1)
+            self.assertNotEqual(pending[0][0]["location"], pending[0][0]["path"])
+            self.assertEqual(Path(pending[0][0]["location"]).read_bytes(), b"fresh log")
+            self.now += 5 * 86400
+            self.engine.execute(self.engine.plan())
+        self.assertEqual(self.engine.pending(), [])
+
+    def test_installed_rerun_recovers_published_request_before_real_rotation(self):
+        self.rerun_after_interrupted_request()
+
+    def test_recently_written_pending_source_is_isolated_before_rotation_and_retained(self):
+        self.rerun_after_interrupted_request(fresh=True)
+
+    def test_already_moved_pending_file_survives_rotation_and_is_recovered(self):
+        self.rerun_after_interrupted_request(fresh=True, interrupt="lease")
+
+    def test_external_timer_rotation_during_interruption_recovers_original_inode(self):
+        self.rerun_after_interrupted_request(rotated_while_down=True)
+
+    def test_external_timer_rotation_preserves_recent_pending_and_new_archives(self):
+        self.rerun_after_interrupted_request(fresh=True, rotated_while_down=True)
+
+    def test_rotation_lock_conflict_and_pending_drift_stop_before_rotation(self):
+        state = self.root / "rotate.state"
+        write_new(state, b"", 0o600)
+        with patch.object(installed, "check_log_configuration"), \
+                patch.object(installed, "LogArchiveRetention", return_value=self.engine), \
+                patch.object(installed, "LOGROTATE_STATE", state), \
+                patch.object(installed, "command_ok") as command:
+            with state.open("rb") as owner:
+                fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                with self.assertRaises(BlockingIOError):
+                    installed.logs_job(None)
+                command.assert_not_called()
+            with patch("ops.maintenance.log_retention.rename_new", side_effect=OSError("power loss")):
+                with self.assertRaises(OSError):
+                    self.engine.execute(self.engine.plan())
+            self.archive.rename(self.root / "replaced-archive")
+            write_new(self.archive, b"different inode", 0o640)
+            with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_LOG_DRIFT"):
+                installed.logs_job(None)
+            command.assert_not_called()
+
+    def test_replaced_rotation_state_cannot_leave_us_holding_obsolete_lock(self):
+        state = self.root / "rotate.state"
+        write_new(state, b"", 0o600)
+        flock = fcntl.flock
+
+        def replace(fd, operation):
+            flock(fd, operation)
+            state.rename(self.root / "old.state")
+            write_new(state, b"", 0o600)
+
+        with patch.object(installed, "LOGROTATE_STATE", state), \
+                patch.object(installed.fcntl, "flock", side_effect=replace):
+            with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_LOGROTATE_LOCK"):
+                with installed.logrotate_lock():
+                    self.fail("取得旧 inode 锁后不得继续")
 
     def test_templates_do_not_delete_outside_guarded_retention(self):
         templates = Path(__file__).resolve().parents[2] / "ops/maintenance/templates"

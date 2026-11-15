@@ -13,6 +13,7 @@ from ops.deploy.deployment_state import (
     initialize_layout, publish_new, require, sync_directory, write_new,
 )
 from ops.deploy.release_install import rename_new
+from ops.monitor.bounded_process import retain_locks
 
 
 MARKER = b"axialmuse-local-maintenance-v2\n"
@@ -77,7 +78,8 @@ class LocalMaintenanceState:
                 require(False, "MAINTENANCE_BUSY")
             held, live = os.fstat(descriptor), path.lstat()
             require((held.st_dev, held.st_ino) == (live.st_dev, live.st_ino), "MAINTENANCE_LOCK")
-            yield
+            with retain_locks((descriptor,)):
+                yield
         finally:
             os.close(descriptor)
 

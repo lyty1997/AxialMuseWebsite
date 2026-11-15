@@ -1,13 +1,16 @@
 """固定命令语法和执行前边界，不依赖生产凭证。"""
 
 import contextlib
+import fcntl
 import io
 import hashlib
 import json
 import os
 import select
+import signal
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -16,6 +19,7 @@ from ops.deploy import release_commands as command
 from ops.deploy.deployment_state import DeploymentError
 from ops.deploy.nginx_activation import LocalNginx, local_site_config
 from ops import runtime_bootstrap
+from ops.monitor.bounded_process import inherited_lock_fds, run_process
 
 
 class RuntimeLoadingTests(unittest.TestCase):
@@ -30,7 +34,7 @@ class RuntimeLoadingTests(unittest.TestCase):
         self.lock.write_bytes(b"")
         self.lock.chmod(0o600)
 
-    def cohort(self, version):
+    def cohort(self, version, extra=None):
         source = {
             "ops/deploy/release_commands.py": (
                 f"import sys\nVERSION = {version!r}\nprint('loaded', flush=True)\n"
@@ -39,6 +43,7 @@ class RuntimeLoadingTests(unittest.TestCase):
                 " print(VERSION + ':' + lazy, flush=True)\n return 0\n"),
             "ops/deploy/helper.py": f"VERSION = {version!r}\n",
         }
+        source.update(extra or {})
         manifest = json.dumps({name: hashlib.sha256(code.encode()).hexdigest() for name, code in source.items()},
                               sort_keys=True).encode()
         root = self.versions / hashlib.sha256(manifest).hexdigest()
@@ -101,8 +106,108 @@ class RuntimeLoadingTests(unittest.TestCase):
         self.assertEqual(output, b"")
         self.assertNotEqual(child.returncode, 0)
 
+    def test_killed_maintenance_parent_and_worker_cannot_release_live_descendant_locks(self):
+        repository = Path(__file__).resolve().parents[2]
+        source = {p.relative_to(repository).as_posix(): p.read_text()
+                  for p in (repository / "ops").rglob("*.py")}
+        ready = self.lib / "writer-ready"
+        stop = self.lib / "stop"
+        progress = self.lib / "progress"
+        worker_pid = self.lib / "worker-pid"
+        local_root = self.lib / "maintenance"
+        writer = ("import os,time; from pathlib import Path; "
+                  f"Path({str(ready)!r}).write_text(str(os.getpid()))\n"
+                  f"while not Path({str(stop)!r}).exists():\n"
+                  f" Path({str(progress)!r}).write_text(str(time.monotonic_ns()))\n time.sleep(.01)\n")
+        source["ops/maintenance/installed.py"] += (
+            "\ndef worker(name):\n"
+            f" Path({str(worker_pid)!r}).write_text(str(os.getpid()))\n"
+            f" result = run_process(['/usr/bin/python3', '-c', {writer!r}], timeout=30, output_limit=1024)\n"
+            " sys.stdout.buffer.write(canonical({'schema': 1, 'status': 'ok', 'code': 'OK'}))\n"
+            " return result.returncode\n")
+        source["ops/deploy/release_commands.py"] += (
+            "\ndef main():\n"
+            " from ops.maintenance.installed import run_job\n"
+            " from ops.maintenance.local_state import LocalMaintenanceState, JOBS\n"
+            f" state = LocalMaintenanceState(Path({str(local_root)!r}), os.getuid())\n"
+            " state.initialize()\n"
+            " state.execute({name: lambda: run_job('resources') for name in JOBS}, guard=verifier_lock)\n"
+            " return 0\n")
+        root = self.cohort("maintenance", source)
+        self.pointer.symlink_to(root)
+        parent = self.process()
+
+        def finish():
+            stop.touch()
+            for marker in (worker_pid, ready):
+                if marker.exists():
+                    try:
+                        os.killpg(int(marker.read_text()), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+        self.addCleanup(finish)
+        deadline = time.monotonic() + 10
+        while not progress.exists():
+            self.assertIsNone(parent.poll(), "维护父进程提前退出")
+            self.assertLess(time.monotonic(), deadline, "工作进程未到达写入屏障")
+            time.sleep(.01)
+        parent.kill()
+        parent.wait(timeout=5)
+        from ops.maintenance.local_state import LocalMaintenanceState
+        local = LocalMaintenanceState(local_root, os.getuid())
+        for kill_worker in (False, True):
+            with self.subTest(kill_worker=kill_worker):
+                if kill_worker:
+                    os.kill(int(worker_pid.read_text()), signal.SIGKILL)
+                previous = progress.read_bytes()
+                deadline = time.monotonic() + 3
+                while progress.read_bytes() == previous:
+                    self.assertLess(time.monotonic(), deadline, "存活后代未继续工作")
+                    time.sleep(.01)
+                with self.assertRaises(BlockingIOError):
+                    with runtime_bootstrap.lifecycle(self.lib, self.lock, uid=os.getuid()):
+                        self.fail("仍在写入的后代丢失了生命周期锁")
+                for path in (self.lib, self.lock):
+                    fd = os.open(path, os.O_RDONLY)
+                    try:
+                        with self.assertRaises(BlockingIOError):
+                            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    finally:
+                        os.close(fd)
+                with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_BUSY"):
+                    with local.locked():
+                        self.fail("仍在写入的后代丢失了维护锁")
+        stop.touch()
+        deadline = time.monotonic() + 5
+        while True:
+            try:
+                with runtime_bootstrap.lifecycle(self.lib, self.lock, uid=os.getuid()):
+                    with local.locked():
+                        break
+            except (BlockingIOError, DeploymentError):
+                self.assertLess(time.monotonic(), deadline, "后代退出后仍残留锁")
+                time.sleep(.01)
+
 
 class ReleaseCommandsTests(unittest.TestCase):
+    def test_compatibility_entry_passes_both_acquired_locks_to_subcommands(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            lock = root / "lock"
+            lock.write_bytes(b"")
+            lock.chmod(0o600)
+            check_directory, read_file = command.check_directory, command.read_file
+            with patch.object(command, "LIB", root), patch.object(command, "LOCK", lock), \
+                    patch.object(command, "check_directory", side_effect=lambda p, _uid: check_directory(p, os.getuid())), \
+                    patch.object(command, "read_file", side_effect=lambda p, _uid, **kw: read_file(p, os.getuid(), **kw)):
+                with command.verifier_lock():
+                    descriptors = inherited_lock_fds()
+                    self.assertEqual(len(descriptors), 2)
+                    source = f"import os; [os.fstat(fd) for fd in {descriptors!r}]; print('inherited')"
+                    result = run_process(["/usr/bin/python3", "-c", source], timeout=5, output_limit=128)
+                    self.assertEqual((result.returncode, result.stdout), (0, b"inherited\n"))
+                self.assertEqual(inherited_lock_fds(), ())
+
     def test_exact_five_parameters_and_no_path_or_shell_inputs(self):
         values = ["1", "2", "a" * 40, "b" * 64, "c" * 64]
         args = [value for pair in zip(command.FLAGS, values) for value in pair]

@@ -70,11 +70,24 @@ class LogArchiveRetention:
                     "MAINTENANCE_LOG_QUARANTINE")
             source = Path(record["source"])
             self.policy(source)
+            safe_directory(source.parent, self.uid, self.writable_group)
             if "sealed" in entries:
                 require(read_file(directory / "sealed", self.uid, mode=0o600) == b"", "MAINTENANCE_LOG_QUARANTINE")
                 if "data" not in entries:
                     continue
-            location = directory / "data" if "data" in entries else source
+            if "data" in entries:
+                location = directory / "data"
+            else:
+                # 中断后系统轮转器可能先改了序号；请求绑定 inode，而非可复用的路径。
+                base = re.sub(r"\.[1-9][0-9]*(?:\.gz)?$", "", source.name)
+                matches = []
+                for path in source.parent.iterdir():
+                    if re.fullmatch(re.escape(base) + r"\.[1-9][0-9]*(?:\.gz)?", path.name):
+                        value = path.lstat()
+                        if (value.st_dev, value.st_ino) == (record["device"], record["inode"]):
+                            matches.append(path)
+                require(len(matches) == 1, "MAINTENANCE_LOG_DRIFT")
+                location = matches[0]
             metadata, days = self.metadata(location, source)
             require((metadata["device"], metadata["inode"]) == (record["device"], record["inode"]),
                     "MAINTENANCE_LOG_DRIFT")
@@ -83,7 +96,7 @@ class LogArchiveRetention:
 
     def expired(self):
         records = self.pending()
-        pending_sources = {r["path"] for r, _ in records if r["path"] == r["location"]}
+        pending_sources = {r["location"] for r, _ in records}
         seen = set()
         for active, owner, group, days in self.policies:
             active = Path(active)
@@ -104,9 +117,16 @@ class LogArchiveRetention:
         created = int(self.clock())
         return {"schema": 1, "created": created, "expires": created + 600, "files": self.expired()}
 
+    def recover_pending(self):
+        """调用者持轮转锁；全部源路径请求先隔离，年龄只控制最终删除。"""
+        for record, _days in self.pending():
+            self.isolate(record)
+
     def isolate(self, record):
         source, location = Path(record["path"]), Path(record["location"])
-        if location != source:
+        if location.parent != source.parent:
+            require(location.name == "data" and location.parent.parent == self.quarantine,
+                    "MAINTENANCE_LOG_QUARANTINE")
             # 前次可能在 rename 后、源目录 fsync 前中断；删除前补齐两端持久性。
             sync_directory(source.parent)
             sync_directory(location.parent)
@@ -116,7 +136,7 @@ class LogArchiveRetention:
             self.quarantine.mkdir(mode=0o700)
             sync_directory(self.quarantine.parent)
         check_directory(self.quarantine, self.uid, 0o700)
-        require(self.quarantine.stat().st_dev == source.lstat().st_dev, "MAINTENANCE_LOG_FILESYSTEM")
+        require(self.quarantine.stat().st_dev == location.lstat().st_dev, "MAINTENANCE_LOG_FILESYSTEM")
         request = {"source": str(source), "device": record["device"], "inode": record["inode"]}
         directory = next((p for p in self.quarantine.iterdir() if (p / "request.json").exists()
                           and not (p / "data").exists() and not (p / "sealed").exists()
@@ -127,7 +147,7 @@ class LogArchiveRetention:
             sync_directory(self.quarantine)
             publish_new(directory / "request.json", canonical(request))
         destination = directory / "data"
-        rename_new(source, destination)
+        rename_new(location, destination)
         sync_directory(source.parent)
         return destination
 

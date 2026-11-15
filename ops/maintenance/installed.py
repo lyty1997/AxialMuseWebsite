@@ -1,5 +1,6 @@
 """固定的本机维护入口候选；不安装、不重启、不自动退役 release。"""
 
+import contextlib
 import grp
 import fcntl
 import os
@@ -17,20 +18,23 @@ from ops.maintenance.ledger_backup import LedgerBackups
 from ops.maintenance.local_state import JOBS, LocalMaintenanceState, safe_code
 from ops.maintenance.log_retention import LogArchiveRetention
 from ops.maintenance.resources import check_resources
-from ops.monitor.bounded_process import ProcessOutputLimit, run_process
+from ops.monitor.bounded_process import ProcessOutputLimit, inherited_lock_fds, retain_locks, run_process
 
 
 LIB = Path(__file__).resolve().parents[2]
 TEMPLATES = LIB / "ops/maintenance/templates"
 BACKUPS = Path("/var/backups/axialmuse-ledger")
 ENV = {"PATH": "/usr/sbin:/usr/bin:/bin", "LANG": "C"}
+LOGROTATE_STATE = Path("/var/lib/logrotate/status")
 
 
 def run_job(name, *, command=run_process):
     require(name in JOBS, "MAINTENANCE_JOBS")
     program = (f"import sys; sys.path.insert(0, {str(LIB)!r}); "
                "from ops.maintenance.installed import worker; "
-               f"raise SystemExit(worker('{name}'))")
+               "from ops.monitor.bounded_process import retain_locks\n"
+               f"with retain_locks({inherited_lock_fds()!r}):\n"
+               f" raise SystemExit(worker('{name}'))")
     try:
         result = command(["/usr/bin/python3", "-I", "-B", "-c", program],
                          timeout=120, output_limit=65536, env=ENV)
@@ -92,6 +96,19 @@ def check_log_configuration(store):
                 == local_site_config(store.site), "MAINTENANCE_LOCAL_CONFIG")
 
 
+@contextlib.contextmanager
+def logrotate_lock():
+    descriptor = os.open(LOGROTATE_STATE, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        held, live = os.fstat(descriptor), LOGROTATE_STATE.lstat()
+        require((held.st_dev, held.st_ino) == (live.st_dev, live.st_ino), "MAINTENANCE_LOGROTATE_LOCK")
+        with retain_locks((descriptor,)):
+            yield
+    finally:
+        os.close(descriptor)
+
+
 def logs_job(store):
     check_log_configuration(store)
     adm = grp.getgrnam("adm").gr_gid
@@ -104,16 +121,14 @@ def logs_job(store):
             policies.append((active, syslog, adm, 27))
     engine = LogArchiveRetention(policies, quarantine=STATE / "log-retention",
                                  writable_group=grp.getgrnam("syslog").gr_gid)
-    engine.plan()  # 未知对象/权限/时间异常在轮转前暴露。
-    command_ok(["/usr/sbin/logrotate", "--force", "--state", "/var/lib/logrotate/status",
+    with logrotate_lock():
+        engine.plan()  # 未知对象/权限/时间异常在轮转前暴露。
+        engine.recover_pending()  # 未到期的待处理文件也必须先解除源路径绑定。
+    command_ok(["/usr/sbin/logrotate", "--force", "--state", str(LOGROTATE_STATE),
                 "/etc/logrotate.d/nginx", "/etc/logrotate.d/rsyslog"], "MAINTENANCE_LOGROTATE_FAILED")
     # 系统 logrotate timer 也使用此状态文件的 flock；排除重命名归档的并发。
-    descriptor = os.open("/var/lib/logrotate/status", os.O_RDONLY | os.O_NOFOLLOW)
-    try:
-        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    with logrotate_lock():
         engine.execute(engine.plan())
-    finally:
-        os.close(descriptor)
     command_ok(["/usr/bin/journalctl", "--rotate"], "MAINTENANCE_JOURNAL_ROTATE")
     command_ok(["/usr/bin/journalctl", "--vacuum-time=27d"], "MAINTENANCE_JOURNAL_VACUUM")
 
@@ -143,7 +158,7 @@ def worker(name):
 def main():
     try:
         require(os.geteuid() == 0 and not sys.argv[1:], "MAINTENANCE_CONTEXT")
-        # 子进程不重入此锁；父进程的锁覆盖加载、运行及退出。
+        # 子进程继承同一内核锁，不重入 flock；父进程死亡不解除后代的保护。
         state = LocalMaintenanceState(STATE / "maintenance")
         result = state.execute({name: lambda name=name: run_job(name) for name in JOBS}, guard=verifier_lock)
         print(canonical(result).decode(), end="")
