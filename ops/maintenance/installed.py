@@ -1,13 +1,16 @@
 """固定的本机维护入口候选；不安装、不重启、不自动退役 release。"""
 
 import grp
+import fcntl
 import os
 import pwd
 import subprocess
 import sys
 from pathlib import Path
 
-from ops.deploy.deployment_state import DeploymentError, DeploymentState, canonical, decode, read_file, require
+from ops.deploy.deployment_state import (
+    DeploymentError, DeploymentState, canonical, check_directory, decode, read_file, require, sync_directory,
+)
 from ops.deploy.release_commands import SITE, STATE, load_verifier, verifier_lock
 from ops.deploy.release_install import ReleaseStore
 from ops.maintenance.ledger_backup import LedgerBackups
@@ -17,7 +20,7 @@ from ops.maintenance.resources import check_resources
 from ops.monitor.bounded_process import ProcessOutputLimit, run_process
 
 
-LIB = Path("/usr/local/lib/axialmuse-release")
+LIB = Path(__file__).resolve().parents[2]
 TEMPLATES = LIB / "ops/maintenance/templates"
 BACKUPS = Path("/var/backups/axialmuse-ledger")
 ENV = {"PATH": "/usr/sbin:/usr/bin:/bin", "LANG": "C"}
@@ -25,7 +28,7 @@ ENV = {"PATH": "/usr/sbin:/usr/bin:/bin", "LANG": "C"}
 
 def run_job(name, *, command=run_process):
     require(name in JOBS, "MAINTENANCE_JOBS")
-    program = ("import sys; sys.path.insert(0, '/usr/local/lib/axialmuse-release'); "
+    program = (f"import sys; sys.path.insert(0, {str(LIB)!r}); "
                "from ops.maintenance.installed import worker; "
                f"raise SystemExit(worker('{name}'))")
     try:
@@ -99,11 +102,18 @@ def logs_job(store):
         active = Path("/var/log") / name
         if os.path.lexists(active) or name in ("syslog", "auth.log") or list(active.parent.glob(name + ".*")):
             policies.append((active, syslog, adm, 27))
-    engine = LogArchiveRetention(policies)
+    engine = LogArchiveRetention(policies, quarantine=STATE / "log-retention",
+                                 writable_group=grp.getgrnam("syslog").gr_gid)
     engine.plan()  # 未知对象/权限/时间异常在轮转前暴露。
     command_ok(["/usr/sbin/logrotate", "--force", "--state", "/var/lib/logrotate/status",
                 "/etc/logrotate.d/nginx", "/etc/logrotate.d/rsyslog"], "MAINTENANCE_LOGROTATE_FAILED")
-    engine.execute(engine.plan())
+    # 系统 logrotate timer 也使用此状态文件的 flock；排除重命名归档的并发。
+    descriptor = os.open("/var/lib/logrotate/status", os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        engine.execute(engine.plan())
+    finally:
+        os.close(descriptor)
     command_ok(["/usr/bin/journalctl", "--rotate"], "MAINTENANCE_JOURNAL_ROTATE")
     command_ok(["/usr/bin/journalctl", "--vacuum-time=27d"], "MAINTENANCE_JOURNAL_VACUUM")
 
@@ -152,9 +162,21 @@ def manage():
         with verifier_lock():
             local = LocalMaintenanceState(STATE / "maintenance")
             if arguments == ["--initialize"]:
-                # 不隐式重建半初始化或未知备份位置；任何失败均停下审查。
-                LedgerBackups(DeploymentState(STATE), BACKUPS).initialize()
-                local.initialize()
+                # 已完整发布的前序步骤只核验；中断的准备树由原初始化入口续跑。
+                backup = LedgerBackups(DeploymentState(STATE), BACKUPS)
+                if os.path.lexists(BACKUPS):
+                    backup.check()
+                else:
+                    backup.initialize()
+                if os.path.lexists(local.root):
+                    local.check()
+                else:
+                    local.initialize()
+                quarantine = STATE / "log-retention"
+                if not os.path.lexists(quarantine):
+                    quarantine.mkdir(mode=0o700)
+                check_directory(quarantine, 0, 0o700)
+                sync_directory(STATE)
             elif arguments == ["--enable"]:
                 local.enable()
             else:

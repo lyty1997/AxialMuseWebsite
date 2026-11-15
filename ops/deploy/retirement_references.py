@@ -46,7 +46,8 @@ class RetirementReferences:
         changed = config_changed
         protected = set()
         base = str(self.store.releases)
-        pattern = re.compile(re.escape(base) + r"/([0-9a-f]{40})(?=/|\s|;|$)")
+        pattern = re.compile("(?:" + re.escape(base) + "|" + re.escape(str(self.store.site / ".retired"))
+                             + r")/([0-9a-f]{40})(?=/|\s|;|$)")
 
         def protect(value):
             protected.update(pattern.findall(value))

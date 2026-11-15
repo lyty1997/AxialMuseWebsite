@@ -7,6 +7,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from ops.deploy.deployment_state import DeploymentError, write_new
 from ops.maintenance.log_retention import LogArchiveRetention
@@ -78,3 +79,57 @@ class LogRetentionTests(unittest.TestCase):
         self.archive.symlink_to(self.active)
         with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_LOG_FILE"):
             self.engine.plan()
+
+    def test_existing_writer_is_preserved_and_released_file_can_be_recovered(self):
+        plan = self.engine.plan()
+        with self.archive.open("ab") as writer:
+            with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_LOG_OPEN"):
+                self.engine.execute(plan)
+            writer.write(b"fresh")
+            writer.flush()
+            location = next(self.engine.quarantine.glob("*/data"))
+            self.assertEqual(location.read_bytes(), b"synthetic logfresh")
+        # 新写入不能被旧年龄授权覆盖；后续重新达到期限才可清理。
+        self.assertEqual(self.engine.plan()["files"], [])
+        self.now += 5 * 86400
+        self.assertEqual(self.engine.execute(self.engine.plan())["deletedArchives"], 1)
+
+    def test_late_nonblocking_open_is_rejected_by_kernel_lease(self):
+        original = Path.unlink
+        attempts = []
+        def attempt(path, *args, **kwargs):
+            if path.name == "data":
+                # SIGIO 在 Python 层处理前，内核也必须拒绝此非阻塞 open。
+                try:
+                    fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
+                except (BlockingIOError, DeploymentError):
+                    attempts.append("blocked")
+                    raise DeploymentError("MAINTENANCE_LOG_OPEN")
+                else:
+                    os.close(fd)
+                    self.fail("租约没有保护最终 unlink")
+            return original(path, *args, **kwargs)
+        with patch.object(Path, "unlink", attempt):
+            with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_LOG_OPEN"):
+                self.engine.execute(self.engine.plan())
+        self.assertEqual(attempts, ["blocked"])
+        self.assertTrue(next(self.engine.quarantine.glob("*/data")).exists())
+
+    def test_quarantine_move_interrupt_and_unknown_object_remain_visible(self):
+        with patch("ops.maintenance.log_retention.rename_new", side_effect=OSError("power loss")):
+            with self.assertRaises(OSError):
+                self.engine.execute(self.engine.plan())
+        self.assertTrue(self.archive.exists())
+        self.assertEqual(self.engine.execute(self.engine.plan())["deletedArchives"], 1)
+        write_new(self.engine.quarantine / "unknown", b"unknown")
+        with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_LOG_QUARANTINE"):
+            self.engine.plan()
+
+    def test_templates_do_not_delete_outside_guarded_retention(self):
+        templates = Path(__file__).resolve().parents[2] / "ops/maintenance/templates"
+        for name in ("nginx", "rsyslog"):
+            config = (templates / f"{name}.logrotate").read_text().splitlines()
+            self.assertIn("    rotate -1", config)
+            self.assertIn("    nocompress", config)
+            self.assertFalse(any(line.strip().startswith("maxage") for line in config))
+        self.assertIn("    su root syslog", (templates / "rsyslog.logrotate").read_text().splitlines())

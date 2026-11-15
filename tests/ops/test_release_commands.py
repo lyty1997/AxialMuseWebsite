@@ -2,12 +2,104 @@
 
 import contextlib
 import io
+import hashlib
+import json
+import os
+import select
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from ops.deploy import release_commands as command
 from ops.deploy.deployment_state import DeploymentError
 from ops.deploy.nginx_activation import LocalNginx, local_site_config
+from ops import runtime_bootstrap
+
+
+class RuntimeLoadingTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="axial-runtime-")
+        self.addCleanup(temporary.cleanup)
+        self.lib = Path(temporary.name)
+        self.versions = self.lib / "versions"
+        self.versions.mkdir(mode=0o755)
+        self.pointer = self.lib / "active"
+        self.lock = self.lib / "lock"
+        self.lock.write_bytes(b"")
+        self.lock.chmod(0o600)
+
+    def cohort(self, version):
+        source = {
+            "ops/deploy/release_commands.py": (
+                f"import sys\nVERSION = {version!r}\nprint('loaded', flush=True)\n"
+                "def main():\n print('ready', flush=True)\n sys.stdin.read(1)\n"
+                " from ops.deploy.helper import VERSION as lazy\n"
+                " print(VERSION + ':' + lazy, flush=True)\n return 0\n"),
+            "ops/deploy/helper.py": f"VERSION = {version!r}\n",
+        }
+        manifest = json.dumps({name: hashlib.sha256(code.encode()).hexdigest() for name, code in source.items()},
+                              sort_keys=True).encode()
+        root = self.versions / hashlib.sha256(manifest).hexdigest()
+        root.mkdir(mode=0o755)
+        for name, code in source.items():
+            target = root / name
+            target.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+            for folder in (root / "ops", root / "ops/deploy"):
+                folder.chmod(0o755)
+            target.write_text(code)
+            target.chmod(0o644)
+        (root / "runtime.json").write_bytes(manifest)
+        (root / "runtime.json").chmod(0o644)
+        return root
+
+    def process(self):
+        script = ("import importlib.util; "
+                  f"s=importlib.util.spec_from_file_location('bootstrap', {runtime_bootstrap.__file__!r}); "
+                  "m=importlib.util.module_from_spec(s); s.loader.exec_module(m); "
+                  f"raise SystemExit(m.launch('axialmuse-deploy', [], lib=m.Path({str(self.lib)!r}), "
+                  f"pointer=m.Path({str(self.pointer)!r}), versions=m.Path({str(self.versions)!r}), "
+                  f"lock=m.Path({str(self.lock)!r}), uid={os.getuid()}))")
+        child = subprocess.Popen(["/usr/bin/python3", "-I", "-B", "-c", script],
+                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        def cleanup():
+            if child.poll() is None:
+                child.kill()
+            child.communicate()
+        self.addCleanup(cleanup)
+        return child
+
+    def test_real_process_locks_before_import_and_pins_lazy_import_root(self):
+        first, second = self.cohort("old"), self.cohort("new")
+        self.pointer.symlink_to(first)
+        child = self.process()
+        self.assertTrue(select.select([child.stdout], [], [], 10)[0], "入口未到达加载屏障")
+        loaded = child.stdout.readline()
+        self.assertEqual(loaded, b"loaded\n", child.stderr.read() if not loaded else b"")
+        ready = child.stdout.readline()
+        self.assertEqual(ready, b"ready\n", child.stderr.read() if not ready else b"")
+        with self.assertRaises(BlockingIOError):
+            with runtime_bootstrap.lifecycle(self.lib, self.lock, uid=os.getuid()):
+                self.fail("安装锁不应穿过活动进程")
+        # 即便模拟不遵守安装锁的指针切换，已启动进程也只能加载同一代际。
+        self.pointer.unlink()
+        self.pointer.symlink_to(second)
+        output, errors = child.communicate(b"x", timeout=10)
+        self.assertEqual(child.returncode, 0, errors)
+        self.assertEqual(output, b"old:old\n")
+
+    def test_busy_and_corrupt_runtime_never_import_business_code(self):
+        root = self.cohort("bad")
+        self.pointer.symlink_to(root)
+        with runtime_bootstrap.lifecycle(self.lib, self.lock, uid=os.getuid()):
+            output, _ = self.process().communicate(b"x", timeout=10)
+            self.assertEqual(output, b"")
+        (root / "ops/deploy/helper.py").write_text("VERSION = 'tampered'\n")
+        child = self.process()
+        output, _ = child.communicate(b"x", timeout=10)
+        self.assertEqual(output, b"")
+        self.assertNotEqual(child.returncode, 0)
 
 
 class ReleaseCommandsTests(unittest.TestCase):

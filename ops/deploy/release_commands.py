@@ -10,8 +10,6 @@ import sys
 from pathlib import Path
 
 sys.dont_write_bytecode = True
-# verifier 保持独占闭合命名空间；发布组件使用同级独立根。
-sys.path.insert(0, "/usr/local/lib/axialmuse-release")
 
 from ops.deploy.deployment_state import (  # noqa: E402
     DeploymentError, DeploymentState, canonical, check_directory, identity_valid,
@@ -40,6 +38,11 @@ def parse_deploy(arguments):
 
 @contextlib.contextmanager
 def verifier_lock():
+    bootstrap = sys.modules.get("_axialmuse_runtime")
+    if bootstrap is not None:
+        bootstrap.check_lock()
+        yield
+        return
     # 与 #36 bootstrap/upgrade 使用同一目录锁和文件锁，且先锁后加载组件。
     check_directory(LIB, 0)
     parent = os.open(LIB, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -138,4 +141,4 @@ def main(arguments=None, executable=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit("[DEPLOY_RUNTIME_REQUIRED] 请使用固定启动器。")

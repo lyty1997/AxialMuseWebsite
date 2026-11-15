@@ -1,4 +1,3 @@
-import ast
 import contextlib
 import errno
 import fcntl
@@ -1262,42 +1261,22 @@ class ArtifactVerifierUpgradeTests(unittest.TestCase):
             )
 
     def test_release_installation_allows_real_upgrade_and_idempotent_recheck(self):
-        # 从真实入口解析安装根，防止 fixture 使用与运行代码无关的手写路径。
-        roots = []
-        for name in ("deploy.py", "release_commands.py", "renew_public_certificate.py"):
-            tree = ast.parse(UPGRADER_PATH.with_name(name).read_bytes())
-            roots.append(next(
-                Path(ast.literal_eval(node.args[1]))
-                for node in ast.walk(tree)
-                if isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and ast.unparse(node.func) == "sys.path.insert"
-            ))
-        self.assertEqual(roots, [roots[0]] * 3)
-        self.assertEqual(roots[0].parent, Path("/usr/local/lib"))
+        from ops import runtime_bootstrap, runtime_bundle
+        # 从真实启动器及打包器构造新布局，验证 verifier 升级不触碰业务代际。
+        self.assertEqual(runtime_bootstrap.POINTER.parent, Path("/usr/local/lib"))
         template = UPGRADER_PATH.with_name("tat-command.sh").read_bytes()
         parser_path = Path(shlex.split(template.splitlines()[1].decode())[4])
-        self.assertEqual(parser_path, roots[0] / "tat-entry.py")
+        self.assertEqual(parser_path, runtime_bootstrap.POINTER / "tat-entry.py")
 
         with tempfile.TemporaryDirectory(prefix="axial-muse-combined-upgrade-") as temporary:
             fixture = UpgradeFixture(temporary)
             fixture.install()
-            runtime = fixture.root / roots[0].relative_to("/")
-            modules = runtime / "ops/deploy"
-            modules.mkdir(parents=True, mode=0o755)
-            for directory in (runtime, runtime / "ops", modules):
-                directory.chmod(0o755)
-            # 安装真实发布源码，不混入 verifier、bootstrap 或 upgrader。
-            excluded = {"verify_artifact.py", "bootstrap_artifact_verifier.py",
-                        "upgrade_artifact_verifier.py"}
-            for source in UPGRADER_PATH.parent.glob("*.py"):
-                if source.name not in excluded:
-                    target = modules / source.name
-                    target.write_bytes(source.read_bytes())
-                    target.chmod(0o644)
-            parser = fixture.root / parser_path.relative_to("/")
-            parser.write_bytes(UPGRADER_PATH.with_name("tat_entry.py").read_bytes())
-            parser.chmod(0o644)
+            versions = fixture.root / runtime_bootstrap.VERSIONS.relative_to("/")
+            versions.mkdir(mode=0o755)
+            runtime = runtime_bundle.bundle(REPOSITORY_ROOT, versions)
+            pointer = fixture.root / runtime_bootstrap.POINTER.relative_to("/")
+            pointer.symlink_to(runtime)
+            self.assertEqual((pointer / "tat-entry.py").read_bytes(), UPGRADER_PATH.with_name("tat_entry.py").read_bytes())
 
             def snapshot():
                 return {

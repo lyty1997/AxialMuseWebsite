@@ -5,13 +5,12 @@
 /var/log/user.log
 /var/log/cron.log
 {
+    su root syslog
     daily
-    rotate 128
-    maxage 27
+    rotate -1
     missingok
     ifempty
-    compress
-    delaycompress
+    nocompress
     nodateext
     noolddir
     create 0640 syslog adm

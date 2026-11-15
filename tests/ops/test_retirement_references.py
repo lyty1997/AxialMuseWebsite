@@ -79,6 +79,11 @@ class RetirementReferenceTests(unittest.TestCase):
         with self.assertRaisesRegex(DeploymentError, "DEPLOY_RETIREMENT_WORKER_GENERATION"):
             self.probe()
 
+    def test_quarantined_release_fd_is_still_a_protected_reference(self):
+        old = "b" * 40
+        (self.proc / "200/fd/3").symlink_to(self.fixture.site / ".retired" / old / "payload/index.html")
+        self.assertIn(old, self.probe()["protected"])
+
     def test_explicit_config_fd_and_symbolic_references_are_protected(self):
         old = "b" * 40
         path = self.fixture.store.releases / old

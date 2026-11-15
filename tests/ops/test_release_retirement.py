@@ -5,6 +5,7 @@ import copy
 import os
 import shutil
 import tempfile
+import subprocess
 import time
 import unittest
 from unittest.mock import patch
@@ -169,7 +170,7 @@ class ReleaseRetirementTests(unittest.TestCase):
         self.assertEqual(self.fixture.state.available_releases(), {self.current})
 
     def test_interrupt_after_record_excludes_release_and_resumes_partial_deletion(self):
-        directory = self.fixture.store.releases / self.old
+        directory = self.fixture.store.site / ".retired" / self.old
         real_rmtree = shutil.rmtree
 
         def partial_delete(path):
@@ -197,7 +198,7 @@ class ReleaseRetirementTests(unittest.TestCase):
             mocked.avoids_symlink_attacks = real_rmtree.avoids_symlink_attacks
             with self.assertRaises(OSError):
                 self.engine.execute(self.plan)
-        directory = self.fixture.store.releases / self.old
+        directory = self.engine.location(self.old)
         self.now = self.plan["expires"] + 3600
         changed = copy.deepcopy(self.plan)
         changed["authorizationId"] = "0" * 32
@@ -222,7 +223,7 @@ class ReleaseRetirementTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 self.engine.execute(self.plan)
         self.now = self.plan["expires"] + 3600
-        directory = self.fixture.store.releases / self.old
+        directory = self.engine.location(self.old)
         write_new(directory / "unexpected", b"unknown", 0o644)
         with self.assertRaisesRegex(DeploymentError, "DEPLOY_RETIREMENT_EXTRA"):
             self.engine.execute(self.plan)
@@ -253,6 +254,83 @@ class ReleaseRetirementTests(unittest.TestCase):
         with self.assertRaisesRegex(DeploymentError, "DEPLOY_RETIREMENT_LAYOUT"):
             self.fixture.store.current()
 
+    def test_changed_context_can_reauthorize_cleanup_without_changing_retirement_fact(self):
+        real_rmtree = shutil.rmtree
+        with patch("ops.deploy.release_retirement.shutil.rmtree", side_effect=OSError("power loss")) as mocked:
+            mocked.avoids_symlink_attacks = real_rmtree.avoids_symlink_attacks
+            with self.assertRaises(OSError):
+                self.engine.execute(self.plan)
+        record = self.fixture.state.root / "retirements" / f"{self.old}.json"
+        original = record.read_bytes()
+        stage, identity = self.fixture.stage(self.next)
+        self.fixture.engine.execute(stage=stage, identity=identity)
+        self.evidence = "f" * 64
+        with self.assertRaisesRegex(DeploymentError, "DEPLOY_RETIREMENT_DRIFT"):
+            self.engine.execute(self.plan)
+        plan = self.engine.plan(self.old, "e" * 32)
+        self.assertEqual(plan["schema"], 2)
+        self.assertEqual(plan["retirementSha256"], digest(original))
+        self.assertEqual(self.engine.execute(plan)["status"], "retired")
+        self.assertEqual(record.read_bytes(), original)
+        self.assertFalse(self.engine.location(self.old).exists())
+        self.assertEqual(self.fixture.state.available_releases(), {self.current, self.next})
+        self.assertTrue((self.fixture.state.root / "retirement-cleanups" / ("e" * 32 + ".json")).exists())
+
+    def test_new_reference_after_probe_blocks_kernel_deletion(self):
+        original = self.engine.remaining
+        held = []
+        self.addCleanup(lambda: [f.close() for f in held])
+        def open_after_check(plan):
+            result = original(plan)
+            if self.engine.location(self.old).parent.name == ".retired" and not held:
+                held.append((self.engine.location(self.old) / "payload/index.html").open("rb"))
+            return result
+        with patch.object(self.engine, "remaining", open_after_check):
+            with self.assertRaisesRegex(DeploymentError, "DEPLOY_RETIREMENT_REFERENCED"):
+                self.engine.execute(self.plan)
+        self.assertTrue(self.engine.location(self.old).exists())
+        for stream in held:
+            stream.close()
+        self.assertEqual(self.engine.execute(self.plan)["status"], "retired")
+
+    def test_file_open_after_final_original_probe_must_prevent_deletion(self):
+        original = self.engine.remaining
+        calls, held = [], []
+        self.addCleanup(lambda: [stream.close() for stream in held])
+        def raced(plan):
+            result = original(plan)
+            calls.append(True)
+            if len(calls) == 2:
+                public = self.fixture.store.releases / self.old
+                directory = public if public.exists() else self.fixture.store.site / ".retired" / self.old
+                held.append((directory / "payload/index.html").open("rb"))
+            return result
+        with patch.object(self.engine, "remaining", raced):
+            with self.assertRaisesRegex(DeploymentError, "DEPLOY_RETIREMENT_REFERENCED"):
+                self.engine.execute(self.plan)
+        self.assertTrue(held[0].read())
+
+    @unittest.skipUnless(os.environ.get("AXIALMUSE_NGINX_ACCEPTANCE") == "1", "需显式启用现有 Docker 镜像")
+    def test_real_unprivileged_process_cannot_reopen_isolated_tree(self):
+        image = "docker.io/library/nginx@sha256:0dcc88822d45581e65ae329f8be769762bf628d3b2bb7d2a077d4aa5c98b30e3"
+        def probe(path):
+            return subprocess.run(["docker", "run", "--rm", "--network", "none", "--user", "65534:65534",
+                "--entrypoint", "/bin/sh", "--mount", f"type=bind,src={self.fixture.site},dst=/site,readonly",
+                image, "-c", 'test -r "$1"', "sh", path], capture_output=True, timeout=30).returncode
+        self.assertEqual(probe(f"/site/releases/{self.old}/payload/index.html"), 0)
+        original = self.engine.remaining
+        seen = []
+        def after_isolation(plan):
+            result = original(plan)
+            if self.engine.location(self.old).parent.name == ".retired" and not seen:
+                seen.append(True)
+                self.assertNotEqual(probe(f"/site/releases/{self.old}/payload/index.html"), 0)
+                self.assertNotEqual(probe(f"/site/.retired/{self.old}/payload/index.html"), 0)
+            return result
+        with patch.object(self.engine, "remaining", after_isolation):
+            self.engine.execute(self.plan)
+        self.assertEqual(seen, [True])
+
     def test_old_installation_read_does_not_initialize_retirement_catalog(self):
         root = self.fixture.state.root
         (root / "retirement-schema").unlink()
@@ -263,6 +341,42 @@ class ReleaseRetirementTests(unittest.TestCase):
         self.assertEqual(self.fixture.state.available_releases(), {self.old, self.current})
         self.assertFalse((root / "retirement-schema").exists())
         self.assertFalse((root / "retirements").exists())
+
+    def test_protocol_initialization_resumes_every_file_publication_boundary(self):
+        from ops.deploy import release_retirement
+        for failure in range(1, 4):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as root:
+                fixture = ReleaseFixture(root)
+                original = release_retirement.publish_new
+                calls = 0
+                def interrupted(*args, **kwargs):
+                    nonlocal calls
+                    calls += 1
+                    if calls == failure:
+                        raise OSError("power loss")
+                    return original(*args, **kwargs)
+                with fixture.state.locked(retirement_aware=True):
+                    with patch.object(release_retirement, "publish_new", interrupted):
+                        with self.assertRaises(OSError):
+                            initialize_retirements(fixture.state)
+                    with self.assertRaises(DeploymentError):
+                        fixture.state.assert_idle()
+                    initialize_retirements(fixture.state)
+                    fixture.state.assert_idle()
+                self.assertEqual(fixture.state.successful_releases(), set())
+
+    def test_protocol_recovery_rejects_unknown_transaction_members(self):
+        protocol = self.fixture.state.transactions / RETIREMENT_PROTOCOL_ID
+        (protocol / "pending").write_bytes(b"")
+        (protocol / "pending").chmod(0o600)
+        write_new(protocol / "unknown", b"unknown")
+        with self.assertRaisesRegex(DeploymentError, "DEPLOY_RETIREMENT_PROTOCOL"):
+            initialize_retirements(self.fixture.state)
+
+    def test_completed_protocol_marker_loss_is_not_reconstructed_as_interruption(self):
+        (self.fixture.state.root / "retirement-schema").unlink()
+        with self.assertRaisesRegex(DeploymentError, "DEPLOY_RETIREMENT_PROTOCOL"):
+            initialize_retirements(self.fixture.state)
 
     def test_unupgraded_call_path_refuses_initialized_retirement_protocol(self):
         with self.assertRaisesRegex(DeploymentError, "DEPLOY_RETIREMENT_PROTOCOL_UNSUPPORTED"):

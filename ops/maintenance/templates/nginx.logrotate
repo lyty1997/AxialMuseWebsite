@@ -2,12 +2,10 @@
 /var/log/nginx/error.log
 {
     daily
-    rotate 64
-    maxage 4
+    rotate -1
     missingok
     ifempty
-    compress
-    delaycompress
+    nocompress
     nodateext
     noolddir
     create 0640 www-data adm

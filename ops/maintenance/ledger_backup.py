@@ -11,7 +11,7 @@ from pathlib import Path
 from ops.deploy import url_exposure_ledger as ledger
 from ops.deploy.deployment_state import (
     DeploymentState, canonical, check_directory, decode, digest, read_file,
-    require, sync_directory, write_new,
+    initialize_layout, require, sync_directory, write_new,
 )
 from ops.deploy.release_install import rename_new
 
@@ -53,12 +53,8 @@ class LedgerBackups:
                 and not state.home.is_relative_to(self.root), "MAINTENANCE_BACKUP_LOCATION")
 
     def initialize(self):
-        check_directory(self.root.parent, self.state.uid)
         require(not os.path.lexists(self.root), "MAINTENANCE_BACKUP_INITIALIZED")
-        self.root.mkdir(mode=0o700)
-        sync_directory(self.root.parent)
-        write_new(self.root / "backup-schema", MARKER)
-        write_new(self.root / "lock", b"")
+        initialize_layout(self.root, self.state.uid, {"backup-schema": MARKER, "lock": b""})
 
     def check(self):
         check_directory(self.root, self.state.uid, 0o700)

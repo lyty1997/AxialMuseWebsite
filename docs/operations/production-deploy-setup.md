@@ -1,5 +1,18 @@
 # 生产调度接线清单
 
+## 2026-11-15 / #88 不可变组件代际候选
+
+以下取代本文件历史步骤中的业务模块原位替换方式，尚未安装。verifier 仍保持原独立闭合目录与升级协议。
+
+- 本地以 `/usr/bin/python3 -B ops/runtime_bundle.py --output <全新绝对目录>` 构造完整组件树。物理根名是 `runtime.json` 字节的 SHA-256，manifest 绑定每个 Python 模块及维护模板；包含固定 TAT 路径所需的 `tat-entry.py`，其内容与原标准库解析器一致。该工具只打包，不认证 Git/CI、不切换入口。
+- 生产版本目录为 `/usr/local/lib/axialmuse-runtimes/<manifestSHA256>`，目录 root:root 0755、文件 0644，发布后禁止修改或覆盖。标准库启动器独立安装为 `/usr/local/lib/axialmuse-runtime-bootstrap.py`，根指针 `/usr/local/lib/axialmuse-release` 仅指向一个已认证物理版本。
+- 部署、预备部署、回滚、初始化和退役命令均安装 `ops/deploy/axialmuse-release-command` 包装器；监测及两项维护入口使用各自新包装器。Certbot 实际 hook `/etc/letsencrypt/renewal-hooks/deploy/axialmuse-public` 安装 `ops/deploy/axialmuse-public-renew`。包装器先进入启动器，在任何业务 import 前持既有目录锁和 verifier 生命周期文件锁，验证全 manifest 后只把物理根加入 sys.path。维护 worker 使用父进程的同一物理根。
+- 首次旧目录迁移：先冻结精确 Git/CI 来源、完整新树和所有包装器摘要；持生命周期锁安装稳定入口，排空已启动的旧部署、监测、续期解释器及其子进程，确认没有旧入口仍可派生旧解释器，再把原目录整体保留为恢复证据并切换指针。不能仅持锁就假设排空已完成，不能逐文件覆盖活动根。不能确认旧进程排空时停止迁移，保留旧生产布局；现有网站继续服务。
+- 后续升级先在新物理根完整验收，再持同一生命周期锁原子切换 root-owned 指针。既有进程所绑定的版本根禁止提前回收；旧版本保留，回退组件须兼容已持久化状态。锁冲突或 manifest/owner/mode/成员异常均在导入前失败，不使用旧模块兜底。
+- 安装前另验证实际文件系统的 Linux 租约、root 对服务属主文件取得租约的能力、日志隔离目录同设备、systemd 写入白名单、真实 logrotate 及迁移基线。失败保留旧组件和现场，不删除 release。原候选安装清单已过期，须从修复后的精确提交重新生成。
+
+本地真实进程验证覆盖锁占用时业务模块未加载、启动后指针变化仍按原物理根 lazy import；这不替代首次生产迁移的旧进程排空和安装后独立复验。
+
 ## 2026-11-05 — #61 下载器兼容升级前置
 
 #61 的本地候选移除了两个独立 CI job，旧下载器仍要求它们成功，会以 `ARTIFACT_PRODUCER_NOT_READY` 拒绝新拓扑制品。兼容候选只接受以下两套完整成功集合；`Deploy production` 可以仍在运行，无须等待整体 run 完成。
