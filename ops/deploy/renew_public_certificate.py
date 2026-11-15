@@ -61,7 +61,7 @@ def main(arguments=None):
         started = time.time_ns()
         with verifier_lock():
             state = DeploymentState(STATE)
-            with state.locked():
+            with state.locked(retirement_aware=True):
                 mode = load_public_mode(state)
                 require(mode is not None, "PUBLIC_MODE_MISSING")
                 store = ReleaseStore(SITE, state, load_verifier())

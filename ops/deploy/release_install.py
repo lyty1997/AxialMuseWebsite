@@ -56,7 +56,9 @@ class ReleaseStore:
 
     def read_view(self, sha):
         sha_valid(sha)
+        require(sha not in self.state.retired_releases(), "DEPLOY_RELEASE_RETIRED")
         directory = self.releases / sha
+        require(os.path.lexists(directory), "DEPLOY_RELEASE_MISSING")
         check_directory(directory, self.uid, 0o755)
         receipt = decode(read_file(self.state.root / "releases" / f"{sha}.json", self.uid, mode=0o600))
         require(set(receipt) == {"identity", "files", "routes"}, "DEPLOY_RELEASE_RECEIPT")
@@ -83,6 +85,7 @@ class ReleaseStore:
 
     def install(self, stage, identity):
         identity_valid(identity)
+        require(identity["commit_sha"] not in self.state.retired_releases(), "DEPLOY_RELEASE_RETIRED")
         stage = Path(stage)
         check_directory(stage, self.uid, 0o700)
         require(stage.name == "-".join(identity[key] for key in ("commit_sha", "workflow_run_id", "artifact_id")),

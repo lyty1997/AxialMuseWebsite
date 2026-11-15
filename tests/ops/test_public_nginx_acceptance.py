@@ -16,6 +16,7 @@ from ops.deploy.nginx_activation import local_site_config
 from ops.deploy.public_activation import PublicNginx, load_public_mode
 from ops.deploy.public_site import bootstrap_config, content_hash
 from ops.deploy.release_transaction import ReleaseTransaction
+from ops.deploy.release_retirement import initialize_retirements
 from ops.deploy.renew_public_certificate import renew
 from test_release_nginx_acceptance import IMAGE, free_port
 from test_release_transaction import ReleaseFixture
@@ -58,6 +59,8 @@ class PublicFixture:
         stage, identity = self.fixture.stage(self.sha, payload_index=body)
         self.fixture.approve(identity)
         self.fixture.engine.execute(identity=identity, stage=stage)
+        with self.fixture.state.locked():
+            initialize_retirements(self.fixture.state)
         self.lineage, ca = test_certificate(self.root)
         ports = set()
         while len(ports) < 5:
@@ -75,7 +78,7 @@ class PublicFixture:
         config, pid = self.root / "nginx.conf", self.root / "nginx.pid"
         write_new(config, (
             f"worker_processes 1; pid {pid}; error_log stderr crit;\n"
-            "events { worker_connections 128; }\nhttp { access_log off; include /etc/nginx/mime.types;\n"
+            f"events {{ worker_connections 128; }}\nhttp {{ access_log off; include {self.root}/mime.types;\n"
             + "".join(f"{kind}_temp_path {self.root}/{kind};\n" for kind in
                       ("client_body", "proxy", "fastcgi", "uwsgi", "scgi"))
             + f"include {self.conf_d}/*.conf;\n}}\n"
@@ -103,6 +106,7 @@ class PublicFixture:
             public_address="127.0.0.1",
             active_port=local, candidate_port=free_port(), active_config=config, active_pid=pid,
             site_configuration=self.conf_d / "local.conf", process_reader=process_reader,
+            capture_command=lambda args, **_limits: command(self.base + ["exec", self.name] + args),
             reload_command=self.nginx_command + ["-s", "reload"],
         )
         write_new(self.adapter.site_configuration, local_site_config(self.fixture.site, local), 0o644)
@@ -113,6 +117,7 @@ class PublicFixture:
                              "--network", "host", "--read-only", "--cap-drop", "ALL", "--pids-limit", "64",
                              "--user", f"{os.getuid()}:{os.getgid()}", "--volume", f"{self.root}:{self.root}",
                              "--entrypoint", "/bin/sh", IMAGE, "-c", "exec sleep 600"])
+        write_new(self.root / "mime.types", command(self.base + ["exec", self.name, "cat", "/etc/nginx/mime.types"]).stdout, 0o644)
         self.adapter.run(self.nginx_command + ["-t"])
         self.adapter.run(self.nginx_command)
 
@@ -155,6 +160,7 @@ class PublicRealNginxTests(unittest.TestCase):
                 engine = ReleaseTransaction(store, adapter)
                 stage, identity = fixture.fixture.stage("d" * 40, payload_index=b"TRIAL RELEASE")
                 engine.execute(identity=identity, stage=stage)
+                self.assertTrue((fixture.fixture.state.root / "nginx-generation.json").is_file())
                 self.assertIn(("Strict-Transport-Security", "max-age=300"), request("www.axialmuse.com", "/")[1])
                 engine.execute(rollback_sha=fixture.sha)
                 renew(store, adapter)
@@ -230,6 +236,17 @@ class PublicRealNginxTests(unittest.TestCase):
                         engine.execute(identity=identity, stage=stage)
                 self.assertEqual(store.current(), fixture.sha)
                 adapter.public_smoke(fixture.sha)
+                generation = fixture.fixture.state.root / "nginx-generation.json"
+                verified_generation = generation.read_bytes()
+                def fail_active_smoke(sha, **kwargs):
+                    if not kwargs.get("candidate"):
+                        raise DeploymentError("TEST_PUBLIC_SMOKE_FAILED")
+                    original(sha, **kwargs)
+                with patch.object(adapter, "public_smoke", side_effect=fail_active_smoke):
+                    with self.assertRaisesRegex(DeploymentError, "TEST_PUBLIC_SMOKE_FAILED"):
+                        adapter.activate(fixture.sha)
+                self.assertEqual(generation.read_bytes(), verified_generation)
+                adapter.activate(fixture.sha)
                 renew(store, adapter)
                 wrong, _ = test_certificate(fixture.root, name="wrong", domains="DNS:wrong.invalid")
                 old_lineage = adapter.lineage

@@ -1,8 +1,35 @@
 # 生产环境清单
 
 状态：active（#40 已验收关闭；DNSSEC 按 D-168 延期）
-最近更新：2026-11-11
+最近更新：2026-11-14
 适用范围：M0 生产环境非敏感事实与验证记录
+
+## 2026-11-14 / #42 服务器维护只读盘点
+
+用户授权本轮只读盘点定时器、日志轮转、磁盘阈值和账本备份。通过既有严格 SSH 与 `sudo -n` 读取运行属性、配置和文件元数据；未读取访问、错误或认证日志正文，journal 仅查看文件头时间和占用信息。未执行任务、轮转、清理、备份或恢复，未修改服务器配置、凭证、云资源或 GitHub Issue；正常 SSH/sudo 审计日志仍会产生。本节为现场事实，不表示 #42 已完成。
+
+| 项目 | 当前证据 | 与设计或验收的差距 |
+|---|---|---|
+| 系统定时任务 | `certbot.timer`、`logrotate.timer`、两个 apt timer 均 enabled/active/persistent；相关服务最近结果为 success，零 failed unit；Nginx、TAT、自动安全更新、rsyslog、journal、cron 服务 active | 在已盘点的 systemd/cron 入口中，未发现站点专用的每日/周/月维护、磁盘阈值或账本备份任务；系统自带任务不能替代这些能力 |
+| 重复调度与厂商任务 | Certbot cron 与 logrotate daily 脚本含 systemd 运行时保护；root 的周期任务指向腾讯云 Stargate 脚本，未发现站点/账本备份或磁盘检查逻辑 | 保留既有厂商任务；不把其存在或执行结果当作 #42 验收 |
+| 访问日志 | `nginx -T` 成功；实际加载的六个公网 server 块及本机 server 均 `access_log off`，当前 access 文件为空 | 仍有 14 份非空旧访问日志归档，文件修改时间为七月；关闭新日志不会自动删除历史数据 |
+| 错误日志 | 六个公网 server 均为 `error_log /dev/null crit`；全局仍有 `/var/log/nginx/error.log`，其当前文件为空，另有三份六月/七月旧归档 | 当前公网错误日志不落盘，与维护手册的管理员可读、保留 7 天设计不一致；不能仅调整轮转份数就称日志能力已落实 |
+| 日志轮转 | Nginx 为 daily / rotate 14 / notifempty / compress / delaycompress / create 0640；auth/syslog 为 weekly / rotate 4 / notifempty，已轮转文件权限 0640。`logrotate --debug /etc/logrotate.conf` 退出 0，无配置错误 | 份数不等于天数。debug 明确因当前文件为空跳过 Nginx 轮转，最后轮转记录仍在七月；缺少独立于新日志写入的到期处理，无法证明错误日志 7 天及 auth 目标 30 天的实际保留 |
+| journal | 持久化 journal 存在，显式覆盖为 `ForwardToSyslog=yes`；未发现 `MaxRetentionSec` 显式设置，文件头可追溯到六月 | system/auth 信息还可能保留在 journal，不能只修改 auth.log 的轮转就宣称完成保留治理；本次没有读取事件正文或执行 vacuum |
+| 磁盘与 inode | 本轮采样磁盘使用率 15.94%，inode 使用率 4.82%；所查站点、状态和日志目录落在相同使用率的文件系统 | 设计尚未确认资源告警阈值；在所查本地自动化入口未发现站点阈值检查。当前空闲不等于已配置告警，不自行设定百分比或自动清理条件 |
+| 账本完整性 | 活动账本 root:root/0600，历史目录 root:root/0700；受部署锁保护的四代摘要链及活动 release 校验通过，事务 idle | 当前账本与原目录内的历史链属于同一故障域，不能代替独立备份 |
+| 账本备份 | 发现发布事务的 before/after 账本及升级自测副本；最近事务 after 账本与当前账本摘要相同。`/var/backups` 所见是系统包数据库备份 | 未发现独立、例行、带保留规则和校验回执的账本备份；自测及发布事务文件不冒充例行备份。本轮未核验腾讯云当前快照或做恢复演练 |
+| release 留存 | 20 个目录均通过现有 release 读取校验；10 个与当前账本兼容、10 个不兼容，当前版本兼容 | 尚未发现站点清理任务，目录数超过设计默认最近 5 个成功版本；清理候选还须识别当前、兼容 fallback 和旧 worker 引用，不能只按数量、时间或单独 symlink 决定删除 |
+
+盘点开始与终点活动版本均为 `main@c0d4a75bee73f464fb264542828238476b558f85`；四代账本及历史摘要一致，未发生发布身份或账本漂移。私有容量、完整路径元数据、调度属性及文件头证据只存于本机权限 0700 的 `/tmp/axial-issue42-inventory-BI5RQP/`，不复制日志、私钥或账号数据入库。
+
+后续先补齐磁盘/inode 阈值、备份频率/保留/失败通知和日志保留执行边界，再准备仓库候选及隔离反例。systemd、logrotate、journal、root-owned 备份位置、快照或清理的生产写入仍按 [#42](https://github.com/lyty1997/AxialMuseWebsite/issues/42) 单独授权；本轮不执行，也不关闭 Issue。
+
+### 同日清理前检：发现退役协议缺口，未删除
+
+用户随后要求清理不兼容 release。重新持生命周期/部署锁核对，仍为 20 个目录、10 个兼容和 10 个 `DEPLOY_RELEASE_INCOMPATIBLE_ROUTE`，current 与四代账本摘要未变。生产三个相关部署模块摘要与本地源码相同。
+
+从删除结果反查后续调用发现，历史成功集合没有区分退役与当前可用版本，fallback 遍历先读文件再判断兼容性。临时真实磁盘对照中，保留旧目录时，有效授权的新增重定向发布成功；仅删一个已不兼容旧目录时，发布返回 `DEPLOY_REJECTED`、事务原因 `DEPLOY_INTERNAL`，未走到有效授权消费，current/账本保持原值。因此本次没有删除或移动服务器 release、历史事务或收据。诊断程序及结果保存在本机 0700 目录 `/tmp/axial-issue42-cleanup-AeHeWl/`；问题与盘点缺口由 [#88](https://github.com/lyty1997/AxialMuseWebsite/issues/88) 跟进。现有清理授权继续有效，须先具备不会破坏后续部署的退役机制，再重新核验并执行。
 
 ## 使用规则
 

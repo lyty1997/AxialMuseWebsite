@@ -4,19 +4,21 @@ import re
 
 from ops.deploy import url_exposure_ledger as ledger
 from ops.deploy.deployment_state import digest, require
+from ops.maintenance.local_state import LocalMaintenanceState
 from ops.monitor.public_health import utc
 
 
 def release_bundle(store):
     """在同一个锁内捕获身份、账本、已验证文件清单和规则。"""
     state = store.state
-    with state.locked():
+    with state.locked(retirement_aware=True):
         state.assert_idle()
+        LocalMaintenanceState(state.home / "maintenance", state.uid).assert_healthy()
         content, history_digest, count = state.read_ledger()
         exposure = ledger.parse_exposure_ledger(content)
         sha = store.current()
         require(sha is not None, "MONITOR_CURRENT_MISSING")
-        require(sha in state.successful_releases(), "MONITOR_CURRENT_UNACCEPTED")
+        require(sha in state.available_releases(), "MONITOR_CURRENT_UNACCEPTED")
         view, receipt, _ = store.read_view(sha)
         ledger.assert_release_compatible(exposure, view)
         require(store.current() == sha, "MONITOR_CURRENT_DRIFT")

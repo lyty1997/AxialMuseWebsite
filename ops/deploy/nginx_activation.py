@@ -58,7 +58,8 @@ def local_site_config(site, port=18080):
 class LocalNginx:
     def __init__(self, store, run=run_command, active_port=18080, candidate_port=18081,
                  active_config=Path("/etc/nginx/nginx.conf"), reload_command=None,
-                 site_configuration=None, active_pid=Path("/run/nginx.pid"), process_reader=None):
+                 site_configuration=None, active_pid=Path("/run/nginx.pid"), process_reader=None,
+                 capture_command=None):
         self.store = store
         self.run = run
         self.active_port = active_port
@@ -68,6 +69,7 @@ class LocalNginx:
         self.site_configuration = site_configuration
         self.active_pid = Path(active_pid)
         self.process_reader = process_reader or (lambda path: Path(path).read_bytes())
+        self.capture_command = capture_command
 
     def process_identity(self, pid):
         try:
@@ -176,6 +178,9 @@ class LocalNginx:
         with self.candidate(sha):
             pass
 
+    def active_smoke(self, sha):
+        self.wait_smoke(sha, self.active_port)
+
     def activate(self, sha):
         if self.site_configuration is not None:
             content = local_site_config(self.store.site, self.active_port)
@@ -191,7 +196,14 @@ class LocalNginx:
         master_identity = self.process_identity(master)
         require(master_identity is not None, "DEPLOY_NGINX_MASTER")
         previous = self.workers(master)
+        configuration = None
+        if os.path.lexists(self.store.state.root / "retirement-schema"):
+            from ops.deploy.retirement_references import RetirementReferences
+            configuration = RetirementReferences(self.store, self).configuration()
         self.run(["/usr/sbin/nginx", "-t", "-c", str(self.active_config)])
         self.run(self.reload_command)
         self.wait_old_workers(master, master_identity, previous)
-        self.wait_smoke(sha, self.active_port)
+        self.active_smoke(sha)
+        if configuration is not None:
+            from ops.deploy.nginx_generation import record_activation
+            record_activation(self, sha, configuration, master, master_identity)

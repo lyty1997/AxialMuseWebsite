@@ -29,7 +29,7 @@ permissions:
 `;
 
 // 定时 workflow 的触发、权限和固定接线按完整字节冻结，修改时须同步审查契约摘要。
-const MAINTENANCE_SHA256 = "02ff28c72750b38111807835a2ddceef994fa70d5e6e8b66665a3cc474c28aae";
+const MAINTENANCE_SHA256 = "75279c7b6e50e4bd3ca1be1a87baa712f236975f172b01fde1225b870fcccd9d";
 const MAINTENANCE_HELPER_SHA256 = "d78087f3c4b92df7061443c6a0c712b81936e40ee8a77cb8d18f5ba24b2c31a9";
 
 const MATERIALIZE_PRIVATE_NODE_STEP = `      - name: Materialize private Node runtime

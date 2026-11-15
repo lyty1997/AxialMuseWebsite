@@ -126,6 +126,21 @@ test("CODE-020 repository workflow file set is closed and maintenance is immutab
       actionCount: 10,
       jobCount: 4,
     });
+    for (const module of [
+      "test_retirement_commands",
+      "test_release_commands",
+      "test_fetch_artifact",
+      "test_public_nginx_acceptance",
+      "test_release_nginx_acceptance",
+    ]) {
+      const monitorJob = MAINTENANCE.split("  monitor-tests:\n")[1].split("\n  maintenance:")[0];
+      assert.ok(monitorJob.includes(module), `missing PR regression: ${module}`);
+      writeFileSync(join(directory, "maintenance.yml"), replaceOnce(MAINTENANCE, module, ""));
+      assert.throws(
+        () => checkCiWorkflow(root),
+        (error) => error instanceof CiWorkflowError && error.code === "CI_WORKFLOW_MAINTENANCE",
+      );
+    }
     writeFileSync(join(directory, "maintenance.yml"), MAINTENANCE.replace("17 0 * * *", "18 0 * * *"));
     assert.throws(
       () => checkCiWorkflow(root),

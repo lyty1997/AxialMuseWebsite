@@ -11,6 +11,7 @@ from pathlib import Path
 from ops.deploy.deployment_state import DeploymentError, write_new
 from ops.deploy.nginx_activation import LocalNginx, local_config
 from ops.deploy.release_transaction import ReleaseTransaction
+from ops.deploy.release_retirement import initialize_retirements
 from test_release_transaction import ReleaseFixture
 
 
@@ -29,6 +30,8 @@ class RealNginxTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="axial-nginx-") as temporary:
             root = Path(temporary)
             fixture = ReleaseFixture(root)
+            with fixture.state.locked():
+                initialize_retirements(fixture.state)
             name = "axial-37-" + secrets.token_hex(8)
             active_port, candidate_port = free_port(), free_port()
             self.assertNotEqual(active_port, candidate_port)
@@ -69,12 +72,14 @@ class RealNginxTests(unittest.TestCase):
                                      candidate_port=candidate_port, active_config=config,
                                      reload_command=nginx_command + ["-s", "reload"],
                                      site_configuration=conf_d / "axialmuse-local.conf",
-                                     active_pid=pid, process_reader=process_reader)
+                                     active_pid=pid, process_reader=process_reader,
+                                     capture_command=lambda args, **_limits: command(base + ["exec", name] + args))
                 engine = ReleaseTransaction(fixture.store, adapter)
                 first, second, third = "a" * 40, "b" * 40, "c" * 40
                 stage, identity = fixture.stage(first, payload_index=b"FIRST GENERATION\n")
                 fixture.approve(identity)
                 self.assertEqual(engine.execute(identity=identity, stage=stage)["status"], "local-accepted")
+                self.assertTrue((fixture.state.root / "nginx-generation.json").is_file())
                 before = fixture.state.read_ledger()[0]
                 stage, identity = fixture.stage(second, payload_index=b"SECOND GENERATION\n")
                 self.assertEqual(engine.execute(identity=identity, stage=stage)["fallback"], first)

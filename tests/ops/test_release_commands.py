@@ -30,7 +30,9 @@ class ReleaseCommandsTests(unittest.TestCase):
 
     def test_invalid_root_invocation_fails_before_lock(self):
         for executable, args in (("axialmuse-rollback", ["--commit-sha", "latest"]),
-                                 ("axialmuse-deploy-init", []), ("arbitrary", [])):
+                                 ("axialmuse-deploy-init", []), ("arbitrary", []),
+                                 ("axialmuse-release-retire", ["--initialize", "--force"]),
+                                 ("axialmuse-release-retire", ["--execute", "../bad", "--authorization-id", "a" * 32])):
             with self.subTest(executable=executable), \
                     patch.object(command.os, "geteuid", return_value=0), \
                     patch.object(command, "verifier_lock", side_effect=AssertionError("lock reached")), \

@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily Axial Muse local maintenance
+
+[Timer]
+OnCalendar=*-*-* 22:37:00 UTC
+Persistent=yes
+AccuracySec=1min
+RandomizedDelaySec=5min
+Unit=axialmuse-local-maintenance.service
+
+[Install]
+WantedBy=timers.target
