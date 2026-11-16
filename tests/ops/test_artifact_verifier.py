@@ -116,9 +116,11 @@ def build_release(
     metadata_transform=None,
     manifest_transform=None,
     release_json_override=None,
+    extra_payload=None,
 ):
     rules = default_rules() if rules is None else rules
     payload = {
+        **(extra_payload or {}),
         "payload/assets/app.js": b'console.log("fixture");\n',
         "payload/index.html": payload_index,
         "payload/projects/index.html": b"<!doctype html><title>projects</title>\n",

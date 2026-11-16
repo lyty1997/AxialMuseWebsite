@@ -4,8 +4,6 @@
 import sys
 
 
-# -I 不读取 PYTHONPATH；生产组件只从 root-owned 固定路径导入。
-sys.path.insert(0, "/usr/local/lib/axialmuse-release")
 
 from ops.deploy.fetch_artifact import ArtifactFetchError  # noqa: E402
 from ops.deploy.github_app_auth import GitHubAppAuthError  # noqa: E402
@@ -57,4 +55,4 @@ def main(arguments=None, prepare=prepare_artifact):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit("[DEPLOY_RUNTIME_REQUIRED] 请使用固定启动器。")

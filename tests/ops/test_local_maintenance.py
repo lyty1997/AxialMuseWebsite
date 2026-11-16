@@ -5,9 +5,11 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from ops.deploy.deployment_state import DeploymentError, canonical, write_new
 from ops.maintenance.local_state import JOBS, LocalMaintenanceState
+from ops import runtime_bootstrap
 
 
 class LocalMaintenanceTests(unittest.TestCase):
@@ -106,6 +108,93 @@ class LocalMaintenanceTests(unittest.TestCase):
         write_new(self.state.root / "unknown", b"unknown")
         with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_LAYOUT"):
             self.state.execute(self.jobs)
+
+    def test_request_publication_interrupts_never_start_work_or_poison_next_run(self):
+        from ops.maintenance import local_state
+        for point in ("write_new", "rename_new"):
+            calls = []
+            jobs = {name: lambda: calls.append("work") or {"status": "ok", "code": "OK"} for name in JOBS}
+            with self.subTest(point=point), patch.object(local_state, point, side_effect=OSError("power loss")):
+                with self.assertRaises(OSError):
+                    self.state.execute(jobs)
+            self.assertEqual(calls, [])
+            self.assertEqual(self.state.records(), [])
+        success = self.state.execute(self.jobs)
+        self.assertEqual(success["status"], "ok")
+        self.assertEqual(len(self.state.records()), 1)
+
+    def test_partial_preparation_is_not_a_run_but_unknown_objects_are_rejected(self):
+        directory = self.state.root / "runs" / (".preparing-" + "f" * 32)
+        directory.mkdir(mode=0o700)
+        write_new(directory / "request.json", b'{"partial')
+        self.assertEqual(self.state.execute(self.jobs)["status"], "ok")
+        write_new(directory / "result.json", b"unknown")
+        with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_LAYOUT"):
+            self.state.records()
+
+    def test_initialization_is_published_whole_and_resumes_after_torn_writes(self):
+        from ops.deploy import deployment_state
+        for failure in (1, 2):
+            root = self.root / f"new-{failure}"
+            state = LocalMaintenanceState(root, os.getuid(), clock=lambda: self.now)
+            original = deployment_state.write_new
+            calls = 0
+            def torn(path, content, *args, **kwargs):
+                nonlocal calls
+                calls += 1
+                if calls == failure:
+                    original(path, content[:1], *args, **kwargs)
+                    raise OSError("power loss")
+                return original(path, content, *args, **kwargs)
+            with patch.object(deployment_state, "write_new", torn):
+                with self.assertRaises(OSError):
+                    state.initialize()
+            self.assertFalse(root.exists())
+            state.initialize()
+            self.assertEqual(state.execute(self.jobs)["status"], "ok")
+
+    def test_activation_interrupt_can_resume_but_is_never_reported_healthy(self):
+        self.state.execute(self.jobs)
+        with patch("ops.maintenance.local_state.os.replace", side_effect=OSError("power loss")):
+            with self.assertRaises(OSError):
+                self.state.enable()
+        with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_ACTIVATION"):
+            self.state.assert_healthy()
+        self.state.enable()
+        self.state.assert_healthy()
+
+    def test_import_time_failure_is_not_hidden_by_next_success_and_can_be_acknowledged(self):
+        self.state.execute(self.jobs)
+        self.state.enable()
+        identifier = runtime_bootstrap.record_maintenance_failure(
+            "DEPLOY_VERIFIER_BUSY", root=self.state.root, uid=os.getuid(), clock=lambda: self.now)
+        self.state.execute(self.jobs)
+        with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_BOOTSTRAP_FAILED"):
+            self.state.assert_healthy()
+        with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_ACK"):
+            self.state.acknowledge(identifier)
+        self.now += 2
+        self.state.execute(self.jobs)
+        self.state.acknowledge(identifier)
+        self.state.assert_healthy()
+
+    def test_activation_resume_with_new_failure_completes_but_health_stays_failed(self):
+        self.state.execute(self.jobs)
+        with patch("ops.maintenance.local_state.os.replace", side_effect=OSError("power loss")):
+            with self.assertRaises(OSError):
+                self.state.enable()
+        runtime_bootstrap.record_maintenance_failure(
+            "DEPLOY_RUNTIME_INTEGRITY", root=self.state.root, uid=os.getuid(), clock=lambda: self.now)
+        self.state.enable()
+        with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_BOOTSTRAP_FAILED"):
+            self.state.assert_healthy()
+
+    def test_launch_receipt_directory_loss_cannot_restore_a_legacy_bypass(self):
+        self.state.execute(self.jobs)
+        self.state.enable()
+        (self.state.root / "launch-failures").rmdir()
+        with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_LAYOUT"):
+            self.state.assert_healthy()
 
     def test_enabled_marker_or_lock_loss_does_not_restore_legacy_bypass(self):
         self.state.execute(self.jobs)

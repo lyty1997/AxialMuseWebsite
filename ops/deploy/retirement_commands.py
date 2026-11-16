@@ -25,7 +25,7 @@ def retire_command(store, arguments):
     plans = state.root / "retirement-plans"
     if arguments == ["--initialize"]:
         with state.locked(retirement_aware=True):
-            state.assert_idle()
+            state.assert_idle(initializing_retirement=True)
             state.read_ledger()
             if not plans.exists():
                 plans.mkdir(mode=0o700)

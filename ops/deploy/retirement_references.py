@@ -8,6 +8,49 @@ from ops.deploy.deployment_state import canonical, decode, digest, read_file, re
 from ops.monitor.bounded_process import run_process
 
 
+def without_nginx_comments(output):
+    """保留参数中的 #；注释仅从参数边界开始，且始终在换行处结束。"""
+    result = []
+    quote = None
+    escaped = comment = False
+    boundary = True
+    variable = False
+    for character in output:
+        if comment:
+            if character == "\n":
+                comment = False
+                result.append(character)
+            else:
+                result.append(" ")
+            continue
+        if escaped:
+            escaped = False
+            result.append(character)
+            continue
+        if character == "\\":
+            escaped = True
+            boundary = False
+            variable = False
+        elif quote:
+            if character == quote:
+                quote = None
+                boundary = True
+        elif boundary and character == "#":
+            comment = True
+            result.append(" ")
+            continue
+        elif boundary and character in "\"'":
+            quote = character
+            boundary = False
+        else:
+            # ${name} 和参数内部的 } 都不结束参数，不能让其后的 # 变成注释。
+            boundary = (character in " \t\r\n;" or character == "{" and not variable
+                        or character == "}" and boundary)
+            variable = character == "$"
+        result.append(character)
+    return "".join(result)
+
+
 class RetirementReferences:
     def __init__(self, store, nginx, *, proc=Path("/proc"), command=None):
         self.store = store
@@ -46,14 +89,16 @@ class RetirementReferences:
         changed = config_changed
         protected = set()
         base = str(self.store.releases)
-        pattern = re.compile(re.escape(base) + r"/([0-9a-f]{40})(?=/|\s|;|$)")
+        pattern = re.compile("(?:" + re.escape(base) + "|" + re.escape(str(self.store.site / ".retired"))
+                             + r")/([0-9a-f]{40})(?=/|\s|;|$)")
 
         def protect(value):
             protected.update(pattern.findall(value))
 
-        protect(output)
+        configuration = without_nginx_comments(output)
+        protect(configuration)
         # absolute root/alias 可能通过站点外的符号链接间接引用旧目录。
-        for match in re.finditer(r"\b(root|alias)\s+([^;\n]+);", output):
+        for match in re.finditer(r"\b(root|alias)\s+([^;\n]+);", configuration):
             value = match[2].strip().strip('"\'')
             require(value.startswith("/") and "$" not in value and not re.search(r"\s", value),
                     "DEPLOY_RETIREMENT_CONFIG_DYNAMIC")

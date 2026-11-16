@@ -116,6 +116,56 @@ def replace_file(path, content):
     sync_directory(path.parent)
 
 
+def publish_new(path, content, *, staging=None):
+    """先完整同步准备文件，再以 NOREPLACE 发布；半写字节永不成为正式事实。"""
+    from ops.deploy.release_install import rename_new
+    path = Path(path)
+    parent = path.parent if staging is None else Path(staging)
+    temporary = parent / f".prepared-{secrets.token_hex(16)}.json"
+    write_new(temporary, content)
+    rename_new(temporary, path)
+    if parent != path.parent:
+        sync_directory(parent)
+
+
+def initialize_layout(path, uid, files, folders=()):
+    """只有完整、同步的树才发布为正式布局；显式初始化可恢复准备阶段。"""
+    from ops.deploy.release_install import rename_new
+    path = Path(path)
+    check_directory(path.parent, uid)
+    require(not os.path.lexists(path), "MAINTENANCE_INITIALIZED")
+    staging = path.with_name(".initializing-" + path.name)
+    if not os.path.lexists(staging):
+        staging.mkdir(mode=0o700)
+        sync_directory(staging.parent)
+    check_directory(staging, uid, 0o700)
+    entries = set(os.listdir(staging))
+    prepared = {n for n in entries if re.fullmatch(r"\.prepared-[0-9a-f]{32}\.json", n)}
+    require(entries - prepared <= set(files) | set(folders), "MAINTENANCE_LAYOUT")
+    for name in prepared:
+        read_file(staging / name, uid, mode=0o600)
+    for name in folders:
+        directory = staging / name
+        if not os.path.lexists(directory):
+            directory.mkdir(mode=0o700)
+        check_directory(directory, uid, 0o700)
+        require(not os.listdir(directory), "MAINTENANCE_LAYOUT")
+        sync_directory(directory)
+    for name, content in files.items():
+        target = staging / name
+        if os.path.lexists(target):
+            require(read_file(target, uid, mode=0o600) == content, "MAINTENANCE_LAYOUT")
+        else:
+            publish_new(target, content)
+    # 半写准备文件无运行语义，但不能随正式树发布成未知成员。
+    for name in set(os.listdir(staging)) - set(files) - set(folders):
+        require(re.fullmatch(r"\.prepared-[0-9a-f]{32}\.json", name), "MAINTENANCE_LAYOUT")
+        read_file(staging / name, uid, mode=0o600)
+        (staging / name).unlink()
+    sync_directory(staging)
+    rename_new(staging, path)
+
+
 def identity_valid(identity):
     require(isinstance(identity, dict) and set(identity) == {
         "workflow_run_id", "artifact_id", "commit_sha", "artifact_digest",
@@ -216,12 +266,15 @@ class DeploymentState:
         replace_file(self.ledger_path, after)
         require(self.read_ledger()[0] == after, "DEPLOY_LEDGER_HEAD")
 
-    def assert_idle(self):
+    def assert_idle(self, *, initializing_retirement=False):
         check_directory(self.transactions, self.uid, 0o700)
         for name in os.listdir(self.transactions):
             require(re.fullmatch(r"[0-9a-f]{32}", name), "DEPLOY_TRANSACTION")
             directory = self.transactions / name
             check_directory(directory, self.uid, 0o700)
+            if initializing_retirement and name == RETIREMENT_PROTOCOL_ID:
+                # 仅显式迁移入口可恢复此固定事务；调用者随后逐项核验。
+                continue
             require(not os.path.lexists(directory / "pending"), "DEPLOY_RECOVERY_REQUIRED")
             require((directory / "result.json").exists(), "DEPLOY_RECOVERY_REQUIRED")
             result = decode(read_file(directory / "result.json", self.uid, mode=0o600))
