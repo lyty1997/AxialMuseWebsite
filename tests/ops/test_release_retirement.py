@@ -6,6 +6,7 @@ import os
 import shutil
 import tempfile
 import subprocess
+import sys
 import time
 import unittest
 from unittest.mock import patch
@@ -19,12 +20,12 @@ from test_release_transaction import ReleaseFixture
 
 
 class ReleaseRetirementTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self, *, extra_payload=None):
         temporary = tempfile.TemporaryDirectory(prefix="axial-retirement-")
         self.addCleanup(temporary.cleanup)
         self.fixture = f = ReleaseFixture(temporary.name)
         self.old, self.current, self.next = (character * 40 for character in "abc")
-        stage, identity = f.stage(self.old, rules=default_rules()[2:])
+        stage, identity = f.stage(self.old, rules=default_rules()[2:], extra_payload=extra_payload)
         f.approve(identity, registered=False)
         f.engine.execute(stage=stage, identity=identity)
         stage, identity = f.stage(self.current)
@@ -53,6 +54,60 @@ class ReleaseRetirementTests(unittest.TestCase):
         self.engine = ReleaseRetirement(f.store, lifecycle_lock=lifecycle,
                                         reference_probe=probe, clock=lambda: self.now)
         self.plan = self.engine.plan(self.old, "d" * 32)
+
+    def check_large_release_limits(self, scenario):
+        import resource
+        self.setUp(extra_payload={f"payload/assets/large-{n}.txt": b"asset\n" for n in range(1100)})
+        f = self.fixture
+        if scenario == "cleanup":
+            with patch("ops.deploy.release_retirement.shutil.rmtree", side_effect=OSError("power loss")):
+                with self.assertRaises(OSError):
+                    self.engine.execute(self.plan)
+            self.plan = self.engine.plan(self.old, "e" * 32)
+        original_hard = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+        resource.setrlimit(resource.RLIMIT_NOFILE,
+                           (1024, 1024 if scenario in ("hard-limit", "cleanup") else original_hard))
+        before = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if scenario == "interrupted":
+            with patch("ops.deploy.release_retirement.shutil.rmtree", side_effect=OSError("power loss")):
+                with self.assertRaisesRegex(OSError, "power loss"):
+                    self.engine.execute(self.plan)
+            self.assertEqual(resource.getrlimit(resource.RLIMIT_NOFILE), before)
+            self.assertTrue(self.engine.location(self.old).exists())
+            self.assertEqual(self.engine.execute(self.plan)["status"], "retired")
+        elif scenario == "success":
+            self.assertEqual(self.engine.execute(self.plan)["status"], "retired")
+            self.assertFalse(self.engine.location(self.old).exists())
+        else:
+            with contextlib.ExitStack() as stack:
+                if scenario == "raise-denied":
+                    stack.enter_context(patch("ops.deploy.inode_guard.resource.setrlimit", side_effect=PermissionError))
+                with self.assertRaisesRegex(DeploymentError, "DEPLOY_RETIREMENT_FD_BUDGET"):
+                    self.engine.execute(self.plan)
+            if scenario == "cleanup":
+                self.assertFalse((f.state.root / "retirement-cleanups" / ("e" * 32 + ".json")).exists())
+                self.assertTrue(self.engine.location(self.old).exists())
+            else:
+                self.assertEqual(retired_records(f.state), {})
+                self.assertTrue((f.store.releases / self.old).exists())
+                self.assertFalse((f.site / ".retired").exists())
+        self.assertEqual(resource.getrlimit(resource.RLIMIT_NOFILE), before)
+
+    def test_large_release_prepares_fd_budget_before_committing_facts(self):
+        # hard limit 只能在独立进程降低，不能影响同一测试进程的后续用例。
+        for scenario in ("success", "hard-limit", "cleanup", "interrupted", "raise-denied"):
+            with self.subTest(scenario=scenario):
+                script = (
+                    "from test_release_retirement import ReleaseRetirementTests\n"
+                    "case = ReleaseRetirementTests()\n"
+                    "try:\n"
+                    f"    case.check_large_release_limits({scenario!r})\n"
+                    "finally:\n"
+                    "    case.doCleanups()\n"
+                )
+                result = subprocess.run([sys.executable, "-c", script], capture_output=True, timeout=120,
+                    env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)})
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
 
     def test_retirement_preserves_audit_and_allows_compatible_publish_and_rollback(self):
         f = self.fixture

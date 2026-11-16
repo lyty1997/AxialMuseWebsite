@@ -4,6 +4,13 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-11-16 — release 退役描述符预算与 Nginx 注释修复
+
+- **复现**：超过 1,100 个文件的真实 release 在 `RLIMIT_NOFILE` soft limit 1024 下，旧实现取得全文件租约时以 `EMFILE` 失败；注释中的动态 root 和旧 release 路径也分别造成误拒绝、误保护。旧实现反例日志为 `/tmp/retirement-before.log`。
+- **修复**：提交退役事实或新清理授权前，按剩余树准备描述符额度，仅在既有 hard limit 内临时提高 soft limit，成功或中断后恢复；硬上限不足或调整被拒绝时报 `DEPLOY_RETIREMENT_FD_BUDGET`，不追加本次事实、不隔离目录。保留全文件写租约。配置扫描按 Nginx 参数、引号、转义和变量花括号边界排除注释，原始输出继续绑定摘要、代际与漂移检查。契约见[退役与可用性](operations/maintenance.md#release-退役与可用性)。
+- **验证**：`AXIALMUSE_NGINX_ACCEPTANCE=1 PYTHONPATH=tests/ops /usr/bin/python3.12 -m unittest discover -s tests/ops` 共 437 项通过，无跳过，日志 `/tmp/retirement-final-ops-clean.log`；包含大型 release、硬上限不足的首次退役及重新授权、提高额度被拒绝、删除中断与重试、真实 Nginx 引号及参数内部 `#`。Node `24.18.0` 完整隔离 quality、修改文件 Ruff 和差异检查通过，quality 日志 `/tmp/retirement-quality.log`。进程内撤销注释过滤、换为简单井号截断，以及独立子进程撤销描述符预算的三组反例全部被检出，见 `/tmp/retirement-mutations.log`。首轮全量中新增容器夹具未映射配置路径的七个错误保留于 `/tmp/retirement-final-ops.log`，修正夹具后定向及最终全量均通过。
+- **边界**：仅本地修复与隔离验证，保留原有供应链未提交改动。未提交、推送、部署或执行生产清理；没有新增第三方服务、依赖、浏览器外部请求或用户数据处理。
+
 ## 2026-11-15 — #88 完整候选 Git 交付验证
 
 - **范围与授权**：用户授权提交、推送、开 PR，并在 CI 全绿后合并 main。以 `main@c0d4a75` 建立独立交付副本，纳入全部新增退役/维护实现、模板、入口和测试，保留 main 的历史文档及原工作区文件/暂存内容。既有定时 workflow 仅扩充 PR 回归模块，cron、权限和通知不变。

@@ -6,10 +6,32 @@
 import contextlib
 import fcntl
 import os
+import resource
 import signal
 import stat
 
 from ops.deploy.deployment_state import DeploymentError, require
+
+
+@contextlib.contextmanager
+def inode_descriptor_budget(entries, *, code):
+    """在提交持久事实前准备全树租约及递归删除所需的描述符额度。"""
+    original = resource.getrlimit(resource.RLIMIT_NOFILE)
+    try:
+        # 最高编号也覆盖已继承的稀疏 fd；额外余量供状态文件、引用探针使用。
+        highest = max(int(name) for name in os.listdir("/proc/self/fd"))
+        needed = highest + 1 + entries + 32
+        soft, hard = original
+        require(hard == resource.RLIM_INFINITY or needed <= hard, code)
+        if soft != resource.RLIM_INFINITY and soft < needed:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (needed, hard))
+    except (OSError, ValueError) as error:
+        raise DeploymentError(code) from error
+    try:
+        yield
+    finally:
+        if resource.getrlimit(resource.RLIMIT_NOFILE) != original:
+            resource.setrlimit(resource.RLIMIT_NOFILE, original)
 
 
 @contextlib.contextmanager

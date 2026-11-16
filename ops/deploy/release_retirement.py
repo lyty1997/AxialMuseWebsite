@@ -20,7 +20,7 @@ from ops.deploy.deployment_state import (
     publish_new, require, sync_directory, write_new,
 )
 from ops.deploy.release_install import rename_new, sha_valid
-from ops.deploy.inode_guard import exclusive_inodes
+from ops.deploy.inode_guard import exclusive_inodes, inode_descriptor_budget
 
 
 MARKER = RETIREMENT_SCHEMA
@@ -292,7 +292,7 @@ class ReleaseRetirement:
 
     def execute(self, plan):
         validate_plan(plan)
-        with self.locked():
+        with self.locked(), contextlib.ExitStack() as resources:
             records = retired_records(self.state)
             self.used_authorizations()
             prior = records.get(plan["sha"])
@@ -311,6 +311,10 @@ class ReleaseRetirement:
                 require(plan["created"] <= self.clock() < plan["expires"], "DEPLOY_RETIREMENT_EXPIRED")
             context = self.context(plan["sha"])
             require(all(plan[key] == value for key, value in context.items()), "DEPLOY_RETIREMENT_DRIFT")
+            directory = self.location(plan["sha"])
+            # 目录也计入预算，覆盖 rmtree 按深度持有的 fd；恢复只需剩余树额度。
+            entries = sum(1 + len(names) for _, _, names in os.walk(directory, followlinks=False))
+            resources.enter_context(inode_descriptor_budget(entries, code="DEPLOY_RETIREMENT_FD_BUDGET"))
             if recovery:
                 if committed_cleanup:
                     require(read_file(cleanup, self.state.uid, mode=0o600) == canonical(plan),
