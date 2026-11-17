@@ -4,6 +4,13 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-11-18 — #88 退役引用探针现场预检修复
+
+- 只读盘点时生产 current 为 `a4ced22818acace3b68d4719227e30e4344f33c4`，账本有四代历史；13 个 release 与账本兼容，10 个不兼容。退役协议尚未启用，Nginx 代际记录尚未建立。
+- 现场引用探针两次以 `DEPLOY_RETIREMENT_PROCESS_DRIFT` 失败，确认消失的描述符属于探针自身：枚举 `/proc/self/fd` 时目录句柄在逐项读取前关闭。修复为枚举期间保持该句柄打开，其他活进程真实描述符消失仍失败关闭。
+- 原实现的真实 `/proc/self/fd` 行为反例失败，修复后通过；外部描述符消失反例继续阻断。在生产进程内存中加载修复并临时模拟代际记录的只读预检通过，受保护集合仅有当前版本；该模拟不代替正式激活后的代际证据。
+- Python 3.12 完整运维回归 439 项通过、无跳过；主 Node 完整隔离 quality、Ruff 与差异检查通过。修复仍是本地候选，未提交、部署、初始化协议或删除 release。
+
 ## 2026-11-16 — 运维修复发布与组件部署验收
 
 - **Git 与 CI**：本轮两项退役缺陷修复形成 `dev@4846c4722cfe4fe1f097b9dbfda112607757462c`，连同既有两次运维加固提交，经 [PR #90](https://github.com/lyty1997/AxialMuseWebsite/pull/90) 普通合并到 `main@f26179be4ef84133086206cd9f019fdce8feaaad`。dev run `43878792771`、PR CI `43879487860`、运维回归 `43879487855` 及 [main run `43880094965`](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/43880094965) 均 `completed/success`，attempt 1。首次推送因 GH007 被拒，仅将尚未发布的提交改为现有 noreply 身份后普通推送，代码树不变。

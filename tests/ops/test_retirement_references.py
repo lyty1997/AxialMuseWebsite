@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from ops.deploy.deployment_state import DeploymentError, write_new
 from ops.deploy.retirement_references import RetirementReferences
@@ -148,6 +149,27 @@ class RetirementReferenceTests(unittest.TestCase):
         old = "b" * 40
         (self.proc / "200/fd/3").symlink_to(self.fixture.site / ".retired" / old / "payload/index.html")
         self.assertIn(old, self.probe()["protected"])
+
+    def test_probe_reads_its_own_real_proc_fd_directory(self):
+        import shutil
+        directory = self.proc / "200/fd"
+        shutil.rmtree(directory)
+        directory.symlink_to("/proc/self/fd", target_is_directory=True)
+        self.assertEqual(self.probe()["protected"], ["a" * 40])
+
+    def test_live_process_fd_disappearing_remains_a_failure(self):
+        descriptor = self.proc / "200/fd/3"
+        descriptor.symlink_to("/tmp")
+        original = os.readlink
+
+        def disappear(path, *args, **kwargs):
+            if Path(path) == descriptor:
+                descriptor.unlink()
+            return original(path, *args, **kwargs)
+
+        with patch("ops.deploy.retirement_references.os.readlink", side_effect=disappear):
+            with self.assertRaisesRegex(DeploymentError, "DEPLOY_RETIREMENT_PROCESS_DRIFT"):
+                self.probe()
 
     def test_explicit_config_fd_and_symbolic_references_are_protected(self):
         old = "b" * 40

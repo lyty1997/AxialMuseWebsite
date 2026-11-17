@@ -146,7 +146,9 @@ class RetirementReferences:
                 if Path(executable).name == "nginx":
                     nginx_pids.add(int(directory.name))
                 values = [os.readlink(directory / "cwd")]
-                values.extend(os.readlink(p) for p in (directory / "fd").iterdir())
+                # 自身 fd 目录的枚举句柄也在列表中，须保持打开直到读取完成。
+                with os.scandir(directory / "fd") as entries:
+                    values.extend(os.readlink(entry.path) for entry in entries)
                 with (directory / "maps").open("rb") as stream:
                     mappings = stream.read(8 * 1024 * 1024 + 1)
                 require(len(mappings) <= 8 * 1024 * 1024, "DEPLOY_RETIREMENT_PROCESS_SIZE")
