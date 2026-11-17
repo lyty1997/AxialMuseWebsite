@@ -5,6 +5,7 @@ import re
 from ops.deploy import url_exposure_ledger as ledger
 from ops.deploy.deployment_state import digest, require
 from ops.maintenance.local_state import LocalMaintenanceState
+from ops.maintenance.resources import check_resources
 from ops.monitor.public_health import utc
 
 
@@ -13,6 +14,11 @@ def release_bundle(store):
     state = store.state
     with state.locked(retirement_aware=True):
         state.assert_idle()
+        resources = check_resources()
+        failures = [check for check in resources["checks"] if check["level"] != "ok"]
+        if failures:
+            critical = next((check for check in failures if check["level"] == "critical"), failures[0])
+            require(False, critical["code"])
         LocalMaintenanceState(state.home / "maintenance", state.uid).assert_healthy()
         content, history_digest, count = state.read_ledger()
         exposure = ledger.parse_exposure_ledger(content)

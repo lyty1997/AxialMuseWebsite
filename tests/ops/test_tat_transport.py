@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 from ops.monitor.public_health import HealthError
 from ops.monitor.bounded_process import ProcessOutputLimit
 from ops.monitor.tat_transport import COMMAND, COMMAND_SHA256, TatTransport, authorization, decode_json
+from ops.monitor.maintenance_runner import check_resource_failure
 
 
 def b64(value):
@@ -56,6 +57,15 @@ class TatTransportTests(unittest.TestCase):
                          ["DescribeCommands", "InvokeCommand", "DescribeInvocationTasks"])
         self.assertEqual(self.calls[1][1], {"CommandId": self.command_id, "InstanceIds": [self.instance_id]})
         self.assertTrue(self.calls[2][1]["HideOutput"] is False)
+
+    def test_authenticated_resource_failure_remains_a_failure_after_transport(self):
+        code = "MAINTENANCE_DISK_USED_WARNING"
+        self.task["TaskResult"]["Output"] = b64(json.dumps({"schema": 1, "resourceFailure": code}).encode())
+        with self.assertRaisesRegex(HealthError, code):
+            check_resource_failure(self.transport().fetch())
+        self.task["CommandDocument"]["Content"] = b64(b"changed")
+        with self.assertRaisesRegex(HealthError, "MONITOR_TAT_COMMAND"):
+            check_resource_failure(self.transport().fetch())
 
     def test_untrusted_command_never_invoked(self):
         for key, value in (("Content", b64(b"modified")), ("EnableParameter", True),

@@ -6,6 +6,11 @@ from ops.deploy.deployment_state import require
 
 
 GIB = 1024 ** 3
+RESOURCE_FAILURE_CODES = frozenset(
+    {"MAINTENANCE_RESOURCE_READ", "MAINTENANCE_RESOURCE_DATA"}
+    | {f"MAINTENANCE_{dimension}_{level}" for dimension in ("DISK_USED", "DISK_FREE", "INODE_USED")
+       for level in ("WARNING", "CRITICAL")}
+)
 
 
 def check_resources(path="/", *, statvfs=os.statvfs):
