@@ -1,5 +1,14 @@
 # 生产调度接线清单
 
+## 2026-11-16 / #88 不可变组件认证安装完成
+
+按本轮提交、推送与部署授权，PR #90 合入 canonical `main@f26179be4ef84133086206cd9f019fdce8feaaad`，run `43880094965` attempt 1 的全部适用 job 成功，实际 TAT task 为 `SUCCESS / exit 0`。服务器 current 与 artifact `14231952780` 身份一致。以下 11-15 条目保留为安装前设计；本节记录实际落地状态。
+
+- 不可变物理根为 `/usr/local/lib/axialmuse-runtimes/0fe3434a74b130d08e57bc96f4959374e234a33fff39fc69673bd73d0b0e8690`；56 个来源 blob 已与远端 main 认证，runtime manifest 全量复核。稳定启动器及九个包装器共 10 个固定入口已安装，root:root、普通单链接文件、模式与摘要均通过新会话独立验证。
+- 先在服务器隔离目录验收真实父进程/中间 worker 强杀后的锁继承、固定物理根、超过 1,100 文件的低描述符限额恢复，以及 root 对服务属主文件的 Linux 写租约。确认无旧入口解释器后，持同一生命周期/部署锁原子交换目录与指针。旧业务树和入口原件位于 `/usr/local/lib/axialmuse-runtime-backups/f26179be4ef84133086206cd9f019fdce8feaaad/`，其父备份目录 0700，未删除旧组件。
+- 安装回执为 `/var/lib/axialmuse/runtime-upgrade-f26179be4ef84133086206cd9f019fdce8feaaad/receipt.json`，相邻 `acceptance.log` 保留现场测试，`monitor-after.json` 保留新入口只读回执。新 SSH 复核 current、账本四代及摘要、无 pending、Nginx 配置/活动状态；本地独立制品 verifier 和真实 daily 82 项也通过，详见[完整进度](../progress.md#2026-11-16--运维修复发布与组件部署验收)。
+- 本次只安装组件，不初始化退役协议、不建立清理授权、不删除 release、不迁移日志、不初始化备份或启用维护 timer；后续启用仍按独立运维范围验收。本节为部署后的本地记录，未额外触发生产发布。
+
 ## 2026-11-15 / #88 不可变组件代际候选
 
 以下取代本文件历史步骤中的业务模块原位替换方式，尚未安装。verifier 仍保持原独立闭合目录与升级协议。

@@ -11,7 +11,6 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
-  rmdirSync,
   rmSync,
   unlinkSync,
   writeFileSync,
@@ -28,6 +27,8 @@ import { validateSupplyChainClosure } from "./check.mjs";
 import { NPM_VERSIONS_BY_ROLE } from "./contracts.mjs";
 import { deriveNpmCli } from "./environment.mjs";
 import { fail, NpmIsolationError } from "./errors.mjs";
+import {assertNoLiveDisplacedLocks, createGenerationLock} from "./generation-lock.mjs";
+import {beginPublication, preparePublication, publicationJournalPath, recoverPublication, settlePublication} from "./publication-recovery.mjs";
 import {
   buildExpectedSpdxGraph,
   hashProjectFile,
@@ -222,7 +223,7 @@ function acquireGenerationLock(
   const lockPath = join(parent, `.${basename(artifactDirectory)}.generation.lock`);
   let descriptor;
   try {
-    descriptor = openSync(lockPath, "wx", 0o600);
+    descriptor = createGenerationLock(lockPath, "SPDX_GENERATION_LOCKED", syncDirectoryPath);
     const descriptorStat = fstatSync(descriptor);
     if (
       !descriptorStat.isFile()
@@ -234,8 +235,10 @@ function acquireGenerationLock(
     }
     fsyncSync(descriptor);
     syncDirectoryPath(parent);
+    assertNoLiveDisplacedLocks(lockPath, "SPDX_GENERATION_LOCKED");
   } catch (error) {
     if (descriptor === undefined) {
+      if (error?.code === "SPDX_GENERATION_LOCKED") throw error;
       if (error?.code === "EEXIST") {
         fail("SPDX_GENERATION_LOCKED", "已有供应链 artifact 生成任务持有排他锁。" );
       }
@@ -543,18 +546,6 @@ function removeOwnedPrivateDirectory(path, identity, snapshot, syncParentDirecto
   syncParentDirectory(dirname(path));
 }
 
-function removeOwnedEmptyPrivateDirectory(path, identity, syncParentDirectory) {
-  if (!pathExists(path, "SPDX_ARTIFACT_PUBLISH_UNCERTAIN")) return;
-  if (
-    !pathIdentitiesEqual(capturePathIdentity(path, "artifact"), identity)
-    || readdirSync(path).length !== 0
-  ) {
-    fail("SPDX_ARTIFACT_PUBLISH_UNCERTAIN", "供应链空候选目录已被替换或写入。" );
-  }
-  rmdirSync(path);
-  syncParentDirectory(dirname(path));
-}
-
 function removeOwnedNoticeCandidateDirectory({
   directory,
   directoryIdentity,
@@ -601,22 +592,6 @@ function restoreArtifactSnapshot({
   }
 }
 
-function restoreNoticeSnapshot({ path, snapshot, syncFile, syncParentDirectory }) {
-  const ownership = writeOwnedCandidateFile(path, snapshot, syncFile);
-  try {
-    assertOwnedPublishedPath({
-      identity: ownership.identity,
-      kind: "notice",
-      path,
-      snapshot,
-    });
-    syncParentDirectory(dirname(path));
-    return ownership.identity;
-  } finally {
-    releasePublishedPath(ownership);
-  }
-}
-
 function publishSpdxArtifactsWithNotice({
   artifactDirectory,
   result,
@@ -630,6 +605,7 @@ function publishSpdxArtifactsWithNotice({
   syncCandidateDirectory,
   syncFile,
   syncParentDirectory,
+  afterDurableStep,
 }) {
   const canonicalArtifactDirectory = resolve(artifactDirectory);
   const canonicalNoticePath = resolve(noticePath);
@@ -748,17 +724,14 @@ function publishSpdxArtifactsWithNotice({
     sbomBytes: result.bytes,
   };
 
-  let artifactActivated = false;
-  let artifactBackedUp = false;
   let committed = false;
-  let noticeActivated = false;
-  let noticeBackedUp = false;
   let artifactBackupIdentity = null;
   let noticeBackupIdentity = null;
   let noticeCandidateIdentity = null;
   let artifactBackupOwnership = null;
   let noticeBackupOwnership = null;
   let noticeCandidateOwnership = null;
+  let transaction = null;
   try {
     writeOwnedArtifactFiles(
       artifactCandidateOwnership,
@@ -790,6 +763,15 @@ function publishSpdxArtifactsWithNotice({
       fail("SPDX_ARTIFACT_STALE_BACKUP", "检测到未清理的供应链三件套备份。" );
     }
 
+    transaction = beginPublication({artifactDirectory: canonicalArtifactDirectory, noticePath: canonicalNoticePath,
+      artifactCandidate, noticeCandidateDirectory, previousArtifact: current, previousNotice: currentNotice,
+      nextArtifact: expectedActive, nextNotice,
+      previousArtifactIdentity: currentArtifactOwnership?.identity ?? null,
+      previousNoticeIdentity: currentNoticeOwnership?.identity ?? null,
+      nextArtifactIdentity: artifactCandidateIdentity, nextNoticeIdentity: noticeCandidateIdentity,
+      step: afterDurableStep});
+    preparePublication(transaction);
+
     if (current !== null) {
       assertOwnedPublishedPath({
         identity: currentArtifactOwnership.identity,
@@ -798,11 +780,12 @@ function publishSpdxArtifactsWithNotice({
         snapshot: current,
       });
       renameSync(canonicalArtifactDirectory, artifactBackup);
-      artifactBackedUp = true;
+      afterDurableStep("backup-artifact-renamed");
       artifactBackupOwnership = currentArtifactOwnership;
       currentArtifactOwnership = null;
       artifactBackupIdentity = artifactBackupOwnership.identity;
       syncParentDirectory(artifactParent);
+      afterDurableStep("backup-artifact");
       assertOwnedPublishedPath({
         identity: artifactBackupIdentity,
         kind: "artifact",
@@ -818,11 +801,12 @@ function publishSpdxArtifactsWithNotice({
         snapshot: currentNotice,
       });
       renameSync(canonicalNoticePath, noticeBackup);
-      noticeBackedUp = true;
+      afterDurableStep("backup-notice-renamed");
       noticeBackupOwnership = currentNoticeOwnership;
       currentNoticeOwnership = null;
       noticeBackupIdentity = noticeBackupOwnership.identity;
       syncParentDirectory(noticeParent);
+      afterDurableStep("backup-notice");
       assertOwnedPublishedPath({
         identity: noticeBackupIdentity,
         kind: "notice",
@@ -832,7 +816,7 @@ function publishSpdxArtifactsWithNotice({
     }
     if (afterBackup) afterBackup();
 
-    if (artifactBackedUp) {
+    if (artifactBackupOwnership !== null) {
       assertOwnedPublishedPath({
         identity: artifactBackupIdentity,
         kind: "artifact",
@@ -840,7 +824,7 @@ function publishSpdxArtifactsWithNotice({
         snapshot: expectedPrevious,
       });
     }
-    if (noticeBackedUp) {
+    if (noticeBackupOwnership !== null) {
       assertOwnedPublishedPath({
         identity: noticeBackupIdentity,
         kind: "notice",
@@ -849,24 +833,21 @@ function publishSpdxArtifactsWithNotice({
       });
     }
     if (
-      (!artifactBackedUp && readArtifactSnapshot(canonicalArtifactDirectory) !== null)
-      || (!noticeBackedUp && readNoticeSnapshot(canonicalNoticePath) !== null)
+      (artifactBackupOwnership === null && readArtifactSnapshot(canonicalArtifactDirectory) !== null)
+      || (noticeBackupOwnership === null && readNoticeSnapshot(canonicalNoticePath) !== null)
     ) {
       fail("SPDX_ARTIFACT_CONCURRENT_CHANGE", "供应链三件套在最终激活窗口发生变化。" );
     }
 
     // 两个 parent 之间没有跨目录原子提交；逐项持久化并以完整 snapshot/备份回滚收口。
     renameSync(artifactCandidate, canonicalArtifactDirectory);
-    artifactActivated = true;
+    afterDurableStep("activate-artifact-renamed");
     syncParentDirectory(artifactParent);
+    afterDurableStep("activate-artifact");
     renameSync(noticeCandidate, canonicalNoticePath);
-    noticeActivated = true;
+    afterDurableStep("activate-notice-renamed");
     syncParentDirectory(noticeParent);
-    removeOwnedEmptyPrivateDirectory(
-      noticeCandidateDirectory,
-      noticeCandidateDirectoryIdentity,
-      syncParentDirectory,
-    );
+    afterDurableStep("activate-notice");
     if (afterActivate) afterActivate();
 
     assertOwnedPublishedPath({
@@ -882,29 +863,7 @@ function publishSpdxArtifactsWithNotice({
       snapshot: nextNotice,
     });
     committed = true;
-
-    if (artifactBackedUp) {
-      const quarantine = quarantineOwnedPublishedPath({
-        identity: artifactBackupIdentity,
-        kind: "artifact",
-        path: artifactBackup,
-        snapshot: expectedPrevious,
-        syncParentDirectory,
-      });
-      removeOwnedQuarantine(quarantine, syncParentDirectory);
-      artifactBackedUp = false;
-    }
-    if (noticeBackedUp) {
-      const quarantine = quarantineOwnedPublishedPath({
-        identity: noticeBackupIdentity,
-        kind: "notice",
-        path: noticeBackup,
-        snapshot: expectedNotice,
-        syncParentDirectory,
-      });
-      removeOwnedQuarantine(quarantine, syncParentDirectory);
-      noticeBackedUp = false;
-    }
+    settlePublication(transaction, {commit: true, sync: syncParentDirectory});
   } catch (error) {
     if (committed) {
       fail(
@@ -912,114 +871,17 @@ function publishSpdxArtifactsWithNotice({
         "新供应链三件套已完整激活，但旧备份清理失败；active canonical 与残余状态均保留。",
       );
     }
+    if (transaction !== null) {
+      try {
+        settlePublication(transaction, {sync: syncParentDirectory, afterOwnershipCheck: afterRollbackOwnershipCheck});
+      } catch {
+        fail("SPDX_ARTIFACT_PUBLISH_UNCERTAIN", "三件套发布失败且持久事务尚待恢复；保留现场。");
+      }
+      if (error instanceof NpmIsolationError) throw error;
+      fail("SPDX_ARTIFACT_PUBLISH", "三件套发布失败，旧状态已恢复。");
+    }
     try {
-      if (artifactBackedUp) {
-        assertOwnedPublishedPath({
-          identity: artifactBackupIdentity,
-          kind: "artifact",
-          path: artifactBackup,
-          snapshot: expectedPrevious,
-        });
-      }
-      if (noticeBackedUp) {
-        assertOwnedPublishedPath({
-          identity: noticeBackupIdentity,
-          kind: "notice",
-          path: noticeBackup,
-          snapshot: expectedNotice,
-        });
-      }
-
-      if (artifactActivated) {
-        assertOwnedPublishedPath({
-          identity: artifactCandidateIdentity,
-          kind: "artifact",
-          path: canonicalArtifactDirectory,
-          snapshot: expectedActive,
-        });
-      }
-      if (noticeActivated) {
-        assertOwnedPublishedPath({
-          identity: noticeCandidateIdentity,
-          kind: "notice",
-          path: canonicalNoticePath,
-          snapshot: nextNotice,
-        });
-      }
-
-      const artifactQuarantine = artifactActivated
-        ? quarantineOwnedPublishedPath({
-          afterOwnershipCheck: afterRollbackOwnershipCheck,
-          identity: artifactCandidateIdentity,
-          kind: "artifact",
-          path: canonicalArtifactDirectory,
-          snapshot: expectedActive,
-          syncParentDirectory,
-        })
-        : null;
-      const noticeQuarantine = noticeActivated
-        ? quarantineOwnedPublishedPath({
-          afterOwnershipCheck: afterRollbackOwnershipCheck,
-          identity: noticeCandidateIdentity,
-          kind: "notice",
-          path: canonicalNoticePath,
-          snapshot: nextNotice,
-          syncParentDirectory,
-        })
-        : null;
-
-      if (artifactBackedUp) {
-        restoreArtifactSnapshot({
-          path: canonicalArtifactDirectory,
-          snapshot: expectedPrevious,
-          syncCandidateDirectory,
-          syncFile,
-          syncParentDirectory,
-        });
-      }
-      if (noticeBackedUp) {
-        restoreNoticeSnapshot({
-          path: canonicalNoticePath,
-          snapshot: expectedNotice,
-          syncFile,
-          syncParentDirectory,
-        });
-      }
-      if (
-        !snapshotsEqual(readArtifactSnapshot(canonicalArtifactDirectory), expectedPrevious)
-        || !noticeSnapshotsEqual(readNoticeSnapshot(canonicalNoticePath), expectedNotice)
-      ) {
-        fail("SPDX_ARTIFACT_PUBLISH_UNCERTAIN", "三件套回滚后的旧状态不完整。" );
-      }
-
-      if (artifactBackedUp) {
-        const quarantine = quarantineOwnedPublishedPath({
-          identity: artifactBackupIdentity,
-          kind: "artifact",
-          path: artifactBackup,
-          snapshot: expectedPrevious,
-          syncParentDirectory,
-        });
-        removeOwnedQuarantine(quarantine, syncParentDirectory);
-        artifactBackedUp = false;
-      }
-      if (noticeBackedUp) {
-        const quarantine = quarantineOwnedPublishedPath({
-          identity: noticeBackupIdentity,
-          kind: "notice",
-          path: noticeBackup,
-          snapshot: expectedNotice,
-          syncParentDirectory,
-        });
-        removeOwnedQuarantine(quarantine, syncParentDirectory);
-        noticeBackedUp = false;
-      }
-      if (artifactQuarantine) {
-        removeOwnedQuarantine(artifactQuarantine, syncParentDirectory);
-      }
-      if (noticeQuarantine) {
-        removeOwnedQuarantine(noticeQuarantine, syncParentDirectory);
-      }
+      // 事务形成前没有移动过 canonical；只清理连续持有的私有候选。
       removeOwnedPrivateDirectory(
         artifactCandidate,
         artifactCandidateIdentity,
@@ -1050,7 +912,7 @@ function publishSpdxArtifactsWithNotice({
   }
 }
 
-export function publishSpdxArtifacts({
+function publishSpdxArtifactsUnlocked({
   artifactDirectory,
   result,
   expectedPrevious,
@@ -1063,6 +925,7 @@ export function publishSpdxArtifacts({
   syncCandidateDirectory = fsyncDirectory,
   syncFile = fsyncSync,
   syncParentDirectory = fsyncDirectory,
+  afterDurableStep = () => {},
 }) {
   const noticeArguments = [noticePath, noticeBytes, expectedPreviousNotice];
   const noticeArgumentCount = noticeArguments.filter((value) => value !== undefined).length;
@@ -1086,6 +949,7 @@ export function publishSpdxArtifacts({
       syncCandidateDirectory,
       syncFile,
       syncParentDirectory,
+      afterDurableStep,
     });
   }
   const parent = dirname(artifactDirectory);
@@ -1247,6 +1111,26 @@ export function publishSpdxArtifacts({
   }
 }
 
+export function publishSpdxArtifacts(options) {
+  const {artifactDirectory, noticePath, noticeBytes, expectedPreviousNotice, afterDurableStep = () => {}} = options;
+  const count = [noticePath, noticeBytes, expectedPreviousNotice].filter((value) => value !== undefined).length;
+  if (count !== 0 && count !== 3) {
+    fail("SPDX_ARTIFACT_NOTICE_ARGUMENTS", "noticePath、noticeBytes 与 expectedPreviousNotice 必须同时提供。");
+  }
+  assertDirectory(dirname(artifactDirectory), "SPDX_ARTIFACT_PARENT");
+  const publicationLock = acquireGenerationLock(dirname(artifactDirectory), `${artifactDirectory}.publication`);
+  try {
+    if (count === 3) {
+      recoverPublication({artifactDirectory, noticePath, step: afterDurableStep});
+    } else if (pathExists(publicationJournalPath(artifactDirectory), "SPDX_ARTIFACT_PUBLISH_UNCERTAIN")) {
+      fail("SPDX_ARTIFACT_PUBLISH_UNCERTAIN", "两件套入口不能绕过未恢复的三件套事务。");
+    }
+    return publishSpdxArtifactsUnlocked(options);
+  } finally {
+    releaseGenerationLock(publicationLock);
+  }
+}
+
 export function parseGenerateSupplyChainArguments(arguments_) {
   if (!Array.isArray(arguments_)) {
     fail("SPDX_ARGUMENTS", "供应链生成参数必须是 array。" );
@@ -1256,6 +1140,28 @@ export function parseGenerateSupplyChainArguments(arguments_) {
     fail("SPDX_ARGUMENTS", "只允许可选的 --created-at <UTC秒精度时间>。" );
   }
   return { createdAt: validateCreatedAt(arguments_[1]) };
+}
+
+export function recoverSpdxPublication({artifactDirectory, noticePath, afterDurableStep = () => {}}) {
+  const publicationLock = acquireGenerationLock(dirname(artifactDirectory), `${artifactDirectory}.publication`);
+  try {
+    return recoverPublication({artifactDirectory, noticePath, step: afterDurableStep});
+  } finally {
+    releaseGenerationLock(publicationLock);
+  }
+}
+
+export function recoverSupplyChainArtifacts({root, artifactDirectory = resolve(root, "docs/generated/supply-chain"),
+  noticePath = resolve(root, "THIRD_PARTY_NOTICES"), afterDurableStep = () => {}}) {
+  const parent = dirname(artifactDirectory);
+  mkdirSync(parent, {recursive: true, mode: 0o755});
+  assertDirectory(parent, "SPDX_ARTIFACT_PARENT");
+  const generationLock = acquireGenerationLock(parent, artifactDirectory);
+  try {
+    return recoverSpdxPublication({artifactDirectory, noticePath, afterDurableStep});
+  } finally {
+    releaseGenerationLock(generationLock);
+  }
 }
 
 export function generateSupplyChainArtifacts({
@@ -1281,6 +1187,18 @@ export function generateSupplyChainArtifacts({
   if (!reviewedEvidence && licenseEvidence !== null) {
     fail("SPDX_LICENSE_EVIDENCE_INPUT", "非正式 SPDX 生成不接受补充许可证证据。" );
   }
+  const preflightManifest = readAndValidateManifest(canonicalRoot);
+  const preflightNpm = deriveNpmCli(process.execPath);
+  if (nodeVersion !== process.versions.node) {
+    fail("NPM_RUNTIME_PROCESS", "声明的 Node 版本与当前进程不一致。" );
+  }
+  const preflightRuntime = validateRuntimeContract({
+    root: canonicalRoot, nodeVersion, npmVersion: preflightNpm.npmVersion,
+    manifest: preflightManifest, npmVersionsByRole,
+  });
+  if (preflightRuntime.role !== "primary") {
+    fail("SPDX_PRIMARY_ONLY", "确定性 SPDX 只允许 .nvmrc 主端点生成。" );
+  }
   const parent = dirname(artifactDirectory);
   mkdirSync(parent, { recursive: true, mode: 0o755 });
   assertDirectory(parent, "SPDX_ARTIFACT_PARENT");
@@ -1291,6 +1209,7 @@ export function generateSupplyChainArtifacts({
   );
   let pendingError;
   try {
+    recoverSpdxPublication({artifactDirectory, noticePath});
     readAndValidateLockfile(canonicalRoot, readAndValidateManifest(canonicalRoot));
     if (reviewedEvidence) {
       readAndValidateDependencyPolicy(canonicalRoot);

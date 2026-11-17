@@ -709,6 +709,7 @@ test("E-010 npm isolation contract", async (t) => {
       ["--test", "tests/build/supply-chain-final-admission.test.mjs"],
       ["--test", "tests/build/supply-chain-final-admission-runner.test.mjs"],
       ["--test", "tests/build/supply-chain-generation.test.mjs"],
+      ["--test", "tests/build/supply-chain-recovery.test.mjs"],
       ["--test", "tests/build/supply-chain-notices.test.mjs"],
       ["--test", "tests/build/supply-chain-policy.test.mjs"],
       ["--test", "tests/build/supply-chain-review-report.test.mjs"],

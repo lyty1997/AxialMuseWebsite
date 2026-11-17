@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {spawnSync} from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   existsSync,
@@ -363,6 +364,43 @@ async function runFormalGeneration(fixture, nativeState = null) {
 }
 
 test("D-077 formal supply-chain generation closure", async (suite) => {
+  await suite.test("recovers killed formal, native and publication locks before reading the old triplet", async () => {
+    const fixture = createFixture();
+    try {
+      const baseline = await runFormalGeneration(fixture, createNativeStub(fixture));
+      const module = new URL("../../scripts/quality/lib/supply-chain/formal-generation.mjs", import.meta.url).href;
+      const options = {root: fixture.root, createdAt: null, npmVersionsByRole: fixture.npmVersionsByRole};
+      const documents = nativeDocuments(fixture.npmVersion);
+      const child = spawnSync(process.execPath, ["--input-type=module", "-e", `
+        import {generateReviewedSupplyChainArtifacts} from ${JSON.stringify(module)};
+        process.chdir(${JSON.stringify(fixture.root)});
+        const docs = ${JSON.stringify(documents)};
+        let calls = 0;
+        await generateReviewedSupplyChainArtifacts({...${JSON.stringify(options)},
+          reviewTarballs: async () => ${JSON.stringify(fixture.inspections)},
+          runIsolated: () => ({runtime: {nodeVersion: process.versions.node,
+            npmVersion: ${JSON.stringify(fixture.npmVersion)}, role: 'primary'}, stdout: JSON.stringify(docs[calls++]) + '\\n'}),
+          afterActivate() {process.kill(process.pid, 'SIGKILL');}
+        });`], {encoding: "utf8", timeout: 10000});
+      assert.equal(child.signal, "SIGKILL", child.stderr);
+      const parent = join(fixture.root, "docs/generated");
+      for (const name of [".supply-chain.formal.lock", ".supply-chain.generation.lock",
+        ".supply-chain.publication.generation.lock", ".supply-chain.transaction.json"]) {
+        assert.equal(existsSync(join(parent, name)), true, name);
+      }
+      const native = createNativeStub(fixture);
+      await withWorkingDirectory(fixture.root, () => generateReviewedSupplyChainArtifacts({...options,
+        reviewTarballs: async () => {
+          assert.equal(existsSync(join(parent, ".supply-chain.transaction.json")), false);
+          assert.equal(readFileSync(join(parent, "supply-chain/sbom.spdx.json"), "utf8"), baseline.bytes);
+          assert.equal(readFileSync(join(fixture.root, "THIRD_PARTY_NOTICES"), "utf8"), baseline.noticeBytes);
+          return clone(fixture.inspections);
+        }, runIsolated: native.runIsolated}));
+      assert.equal(native.calls, 2);
+      assert.equal(existsSync(join(parent, ".supply-chain.formal.lock")), false);
+    } finally { rmSync(fixture.outer, {recursive: true, force: true}); }
+  });
+
   await suite.test("publishes SPDX JSON, evidence and NOTICE from one reviewed tarball set", async () => {
     const fixture = createFixture();
     const nativeState = createNativeStub(fixture);
@@ -450,6 +488,7 @@ test("D-077 formal supply-chain generation closure", async (suite) => {
         );
         assert.equal(existsSync(join(fixture.root, "docs/generated/supply-chain")), false);
         assert.equal(existsSync(join(fixture.root, "THIRD_PARTY_NOTICES")), false);
+        assert.equal(existsSync(join(fixture.root, "docs/generated")), false);
         assert.equal(
           existsSync(join(fixture.root, "docs/generated/.supply-chain.formal.lock")),
           false,
