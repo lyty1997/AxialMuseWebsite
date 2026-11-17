@@ -22,6 +22,7 @@ import {
 import { NPM_VERSIONS_BY_ROLE } from "./contracts.mjs";
 import { deriveNpmCli } from "./environment.mjs";
 import { fail } from "./errors.mjs";
+import {assertNoLiveDisplacedLocks, createGenerationLock} from "./generation-lock.mjs";
 import {
   hashProjectFile,
   readAndValidateLockfile,
@@ -31,7 +32,7 @@ import {
   readAndValidateDependencyAdmissions,
   readAndValidateDependencyPolicy,
 } from "./policy.mjs";
-import { generateSupplyChainArtifacts } from "./sbom-artifacts.mjs";
+import { generateSupplyChainArtifacts, recoverSupplyChainArtifacts } from "./sbom-artifacts.mjs";
 import {
   downloadRegistryTarball,
   reviewLockedPackageTarballs,
@@ -66,6 +67,20 @@ function assertFormalInputsUnchanged(root, expected) {
     if (error?.code === "SPDX_INPUT_CONCURRENT_CHANGE") throw error;
     fail("SPDX_INPUT_CONCURRENT_CHANGE", "正式供应链生成期间固定输入不可读或发生变化。" );
   }
+}
+
+function primaryRuntime(root, nodeVersion, npmVersionsByRole) {
+  const manifest = readAndValidateManifest(root);
+  const npmRuntime = deriveNpmCli(process.execPath);
+  if (nodeVersion !== process.versions.node) {
+    fail("NPM_RUNTIME_PROCESS", "声明的 Node 版本与当前进程不一致。");
+  }
+  const runtime = validateRuntimeContract({root, nodeVersion, npmVersion: npmRuntime.npmVersion,
+    manifest, npmVersionsByRole});
+  if (runtime.role !== "primary") {
+    fail("SPDX_PRIMARY_ONLY", "正式供应链生成只允许 .nvmrc 主端点执行。");
+  }
+  return {manifest, npmRuntime};
 }
 
 function syncDirectory(path) {
@@ -150,7 +165,7 @@ function acquireFormalGenerationLock(root) {
   let descriptor;
   let created = false;
   try {
-    descriptor = openSync(path, "wx", 0o600);
+    descriptor = createGenerationLock(path, "SPDX_FORMAL_GENERATION_LOCKED", syncDirectory);
     created = true;
     const stat = fstatSync(descriptor);
     if (
@@ -163,6 +178,7 @@ function acquireFormalGenerationLock(root) {
     }
     fsyncSync(descriptor);
     syncDirectory(parent);
+    assertNoLiveDisplacedLocks(path, "SPDX_FORMAL_GENERATION_LOCKED");
   } catch (error) {
     if (descriptor !== undefined && created) {
       cleanupFormalGenerationLock({ descriptor, parent, path });
@@ -212,33 +228,24 @@ export async function generateReviewedSupplyChainArtifacts({
     fail("NPM_ROOT_CWD", "正式供应链生成必须从仓库根目录启动。" );
   }
 
-  const inputHashes = hashFormalInputs(canonicalRoot);
-  validateProjectNpmrc(canonicalRoot);
-  assertNoCompetingPackageManagerInputs(canonicalRoot);
-  const manifest = readAndValidateManifest(canonicalRoot);
-  const npmRuntime = deriveNpmCli(process.execPath);
-  if (nodeVersion !== process.versions.node) {
-    fail("NPM_RUNTIME_PROCESS", "声明的 Node 版本与当前进程不一致。" );
-  }
-  const runtime = validateRuntimeContract({
-    root: canonicalRoot,
-    nodeVersion,
-    npmVersion: npmRuntime.npmVersion,
-    manifest,
-    npmVersionsByRole,
-  });
-  if (runtime.role !== "primary") {
-    fail("SPDX_PRIMARY_ONLY", "正式供应链生成只允许 .nvmrc 主端点执行。" );
-  }
-  const lockfile = readAndValidateLockfile(canonicalRoot, manifest);
-  readAndValidateDependencyPolicy(canonicalRoot);
-  const licenseEvidence = readAndValidateDependencyLicenseEvidence(canonicalRoot);
-  const admissions = readAndValidateDependencyAdmissions(canonicalRoot);
-  const lockedPackages = validateAdmissionClosure({ lockfile, manifest, admissions });
-  assertFormalInputsUnchanged(canonicalRoot, inputHashes);
+  // 最低端点保持只读：取得任何锁或恢复写入前，先通过现有 runtime 契约。
+  primaryRuntime(canonicalRoot, nodeVersion, npmVersionsByRole);
   const formalLock = acquireFormalGenerationLock(canonicalRoot);
   let pendingError;
   try {
+    recoverSupplyChainArtifacts({root: canonicalRoot, artifactDirectory: generationOptions.artifactDirectory,
+      noticePath: generationOptions.noticePath});
+    const inputHashes = hashFormalInputs(canonicalRoot);
+    validateProjectNpmrc(canonicalRoot);
+    assertNoCompetingPackageManagerInputs(canonicalRoot);
+    // 预检只控制入口资格，恢复后的生成不能复用锁前的 manifest 快照。
+    const {manifest} = primaryRuntime(canonicalRoot, nodeVersion, npmVersionsByRole);
+    const lockfile = readAndValidateLockfile(canonicalRoot, manifest);
+    readAndValidateDependencyPolicy(canonicalRoot);
+    const licenseEvidence = readAndValidateDependencyLicenseEvidence(canonicalRoot);
+    const admissions = readAndValidateDependencyAdmissions(canonicalRoot);
+    const lockedPackages = validateAdmissionClosure({ lockfile, manifest, admissions });
+    assertFormalInputsUnchanged(canonicalRoot, inputHashes);
     const guardedDownload = async (lockedPackage, downloadOptions) => {
       assertFormalInputsUnchanged(canonicalRoot, inputHashes);
       let bytes;

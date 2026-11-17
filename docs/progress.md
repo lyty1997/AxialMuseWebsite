@@ -4,12 +4,28 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-11-16 — 运维修复发布与组件部署验收
+
+- **Git 与 CI**：本轮两项退役缺陷修复形成 `dev@4846c4722cfe4fe1f097b9dbfda112607757462c`，连同既有两次运维加固提交，经 [PR #90](https://github.com/lyty1997/AxialMuseWebsite/pull/90) 普通合并到 `main@f26179be4ef84133086206cd9f019fdce8feaaad`。dev run `43878792771`、PR CI `43879487860`、运维回归 `43879487855` 及 [main run `43880094965`](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/43880094965) 均 `completed/success`，attempt 1。首次推送因 GH007 被拒，仅将尚未发布的提交改为现有 noreply 身份后普通推送，代码树不变。
+- **制品与实际部署**：artifact `14231952780`，外层 SHA-256 `028d59e0d79479f6202daba73fc11d5759a7240e1f4e370eadc507cf9c1c347e`，内容摘要 `ee85bd8ba30877039533d7f8cea710899f20ae80791b57459f62a1f49d612ad6`。CI 的部署步骤仅调度；已另从生产 TAT agent 日志确认任务 `invt-1b91ee0jn5` 为 `SUCCESS / exit 0`，并独立读取 current、安装收据和账本验证身份一致，未重跑 CI 或追加 TAT。
+- **组件安装**：56 个源文件 Git blob 与远端精确 main 一致；完整 manifest 为 `0fe3434a74b130d08e57bc96f4959374e234a33fff39fc69673bd73d0b0e8690`。服务器先通过三项真实启动器/锁继承测试、大型 release 描述符预算及服务属主文件租约验收，再持生命周期与部署锁，安装稳定启动器和包装器，排空旧解释器并原子交换目录/指针。旧运行时及入口保留于 root-only 备份。新 SSH 会话复核全部 manifest、10 个入口的摘要/owner/mode/单链接、账本不变、pending 为 0、Nginx active 且配置有效，详见[安装记录](operations/production-deploy-setup.md#2026-11-16--88-不可变组件认证安装完成)。
+- **公网后验**：独立下载并经 Python 3.12 verifier 完整复验 40 个 release 文件，其中 36 个 payload 与服务器清单逐一一致；现有真实 daily 状态机通过 82 项，零失败，前后新鲜 SSH 服务器证据一致且 `serverLedgerInspected=true`。本地证据目录 `/tmp/axial-retirement-delivery-7y8vw7zf/`，含 `tat-terminal.json`、`runtime-install.log`、`server-independent-readback.json`、`independent-artifact-verifier.json` 与 `public-daily-receipt.json`；安装回执及验收日志保留在服务器固定提交命名目录。
+- **保留与范围**：原工作区 20 个文件的提交前后字节已核对一致，供应链三件套恢复改动未纳入交付。此条及对应安装后验为本地文档更新，不再追加 main push/TAT；退役协议、实际 release 清理、日志迁移、备份初始化和本地维护定时器均未启用。无新增第三方服务、依赖或用户数据处理。
+
 ## 2026-11-16 — release 退役描述符预算与 Nginx 注释修复
 
 - **复现**：超过 1,100 个文件的真实 release 在 `RLIMIT_NOFILE` soft limit 1024 下，旧实现取得全文件租约时以 `EMFILE` 失败；注释中的动态 root 和旧 release 路径也分别造成误拒绝、误保护。旧实现反例日志为 `/tmp/retirement-before.log`。
 - **修复**：提交退役事实或新清理授权前，按剩余树准备描述符额度，仅在既有 hard limit 内临时提高 soft limit，成功或中断后恢复；硬上限不足或调整被拒绝时报 `DEPLOY_RETIREMENT_FD_BUDGET`，不追加本次事实、不隔离目录。保留全文件写租约。配置扫描按 Nginx 参数、引号、转义和变量花括号边界排除注释，原始输出继续绑定摘要、代际与漂移检查。契约见[退役与可用性](operations/maintenance.md#release-退役与可用性)。
 - **验证**：`AXIALMUSE_NGINX_ACCEPTANCE=1 PYTHONPATH=tests/ops /usr/bin/python3.12 -m unittest discover -s tests/ops` 共 437 项通过，无跳过，日志 `/tmp/retirement-final-ops-clean.log`；包含大型 release、硬上限不足的首次退役及重新授权、提高额度被拒绝、删除中断与重试、真实 Nginx 引号及参数内部 `#`。Node `24.18.0` 完整隔离 quality、修改文件 Ruff 和差异检查通过，quality 日志 `/tmp/retirement-quality.log`。进程内撤销注释过滤、换为简单井号截断，以及独立子进程撤销描述符预算的三组反例全部被检出，见 `/tmp/retirement-mutations.log`。首轮全量中新增容器夹具未映射配置路径的七个错误保留于 `/tmp/retirement-final-ops.log`，修正夹具后定向及最终全量均通过。
 - **边界**：仅本地修复与隔离验证，保留原有供应链未提交改动。未提交、推送、部署或执行生产清理；没有新增第三方服务、依赖、浏览器外部请求或用户数据处理。
+
+## 2026-11-16 — 供应链三件套进程死亡恢复本地修复
+
+- **原反例**：临时三件套在新文件激活后遭真实 `SIGKILL`，旧实现重试报 `SPDX_ARTIFACT_CONCURRENT_CHANGE`；原始内存回滚无法在进程死亡后运行，正式入口还有内外锁残留。
+- **实现**：发布器在移动旧 canonical 前持久化路径、父目录、原始 inode 与逐文件摘要，prepared 恢复旧代、committed 保留新代、rolled-back 续清新候选；恢复与逐文件清扫也允许再次中断。正式/内部生成在读取制品基线前恢复，入口主端点预检继续先于任何写入，恢复后重新读取输入。两件套低层入口共用发布锁，不能绕过未决三件套事务。新增共享锁恢复和发布恢复模块，详见 [CODE-015](engineering/main-site-coding-spec.md#code-015-供应链证据与发布封装)。
+- **保护**：锁通过完整 holder 文件的原子排他 link 发布；Linux 绑定 boot、PID namespace、PID/start tick，确认死亡后摘离，所有竞争者检查隔离区存活 holder，覆盖恢复竞争误摘离新锁的交错。活动持有者、未知/旧版空锁、文件或父目录替换、内容漂移及未知成员继续失败关闭。旧版本无事务残留、死亡锁审计标记及事务形成前的私有候选不按时间自动清理。
+- **验证**：Node `24.18.0` 完整 E-010 隔离 quality 通过，相关确定性 SPDX、正式生成、恢复回归合计 102 项通过；Node `24.16.0` 同三项回归 102 项通过，均零跳过。覆盖实际 `SIGKILL` 下的备份、激活、事务 marker 更新、逐文件/目录清扫，以及恢复再次中断、首次发布、真实正式入口组合链和同字节换 inode 反例；原错误实现已被复现反例检出。日志为 `/tmp/axial-spdx-quality-final.log` 与 `/tmp/axial-spdx-minimum-final.log`。真实断电未实测。
+- **边界**：仅本地源码、测试和设计记录；未提交、推送、修改远端或部署。没有新增第三方服务、依赖、浏览器外部请求或用户数据处理，三件套内容格式与许可证准入语义不变。
 
 ## 2026-11-15 — #88 完整候选 Git 交付验证
 
