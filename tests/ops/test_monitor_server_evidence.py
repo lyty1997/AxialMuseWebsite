@@ -1,11 +1,17 @@
 """以真实隔离部署状态检查只读证据和失败边界。"""
 
+import io
+import json
 import tempfile
 import unittest
+from contextlib import nullcontext
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from ops.deploy.deployment_state import DeploymentError, digest, write_new
 from ops.monitor.server_evidence import challenged_snapshot, release_bundle, snapshot
+from ops.monitor import installed_snapshot
+from ops.maintenance.resources import GIB, check_resources
 from test_release_transaction import ReleaseFixture
 
 
@@ -91,3 +97,28 @@ class ServerEvidenceTests(unittest.TestCase):
         path.write_bytes(b"tampered")
         with self.assertRaises(DeploymentError):
             release_bundle(self.fixture.store)
+
+    def test_real_thresholds_block_read_only_snapshot_and_prioritize_critical(self):
+        self.deploy()
+        for available, inode, code in ((200, 500, "MAINTENANCE_DISK_USED_WARNING"),
+                                       (201, 100, "MAINTENANCE_INODE_USED_CRITICAL"),
+                                       (200, 100, "MAINTENANCE_INODE_USED_CRITICAL")):
+            value = SimpleNamespace(f_blocks=1000, f_bavail=available, f_frsize=GIB,
+                                    f_files=1000, f_favail=inode)
+            result = check_resources(statvfs=lambda _: value)
+            with self.subTest(code=code), patch("ops.monitor.server_evidence.check_resources", return_value=result):
+                with self.assertRaisesRegex(DeploymentError, code):
+                    release_bundle(self.fixture.store)
+
+
+class InstalledResourceFailureTests(unittest.TestCase):
+    def test_only_known_resource_failure_is_encoded_without_private_data(self):
+        for code in ("MAINTENANCE_DISK_FREE_WARNING", "MAINTENANCE_RESOURCE_DATA"):
+            stream = io.BytesIO()
+            with self.subTest(code=code), patch.object(installed_snapshot.sys, "argv", ["snapshot"]), \
+                    patch.object(installed_snapshot.sys, "stdout", SimpleNamespace(buffer=stream)), \
+                    patch.object(installed_snapshot, "verifier_lock", return_value=nullcontext()), \
+                    patch.object(installed_snapshot, "load_verifier"), \
+                    patch.object(installed_snapshot, "release_bundle", side_effect=DeploymentError(code)):
+                self.assertEqual(installed_snapshot.main(), 0)
+                self.assertEqual(json.loads(stream.getvalue()), {"schema": 1, "resourceFailure": code})
