@@ -12,9 +12,19 @@ from ops.monitor.bound_probe import evidence_time, validate_evidence
 from ops.monitor.periodic import run_period
 from ops.monitor.public_health import HealthError, require, utc, validate_baseline, write_receipt
 from ops.monitor.tat_transport import COMMAND_SHA256, TatTransport, decode_json
+from ops.maintenance.resources import RESOURCE_FAILURE_CODES
+
+
+def check_resource_failure(bundle):
+    if isinstance(bundle, dict) and "resourceFailure" in bundle:
+        require(set(bundle) == {"schema", "resourceFailure"} and type(bundle["schema"]) is int
+                and bundle["schema"] == 1 and isinstance(bundle["resourceFailure"], str)
+                and bundle["resourceFailure"] in RESOURCE_FAILURE_CODES, "MONITOR_BUNDLE")
+        raise HealthError(bundle["resourceFailure"])
 
 
 def baseline_from_bundle(bundle, policy, checked_at):
+    check_resource_failure(bundle)
     require(isinstance(bundle, dict) and set(bundle) == {"schema", "observedAtUtc", "snapshot", "release"}
             and type(bundle["schema"]) is int and bundle["schema"] == 1, "MONITOR_BUNDLE")
     snapshot, release = bundle["snapshot"], bundle["release"]
@@ -44,6 +54,7 @@ def run_maintenance(period, transport, policy, *, root, node=None, expiry=None, 
 
     def reader(challenge):
         current = transport.fetch()
+        check_resource_failure(current)
         require(isinstance(current, dict) and set(current) == {"schema", "observedAtUtc", "snapshot", "release"}
                 and type(current["schema"]) is int and current["schema"] == 1, "MONITOR_BUNDLE")
         require(current["snapshot"] == snapshot and current["release"] == release, "MONITOR_SNAPSHOT_DRIFT")

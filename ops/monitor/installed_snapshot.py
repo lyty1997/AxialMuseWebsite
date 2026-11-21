@@ -9,6 +9,7 @@ from ops.deploy.release_install import ReleaseStore
 from ops.monitor.public_health import canonical
 from ops.monitor.server_evidence import release_bundle
 from ops.maintenance.local_state import safe_code
+from ops.maintenance.resources import RESOURCE_FAILURE_CODES
 
 
 def main():
@@ -25,6 +26,10 @@ def main():
         return 0
     except Exception as error:
         if isinstance(error, DeploymentError):
+            if str(error) in RESOURCE_FAILURE_CODES:
+                # TAT 的成功传输只承载诊断；客户端必须将此封套转为非零检查。
+                sys.stdout.buffer.write(canonical({"schema": 1, "resourceFailure": str(error)}))
+                return 0
             print(f"[{safe_code(error)}] 只读维护证据失败。", file=sys.stderr)
         return 1
 

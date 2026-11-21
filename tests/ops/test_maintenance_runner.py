@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ops.monitor import dns_health, public_health
-from ops.monitor.maintenance_runner import baseline_from_bundle, main, public_receipt, run_maintenance
+from ops.monitor.maintenance_runner import baseline_from_bundle, check_resource_failure, main, public_receipt, run_maintenance
 from ops.monitor.periodic import run_period
 from ops.monitor.public_health import HealthError, write_receipt
 from test_public_health import Fixture
@@ -102,6 +102,44 @@ class MaintenanceRunnerTests(unittest.TestCase):
             self.assertEqual(receipt["checks"][0]["check"], "monitor-bootstrap")
             self.assertFalse(receipt["serverLedgerInspected"])
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_resource_failure_envelope_is_strict_and_reaches_failed_receipt(self):
+        code = "MAINTENANCE_INODE_USED_CRITICAL"
+        for value in ({"schema": True, "resourceFailure": code},
+                      {"schema": 1, "resourceFailure": "PRIVATE_DATA"},
+                      {"schema": 1, "resourceFailure": code, "extra": "private"},
+                      {"schema": 1, "resourceFailure": []}):
+            with self.subTest(value=value), self.assertRaisesRegex(HealthError, "MONITOR_BUNDLE"):
+                check_resource_failure(value)
+        class Transport:
+            def fetch(self):
+                return {"schema": 1, "resourceFailure": code}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "receipt.json"
+            environment = {"MONITOR_POLICY_JSON": json.dumps(self.policy), "MONITOR_TAT_SECRET_ID": "fake-id",
+                           "MONITOR_TAT_SECRET_KEY": "fake-key", "MONITOR_TAT_COMMAND_ID": "cmd-abcdefgh",
+                           "MONITOR_TAT_INSTANCE_ID": "lhins-abcdefgh"}
+            with patch.dict(os.environ, environment, clear=True), \
+                    patch("ops.monitor.maintenance_runner.TatTransport", return_value=Transport()), \
+                    redirect_stdout(io.StringIO()):
+                status = main(["--period", "daily", "--root", str(root), "--output", str(output)])
+            receipt = json.loads(output.read_text())
+            self.assertEqual(status, 1)
+            self.assertEqual(receipt["checks"][0]["code"], code)
+            self.assertNotIn("fake-key", json.dumps(receipt))
+
+    def test_resource_failure_after_baseline_is_not_mistaken_for_snapshot_drift(self):
+        code = "MAINTENANCE_DISK_FREE_WARNING"
+        class Transport:
+            def __init__(self, bundle):
+                self.values = iter((bundle, {"schema": 1, "resourceFailure": code}))
+            def fetch(self):
+                return next(self.values)
+        def runner(_period, _baseline, reader, **_kwargs):
+            reader("1" * 64)
+        with self.assertRaisesRegex(HealthError, code):
+            run_maintenance("daily", Transport(self.bundle), self.policy, root=Path("/fixture"), runner=runner)
 
     def test_shared_receipt_excludes_private_expiry_and_unknown_fields(self):
         receipt = {"schema": 1, "period": "monthly", "status": "failed", "failedCount": 1, "checkCount": 1,
