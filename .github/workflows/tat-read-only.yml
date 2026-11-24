@@ -1,0 +1,122 @@
+name: TAT read-only inventory
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  query:
+    if: >-
+      github.repository == 'lyty1997/AxialMuseWebsite' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: maintenance
+
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify repository and branch
+        run: /usr/bin/python3 -B -m ops.monitor.workflow_context verify
+
+      - name: Query TAT tasks
+        env:
+          TAT_SECRET_ID: ${{ secrets.MONITOR_TAT_SECRET_ID }}
+          TAT_SECRET_KEY: ${{ secrets.MONITOR_TAT_SECRET_KEY }}
+          TAT_INSTANCE_ID: ${{ vars.MONITOR_TAT_INSTANCE_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B -c '
+          import collections
+          import json
+          import os
+          import re
+          import sys
+          import time
+
+          from ops.monitor.tat_transport import request_once
+
+          try:
+              secret_id = os.environ.pop("TAT_SECRET_ID")
+              secret_key = os.environ.pop("TAT_SECRET_KEY")
+              instance = os.environ["TAT_INSTANCE_ID"]
+              if not secret_id or not secret_key or not re.fullmatch(r"(?:lhins|ins)-[a-z0-9]{8,64}", instance):
+                  raise ValueError()
+
+              # 日志只允许封闭状态名，不能传播响应中的任意字符串。
+              states = {
+                  "PENDING", "DELIVERING", "DELIVER_DELAYED", "DELIVER_FAILED",
+                  "START_FAILED", "RUNNING", "SUCCESS", "FAILED", "TIMEOUT",
+                  "TASK_TIMEOUT", "CANCELLING", "CANCELLED", "TERMINATED",
+              }
+              tasks = {}
+              offset = 0
+              expected_total = None
+              deadline = time.monotonic() + 240
+
+              while True:
+                  if time.monotonic() >= deadline:
+                      raise ValueError()
+
+                  result = request_once(
+                      "DescribeInvocationTasks",
+                      {
+                          "Filters": [
+                              {"Name": "instance-id", "Values": [instance]}
+                          ],
+                          "HideOutput": True,
+                          "Limit": 20,
+                          "Offset": offset,
+                      },
+                      "ap-shanghai",
+                      secret_id,
+                      secret_key,
+                  )
+
+                  if time.monotonic() >= deadline or not isinstance(result, dict):
+                      raise ValueError()
+                  total = result.get("TotalCount")
+                  page = result.get("InvocationTaskSet")
+                  if type(total) is not int or total < 0:
+                      raise ValueError()
+                  if not isinstance(page, list) or len(page) > 20 or offset + len(page) > total:
+                      raise ValueError()
+                  if expected_total is None:
+                      expected_total = total
+                  if total != expected_total:
+                      raise ValueError()
+
+                  for task in page:
+                      if not isinstance(task, dict) or task.get("InstanceId") != instance:
+                          raise ValueError()
+                      task_id = task.get("InvocationTaskId")
+                      status = task.get("TaskStatus")
+                      if not isinstance(task_id, str) or not re.fullmatch(r"invt-[a-z0-9]{8,64}", task_id):
+                          raise ValueError()
+                      if not isinstance(status, str) or status not in states or task_id in tasks:
+                          raise ValueError()
+                      tasks[task_id] = status
+
+                  offset += len(page)
+                  if offset == total:
+                      break
+                  if not page:
+                      raise ValueError()
+
+              counts = collections.Counter(tasks.values())
+              print(json.dumps({
+                  "status": "queried",
+                  "visibleTaskCount": len(tasks),
+                  "states": dict(sorted(counts.items())),
+              }, sort_keys=True))
+          except Exception:
+              print("TAT_READ_ONLY_QUERY_FAILED", file=sys.stderr)
+              sys.exit(1)
+          '

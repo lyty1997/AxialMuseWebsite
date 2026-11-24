@@ -31,6 +31,7 @@ permissions:
 // 定时 workflow 的触发、权限和固定接线按完整字节冻结，修改时须同步审查契约摘要。
 const MAINTENANCE_SHA256 = "9b5659ad55618bd69b73c7595251dd32e819a0447c3dfee77809b0dc4ed56706";
 const MAINTENANCE_HELPER_SHA256 = "d78087f3c4b92df7061443c6a0c712b81936e40ee8a77cb8d18f5ba24b2c31a9";
+const TAT_READ_ONLY_SHA256 = "cf2db4443edd1e40b6fe7b52e68d02b08ca32a17118ea63c9042a3573fc43562";
 
 const MATERIALIZE_PRIVATE_NODE_STEP = `      - name: Materialize private Node runtime
         shell: bash
@@ -559,6 +560,7 @@ export function checkCiWorkflow(root) {
   const directory = join(root, ".github", "workflows");
   const path = join(directory, "ci.yml");
   const maintenance = join(directory, "maintenance.yml");
+  const inventory = join(directory, "tat-read-only.yml");
   let source;
   try {
     const directoryMetadata = lstatSync(directory);
@@ -568,8 +570,8 @@ export function checkCiWorkflow(root) {
       realpathSync(directory) !== directory
       || directoryMetadata.isSymbolicLink()
       || !directoryMetadata.isDirectory()
-      || entries.length !== 2
-      || entries.map((entry) => entry.name).sort().join(",") !== "ci.yml,maintenance.yml"
+      || entries.length !== 3
+      || entries.map((entry) => entry.name).sort().join(",") !== "ci.yml,maintenance.yml,tat-read-only.yml"
       || entries.some((entry) => !entry.isFile())
       || realpathSync(path) !== path
       || fileMetadata.isSymbolicLink()
@@ -585,6 +587,14 @@ export function checkCiWorkflow(root) {
     }
     if (createHash("sha256").update(readFileSync(maintenance)).digest("hex") !== MAINTENANCE_SHA256) {
       fail("CI_WORKFLOW_MAINTENANCE");
+    }
+    const inventoryMetadata = lstatSync(inventory);
+    if (realpathSync(inventory) !== inventory || inventoryMetadata.isSymbolicLink()
+        || !inventoryMetadata.isFile() || inventoryMetadata.nlink !== 1) {
+      fail("CI_WORKFLOW_FILE_SET");
+    }
+    if (createHash("sha256").update(readFileSync(inventory)).digest("hex") !== TAT_READ_ONLY_SHA256) {
+      fail("CI_WORKFLOW_TAT_READ_ONLY");
     }
     const helper = join(root, "ops/monitor/workflow_context.py");
     const helperMetadata = lstatSync(helper);
