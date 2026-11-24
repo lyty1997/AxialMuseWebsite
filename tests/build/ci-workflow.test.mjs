@@ -24,6 +24,7 @@ const CANONICAL = readFileSync(
 );
 const MAINTENANCE = readFileSync(resolve(ROOT, ".github/workflows/maintenance.yml"), "utf8");
 const MAINTENANCE_HELPER = readFileSync(resolve(ROOT, "ops/monitor/workflow_context.py"), "utf8");
+const TAT_READ_ONLY = readFileSync(resolve(ROOT, ".github/workflows/tat-read-only.yml"), "utf8");
 const JOB_NAMES = Object.freeze([
   "website-quality",
   "node-minimum",
@@ -121,6 +122,7 @@ test("CODE-020 repository workflow file set is closed and maintenance is immutab
     mkdirSync(join(root, "ops/monitor"), {recursive: true});
     writeFileSync(join(directory, "ci.yml"), CANONICAL, "utf8");
     writeFileSync(join(directory, "maintenance.yml"), MAINTENANCE, "utf8");
+    writeFileSync(join(directory, "tat-read-only.yml"), TAT_READ_ONLY, "utf8");
     writeFileSync(join(root, "ops/monitor/workflow_context.py"), MAINTENANCE_HELPER, "utf8");
     assert.deepEqual(checkCiWorkflow(root), {
       actionCount: 10,
@@ -156,6 +158,24 @@ test("CODE-020 repository workflow file set is closed and maintenance is immutab
       (error) => error instanceof CiWorkflowError && error.code === "CI_WORKFLOW_MAINTENANCE",
     );
     writeFileSync(join(root, "ops/monitor/workflow_context.py"), MAINTENANCE_HELPER, "utf8");
+    for (const [search, replacement] of [
+      ["workflow_dispatch:", "push:"],
+      ["contents: read", "contents: write"],
+      ["environment: maintenance", "environment: production"],
+      ["github.ref == 'refs/heads/main'", "true"],
+      ["ref: ${{ github.sha }}", "ref: dev"],
+      ["persist-credentials: false", "persist-credentials: true"],
+      ["DescribeInvocationTasks", "InvokeCommand"],
+      ["\"HideOutput\": True", "\"HideOutput\": False"],
+      ["offset += len(page)", "offset = total"],
+    ]) {
+      writeFileSync(join(directory, "tat-read-only.yml"), replaceOnce(TAT_READ_ONLY, search, replacement));
+      assert.throws(
+        () => checkCiWorkflow(root),
+        (error) => error instanceof CiWorkflowError && error.code === "CI_WORKFLOW_TAT_READ_ONLY",
+      );
+    }
+    writeFileSync(join(directory, "tat-read-only.yml"), TAT_READ_ONLY, "utf8");
     writeFileSync(
       join(directory, "release.yml"),
       "name: bypass\non: push\njobs: {}\n",

@@ -4,6 +4,26 @@
 
 条目格式：`时间戳 / 主题 / 完成内容 / 遗留项`。
 
+## 2026-11-24 — #88 TAT 只读查询工作流
+
+- **本地实现**：新增 `.github/workflows/tat-read-only.yml`，仅手动触发、目标仓库 main 运行，复用 maintenance 环境现有监测密钥与实例变量。固定调用 `DescribeInvocationTasks`、按实例过滤、隐藏输出并读完分页；仅打印可见任务总数与封闭状态计数，异常响应、重复任务、总数漂移及超时失败。同步登记工作流完整性摘要和操作说明，未改变既有维护工作流。
+- **验证**：actionlint、Ruff、22 项 Python 查询/传输/上下文回归、工作流契约测试及 Node 24.18.0 完整隔离 quality 通过；查询夹具包含真实 Bash 引号解析、分页、脱敏及异常失败，云 API 均为模拟。首次 quality 发现 heredoc 被现有 shell 扫描器误解析，改用静态单引号 Python 调用后通过，未放宽扫描规则。
+- **交付边界**：仅本地创建与验证，尚未提交、推送或触发真实查询；CAM 权限关联、云端可见范围及完整在途核对仍待现场验证，不据此宣称告警验收完成。保留此前生产记录；未新增第三方服务、依赖或用户数据处理。
+
+## 2026-11-24 — #88 资源告警生产验收前态
+
+- **已核验**：精确 main `72106a723f78a75df54a5f063adcd65ca504a36a` 与成功 CI、生产活动站点一致；认证资源快照正常，演练状态 `inactive`，运行时为 `8c2ab09763702338b2212a81c6f88b2c12a2cda1e53857fb3fdc502e11e42832`。手动 actor 与最近历史 schedule actor 均为 `lyty1997`；queued、waiting、in-progress 的 GitHub 工作流均为空。
+- **缺口与暂停**：本机和服务器均未发现既有腾讯云只读认证配置，无法查询完整的在途及排队 TAT 调用；服务器 agent 日志和本机进程检查不能证明云端清单完整。按[在途核对规则](operations/resource-alert-drill.md#在途调用与恢复证据)未 arm、未触发失败或新增 daily；已请求提供现有只读查询入口或由维护者核对控制台。安装后的自然 schedule 尚未发生，实际失败通知和两轮恢复也尚未验收。
+- **证据与边界**：前态私有证据位于本机 `/tmp/axialmuse-resource-acceptance-szofxrbg/`，其中云端清单明确为未核验；没有读取或保存云密钥、修改生产配置或勾选 Issue。此记录仅在本地，尚未提交。
+
+## 2026-11-24 — #88 告警闭环交付与生产安装
+
+- **Git 与 CI**：修复提交 `2efb54deb85b94e282980953185af7d221bcbb57` 经 dev CI `45338356735`、[PR #94](https://github.com/lyty1997/AxialMuseWebsite/pull/94) 双 Node 与监测回归通过，普通合并为 `main@72106a723f78a75df54a5f063adcd65ca504a36a`。精确 [main CI 45339306951](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/45339306951) 的四个 job 均成功；artifact `14895832389` 的外层 SHA-256 为 `3b86fcb5b436fe2587fe582e38715a53381a884410b4602e2f0ff4d55662c779`，内容摘要为 `cafefa93bb692c99584394b165a917befc79def0ea9067455af9d14160e45661`。
+- **站点实际状态**：自动 TAT 调度后，独立查询确认事务 `f921691fc287cd5ef01a102ce7f26f60` 达到 `local-accepted`、pending 清除，current 为上述 main，账本前后摘要一致；认证快照、Nginx 配置/active 和公网 HTTPS 200、证书校验通过。已核对服务器事务及当前身份；本轮未取得可独立关联该调用的 TAT 云端终态，不能以调度成功代替其终态。
+- **监测运行时安装**：从精确 main 构建完整不可变组件 `8c2ab09763702338b2212a81c6f88b2c12a2cda1e53857fb3fdc502e11e42832`；在生命周期与部署锁内核验前态、初始化默认关闭演练布局并切换，旧组件 `add43cfa975ca10883233e5fc9916aa5a871d44d229b8ae3a29c001d725b1f8f` 和旧启动器保留。安装回执位于服务器 `/var/lib/axialmuse/runtime-upgrade-72106a723f78a75df54a5f063adcd65ca504a36a/receipt.json`；新 SSH 核验启动器摘要、运行时指针、`inactive` 控制状态和真实快照。安装步骤的隔离夹具覆盖正常切换、当前版本漂移、已有布局与安装包摘要漂移；夹具的部署状态使用模拟对象，不能替代服务器回读。
+- **端到端复验**：[真实 daily 45340683768](https://github.com/lyty1997/AxialMuseWebsite/actions/runs/45340683768) 成功，独立下载的脱敏回执为 82 项、零失败，`bootstrap/before/after` 三次认证读取齐全，真实与演练观察数组均为空，`startedAtUtc <= observedAtUtc <= completedAtUtc`，源码和站点身份均为上述 main。回执保存在本机 `/tmp/axialmuse-72106a7-daily/receipt.json`。
+- **未完成边界**：未 arm 演练、制造故障或确认实际通知；自然 schedule 与两轮失败通知、停用、在途核对和恢复仍需独立验收，#88 未据本次健康复验关闭。未新增第三方服务或用户数据处理。本条为发布后的本地证据记录，尚未追加提交或触发新的 main 发布。
+
 ## 2026-11-24 — #88 首次认证读取的新鲜度修复
 
 - **根因与复现**：`observedAtUtc` 来自公网采样，晚于 bootstrap 首次认证读取；用它比较核验与在途核对时间，会让此前已启动的 daily 冒充新恢复检查。新增完整 runner 反例在旧实现上未抛出错误，事件实际进入 recovered。
