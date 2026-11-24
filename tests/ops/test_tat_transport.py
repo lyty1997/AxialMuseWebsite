@@ -12,6 +12,7 @@ from ops.monitor.public_health import HealthError
 from ops.monitor.bounded_process import ProcessOutputLimit
 from ops.monitor.tat_transport import COMMAND, COMMAND_SHA256, TatTransport, authorization, decode_json
 from ops.monitor.maintenance_runner import check_resource_failure
+from ops.monitor.public_health import canonical, digest
 
 
 def b64(value):
@@ -57,6 +58,16 @@ class TatTransportTests(unittest.TestCase):
                          ["DescribeCommands", "InvokeCommand", "DescribeInvocationTasks"])
         self.assertEqual(self.calls[1][1], {"CommandId": self.command_id, "InstanceIds": [self.instance_id]})
         self.assertTrue(self.calls[2][1]["HideOutput"] is False)
+
+    def test_observation_evidence_is_reconstructible_from_verified_task(self):
+        raw = b'{ "schema": 1 }\n'
+        self.task["TaskResult"]["Output"] = b64(raw)
+        observation = self.transport().fetch_observation()
+        expected = {"schema": 1, "invocationId": self.invocation_id, "commandId": self.command_id,
+                    "instanceId": self.instance_id, "createdTime": self.task["CreatedTime"],
+                    "commandSha256": digest(COMMAND), "outputSha256": digest(raw)}
+        self.assertEqual(observation, {"payload": {"schema": 1}, "evidence": expected})
+        self.assertNotEqual(expected["outputSha256"], digest(canonical(observation["payload"])))
 
     def test_authenticated_resource_failure_remains_a_failure_after_transport(self):
         code = "MAINTENANCE_DISK_USED_WARNING"

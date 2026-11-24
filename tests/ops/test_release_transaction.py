@@ -67,13 +67,13 @@ class ReleaseFixture:
                     "release_content_sha256": hashes["releaseContentSha256"]}
         return directory, identity
 
-    def approve(self, identity, *, registered=True):
+    def approve(self, identity, *, registered=True, published_routes=("/", "/projects/"), rules=None):
         before = self.state.read_ledger()[0]
         from test_artifact_verifier import canonical_json, default_rules
         runtime = canonical_json({"schemaVersion": "1.0.0", "canonicalOrigin": ledger.CANONICAL_ORIGIN,
-                                  "rules": default_rules() if registered else default_rules()[2:]})
+                                  "rules": rules if rules is not None else default_rules() if registered else default_rules()[2:]})
         view = ledger.make_release_view(commit_sha=identity["commit_sha"],
-                                       published_routes=("/", "/projects/"), runtime_content=runtime)
+                                       published_routes=published_routes, runtime_content=runtime)
         after = ledger.merge_candidate_exposure(ledger.parse_exposure_ledger(before), view).content
         write_new(self.state.root / "forward-only.json", canonical({
             "id": identity["commit_sha"][:32], "identity": identity, "before": digest(before),

@@ -122,6 +122,9 @@ class TatTransport:
         return value["response"]
 
     def fetch(self):
+        return self.fetch_observation()["payload"]
+
+    def fetch_observation(self):
         deadline = self.clock() + 80
         catalog = self.call("DescribeCommands", {"CommandIds": [self.command_id], "Limit": 2}, deadline)
         require(isinstance(catalog, dict) and catalog.get("TotalCount") == 1
@@ -166,7 +169,11 @@ class TatTransport:
                     except (KeyError, TypeError, ValueError, OverflowError):
                         raise HealthError("MONITOR_TAT_FRESHNESS") from None
                     require(issued_at - 5 <= created_at <= self.wall() + 5, "MONITOR_TAT_FRESHNESS")
-                    return self._output(task)
+                    output = self._output_bytes(task)
+                    return {"payload": decode_json(output), "evidence": {
+                        "schema": 1, "invocationId": invocation_id, "commandId": self.command_id,
+                        "instanceId": self.instance_id, "createdTime": created.astimezone(timezone.utc).isoformat(),
+                        "commandSha256": self.command_sha256, "outputSha256": hashlib.sha256(output).hexdigest()}}
                 require(state in ("PENDING", "DELIVERING", "DELIVER_DELAYED", "RUNNING"), "MONITOR_TAT_TERMINAL")
             remaining = deadline - self.clock()
             require(remaining > 0, "MONITOR_TAT_TIMEOUT")
@@ -174,6 +181,9 @@ class TatTransport:
         raise HealthError("MONITOR_TAT_TIMEOUT")
 
     def _output(self, task):
+        return decode_json(self._output_bytes(task))
+
+    def _output_bytes(self, task):
         document, result = task.get("CommandDocument"), task.get("TaskResult")
         require(isinstance(document, dict) and isinstance(result, dict)
                 and document.get("CommandType") == "SHELL" and document.get("Username") == "axial-monitor"
@@ -190,7 +200,7 @@ class TatTransport:
             raise HealthError("MONITOR_TAT_OUTPUT") from None
         require(hashlib.sha256(content).hexdigest() == self.command_sha256, "MONITOR_TAT_COMMAND")
         require(len(output) <= EVIDENCE_LIMIT, "MONITOR_TAT_OUTPUT")
-        return decode_json(output)
+        return output
 
 
 if __name__ == "__main__":

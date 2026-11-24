@@ -19,6 +19,14 @@ from ops.monitor.public_health import HealthError, write_receipt
 from test_public_health import Fixture
 
 
+class AuthenticatedFixture:
+    def fetch_observation(self):
+        return {"payload": self.fetch(), "evidence": {
+            "schema": 1, "invocationId": "inv-abcdefgh", "commandId": "cmd-abcdefgh",
+            "instanceId": "lhins-abcdefgh", "createdTime": datetime.now(timezone.utc).isoformat(),
+            "commandSha256": "a" * 64, "outputSha256": "b" * 64}}
+
+
 class MaintenanceRunnerTests(unittest.TestCase):
     def setUp(self):
         fixture = Fixture()
@@ -69,7 +77,7 @@ class MaintenanceRunnerTests(unittest.TestCase):
                     changed["release"]["rules"] = {}
                 else:
                     changed["snapshot"]["ledgerHistorySha256"] = "a" * 64
-                class Transport:
+                class Transport(AuthenticatedFixture):
                     def __init__(self, first, second):
                         self.values = iter((first, second))
                     def fetch(self):
@@ -81,7 +89,7 @@ class MaintenanceRunnerTests(unittest.TestCase):
                                     runner=runner)
 
     def test_bootstrap_wall_clock_jump_and_slow_fetch_are_rejected(self):
-        class Transport:
+        class Transport(AuthenticatedFixture):
             def fetch(inner_self):
                 return self.bundle
         for walls, monotonic, code in (([1000, 1000], [0, 121], "MONITOR_EVIDENCE_TIMEOUT"),
@@ -111,7 +119,7 @@ class MaintenanceRunnerTests(unittest.TestCase):
                       {"schema": 1, "resourceFailure": []}):
             with self.subTest(value=value), self.assertRaisesRegex(HealthError, "MONITOR_BUNDLE"):
                 check_resource_failure(value)
-        class Transport:
+        class Transport(AuthenticatedFixture):
             def fetch(self):
                 return {"schema": 1, "resourceFailure": code}
         with tempfile.TemporaryDirectory() as directory:
@@ -122,6 +130,7 @@ class MaintenanceRunnerTests(unittest.TestCase):
                            "MONITOR_TAT_INSTANCE_ID": "lhins-abcdefgh"}
             with patch.dict(os.environ, environment, clear=True), \
                     patch("ops.monitor.maintenance_runner.TatTransport", return_value=Transport()), \
+                    patch("ops.monitor.maintenance_runner.verified_source_sha", return_value="c" * 40), \
                     redirect_stdout(io.StringIO()):
                 status = main(["--period", "daily", "--root", str(root), "--output", str(output)])
             receipt = json.loads(output.read_text())
@@ -131,7 +140,7 @@ class MaintenanceRunnerTests(unittest.TestCase):
 
     def test_resource_failure_after_baseline_is_not_mistaken_for_snapshot_drift(self):
         code = "MAINTENANCE_DISK_FREE_WARNING"
-        class Transport:
+        class Transport(AuthenticatedFixture):
             def __init__(self, bundle):
                 self.values = iter((bundle, {"schema": 1, "resourceFailure": code}))
             def fetch(self):
@@ -143,6 +152,7 @@ class MaintenanceRunnerTests(unittest.TestCase):
 
     def test_shared_receipt_excludes_private_expiry_and_unknown_fields(self):
         receipt = {"schema": 1, "period": "monthly", "status": "failed", "failedCount": 1, "checkCount": 1,
+                   "serverReadEvidence": [], "resourceObservations": [], "drillObservations": [],
                    "content": [{"private": "secret"}], "checks": [{"check": "expiry:domain", "status": "failed",
                    "code": "MONTHLY_EXPIRY_APPROACHING", "daysRemaining": 3, "private": "secret"}]}
         projected = public_receipt(receipt)
@@ -155,7 +165,7 @@ class MaintenanceRunnerTests(unittest.TestCase):
         fixture = Fixture()
         fixture.certificate["notAfter"] = (datetime.now(timezone.utc) + timedelta(days=90)).strftime(
             "%b %d %H:%M:%S %Y GMT")
-        class Transport:
+        class Transport(AuthenticatedFixture):
             def fetch(inner_self):
                 value = copy.deepcopy(self.bundle)
                 value["observedAtUtc"] = datetime.now(timezone.utc).isoformat()
@@ -171,6 +181,7 @@ class MaintenanceRunnerTests(unittest.TestCase):
                            "MONITOR_TAT_INSTANCE_ID": "lhins-abcdefgh"}
             with patch.dict(os.environ, environment, clear=True), \
                     patch("ops.monitor.maintenance_runner.TatTransport", return_value=Transport()), \
+                    patch("ops.monitor.maintenance_runner.verified_source_sha", return_value="c" * 40), \
                     patch.object(public_health, "Transport", return_value=fixture), \
                     patch.object(dns_health, "check_dns", return_value=[{"check": "dns-weekly:fixture", "status": "passed"}]), \
                     redirect_stdout(io.StringIO()):
@@ -192,7 +203,8 @@ class MaintenanceRunnerTests(unittest.TestCase):
             environment = {"PATH": os.environ.get("PATH", ""), "MONITOR_POLICY_JSON": json.dumps(self.policy),
                            "MONITOR_TAT_COMMAND_ID": "cmd-abcdefgh", "MONITOR_TAT_INSTANCE_ID": "lhins-abcdefgh",
                            "MONITOR_TAT_SECRET_ID": "fake-id", "MONITOR_TAT_SECRET_KEY": "fake-key"}
-            with patch.dict(os.environ, environment, clear=True), redirect_stdout(io.StringIO()):
+            with patch.dict(os.environ, environment, clear=True), redirect_stdout(io.StringIO()), \
+                    patch("ops.monitor.maintenance_runner.verified_source_sha", return_value="c" * 40):
                 result = main(["--period", "monthly", "--root", str(root), "--output", str(output),
                                "--monthly-output", str(root / "monthly.json")])
             receipt = json.loads(output.read_text())
@@ -205,7 +217,7 @@ class MaintenanceRunnerTests(unittest.TestCase):
         fixture.certificate["notAfter"] = (datetime.now(timezone.utc) + timedelta(days=90)).strftime(
             "%b %d %H:%M:%S %Y GMT")
         reads, commands = [], []
-        class Transport:
+        class Transport(AuthenticatedFixture):
             def fetch(inner_self):
                 reads.append(len(reads))
                 value = copy.deepcopy(self.bundle)
