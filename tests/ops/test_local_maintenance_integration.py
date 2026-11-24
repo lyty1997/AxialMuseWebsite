@@ -71,6 +71,7 @@ class LocalMaintenanceIntegrationTests(unittest.TestCase):
                 patch.object(installed_snapshot, "ReleaseStore", return_value=self.fixture.store), \
                 patch.object(installed_snapshot, "verifier_lock", contextlib.nullcontext), \
                 patch.object(installed_snapshot, "load_verifier", return_value=None), \
+                patch.object(installed_snapshot, "installed_observation", side_effect=lambda bundle: bundle), \
                 patch.object(installed_snapshot.sys, "argv", ["axialmuse-monitor-snapshot"]), \
                 patch.object(installed_snapshot.sys, "stdout", SimpleNamespace(buffer=output)), \
                 contextlib.redirect_stderr(errors):

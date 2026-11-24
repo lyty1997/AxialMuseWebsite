@@ -128,6 +128,9 @@ test("CODE-020 repository workflow file set is closed and maintenance is immutab
     });
     for (const module of [
       "test_retirement_commands",
+      "test_resource_drill",
+      "test_resource_alerts",
+      "test_resource_incident",
       "test_release_commands",
       "test_fetch_artifact",
       "test_public_nginx_acceptance",

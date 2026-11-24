@@ -9,6 +9,7 @@ from datetime import datetime
 from ops.monitor.public_health import (
     HealthError, canonical, digest, require, sample, utc, validate_baseline,
 )
+from ops.monitor.resource_protocol import failed_check
 
 
 MAX_EVIDENCE_AGE = 120
@@ -71,13 +72,14 @@ def evidence_time(started_at, started, received_at, ended):
     return started_at + elapsed
 
 
-def read_current_evidence(read_evidence, baseline, *, now=None, monotonic=None):
+def read_current_evidence(read_evidence, baseline, *, now=None, monotonic=None, phase=None):
     """随机量约束本轮，单调时钟限制耗时，UTC 只在固定时差边界内比较。"""
     now = time.time if now is None else now
     monotonic = time.monotonic if monotonic is None else monotonic
     challenge = secrets.token_hex(32)
     started_at, started = now(), monotonic()
-    envelope = read_evidence(challenge)
+    envelope = (read_evidence(challenge, phase=phase) if getattr(read_evidence, "phased", False)
+                else read_evidence(challenge))
     ended, received_at = monotonic(), now()
     value = validate_evidence(envelope, challenge, baseline, evidence_time(started_at, started, received_at, ended))
     return envelope, value
@@ -93,13 +95,12 @@ def run_bound_sample(baseline, read_evidence, *, probe=sample, now=time.time,
                "mutationsPerformed": False}
 
     def evidence(phase):
-        envelope, value = read_current_evidence(read_evidence, baseline, now=now, monotonic=monotonic)
+        envelope, value = read_current_evidence(read_evidence, baseline, now=now, monotonic=monotonic, phase=phase)
         receipt["serverEvidence" + phase.title() + "Sha256"] = digest(canonical(envelope))
         return value
 
     def failure(phase, error):
-        checks.append({"check": phase, "status": "failed",
-                       "code": str(error) if isinstance(error, HealthError) else "MONITOR_EVIDENCE_FAILED"})
+        checks.append(failed_check(phase, error, "MONITOR_EVIDENCE_FAILED"))
 
     try:
         before = evidence("before")

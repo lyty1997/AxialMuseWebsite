@@ -25,6 +25,8 @@
 - [免费加固与运行观察](operations/production-health.md)
 - [内容发布流程](operations/content-publishing.md)
 - [自动化维护与运行手册](operations/maintenance.md)
+- [磁盘与 inode 真实告警闭环](operations/resource-alerts.md)
+- [磁盘与 inode 告警受控演练附件](operations/resource-alert-drill.md)
 - [生产环境清单](operations/production-inventory.md)
 - [契约词表](contracts/contract-terms.json)
 - [内容历史同源导入记录](contracts/content-history-imports.json)
@@ -41,6 +43,8 @@
 - [精确依赖准入记录](contracts/dependency-admissions.json)
 
 ## 当前阶段
+
+- 2026-11-23 / #88 告警闭环：已按评审后的真实事件主流程与服务器演练 A 方案形成本地实现，包含四阶段认证诊断、默认关闭的持久演练控制、人工事件记录校验和最短组合回归。Git 发布、认证生产安装、自然 schedule、实际通知接收及两轮恢复仍待独立验收，见[本轮进度](progress.md#2026-11-23--88-告警闭环本地实现)。
 
 - 2026-11-16 / 运维修复已发布：PR #90 合入 `main@f26179b`，精确 main CI、TAT 实际终态及运行时认证迁移通过。36 个公网文件与独立复验制品一致，真实 daily 82 项通过；退役协议与本地维护定时器仍未启用。后验记录仅补入本地文档，未追加生产发布，详见[部署验收](progress.md#2026-11-16--运维修复发布与组件部署验收)及[维护契约](operations/maintenance.md#release-退役与可用性)。
 

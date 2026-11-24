@@ -9,6 +9,7 @@ from pathlib import Path
 from ops.monitor.bound_probe import read_current_evidence, run_bound_sample
 from ops.monitor.bounded_process import ProcessOutputLimit, run_process
 from ops.monitor.public_health import HealthError, canonical, digest, private_json, require, utc
+from ops.monitor.resource_protocol import failed_check
 
 
 ENVIRONMENT = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP", "CI", "GITHUB_ACTIONS",
@@ -149,12 +150,11 @@ def run_period(period, baseline, read_evidence, *, root=None, node=None, expiry=
                 == baseline["identity"]["commit_sha"], "PERIODIC_SOURCE_IDENTITY")
         require(not command("clean-final", ["git", "status", "--porcelain=v1", "--untracked-files=all"]).strip(),
                 "PERIODIC_DIRTY_SOURCE")
-        _, final = read_current_evidence(read_evidence, baseline)
+        _, final = read_current_evidence(read_evidence, baseline, phase="monthly-final")
         require(digest(canonical(final)) == receipt["serverSnapshotSha256"], "MONITOR_SNAPSHOT_DRIFT")
         checks.append({"check": "monthly-final-evidence", "status": "passed"})
     except Exception as error:
-        checks.append({"check": "monthly-complete", "status": "failed", "code": str(error)
-                       if isinstance(error, HealthError) else "PERIODIC_MONTHLY_FAILED"})
+        checks.append(failed_check("monthly-complete", error, "PERIODIC_MONTHLY_FAILED"))
     failed = sum(c["status"] == "failed" for c in checks)
     receipt.update({"status": "failed" if failed else "passed", "failedCount": failed,
                     "checkCount": len(checks), "completedAtUtc": utc()})

@@ -28,6 +28,7 @@ ENTRY = {
     "axialmuse-deploy-init": ("ops.deploy.release_commands", "main"),
     "axialmuse-release-retire": ("ops.deploy.release_commands", "main"),
     "axialmuse-monitor-snapshot": ("ops.monitor.installed_snapshot", "main"),
+    "axialmuse-resource-drill": ("ops.maintenance.resource_drill_command", "main"),
     "axialmuse-local-maintenance": ("ops.maintenance.installed", "main"),
     "axialmuse-maintenance-state": ("ops.maintenance.installed", "manage"),
     "axialmuse-public-renew": ("ops.deploy.renew_public_certificate", "main"),

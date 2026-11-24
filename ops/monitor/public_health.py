@@ -126,6 +126,21 @@ def validate_baseline(value):
     return value
 
 
+def daily_check_names(baseline):
+    """完整 daily 的公网检查集合，随基线文件、页面及重定向展开。"""
+    validate_baseline(baseline)
+    return {
+        *("dns:" + host for host in HOSTS),
+        *("payload:" + path for path in baseline["files"]),
+        *("page:" + path for path in baseline["pages"]),
+        *(f"redirect:{int(secure)}:{host}:{path}" for secure in (False, True) for host in HOSTS
+          for path in set(("/", "/does-not-exist/")) | set(baseline["rules"])),
+        "robots", "sitemap",
+        *("hidden:" + path for path in ("/metadata/release.json", "/config/site-release.conf", "/does-not-exist/")),
+        "unknown-host:0", "unknown-host:1",
+    }
+
+
 class Page(HTMLParser):
     def __init__(self):
         super().__init__()

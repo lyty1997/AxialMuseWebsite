@@ -9,7 +9,7 @@ from ops.maintenance.resources import check_resources
 from ops.monitor.public_health import utc
 
 
-def release_bundle(store):
+def release_bundle(store, *, drill=None):
     """在同一个锁内捕获身份、账本、已验证文件清单和规则。"""
     state = store.state
     with state.locked(retirement_aware=True):
@@ -53,8 +53,9 @@ def release_bundle(store):
             files[path] = expected
         rules = {rule.source: rule.target for rule in view.rules}
         require(len(rules) == len(view.rules), "MONITOR_RULE_DUPLICATE")
-        return {"schema": 1, "observedAtUtc": utc(), "snapshot": result,
-                "release": {"files": files, "pages": list(view.published_routes), "rules": rules}}
+        bundle = {"schema": 1, "observedAtUtc": utc(), "snapshot": result,
+                  "release": {"files": files, "pages": list(view.published_routes), "rules": rules}}
+        return bundle if drill is None else drill(bundle)
 
 
 def snapshot(store):
