@@ -47,7 +47,8 @@ def validate_recovery(receipt, proof, *, baseline=None):
     required = daily_check_names(baseline) | {"server-evidence:before", "server-evidence:after", "project-experiences"}
     require({c["check"] for c in checks} == required and len(checks) == len(required),
             "INCIDENT_RECOVERY_RECEIPT")
-    require(timestamp(receipt.get("completedAtUtc")) >= timestamp(receipt.get("observedAtUtc")),
+    require(timestamp(receipt.get("startedAtUtc")) <= timestamp(receipt.get("observedAtUtc"))
+            <= timestamp(receipt.get("completedAtUtc")),
             "INCIDENT_RECOVERY_FRESHNESS")
     reads = receipt.get("serverReadEvidence")
     require(isinstance(reads, list) and len(reads) == 3 and all(isinstance(r, dict) and set(r) == {
@@ -135,7 +136,7 @@ class IncidentJournal:
             elif (event["kind"] == "reconciliation"
                   or event["kind"] == "observation" and event["value"]["ordering"] != "historical"
                   or event["kind"] == "state" and event["value"]["state"] == "verifying"):
-                require(timestamp(receipt["observedAtUtc"]) >= timestamp(event["atUtc"]),
+                require(timestamp(receipt["startedAtUtc"]) >= timestamp(event["atUtc"]),
                         "INCIDENT_RECOVERY_FRESHNESS")
         self.record["state"] = "recovered"
         self.record["latestLevel"] = "ok"

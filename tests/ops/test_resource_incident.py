@@ -344,6 +344,84 @@ class ResourceIncidentTests(unittest.TestCase):
             self.recover(receipt, {**self.proof, "receiptSha256": digest(canonical(receipt))})
         self.recover()
 
+    def test_in_flight_bootstrap_cannot_become_fresh_when_public_sample_starts_after_gate(self):
+        self.acknowledge()
+        original = self.journal.snapshot()
+        for boundary in ("verification", "reconciliation", "observation"):
+            journal = self.restore(original)
+            if boundary != "verification":
+                journal.transition("verifying", "a" * 64)
+
+            def during_read(count):
+                if count != 1:
+                    return
+                if boundary == "verification":
+                    journal.transition("verifying", "a" * 64)
+                elif boundary == "reconciliation":
+                    journal.reconcile("a" * 64)
+                else:
+                    journal.observe("11", "1", self.diagnostic(fingerprint="d" * 64))
+
+            # 完整 runner 已启动 bootstrap，随后门禁事件发生，最后才开始公网采样。
+            receipt = self.fixture.execute("daily", [self.fixture.base.bundle] * 3, before_read=during_read)
+            receipt["workflowSourceSha"] = "f" * 40
+            gate = journal.snapshot()["history"][-1]["atUtc"]
+            self.assertLess(datetime.fromisoformat(receipt["startedAtUtc"]), datetime.fromisoformat(gate))
+            self.assertLessEqual(datetime.fromisoformat(gate), datetime.fromisoformat(receipt["observedAtUtc"]))
+            proof = {**self.proof, "incidentContextSha256": journal.recovery_context(),
+                     "receiptSha256": digest(canonical(receipt))}
+            before = journal.snapshot()
+            with self.subTest(boundary=boundary), self.assertRaisesRegex(HealthError, "INCIDENT_RECOVERY_FRESHNESS"):
+                self.recover(receipt, proof, journal=journal)
+            self.assertEqual(journal.snapshot(), before)
+            self.prepare_recovery(journal=journal)
+            self.recover(journal=journal)
+            self.assertEqual(journal.snapshot()["state"], "recovered")
+
+    def test_recovery_requires_run_start_and_ordered_receipt_times(self):
+        self.acknowledge()
+        self.journal.transition("verifying", "a" * 64)
+        self.prepare_recovery()
+        before = self.journal.snapshot()
+        for mutation in ("missing", "invalid", "after-public", "completed-before-public"):
+            receipt = copy.deepcopy(self.healthy)
+            if mutation == "missing":
+                del receipt["startedAtUtc"]
+            elif mutation == "invalid":
+                receipt["startedAtUtc"] = "invalid"
+            elif mutation == "after-public":
+                receipt["startedAtUtc"] = (datetime.fromisoformat(receipt["observedAtUtc"])
+                                            + timedelta(seconds=1)).isoformat()
+            else:
+                receipt["completedAtUtc"] = receipt["startedAtUtc"]
+            proof = {**self.proof, "receiptSha256": digest(canonical(receipt))}
+            with self.subTest(mutation=mutation), self.assertRaises(HealthError):
+                self.recover(receipt, proof)
+            self.assertEqual(self.journal.snapshot(), before)
+        # 相等的回执时间合法；顺序条件不依赖时钟的额外精度。
+        receipt = {**self.healthy, "observedAtUtc": self.healthy["startedAtUtc"],
+                   "completedAtUtc": self.healthy["startedAtUtc"]}
+        self.recover(receipt, {**self.proof, "receiptSha256": digest(canonical(receipt))})
+
+    def test_restore_rechecks_run_start_even_when_archive_digest_is_rebound(self):
+        self.acknowledge()
+        self.journal.transition("verifying", "a" * 64)
+        self.prepare_recovery()
+        self.recover()
+        record = self.journal.snapshot()
+        gate = datetime.fromisoformat(record["history"][-2]["atUtc"])
+        for mutation in ("missing", "before-gate"):
+            receipt, changed = copy.deepcopy(self.healthy), copy.deepcopy(record)
+            if mutation == "missing":
+                del receipt["startedAtUtc"]
+            else:
+                receipt["startedAtUtc"] = (gate - timedelta(seconds=1)).isoformat()
+            checksum = digest(canonical(receipt))
+            changed["history"][-1]["value"]["proof"]["receiptSha256"] = checksum
+            with self.subTest(mutation=mutation), self.assertRaises(HealthError):
+                self.restore(changed, receipts={checksum: receipt})
+        self.assertEqual(self.restore(record).snapshot(), record)
+
     def test_recurrence_needs_new_run_and_receipt_and_survives_replay(self):
         self.acknowledge()
         self.journal.transition("verifying", "a" * 64)

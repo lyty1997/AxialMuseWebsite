@@ -49,6 +49,8 @@ def baseline_from_bundle(bundle, policy, checked_at):
 
 def run_maintenance(period, transport, policy, *, root, node=None, expiry=None, monthly_output=None,
                     now=time.time, monotonic=time.monotonic, runner=run_period, observations=None):
+    # 必须早于 bootstrap；公网采样时间无法证明首次认证读取的新鲜度。
+    started_at = utc()
     observations = observations if observations is not None else Observations()
 
     def fetch(phase, baseline=None):
@@ -76,6 +78,7 @@ def run_maintenance(period, transport, policy, *, root, node=None, expiry=None, 
 
     reader.phased = True
     receipt = runner(period, baseline, reader, root=root, node=node, expiry=expiry, monthly_output=monthly_output)
+    receipt["startedAtUtc"] = started_at
     return observations.merge(receipt)
 
 
@@ -89,7 +92,7 @@ def failure(period, code):
 
 def public_receipt(receipt):
     """共享工件只保存运行结论与失败代码，不传播私有到期日期或剩余天数。"""
-    keys = ("schema", "period", "status", "identity", "baselineSha256", "observedAtUtc", "completedAtUtc",
+    keys = ("schema", "period", "status", "identity", "baselineSha256", "startedAtUtc", "observedAtUtc", "completedAtUtc",
             "checkCount", "failedCount", "serverLedgerInspected", "productionMutationsPerformed",
             "localQualityCommandsExecuted", "workflowSourceSha")
     result = {key: receipt[key] for key in keys if key in receipt}

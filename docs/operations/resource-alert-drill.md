@@ -95,7 +95,7 @@ daily/weekly 允许当前 main 已前进而活动站点仍为较早 release；�
 
 `fetch_observation()` 返回精确的 `{payload, evidence}`；兼容 `fetch()` 仍只返回 payload。createdTime 规范化为 UTC 的 ISO 时间（保留原解析精度）；最小证据摘要采用 `ops.monitor.public_health.canonical()` 的排序紧凑 JSON 字节（含末尾 LF）。outputSha256 始终针对解码后的原始输出，不针对重序列化的 payload。服务器请求与停用事实沿用 `deployment_state.canonical()`；请求摘要由其已保全原始文件字节计算，不能混用两种序列化格式。
 
-run 回执新增 `workflowSourceSha` 与按发生顺序记录的 `serverReadEvidence` 数组，每项精确包含 `phase` 和 `transportEvidenceSha256`。所有通过认证及封套校验的健康读取、真实资源失败或演练读取均登记，正常恢复 run 的三次读取因此也能与云任务关联；传输或封套校验失败不登记为成功认证证据，其失败 check 仍须保留。真实失败的结构化诊断遵循[主设计](resource-alerts.md#真实失败的回执契约)。这些字段经 `public_receipt()` 白名单输出，操作会话在云任务证据仍可查询时及时取得私有记录。
+run 回执新增 `workflowSourceSha` 与按发生顺序记录的 `serverReadEvidence` 数组，每项精确包含 `phase` 和 `transportEvidenceSha256`。runner 还在首次 bootstrap 认证读取前固定 `startedAtUtc`，与公网采样的 `observedAtUtc` 分开保留；恢复时按[主设计](resource-alerts.md#人工事件记录入口与本地样例)从该开始时间验证新鲜度，不能接受核对前已启动但公网采样较晚的在途 run。所有通过认证及封套校验的健康读取、真实资源失败或演练读取均登记，正常恢复 run 的三次读取因此也能与云任务关联；传输或封套校验失败不登记为成功认证证据，其失败 check 仍须保留。真实失败的结构化诊断遵循[主设计](resource-alerts.md#真实失败的回执契约)。这些字段经 `public_receipt()` 白名单输出，操作会话在云任务证据仍可查询时及时取得私有记录。
 
 每份合法诊断精确保留 `phase`、`observedAtUtc`、`resourceFailure`、完整 `drill` 与 `transportEvidenceSha256`。收集器按读取发生顺序追加，已记录条目不能被后续健康结果或其他异常覆盖。对应失败 check 附该诊断的规范字节摘要 `drillObservationSha256`；run 级 `drillObservations` 数组容纳全部条目，不能用单个顶层 ID 覆盖多次读取。若一个 run 跨越不同演练窗口，应分别保留各条证据，验收时分别归属。
 

@@ -93,7 +93,7 @@ warning/critical 表示资源紧迫程度，事故优先级由当前服务影响
 本地校验模型的恢复证据约束如下：
 
 - 进入 verifying、完成在途核对后，以 `recovery_context()` 取得当前事件完整快照的摘要，记录为 proof 的 `incidentContextSha256`；事件 ID、观察、核验轮次或核对记录变化后，旧 proof 即失效。历史重放按原追加时间及顺序重新计算摘要。
-- daily 的 `observedAtUtc` 不得早于本轮 verifying、最近非历史观察或在途核对的记录时间，`completedAtUtc` 不得早于采样开始。同一事件不得再次消费已用于恢复的回执摘要或 run ID/attempt；重新绑定 proof 也不能复用它们。时间检查是本地必要条件，实际调用顺序仍须依据私有证据核对，不能用跨主机墙钟替代。
+- runner 在 bootstrap 首次认证读取前记录 `startedAtUtc`，经公开回执白名单保留；后续组合检查和公网采样不能覆盖它。恢复 daily 的该时间不得早于本轮 verifying、最近非历史观察或在途核对的记录时间，并须满足 `startedAtUtc <= observedAtUtc <= completedAtUtc`。`observedAtUtc` 仅表示公网采样开始，不能证明更早的 bootstrap 读取新鲜；缺少 `startedAtUtc` 的旧回执不得用于恢复或重放恢复结论，须取得新的完整 daily。同一事件不得再次消费已用于恢复的回执摘要或 run ID/attempt；重新绑定 proof 也不能复用它们。时间检查是本地必要条件，实际调用顺序仍须依据私有证据核对，不能用跨主机墙钟替代。
 - `recover(receipt, proof, baseline=...)` 和 `validate_recovery()` 必须取得对应完整基线，核对其摘要及站点身份，并要求检查名称唯一、集合与基线所需的完整 daily 精确一致：DNS、全部制品文件、全部页面、各协议/主机/重定向路径、robots、sitemap、隐藏路径、未知 Host，以及两次服务器核验和项目注册表。删项、重复项、替换项或错误基线均拒绝，即使计数和回执摘要已同步更新。
 - `restore(..., recovery_receipts=..., recovery_baselines=...)` 分别按回执及基线摘要索引已保全字节；缺少任一归档则不能重放恢复结论。旧 proof 缺少上下文绑定时拒绝，须重新取得本轮健康与核验证据。
 

@@ -32,13 +32,15 @@ class ResourceAlertTests(unittest.TestCase):
                     "runtimeSha256": "b" * 64, "siteIdentity": self.base.baseline["identity"],
                     "ledgerSha256": self.base.baseline["ledgerSha256"], "simulated": True}}
 
-    def transport(self, values):
+    def transport(self, values, *, before_read=None):
         values = iter(values)
         class Transport:
             def __init__(self):
                 self.count = 0
             def fetch_observation(inner):
                 inner.count += 1
+                if before_read is not None:
+                    before_read(inner.count)
                 payload = next(values)
                 return {"payload": copy.deepcopy(payload), "evidence": {
                     "schema": 1, "invocationId": f"inv-{inner.count:08d}", "commandId": "cmd-abcdefgh",
@@ -46,7 +48,7 @@ class ResourceAlertTests(unittest.TestCase):
                     "commandSha256": "a" * 64, "outputSha256": digest(canonical(payload))}}
         return Transport()
 
-    def execute(self, period, values, *, public_failure=False):
+    def execute(self, period, values, *, public_failure=False, before_read=None):
         observations = Observations()
         fixture = Fixture()
         fixture.certificate["notAfter"] = (datetime.now(timezone.utc) + timedelta(days=90)).strftime("%b %d %H:%M:%S %Y GMT")
@@ -71,7 +73,7 @@ class ResourceAlertTests(unittest.TestCase):
                 return run_period(*args, command_runner=command, **kwargs)
             try:
                 with patch.object(public_health, "Transport", return_value=fixture):
-                    receipt = run_maintenance(period, self.transport(values), self.base.policy, root=root,
+                    receipt = run_maintenance(period, self.transport(values, before_read=before_read), self.base.policy, root=root,
                         node="/fixture/node", expiry=root / "expiry.json", monthly_output=report,
                         observations=observations, runner=runner)
             except Exception as error:
@@ -134,11 +136,16 @@ class ResourceAlertTests(unittest.TestCase):
         self.assertNotIn("private body", json.dumps(receipt))
 
     def test_healthy_run_has_explicit_empty_arrays_and_three_authenticated_reads(self):
-        receipt = self.execute("daily", [self.base.bundle] * 3)
+        read_times = []
+        receipt = self.execute("daily", [self.base.bundle] * 3,
+                               before_read=lambda _count: read_times.append(datetime.now(timezone.utc)))
         self.assertEqual(receipt["status"], "passed")
         self.assertEqual(receipt["resourceObservations"], [])
         self.assertEqual(receipt["drillObservations"], [])
         self.assertEqual([d["phase"] for d in receipt["serverReadEvidence"]], ["bootstrap", "before", "after"])
+        self.assertLessEqual(datetime.fromisoformat(receipt["startedAtUtc"]), read_times[0])
+        self.assertLessEqual(read_times[0], datetime.fromisoformat(receipt["observedAtUtc"]))
+        self.assertLessEqual(read_times[-1], datetime.fromisoformat(receipt["completedAtUtc"]))
         for token in ("lhins-abcdefgh", "cmd-abcdefgh", "inv-00000001"):
             self.assertNotIn(token, json.dumps(receipt))
 
