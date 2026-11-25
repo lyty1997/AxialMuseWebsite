@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from ops.deploy.deployment_state import (
-    DeploymentError, DeploymentState, canonical, check_directory, decode, read_file, require, sync_directory,
+    DeploymentError, DeploymentState, canonical, check_directory, decode, digest, read_file, require, sync_directory,
 )
 from ops.deploy.release_commands import SITE, STATE, load_verifier, verifier_lock
 from ops.deploy.release_install import ReleaseStore
@@ -44,9 +44,13 @@ def run_job(name, *, command=run_process):
         raise DeploymentError("MAINTENANCE_JOB_OUTPUT") from None
     require(result.returncode in (0, 1), "MAINTENANCE_WORKER_FAILED")
     value = decode(result.stdout)
-    require(isinstance(value, dict) and set(value) == {"schema", "status", "code"} and value["schema"] == 1
+    require(isinstance(value, dict), "MAINTENANCE_WORKER_RESULT")
+    allowed = {"schema", "status", "code"}
+    if name == "weekly-backup" and value.get("status") == "ok":
+        allowed |= {"snapshot", "snapshotSha256"}
+    require(set(value) == allowed and value["schema"] == 1
             and (result.returncode == 0) == (value["status"] == "ok"), "MAINTENANCE_WORKER_RESULT")
-    return {"status": value["status"], "code": value["code"]}
+    return {key: item for key, item in value.items() if key != "schema"}
 
 
 def command_ok(arguments, code):
@@ -148,10 +152,16 @@ def worker(name):
                 assert_weekly_healthy(state, BACKUPS, force=True)
             elif name == "weekly-backup":
                 backups = LedgerBackups(state, BACKUPS)
-                backups.prune(backups.create())
+                snapshot = backups.create()
+                backups.prune(snapshot)
+                backups.verify(snapshot)
+                value = {"status": "ok", "code": "OK", "snapshot": snapshot.name,
+                         "snapshotSha256": digest(read_file(snapshot / "backup.json", state.uid, mode=0o600,
+                                                            limit=64 * 1024 * 1024))}
             else:
                 logs_job(ReleaseStore(SITE, state, load_verifier()))
-            value = {"status": "ok", "code": "OK"}
+            if name != "weekly-backup":
+                value = {"status": "ok", "code": "OK"}
     except Exception as error:
         value = {"status": "failed", "code": safe_code(error)}
     sys.stdout.buffer.write(canonical({"schema": 1, **value}))

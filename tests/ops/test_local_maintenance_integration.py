@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from ops.deploy.deployment_state import DeploymentError, write_new
+from ops.deploy.deployment_state import DeploymentError, digest, read_file, write_new
 from ops.deploy.release_retirement import ReleaseRetirement, initialize_retirements
 from ops.maintenance.installed import run_job
 from ops.maintenance.ledger_backup import LedgerBackups
@@ -188,8 +188,10 @@ class WeeklyBackupTests(unittest.TestCase):
         self.jobs = {"resources": lambda: {"status": "ok", "code": "OK"}, "backup": self.backup}
 
     def backup(self):
-        self.backups.prune(self.backups.create())
-        return {"status": "ok", "code": "OK"}
+        snapshot = self.backups.create()
+        self.backups.prune(snapshot)
+        return {"status": "ok", "code": "OK", "snapshot": snapshot.name,
+                "snapshotSha256": digest(read_file(snapshot / "backup.json", os.getuid(), mode=0o600))}
 
     def healthy(self, *, force=False):
         with patch.object(weekly_backup, "WeeklyBackupState", return_value=self.local), \
@@ -244,6 +246,16 @@ class WeeklyBackupTests(unittest.TestCase):
         self.local.execute(self.jobs)
         second = next(path for path, _ in self.backups.snapshots() if path != first)
         second.rename(self.root / "removed-latest")
+        with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_BACKUP_RUN_MISSING"):
+            self.healthy()
+
+    def test_missing_latest_backup_cannot_reuse_same_second_copy(self):
+        self.local.execute(self.jobs)
+        self.local.enable()
+        first = self.backups.snapshots()[0][0]
+        self.local.execute(self.jobs)
+        second = next(path for path, _ in self.backups.snapshots() if path != first)
+        second.rename(self.root / "removed-same-second")
         with self.assertRaisesRegex(DeploymentError, "MAINTENANCE_BACKUP_RUN_MISSING"):
             self.healthy()
 
@@ -304,6 +316,21 @@ class WeeklyBackupTests(unittest.TestCase):
             self.assertEqual(installed.worker("backup"), 0)
             self.assertEqual(installed.worker("backup"), 0)
         self.assertEqual(len(self.backups.snapshots()), 1)
+
+    def test_real_backup_worker_returns_bound_snapshot_and_digest(self):
+        import json
+        output = io.BytesIO()
+        with patch.object(installed, "STATE", self.fixture.state.home), \
+                patch.object(installed, "BACKUPS", self.backups.root), \
+                patch.object(installed, "DeploymentState", return_value=self.fixture.state), \
+                patch.object(installed, "LedgerBackups", return_value=self.backups), \
+                patch.object(installed.os, "geteuid", return_value=0), \
+                patch.object(installed.sys, "stdout", SimpleNamespace(buffer=output)):
+            self.assertEqual(installed.worker("weekly-backup"), 0)
+        result = json.loads(output.getvalue())
+        snapshot = self.backups.snapshots()[0][0]
+        self.assertEqual(result["snapshot"], snapshot.name)
+        self.assertEqual(result["snapshotSha256"], digest((snapshot / "backup.json").read_bytes()))
 
     def test_weekly_entry_runs_only_resources_and_backup(self):
         output = io.StringIO()

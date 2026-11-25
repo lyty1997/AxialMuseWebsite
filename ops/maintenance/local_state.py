@@ -32,6 +32,13 @@ class LocalMaintenanceState:
     jobs = JOBS
     max_age = 25 * 3600
 
+    def valid_check(self, check, expected):
+        return (isinstance(check, dict) and set(check) == {"id", "status", "code"}
+                and check["id"] == expected and check["status"] in ("ok", "failed", "blocked")
+                and isinstance(check["code"], str)
+                and re.fullmatch(r"(?:OK|(?:MAINTENANCE|DEPLOY)_[A-Z0-9_]{1,90})", check["code"])
+                and (check["status"] == "ok") == (check["code"] == "OK"))
+
     def __init__(self, root, uid=0, *, clock=time.time):
         self.root = Path(root)
         self.uid = uid
@@ -129,11 +136,7 @@ class LocalMaintenanceState:
                         and isinstance(result["checks"], list) and len(result["checks"]) == len(self.jobs),
                         "MAINTENANCE_RESULT")
                 for expected, check in zip(self.jobs, result["checks"]):
-                    require(isinstance(check, dict) and set(check) == {"id", "status", "code"}
-                            and check["id"] == expected and check["status"] in ("ok", "failed", "blocked")
-                            and isinstance(check["code"], str)
-                            and re.fullmatch(r"(?:OK|(?:MAINTENANCE|DEPLOY)_[A-Z0-9_]{1,90})", check["code"])
-                            and (check["status"] == "ok") == (check["code"] == "OK"), "MAINTENANCE_RESULT")
+                    require(self.valid_check(check, expected), "MAINTENANCE_RESULT")
                 require(result["status"] == ("ok" if all(c["status"] == "ok" for c in result["checks"]) else "failed"),
                         "MAINTENANCE_RESULT")
             acknowledged = False
@@ -171,11 +174,8 @@ class LocalMaintenanceState:
                             # 先持久请求再尝试生命周期锁，锁失败也必须留回执。
                             guards.enter_context(guard())
                         value = jobs[name]()
-                        require(isinstance(value, dict) and set(value) == {"status", "code"}
-                                and value["status"] in ("ok", "failed")
-                                and isinstance(value["code"], str)
-                                and re.fullmatch(r"(?:OK|(?:MAINTENANCE|DEPLOY)_[A-Z0-9_]{1,90})", value["code"])
-                                and (value["status"] == "ok") == (value["code"] == "OK"), "MAINTENANCE_JOB_RESULT")
+                        require(isinstance(value, dict) and value.get("status") in ("ok", "failed")
+                                and self.valid_check({"id": name, **value}, name), "MAINTENANCE_JOB_RESULT")
                         check = {"id": name, **value}
                     except Exception as error:
                         check = {"id": name, "status": "failed", "code": safe_code(error)}
@@ -296,3 +296,13 @@ class WeeklyBackupState(LocalMaintenanceState):
     active_marker = b"axialmuse-weekly-ledger-backup-enabled-v1\n"
     jobs = ("resources", "backup")
     max_age = 8 * 86400
+
+    def valid_check(self, check, expected):
+        if isinstance(check, dict) and expected == "backup" and check.get("status") == "ok":
+            if set(check) != {"id", "status", "code", "snapshot", "snapshotSha256"}:
+                return False
+            name, sha = check["snapshot"], check["snapshotSha256"]
+            return (isinstance(name, str) and re.fullmatch(r"[0-9]{12}-[0-9a-f]{32}", name)
+                    and isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{64}", sha)
+                    and super().valid_check({key: check[key] for key in ("id", "status", "code")}, expected))
+        return super().valid_check(check, expected)

@@ -3,7 +3,7 @@
 import os
 import sys
 
-from ops.deploy.deployment_state import DeploymentState, canonical, require
+from ops.deploy.deployment_state import DeploymentState, canonical, digest, read_file, require
 from ops.deploy.release_commands import STATE, verifier_lock
 from ops.maintenance.ledger_backup import LedgerBackups
 from ops.maintenance.local_state import WeeklyBackupState, safe_code
@@ -23,8 +23,12 @@ def assert_weekly_healthy(state, backups, *, force=False, required=False):
         snapshots = engine.snapshots()
         require(snapshots, "MAINTENANCE_BACKUP_MISSING")
         success = local.fresh_success(local.records())
-        require(any(success["request"]["started"] <= created <= success["result"]["finished"]
-                    for _, created in snapshots), "MAINTENANCE_BACKUP_RUN_MISSING")
+        binding = success["result"]["checks"][1]
+        matched = [(path, created) for path, created in snapshots if path.name == binding["snapshot"]]
+        require(len(matched) == 1 and success["request"]["started"] <= matched[0][1] <= success["result"]["finished"]
+                and digest(read_file(matched[0][0] / "backup.json", state.uid, mode=0o600,
+                                     limit=64 * 1024 * 1024)) == binding["snapshotSha256"],
+                "MAINTENANCE_BACKUP_RUN_MISSING")
         latest = max(created for _, created in snapshots)
         require(0 <= local.clock() - latest <= local.max_age, "MAINTENANCE_BACKUP_STALE")
 
