@@ -49,7 +49,7 @@ def main(arguments=None):
             if args.arm:
                 store = ReleaseStore(SITE, state, load_verifier())
                 # 健康前态与请求发布必须在同一部署锁内；生命周期锁已由稳定入口持有。
-                result = release_bundle(store, drill=lambda bundle: drills.arm(
+                result = release_bundle(store, weekly_required=True, drill=lambda bundle: drills.arm(
                     args.scenario, args.ttl_seconds, args.authorization_id, {
                         "runtimeSha256": runtime_identity(), "siteIdentity": bundle["snapshot"]["identity"],
                         "ledgerSha256": bundle["snapshot"]["ledgerSha256"]}))

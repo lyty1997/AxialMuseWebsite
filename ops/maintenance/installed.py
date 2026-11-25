@@ -29,7 +29,7 @@ LOGROTATE_STATE = Path("/var/lib/logrotate/status")
 
 
 def run_job(name, *, command=run_process):
-    require(name in JOBS, "MAINTENANCE_JOBS")
+    require(name in (*JOBS, "weekly-backup"), "MAINTENANCE_JOBS")
     program = (f"import sys; sys.path.insert(0, {str(LIB)!r}); "
                "from ops.maintenance.installed import worker; "
                "from ops.monitor.bounded_process import retain_locks\n"
@@ -135,7 +135,7 @@ def logs_job(store):
 
 def worker(name):
     try:
-        require(os.geteuid() == 0 and name in JOBS, "MAINTENANCE_CONTEXT")
+        require(os.geteuid() == 0 and name in (*JOBS, "weekly-backup"), "MAINTENANCE_CONTEXT")
         if name == "resources":
             result = check_resources()
             failures = sorted((c for c in result["checks"] if c["level"] != "ok"),
@@ -144,6 +144,9 @@ def worker(name):
         else:
             state = DeploymentState(STATE)
             if name == "backup":
+                from ops.maintenance.weekly_backup import assert_weekly_healthy
+                assert_weekly_healthy(state, BACKUPS, force=True)
+            elif name == "weekly-backup":
                 backups = LedgerBackups(state, BACKUPS)
                 backups.prune(backups.create())
             else:
@@ -178,11 +181,8 @@ def manage():
             local = LocalMaintenanceState(STATE / "maintenance")
             if arguments == ["--initialize"]:
                 # 已完整发布的前序步骤只核验；中断的准备树由原初始化入口续跑。
-                backup = LedgerBackups(DeploymentState(STATE), BACKUPS)
-                if os.path.lexists(BACKUPS):
-                    backup.check()
-                else:
-                    backup.initialize()
+                from ops.maintenance.weekly_backup import assert_weekly_healthy
+                assert_weekly_healthy(DeploymentState(STATE), BACKUPS, force=True)
                 if os.path.lexists(local.root):
                     local.check()
                 else:
