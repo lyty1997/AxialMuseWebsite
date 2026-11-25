@@ -6,10 +6,11 @@ from ops.deploy import url_exposure_ledger as ledger
 from ops.deploy.deployment_state import digest, require
 from ops.maintenance.local_state import LocalMaintenanceState
 from ops.maintenance.resources import check_resources
+from ops.maintenance.weekly_backup import assert_weekly_healthy
 from ops.monitor.public_health import utc
 
 
-def release_bundle(store, *, drill=None):
+def release_bundle(store, *, drill=None, weekly_required=False):
     """在同一个锁内捕获身份、账本、已验证文件清单和规则。"""
     state = store.state
     with state.locked(retirement_aware=True):
@@ -20,6 +21,7 @@ def release_bundle(store, *, drill=None):
             critical = next((check for check in failures if check["level"] == "critical"), failures[0])
             require(False, critical["code"])
         LocalMaintenanceState(state.home / "maintenance", state.uid).assert_healthy()
+        assert_weekly_healthy(state, "/var/backups/axialmuse-ledger", required=weekly_required)
         content, history_digest, count = state.read_ledger()
         exposure = ledger.parse_exposure_ledger(content)
         sha = store.current()

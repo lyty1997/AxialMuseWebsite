@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from ops.deploy.deployment_state import (
-    DeploymentError, DeploymentState, canonical, check_directory, decode, read_file, require, sync_directory,
+    DeploymentError, DeploymentState, canonical, check_directory, decode, digest, read_file, require, sync_directory,
 )
 from ops.deploy.release_commands import SITE, STATE, load_verifier, verifier_lock
 from ops.deploy.release_install import ReleaseStore
@@ -29,7 +29,7 @@ LOGROTATE_STATE = Path("/var/lib/logrotate/status")
 
 
 def run_job(name, *, command=run_process):
-    require(name in JOBS, "MAINTENANCE_JOBS")
+    require(name in (*JOBS, "weekly-backup"), "MAINTENANCE_JOBS")
     program = (f"import sys; sys.path.insert(0, {str(LIB)!r}); "
                "from ops.maintenance.installed import worker; "
                "from ops.monitor.bounded_process import retain_locks\n"
@@ -44,9 +44,13 @@ def run_job(name, *, command=run_process):
         raise DeploymentError("MAINTENANCE_JOB_OUTPUT") from None
     require(result.returncode in (0, 1), "MAINTENANCE_WORKER_FAILED")
     value = decode(result.stdout)
-    require(isinstance(value, dict) and set(value) == {"schema", "status", "code"} and value["schema"] == 1
+    require(isinstance(value, dict), "MAINTENANCE_WORKER_RESULT")
+    allowed = {"schema", "status", "code"}
+    if name == "weekly-backup" and value.get("status") == "ok":
+        allowed |= {"snapshot", "snapshotSha256"}
+    require(set(value) == allowed and value["schema"] == 1
             and (result.returncode == 0) == (value["status"] == "ok"), "MAINTENANCE_WORKER_RESULT")
-    return {"status": value["status"], "code": value["code"]}
+    return {key: item for key, item in value.items() if key != "schema"}
 
 
 def command_ok(arguments, code):
@@ -135,7 +139,7 @@ def logs_job(store):
 
 def worker(name):
     try:
-        require(os.geteuid() == 0 and name in JOBS, "MAINTENANCE_CONTEXT")
+        require(os.geteuid() == 0 and name in (*JOBS, "weekly-backup"), "MAINTENANCE_CONTEXT")
         if name == "resources":
             result = check_resources()
             failures = sorted((c for c in result["checks"] if c["level"] != "ok"),
@@ -144,11 +148,20 @@ def worker(name):
         else:
             state = DeploymentState(STATE)
             if name == "backup":
+                from ops.maintenance.weekly_backup import assert_weekly_healthy
+                assert_weekly_healthy(state, BACKUPS, force=True)
+            elif name == "weekly-backup":
                 backups = LedgerBackups(state, BACKUPS)
-                backups.prune(backups.create())
+                snapshot = backups.create()
+                backups.prune(snapshot)
+                backups.verify(snapshot)
+                value = {"status": "ok", "code": "OK", "snapshot": snapshot.name,
+                         "snapshotSha256": digest(read_file(snapshot / "backup.json", state.uid, mode=0o600,
+                                                            limit=64 * 1024 * 1024))}
             else:
                 logs_job(ReleaseStore(SITE, state, load_verifier()))
-            value = {"status": "ok", "code": "OK"}
+            if name != "weekly-backup":
+                value = {"status": "ok", "code": "OK"}
     except Exception as error:
         value = {"status": "failed", "code": safe_code(error)}
     sys.stdout.buffer.write(canonical({"schema": 1, **value}))
@@ -178,11 +191,8 @@ def manage():
             local = LocalMaintenanceState(STATE / "maintenance")
             if arguments == ["--initialize"]:
                 # 已完整发布的前序步骤只核验；中断的准备树由原初始化入口续跑。
-                backup = LedgerBackups(DeploymentState(STATE), BACKUPS)
-                if os.path.lexists(BACKUPS):
-                    backup.check()
-                else:
-                    backup.initialize()
+                from ops.maintenance.weekly_backup import assert_weekly_healthy
+                assert_weekly_healthy(DeploymentState(STATE), BACKUPS, force=True)
                 if os.path.lexists(local.root):
                     local.check()
                 else:

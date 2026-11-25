@@ -20,7 +20,7 @@ def main():
         state = DeploymentState(Path("/var/lib/axialmuse"))
         with verifier_lock():
             store = ReleaseStore(Path("/srv/axialmuse"), state, load_verifier())
-            output = canonical(release_bundle(store, drill=installed_observation))
+            output = canonical(release_bundle(store, drill=installed_observation, weekly_required=True))
         if len(output) > 16 * 1024:
             return 1
         sys.stdout.buffer.write(output)

@@ -31,6 +31,8 @@ ENTRY = {
     "axialmuse-resource-drill": ("ops.maintenance.resource_drill_command", "main"),
     "axialmuse-local-maintenance": ("ops.maintenance.installed", "main"),
     "axialmuse-maintenance-state": ("ops.maintenance.installed", "manage"),
+    "axialmuse-ledger-backup": ("ops.maintenance.weekly_backup", "main"),
+    "axialmuse-ledger-backup-state": ("ops.maintenance.weekly_backup", "manage"),
     "axialmuse-public-renew": ("ops.deploy.renew_public_certificate", "main"),
 }
 
@@ -158,20 +160,22 @@ def record_maintenance_failure(code, *, root=Path("/var/lib/axialmuse/maintenanc
 
 def main():
     command = sys.argv[1] if len(sys.argv) >= 2 else None
+    failure_roots = {"axialmuse-local-maintenance": Path("/var/lib/axialmuse/maintenance"),
+                     "axialmuse-ledger-backup": Path("/var/lib/axialmuse/ledger-backup-maintenance")}
     try:
         ensure(len(sys.argv) >= 2)
         return launch(sys.argv[1], sys.argv[2:])
     except BlockingIOError:
-        if command == "axialmuse-local-maintenance":
+        if command in failure_roots:
             try:
-                record_maintenance_failure("DEPLOY_VERIFIER_BUSY")
+                record_maintenance_failure("DEPLOY_VERIFIER_BUSY", root=failure_roots[command])
             except Exception:
                 print("[MAINTENANCE_LAUNCH_RECEIPT_FAILED] 启动失败回执未完成。", file=sys.stderr)
         print("[DEPLOY_VERIFIER_BUSY] 生命周期被占用。", file=sys.stderr)
     except Exception:
-        if command == "axialmuse-local-maintenance":
+        if command in failure_roots:
             try:
-                record_maintenance_failure("DEPLOY_RUNTIME_INTEGRITY")
+                record_maintenance_failure("DEPLOY_RUNTIME_INTEGRITY", root=failure_roots[command])
             except Exception:
                 print("[MAINTENANCE_LAUNCH_RECEIPT_FAILED] 启动失败回执未完成。", file=sys.stderr)
         print("[DEPLOY_RUNTIME_INTEGRITY] 组件加载失败。", file=sys.stderr)

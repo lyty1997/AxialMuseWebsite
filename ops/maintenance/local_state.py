@@ -27,13 +27,25 @@ def safe_code(error):
 
 
 class LocalMaintenanceState:
+    marker = MARKER
+    active_marker = ACTIVE_MARKER
+    jobs = JOBS
+    max_age = 25 * 3600
+
+    def valid_check(self, check, expected):
+        return (isinstance(check, dict) and set(check) == {"id", "status", "code"}
+                and check["id"] == expected and check["status"] in ("ok", "failed", "blocked")
+                and isinstance(check["code"], str)
+                and re.fullmatch(r"(?:OK|(?:MAINTENANCE|DEPLOY)_[A-Z0-9_]{1,90})", check["code"])
+                and (check["status"] == "ok") == (check["code"] == "OK"))
+
     def __init__(self, root, uid=0, *, clock=time.time):
         self.root = Path(root)
         self.uid = uid
         self.clock = clock
 
     def initialize(self):
-        initialize_layout(self.root, self.uid, {"lock": b"", "schema": MARKER}, ("runs", "launch-failures"))
+        initialize_layout(self.root, self.uid, {"lock": b"", "schema": self.marker}, ("runs", "launch-failures"))
 
     def check(self, *, activating=False):
         check_directory(self.root, self.uid, 0o700)
@@ -46,11 +58,11 @@ class LocalMaintenanceState:
             "schema", "lock", "runs", "enabled", "activation.json", "launch-failures"},
                 "MAINTENANCE_LAYOUT")
         marker = read_file(self.root / "schema", self.uid, mode=0o600)
-        require(marker in (MARKER, ACTIVE_MARKER), "MAINTENANCE_SCHEMA")
-        require(marker != ACTIVE_MARKER or "activation.json" in entries, "MAINTENANCE_ACTIVATION")
-        pending = marker == MARKER and "activation.json" in entries
+        require(marker in (self.marker, self.active_marker), "MAINTENANCE_SCHEMA")
+        require(marker != self.active_marker or "activation.json" in entries, "MAINTENANCE_ACTIVATION")
+        pending = marker == self.marker and "activation.json" in entries
         require(not pending or activating, "MAINTENANCE_ACTIVATION")
-        require((marker == ACTIVE_MARKER) == ("enabled" in entries)
+        require((marker == self.active_marker) == ("enabled" in entries)
                 or pending and activating, "MAINTENANCE_ACTIVATION")
         if "activation.json" in entries:
             raw = read_file(self.root / "activation.json", self.uid, mode=0o600)
@@ -58,7 +70,7 @@ class LocalMaintenanceState:
             require(isinstance(activation, dict) and set(activation) == {"schema", "enabled"}
                     and activation["schema"] == 1 and type(activation["enabled"]) is int
                     and 0 <= activation["enabled"] <= self.clock(), "MAINTENANCE_ACTIVATION")
-            if marker == ACTIVE_MARKER:
+            if marker == self.active_marker:
                 require(read_file(self.root / "enabled", self.uid, mode=0o600) == raw,
                         "MAINTENANCE_ACTIVATION")
         require(read_file(self.root / "lock", self.uid, mode=0o600) == b"", "MAINTENANCE_LOCK")
@@ -121,14 +133,10 @@ class LocalMaintenanceState:
                         and result["schema"] == 1 and result["requestSha256"] == digest(raw)
                         and type(result["finished"]) is int
                         and request["started"] <= result["finished"] <= self.clock()
-                        and isinstance(result["checks"], list) and len(result["checks"]) == len(JOBS),
+                        and isinstance(result["checks"], list) and len(result["checks"]) == len(self.jobs),
                         "MAINTENANCE_RESULT")
-                for expected, check in zip(JOBS, result["checks"]):
-                    require(isinstance(check, dict) and set(check) == {"id", "status", "code"}
-                            and check["id"] == expected and check["status"] in ("ok", "failed", "blocked")
-                            and isinstance(check["code"], str)
-                            and re.fullmatch(r"(?:OK|(?:MAINTENANCE|DEPLOY)_[A-Z0-9_]{1,90})", check["code"])
-                            and (check["status"] == "ok") == (check["code"] == "OK"), "MAINTENANCE_RESULT")
+                for expected, check in zip(self.jobs, result["checks"]):
+                    require(self.valid_check(check, expected), "MAINTENANCE_RESULT")
                 require(result["status"] == ("ok" if all(c["status"] == "ok" for c in result["checks"]) else "failed"),
                         "MAINTENANCE_RESULT")
             acknowledged = False
@@ -145,7 +153,7 @@ class LocalMaintenanceState:
         return records
 
     def execute(self, jobs, *, guard=contextlib.nullcontext):
-        require(set(jobs) == set(JOBS), "MAINTENANCE_JOBS")
+        require(set(jobs) == set(self.jobs), "MAINTENANCE_JOBS")
         with self.locked(), contextlib.ExitStack() as guards:
             records = self.records()  # 未知对象不被新的成功遮蔽。
             directory = self.root / "runs" / secrets.token_hex(16)
@@ -158,7 +166,7 @@ class LocalMaintenanceState:
             rename_new(preparing, directory)
             checks = []
             blocked = False
-            for name in JOBS:
+            for name in self.jobs:
                 check = {"id": name, "status": "blocked", "code": "MAINTENANCE_PREREQUISITE"}
                 if not blocked:
                     try:
@@ -166,11 +174,8 @@ class LocalMaintenanceState:
                             # 先持久请求再尝试生命周期锁，锁失败也必须留回执。
                             guards.enter_context(guard())
                         value = jobs[name]()
-                        require(isinstance(value, dict) and set(value) == {"status", "code"}
-                                and value["status"] in ("ok", "failed")
-                                and isinstance(value["code"], str)
-                                and re.fullmatch(r"(?:OK|(?:MAINTENANCE|DEPLOY)_[A-Z0-9_]{1,90})", value["code"])
-                                and (value["status"] == "ok") == (value["code"] == "OK"), "MAINTENANCE_JOB_RESULT")
+                        require(isinstance(value, dict) and value.get("status") in ("ok", "failed")
+                                and self.valid_check({"id": name, **value}, name), "MAINTENANCE_JOB_RESULT")
                         check = {"id": name, **value}
                     except Exception as error:
                         check = {"id": name, "status": "failed", "code": safe_code(error)}
@@ -187,7 +192,7 @@ class LocalMaintenanceState:
         successful = [r for r in records if r["result"] and r["result"]["status"] == "ok"]
         require(successful, "MAINTENANCE_SUCCESS_MISSING")
         latest = max(successful, key=lambda r: r["request"]["generation"])
-        require(0 <= self.clock() - latest["result"]["finished"] <= 25 * 3600, "MAINTENANCE_STALE")
+        require(0 <= self.clock() - latest["result"]["finished"] <= self.max_age, "MAINTENANCE_STALE")
         return latest
 
     def enable(self):
@@ -207,7 +212,7 @@ class LocalMaintenanceState:
             else:
                 publish_new(enabled, raw)
             temporary = self.root / f".prepared-{secrets.token_hex(16)}.json"
-            write_new(temporary, ACTIVE_MARKER)
+            write_new(temporary, self.active_marker)
             os.replace(temporary, self.root / "schema")
             sync_directory(self.root)
 
@@ -284,3 +289,20 @@ class LocalMaintenanceState:
         require(all(r["result"] is None or r["result"]["status"] == "ok" or r["acknowledged"] for r in records),
                 "MAINTENANCE_LOCAL_FAILED")
         require(all(r["acknowledged"] for r in self.launch_failures()), "MAINTENANCE_BOOTSTRAP_FAILED")
+
+
+class WeeklyBackupState(LocalMaintenanceState):
+    marker = b"axialmuse-weekly-ledger-backup-v1\n"
+    active_marker = b"axialmuse-weekly-ledger-backup-enabled-v1\n"
+    jobs = ("resources", "backup")
+    max_age = 8 * 86400
+
+    def valid_check(self, check, expected):
+        if isinstance(check, dict) and expected == "backup" and check.get("status") == "ok":
+            if set(check) != {"id", "status", "code", "snapshot", "snapshotSha256"}:
+                return False
+            name, sha = check["snapshot"], check["snapshotSha256"]
+            return (isinstance(name, str) and re.fullmatch(r"[0-9]{12}-[0-9a-f]{32}", name)
+                    and isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{64}", sha)
+                    and super().valid_check({key: check[key] for key in ("id", "status", "code")}, expected))
+        return super().valid_check(check, expected)

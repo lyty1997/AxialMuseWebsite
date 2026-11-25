@@ -154,6 +154,7 @@ class ResourceDrillTests(unittest.TestCase):
         def run(arguments, *, verifier_broken=False):
             output = io.BytesIO()
             with patch.object(command.os, "geteuid", return_value=0), \
+                    patch("ops.monitor.server_evidence.assert_weekly_healthy"), \
                     patch.object(command, "DeploymentState", return_value=fixture.state), \
                     patch.object(command, "ReleaseStore", return_value=fixture.store), \
                     patch.object(command, "ResourceDrills", return_value=self.state), \
@@ -289,6 +290,7 @@ m.ResourceDrills(Path(sys.argv[1]), os.geteuid()).arm('disk-free-warning', 60, '
                 return {"InvocationId": f"inv-{invocation[0]:08d}"}
             stream = io.BytesIO()
             with patch.object(installed_snapshot, "DeploymentState", return_value=fixture.state), \
+                    patch("ops.monitor.server_evidence.assert_weekly_healthy"), \
                     patch.object(installed_snapshot, "ReleaseStore", return_value=fixture.store), \
                     patch.object(installed_snapshot, "load_verifier", return_value=None), \
                     patch.object(installed_snapshot, "verifier_lock", contextlib.nullcontext), \

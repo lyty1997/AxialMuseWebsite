@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly Axial Muse ledger backup
+
+[Timer]
+OnCalendar=Mon *-*-* 22:17:00 UTC
+Persistent=yes
+AccuracySec=1min
+RandomizedDelaySec=5min
+Unit=axialmuse-ledger-backup.service
+
+[Install]
+WantedBy=timers.target
